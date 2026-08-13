@@ -1,0 +1,31 @@
+# Normalise line endings in the repository to LF, regardless of contributor platform.
+# Without this, a Windows checkout commits CRLF and every cross-platform diff is noise.
+* text=auto eol=lf
+
+# Windows-only files that must keep CRLF to work.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary — never touch these.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.icns binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.zip binary
+*.exe binary
+*.dll binary
+*.node binary
+*.sqlite binary
+*.db binary
+*.coffer binary
+
+# Generated — collapse in diffs and exclude from language statistics.
+package-lock.json linguist-generated=true -diff
+LICENSE linguist-vendored=true
