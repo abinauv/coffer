@@ -1,0 +1,122 @@
+{
+  "$comment": "Golden fixtures for the storage boundary. Parsing is strict in both directions: nothing that is not exact decimal text may become a Decimal, and nothing but a fixed-scale decimal string may leave for a column. Loosening the pattern must fail a test here.",
+  "accepted": [
+    "0",
+    "-0",
+    "1",
+    "-1",
+    "0.5",
+    "-0.01",
+    "100.00",
+    "0.000",
+    "9999999999999999999999.999999999999",
+    "-9999999999999999999999.999999999999"
+  ],
+  "rejected": [
+    { "text": "", "why": "empty is not zero" },
+    { "text": " ", "why": "whitespace is not a number" },
+    { "text": " 1.00", "why": "no leading whitespace" },
+    { "text": "1.00 ", "why": "no trailing whitespace" },
+    { "text": "+1.00", "why": "no explicit plus; one canonical form only" },
+    { "text": "01", "why": "no leading zeros" },
+    { "text": "-01.5", "why": "no leading zeros, signed" },
+    { "text": ".5", "why": "a digit is required before the point" },
+    { "text": "5.", "why": "a digit is required after the point" },
+    { "text": "1,000.00", "why": "no thousands separators; formatting belongs in the renderer" },
+    { "text": "1 00", "why": "no internal spaces" },
+    { "text": "1e5", "why": "no exponent notation in storage" },
+    { "text": "1E5", "why": "nor uppercase" },
+    { "text": "1.0e-2", "why": "nor a signed exponent" },
+    { "text": "0x10", "why": "not a decimal" },
+    { "text": "NaN", "why": "the value this whole module exists to prevent" },
+    { "text": "Infinity", "why": "not a decimal" },
+    { "text": "-Infinity", "why": "not a decimal" },
+    { "text": "--1", "why": "one sign only" },
+    { "text": "1.2.3", "why": "one point only" },
+    { "text": "1..2", "why": "one point only" },
+    { "text": "-", "why": "a sign is not a number" },
+    { "text": "abc", "why": "not a decimal" },
+    { "text": "١.٥", "why": "Arabic-Indic digits are not ASCII digits" },
+    { "text": "12.34\n", "why": "a trailing newline is not decoration" }
+  ],
+  "roundTrip": [
+    {
+      "point": "moneyStorage",
+      "input": "1.005",
+      "storage": "1.01",
+      "why": "rendering is a rounding point"
+    },
+    {
+      "point": "moneyStorage",
+      "input": "1",
+      "storage": "1.00",
+      "why": "always exactly two places"
+    },
+    {
+      "point": "moneyStorage",
+      "input": "-0",
+      "storage": "0.00",
+      "why": "no signed zero reaches a column"
+    },
+    {
+      "point": "moneyStorage",
+      "input": "-0.001",
+      "storage": "0.00",
+      "why": "nor arrives by rounding"
+    },
+    {
+      "point": "moneyStorage",
+      "input": "-1234.5",
+      "storage": "-1234.50",
+      "why": "sign is preserved"
+    },
+    {
+      "point": "quantityStorage",
+      "input": "2.5",
+      "storage": "2.500",
+      "why": "always exactly three places"
+    },
+    {
+      "point": "quantityStorage",
+      "input": "0.0004",
+      "storage": "0.000",
+      "why": "below the smallest unit"
+    },
+    {
+      "point": "rateStorage",
+      "input": "18",
+      "storage": "18.00",
+      "why": "rates render at two places"
+    },
+    {
+      "point": "wholeUnit",
+      "input": "9092.6",
+      "storage": "9093",
+      "why": "no point at all at whole-unit scale"
+    }
+  ],
+  "scaleRejected": [
+    {
+      "point": "moneyStorage",
+      "text": "1.234",
+      "why": "a money column holds two places; three means something wrote at the wrong scale"
+    },
+    {
+      "point": "moneyStorage",
+      "text": "0.001",
+      "why": "and rounding it away on read would hide that"
+    },
+    { "point": "quantityStorage", "text": "1.2345", "why": "a quantity column holds three" },
+    { "point": "rateStorage", "text": "18.005", "why": "a rate column holds two" },
+    { "point": "wholeUnit", "text": "1.0", "why": "whole units hold none" }
+  ],
+  "scaleAccepted": [
+    { "point": "moneyStorage", "text": "1.23" },
+    { "point": "moneyStorage", "text": "1.2" },
+    { "point": "moneyStorage", "text": "1" },
+    { "point": "moneyStorage", "text": "-0" },
+    { "point": "quantityStorage", "text": "1.234" },
+    { "point": "rateStorage", "text": "18.00" },
+    { "point": "wholeUnit", "text": "-42" }
+  ]
+}

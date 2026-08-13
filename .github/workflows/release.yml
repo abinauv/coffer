@@ -1,0 +1,183 @@
+name: Release
+
+# Tag a version, get installers for all three platforms plus a SHA-256 checksum file.
+#
+# The builds are unsigned (SECURITY.md, "Known gaps"), which makes SHA256SUMS.txt the
+# only integrity signal a download has. It is generated here, from the artefacts that are
+# actually attached, and it is not optional.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  # A tag push does not run the CI workflow, so re-run the correctness gate here. A
+  # release that fails its own test suite should never reach a download page.
+  verify:
+    name: Typecheck, lint, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+
+  build:
+    name: Package ${{ matrix.artefact }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Every platform that can build should still produce its artefacts, so a single
+      # broken runner is one visible failure rather than four.
+      fail-fast: false
+      matrix:
+        include:
+          - artefact: linux-x64
+            os: ubuntu-latest
+            platform: --linux
+            arch: --x64
+          - artefact: windows-x64
+            os: windows-latest
+            platform: --win
+            arch: --x64
+          - artefact: macos-arm64
+            os: macos-latest
+            platform: --mac
+            arch: --arm64
+          # Each macOS architecture is built on its own runner rather than cross-built,
+          # because @node-rs/argon2 ships its binary in a per-architecture optional
+          # dependency and npm only installs the one matching the host. `macos-15-intel`
+          # is GitHub's x64 macOS image. If it is ever retired, the alternatives are to
+          # move this label to whatever replaces it, or to build both slices on the arm64
+          # runner after pulling in @node-rs/argon2-darwin-x64 explicitly.
+          - artefact: macos-x64
+            os: macos-15-intel
+            platform: --mac
+            arch: --x64
+    env:
+      # Never pick up a signing identity from a runner keychain. Builds are unsigned by
+      # decision, not by accident, and an accidentally-signed artefact would not match
+      # what a contributor can reproduce locally.
+      CSC_IDENTITY_AUTO_DISCOVERY: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Verify native modules under Electron
+        run: npm run native:verify
+
+      - name: Build
+        run: npm run build
+
+      - name: Package
+        run: npx --no-install electron-builder ${{ matrix.platform }} ${{ matrix.arch }} --publish never
+
+      # Two reasons, either of which is sufficient. macOS auto-update requires a signed
+      # app, and these builds are unsigned — so latest-mac.yml describes an update path
+      # that cannot work. And the two macOS architectures are built on separate runners,
+      # so each produces its own latest-mac.yml and they would silently overwrite one
+      # another when the artefacts are merged, leaving a feed that names one arch's dmg
+      # for both. Publishing nothing is better than publishing the wrong thing.
+      - name: Drop unusable macOS update metadata
+        if: runner.os == 'macOS'
+        run: rm -f dist/latest-mac.yml dist/*.blockmap
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coffer-${{ matrix.artefact }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.blockmap
+            dist/latest*.yml
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Collect artefacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artefacts
+          pattern: coffer-*
+          merge-multiple: true
+
+      # Hashes every file that is about to be attached, so there is no artefact on the
+      # release page without a published checksum.
+      - name: Generate SHA-256 checksums
+        run: node scripts/checksums.mjs artefacts
+
+      - name: Compose release notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          {
+            echo "## Coffer ${version}"
+            echo
+            echo "### Verify your download"
+            echo
+            echo "These builds are **not code-signed** — Windows shows a SmartScreen warning and"
+            echo "macOS quarantines the download. See"
+            echo "[SECURITY.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/SECURITY.md)."
+            echo "The checksum below is the only integrity signal these builds have, so please"
+            echo "check it before running the installer."
+            echo
+            echo '```'
+            echo 'sha256sum -c SHA256SUMS.txt        # Linux'
+            echo 'shasum -a 256 -c SHA256SUMS.txt    # macOS'
+            echo 'certutil -hashfile <file> SHA256   # Windows, compare by eye'
+            echo '```'
+            echo
+            echo "### SHA-256"
+            echo
+            echo '```'
+            cat artefacts/SHA256SUMS.txt
+            echo '```'
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A tag such as v1.2.0-beta.1 is a prerelease; v1.2.0 is not.
+          prerelease=""
+          case "$GITHUB_REF_NAME" in
+            *-*) prerelease="--prerelease" ;;
+          esac
+
+          gh release create "$GITHUB_REF_NAME" \
+            --title "Coffer $GITHUB_REF_NAME" \
+            --notes-file release-notes.md \
+            --verify-tag \
+            $prerelease \
+            artefacts/*

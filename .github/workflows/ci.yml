@@ -1,0 +1,79 @@
+name: CI
+
+# The gate that keeps three platforms buildable. Fast, single-runner correctness checks
+# first; the cross-platform build matrix in parallel beside them, because the failure
+# mode this project actually has is "works on the maintainer's Windows box".
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch supersedes an older one. `main` is excluded so a merge
+# is never left without a completed run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+env:
+  # docs/ARCHITECTURE.md: Node 22 is the baseline (package.json engines).
+  NODE_VERSION: '22'
+
+jobs:
+  checks:
+    name: Typecheck, lint, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          # Keyed on package-lock.json; restores ~/.npm, so `npm ci` still installs a
+          # clean tree but downloads almost nothing.
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform failing should not hide the state of the other two.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      # postinstall runs scripts/native-modules.mjs, so the prebuilt binaries are already
+      # verified under plain Node by the time this step finishes.
+      - name: Install
+        run: npm ci
+
+      # The check that matters: better-sqlite3-multiple-ciphers and @node-rs/argon2 have
+      # to load inside an Electron main process, not just under Node. This also proves
+      # SQLCipher is genuinely encrypting — see scripts/native-probe.mjs.
+      - name: Verify native modules under Electron
+        run: npm run native:verify
+
+      - name: Build
+        run: npm run build

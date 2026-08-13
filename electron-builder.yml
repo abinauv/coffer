@@ -1,0 +1,169 @@
+# Packaging configuration — Windows (NSIS), macOS (dmg, x64 + arm64), Linux (AppImage + deb).
+#
+# Product identity is duplicated from src/branding.ts, which is the source of truth
+# (BRAND.name, BRAND.appId, BRAND.copyrightHolder, BRAND.tagline, BRAND.description).
+# This file is YAML and cannot import it, so the values are literal here — change
+# branding.ts first, then mirror it down. Nothing else in the repo hard-codes the name.
+appId: com.coffer.app
+productName: Coffer
+copyright: © 2026 The Coffer contributors
+
+# ---------------------------------------------------------------------------------------
+# Signing: deliberately absent.
+#
+# There are no certificates and none are being bought yet. This is a known, documented
+# gap — see SECURITY.md "Known gaps" and docs/ARCHITECTURE.md §6.5. The consequences are
+# real and accepted: Windows shows a SmartScreen warning, macOS quarantines the download
+# and the user has to open it explicitly, and macOS auto-update (which requires a valid
+# signature) will not work.
+#
+# The compensating control is integrity by checksum: .github/workflows/release.yml hashes
+# every artefact with SHA-256 and publishes SHA256SUMS.txt alongside the release. For an
+# unsigned build that file is the only integrity signal there is.
+#
+# Nothing here references CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_TEAM_ID,
+# APPLE_APP_SPECIFIC_PASSWORD or any other signing credential, and no workflow sets them.
+# When certificates do arrive the change is: set mac.identity, replace `notarize: false`
+# with a notarize block, set hardenedRuntime true, add the Windows signing options — and
+# delete this comment.
+# ---------------------------------------------------------------------------------------
+
+# Both native dependencies are Node-API addons shipping prebuilt binaries for every
+# platform targeted here, so there is nothing to compile and no contributor needs a C++
+# toolchain. scripts/native-modules.mjs verifies that on install; see its header.
+npmRebuild: false
+buildDependenciesFromSource: false
+
+# Fails the build if the packaged native binaries are for the wrong platform — the one
+# packaging mistake that produces a clean build and a broken installer. See the script.
+afterPack: ./scripts/verify-packaged-natives.mjs
+
+directories:
+  buildResources: build
+  output: dist
+
+# electron-vite emits to out/. Production dependencies under node_modules are added by
+# electron-builder automatically; devDependencies are never packaged.
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+
+# Native binaries cannot be loaded from inside an asar archive — the dynamic loader needs
+# real files on disk.
+asarUnpack:
+  - '**/node_modules/better-sqlite3-multiple-ciphers/**'
+  - '**/node_modules/@node-rs/**'
+
+# better-sqlite3-multiple-ciphers ships prebuilt binaries for every platform in one
+# tarball — 20 MB of them, of which each installer needs 2 to 5. The per-platform `files`
+# blocks below drop the ones that platform can never load. They are written as explicit
+# exclusions rather than a clever "keep only mine" negation on purpose: if upstream adds a
+# new platform, the failure mode is an installer a few MB larger, not one missing the
+# binary it needs.
+#
+# @node-rs/argon2 needs no equivalent — npm installs only the optional package matching
+# the host platform.
+
+# Update metadata (latest.yml, latest-mac.yml, latest-linux.yml) is generated so
+# electron-updater has a feed to read. Releases are still built with `--publish never`;
+# the workflow uploads artefacts itself rather than letting electron-builder push them.
+publish:
+  provider: github
+  owner: abinauv
+  repo: coffer
+
+# ---------------------------------------------------------------------------------------
+# Windows
+# ---------------------------------------------------------------------------------------
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+  artifactName: ${productName}-${version}-windows-${arch}-setup.${ext}
+  files:
+    - '!**/node_modules/better-sqlite3-multiple-ciphers/prebuilds/{darwin,linux,linuxmusl}-*.node'
+    - '!**/node_modules/better-sqlite3-multiple-ciphers/prebuilds/win32-arm64.node'
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Coffer
+  # A company database is the user's books. Uninstalling must never delete them — this is
+  # a data-safety contract, not a preference.
+  deleteAppDataOnUninstall: false
+
+# ---------------------------------------------------------------------------------------
+# macOS — both architectures. Apple silicon and Intel each get their own dmg; a universal
+# binary would roughly double the download for no benefit to either user.
+# ---------------------------------------------------------------------------------------
+mac:
+  category: public.app-category.finance
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  icon: build/icon.png
+  darkModeSupport: true
+  artifactName: ${productName}-${version}-macos-${arch}.${ext}
+  # Both slices keep both darwin binaries: electron-builder does not vary `files` by
+  # architecture, and 2 MB is not worth a fragile pattern.
+  files:
+    - '!**/node_modules/better-sqlite3-multiple-ciphers/prebuilds/{linux,linuxmusl,win32}-*.node'
+  # Unsigned: no identity, no hardened runtime (it requires signing), no notarization.
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  notarize: false
+  extendInfo:
+    NSHumanReadableCopyright: © 2026 The Coffer contributors
+
+dmg:
+  artifactName: ${productName}-${version}-macos-${arch}.${ext}
+  contents:
+    - x: 140
+      y: 200
+      type: file
+    - x: 400
+      y: 200
+      type: link
+      path: /Applications
+
+# ---------------------------------------------------------------------------------------
+# Linux
+# ---------------------------------------------------------------------------------------
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  icon: build/icon.png
+  # Keeps linux-x64 and linuxmusl-x64 — the AppImage can land on a musl-based
+  # distribution, and the module picks the right one at load time.
+  files:
+    - '!**/node_modules/better-sqlite3-multiple-ciphers/prebuilds/{darwin,win32}-*.node'
+    - '!**/node_modules/better-sqlite3-multiple-ciphers/prebuilds/*-arm64.node'
+  category: Office;Finance
+  synopsis: Your books, in your own safe.
+  description: >-
+    A local-first, double-entry ERP for small businesses. Invoicing, purchases,
+    inventory, a real general ledger and GST compliance — running entirely on your own
+    machine, in one encrypted file you own.
+  # deb requires a maintainer and package.json has no author field. A project address is
+  # used deliberately rather than a personal one.
+  maintainer: The Coffer contributors <abinauv@users.noreply.github.com>
+  # deb `depends` is left at the electron-builder default on purpose. Pinning the runtime
+  # library names here breaks on distributions that renamed them (the Debian/Ubuntu 64-bit
+  # time_t transition renamed libgtk-3-0 and friends to *t64); upstream tracks that, and
+  # this project has no Linux machine to test a hand-written list against.
+  desktop:
+    entry:
+      Name: Coffer
+      Comment: Your books, in your own safe.
+      Keywords: accounting;erp;invoice;ledger;gst;bookkeeping;
+      StartupWMClass: Coffer
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}

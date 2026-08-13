@@ -1,0 +1,107 @@
+version: 2
+
+# Dependency updates for a solo maintainer. The goal is one review sitting a week, not a
+# drip of twelve single-package pull requests — so everything is grouped, and the groups
+# are drawn around things that have to move together anyway.
+#
+# docs/ARCHITECTURE.md §3 pins exact versions and says to upgrade deliberately. Two
+# consequences are encoded here: `versioning-strategy: increase` so a bump rewrites the
+# pin rather than loosening it into a range, and major versions of the load-bearing
+# toolchain are ignored, because Electron, Vite and TypeScript majors are a decision with
+# a paragraph in ARCHITECTURE.md attached, not a green tick.
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '07:00'
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 4
+    versioning-strategy: increase
+    labels:
+      - dependencies
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps-dev)'
+      include: scope
+
+    groups:
+      # Electron, electron-vite, electron-builder, electron-updater and electron-log move
+      # as a unit — a shell upgrade that the packager or the updater has not caught up
+      # with is not an upgrade.
+      electron:
+        patterns:
+          - electron
+          - 'electron-*'
+          - '@electron/*'
+
+      # The native modules the encrypted database and the passphrase depend on. Kept
+      # apart from everything else because these are the ones where a bump means
+      # re-checking that the prebuilt binaries still load under Electron.
+      native:
+        patterns:
+          - better-sqlite3-multiple-ciphers
+          - '@node-rs/*'
+          - libsodium-wrappers
+
+      # Correctness-critical runtime libraries. Money and SQL: read the changelog.
+      accounting-core:
+        patterns:
+          - decimal.js
+          - kysely
+          - exceljs
+
+      react:
+        patterns:
+          - react
+          - react-dom
+          - '@types/react'
+          - '@types/react-dom'
+          - '@vitejs/*'
+
+      toolchain:
+        patterns:
+          - typescript
+          - typescript-eslint
+          - eslint
+          - '@eslint/*'
+          - prettier
+          - vite
+          - vitest
+          - '@types/*'
+
+    ignore:
+      # Majors here are architectural decisions, taken by hand with ARCHITECTURE.md open.
+      - dependency-name: electron
+        update-types: [version-update:semver-major]
+      - dependency-name: vite
+        update-types: [version-update:semver-major]
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      - dependency-name: react
+        update-types: [version-update:semver-major]
+      - dependency-name: react-dom
+        update-types: [version-update:semver-major]
+      - dependency-name: better-sqlite3-multiple-ciphers
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '07:00'
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 1
+    labels:
+      - dependencies
+      - ci
+    commit-message:
+      prefix: 'ci(deps)'
+    groups:
+      # Six or seven actions across two workflows. One pull request, always.
+      actions:
+        patterns:
+          - '*'

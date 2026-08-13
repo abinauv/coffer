@@ -1,0 +1,355 @@
+{
+  "$comment": "Golden fixtures for fiscal years. The April-to-March rule is one entry here, not an assumption anywhere. Changing a year boundary, a label format, or the periods inside a year must fail a test here.",
+  "rules": [
+    { "id": "april-march", "startMonth": 4, "startDay": 1, "exported": "aprilToMarch" },
+    { "id": "january-december", "startMonth": 1, "startDay": 1, "exported": "januaryToDecember" },
+    {
+      "id": "april-sixth",
+      "startMonth": 4,
+      "startDay": 6,
+      "why": "a year that does not start on the 1st — the UK personal tax year"
+    },
+    {
+      "id": "july-june",
+      "startMonth": 7,
+      "startDay": 1,
+      "why": "Australia, and a second two-calendar-year shape"
+    }
+  ],
+  "dates": [
+    {
+      "rule": "april-march",
+      "date": "2026-04-01",
+      "startYear": 2026,
+      "label": "2026-27",
+      "startDate": "2026-04-01",
+      "endDate": "2027-03-31",
+      "why": "the first day of a fiscal year belongs to it, not the one before"
+    },
+    {
+      "rule": "april-march",
+      "date": "2026-03-31",
+      "startYear": 2025,
+      "label": "2025-26",
+      "startDate": "2025-04-01",
+      "endDate": "2026-03-31",
+      "why": "the last day. A date in 2026 whose fiscal year is labelled 2025-26"
+    },
+    {
+      "rule": "april-march",
+      "date": "2026-01-01",
+      "startYear": 2025,
+      "label": "2025-26",
+      "startDate": "2025-04-01",
+      "endDate": "2026-03-31",
+      "why": "January is in the previous fiscal year"
+    },
+    {
+      "rule": "april-march",
+      "date": "2026-12-31",
+      "startYear": 2026,
+      "label": "2026-27",
+      "startDate": "2026-04-01",
+      "endDate": "2027-03-31",
+      "why": "December is in the current one"
+    },
+    {
+      "rule": "april-march",
+      "date": "2028-02-29",
+      "startYear": 2027,
+      "label": "2027-28",
+      "startDate": "2027-04-01",
+      "endDate": "2028-03-31",
+      "why": "the leap day falls in an April-to-March year that started the previous calendar year"
+    },
+    {
+      "rule": "april-march",
+      "date": "2000-03-31",
+      "startYear": 1999,
+      "label": "1999-00",
+      "startDate": "1999-04-01",
+      "endDate": "2000-03-31",
+      "why": "the century roll: the second half of the label wraps to 00"
+    },
+    {
+      "rule": "april-march",
+      "date": "2099-04-01",
+      "startYear": 2099,
+      "label": "2099-00",
+      "startDate": "2099-04-01",
+      "endDate": "2100-03-31",
+      "why": "and again, with 2100 not a leap year"
+    },
+    {
+      "rule": "january-december",
+      "date": "2026-01-01",
+      "startYear": 2026,
+      "label": "2026",
+      "startDate": "2026-01-01",
+      "endDate": "2026-12-31",
+      "why": "a calendar-year rule is labelled with one year, not two"
+    },
+    {
+      "rule": "january-december",
+      "date": "2026-12-31",
+      "startYear": 2026,
+      "label": "2026",
+      "startDate": "2026-01-01",
+      "endDate": "2026-12-31",
+      "why": "the last day"
+    },
+    {
+      "rule": "january-december",
+      "date": "2028-02-29",
+      "startYear": 2028,
+      "label": "2028",
+      "startDate": "2028-01-01",
+      "endDate": "2028-12-31",
+      "why": "the leap day, in a year that is 366 days long"
+    },
+    {
+      "rule": "april-sixth",
+      "date": "2026-04-05",
+      "startYear": 2025,
+      "label": "2025-26",
+      "startDate": "2025-04-06",
+      "endDate": "2026-04-05",
+      "why": "the day before the start belongs to the previous year — the start day matters, not just the month"
+    },
+    {
+      "rule": "april-sixth",
+      "date": "2026-04-06",
+      "startYear": 2026,
+      "label": "2026-27",
+      "startDate": "2026-04-06",
+      "endDate": "2027-04-05",
+      "why": "and the start day itself begins the new one"
+    },
+    {
+      "rule": "july-june",
+      "date": "2026-06-30",
+      "startYear": 2025,
+      "label": "2025-26",
+      "startDate": "2025-07-01",
+      "endDate": "2026-06-30",
+      "why": "last day"
+    },
+    {
+      "rule": "july-june",
+      "date": "2026-07-01",
+      "startYear": 2026,
+      "label": "2026-27",
+      "startDate": "2026-07-01",
+      "endDate": "2027-06-30",
+      "why": "first day"
+    }
+  ],
+  "periods": [
+    {
+      "rule": "april-march",
+      "startYear": 2027,
+      "granularity": "month",
+      "expected": [
+        { "index": 1, "label": "Apr 2027", "startDate": "2027-04-01", "endDate": "2027-04-30" },
+        { "index": 2, "label": "May 2027", "startDate": "2027-05-01", "endDate": "2027-05-31" },
+        { "index": 3, "label": "Jun 2027", "startDate": "2027-06-01", "endDate": "2027-06-30" },
+        { "index": 4, "label": "Jul 2027", "startDate": "2027-07-01", "endDate": "2027-07-31" },
+        { "index": 5, "label": "Aug 2027", "startDate": "2027-08-01", "endDate": "2027-08-31" },
+        { "index": 6, "label": "Sep 2027", "startDate": "2027-09-01", "endDate": "2027-09-30" },
+        { "index": 7, "label": "Oct 2027", "startDate": "2027-10-01", "endDate": "2027-10-31" },
+        { "index": 8, "label": "Nov 2027", "startDate": "2027-11-01", "endDate": "2027-11-30" },
+        { "index": 9, "label": "Dec 2027", "startDate": "2027-12-01", "endDate": "2027-12-31" },
+        { "index": 10, "label": "Jan 2028", "startDate": "2028-01-01", "endDate": "2028-01-31" },
+        { "index": 11, "label": "Feb 2028", "startDate": "2028-02-01", "endDate": "2028-02-29" },
+        { "index": 12, "label": "Mar 2028", "startDate": "2028-03-01", "endDate": "2028-03-31" }
+      ],
+      "why": "period 11 ends on the 29th because the next period starts on 1 March, not because anything here knows about leap years"
+    },
+    {
+      "rule": "april-march",
+      "startYear": 2027,
+      "granularity": "quarter",
+      "expected": [
+        { "index": 1, "label": "Q1 2027-28", "startDate": "2027-04-01", "endDate": "2027-06-30" },
+        { "index": 2, "label": "Q2 2027-28", "startDate": "2027-07-01", "endDate": "2027-09-30" },
+        { "index": 3, "label": "Q3 2027-28", "startDate": "2027-10-01", "endDate": "2027-12-31" },
+        { "index": 4, "label": "Q4 2027-28", "startDate": "2028-01-01", "endDate": "2028-03-31" }
+      ],
+      "why": "Q1 is the first quarter of the fiscal year, not of the calendar year"
+    },
+    {
+      "rule": "january-december",
+      "startYear": 2028,
+      "granularity": "month",
+      "expected": [
+        { "index": 1, "label": "Jan 2028", "startDate": "2028-01-01", "endDate": "2028-01-31" },
+        { "index": 2, "label": "Feb 2028", "startDate": "2028-02-01", "endDate": "2028-02-29" },
+        { "index": 3, "label": "Mar 2028", "startDate": "2028-03-01", "endDate": "2028-03-31" },
+        { "index": 4, "label": "Apr 2028", "startDate": "2028-04-01", "endDate": "2028-04-30" },
+        { "index": 5, "label": "May 2028", "startDate": "2028-05-01", "endDate": "2028-05-31" },
+        { "index": 6, "label": "Jun 2028", "startDate": "2028-06-01", "endDate": "2028-06-30" },
+        { "index": 7, "label": "Jul 2028", "startDate": "2028-07-01", "endDate": "2028-07-31" },
+        { "index": 8, "label": "Aug 2028", "startDate": "2028-08-01", "endDate": "2028-08-31" },
+        { "index": 9, "label": "Sep 2028", "startDate": "2028-09-01", "endDate": "2028-09-30" },
+        { "index": 10, "label": "Oct 2028", "startDate": "2028-10-01", "endDate": "2028-10-31" },
+        { "index": 11, "label": "Nov 2028", "startDate": "2028-11-01", "endDate": "2028-11-30" },
+        { "index": 12, "label": "Dec 2028", "startDate": "2028-12-01", "endDate": "2028-12-31" }
+      ]
+    },
+    {
+      "rule": "january-december",
+      "startYear": 2026,
+      "granularity": "quarter",
+      "expected": [
+        { "index": 1, "label": "Q1 2026", "startDate": "2026-01-01", "endDate": "2026-03-31" },
+        { "index": 2, "label": "Q2 2026", "startDate": "2026-04-01", "endDate": "2026-06-30" },
+        { "index": 3, "label": "Q3 2026", "startDate": "2026-07-01", "endDate": "2026-09-30" },
+        { "index": 4, "label": "Q4 2026", "startDate": "2026-10-01", "endDate": "2026-12-31" }
+      ]
+    },
+    {
+      "rule": "april-sixth",
+      "startYear": 2025,
+      "granularity": "quarter",
+      "expected": [
+        { "index": 1, "label": "Q1 2025-26", "startDate": "2025-04-06", "endDate": "2025-07-05" },
+        { "index": 2, "label": "Q2 2025-26", "startDate": "2025-07-06", "endDate": "2025-10-05" },
+        { "index": 3, "label": "Q3 2025-26", "startDate": "2025-10-06", "endDate": "2026-01-05" },
+        { "index": 4, "label": "Q4 2025-26", "startDate": "2026-01-06", "endDate": "2026-04-05" }
+      ],
+      "why": "periods run from the 6th to the 5th, and the last one still ends on the fiscal year's last day"
+    }
+  ],
+  "periodLookups": [
+    {
+      "rule": "april-march",
+      "date": "2028-02-29",
+      "granularity": "month",
+      "index": 11,
+      "label": "Feb 2028"
+    },
+    {
+      "rule": "april-march",
+      "date": "2027-04-01",
+      "granularity": "month",
+      "index": 1,
+      "label": "Apr 2027"
+    },
+    {
+      "rule": "april-march",
+      "date": "2028-03-31",
+      "granularity": "month",
+      "index": 12,
+      "label": "Mar 2028"
+    },
+    {
+      "rule": "april-march",
+      "date": "2027-04-01",
+      "granularity": "quarter",
+      "index": 1,
+      "label": "Q1 2027-28"
+    },
+    {
+      "rule": "april-march",
+      "date": "2028-03-31",
+      "granularity": "quarter",
+      "index": 4,
+      "label": "Q4 2027-28"
+    },
+    {
+      "rule": "april-march",
+      "date": "2027-12-31",
+      "granularity": "quarter",
+      "index": 3,
+      "label": "Q3 2027-28"
+    },
+    {
+      "rule": "january-december",
+      "date": "2028-12-31",
+      "granularity": "month",
+      "index": 12,
+      "label": "Dec 2028"
+    },
+    {
+      "rule": "january-december",
+      "date": "2028-01-01",
+      "granularity": "quarter",
+      "index": 1,
+      "label": "Q1 2028"
+    },
+    {
+      "rule": "april-sixth",
+      "date": "2026-04-05",
+      "granularity": "quarter",
+      "index": 4,
+      "label": "Q4 2025-26"
+    },
+    {
+      "rule": "april-sixth",
+      "date": "2025-04-06",
+      "granularity": "month",
+      "index": 1,
+      "label": "Apr 2025"
+    },
+    {
+      "rule": "july-june",
+      "date": "2026-06-30",
+      "granularity": "quarter",
+      "index": 4,
+      "label": "Q4 2025-26"
+    }
+  ],
+  "containment": [
+    {
+      "rule": "april-march",
+      "startYear": 2027,
+      "date": "2027-04-01",
+      "contains": true,
+      "why": "first day"
+    },
+    {
+      "rule": "april-march",
+      "startYear": 2027,
+      "date": "2028-03-31",
+      "contains": true,
+      "why": "last day"
+    },
+    {
+      "rule": "april-march",
+      "startYear": 2027,
+      "date": "2027-03-31",
+      "contains": false,
+      "why": "the day before"
+    },
+    {
+      "rule": "april-march",
+      "startYear": 2027,
+      "date": "2028-04-01",
+      "contains": false,
+      "why": "the day after"
+    },
+    {
+      "rule": "april-march",
+      "startYear": 2027,
+      "date": "2028-02-29",
+      "contains": true,
+      "why": "the leap day"
+    },
+    { "rule": "january-december", "startYear": 2026, "date": "2026-12-31", "contains": true },
+    { "rule": "january-december", "startYear": 2026, "date": "2027-01-01", "contains": false },
+    {
+      "rule": "april-sixth",
+      "startYear": 2025,
+      "date": "2026-04-05",
+      "contains": true,
+      "why": "last day"
+    },
+    {
+      "rule": "april-sixth",
+      "startYear": 2025,
+      "date": "2026-04-06",
+      "contains": false,
+      "why": "the next year's first day"
+    }
+  ]
+}

@@ -1,0 +1,200 @@
+{
+  "$comment": "Golden fixtures for the rounding policy. docs/ARCHITECTURE.md §7: ROUND_HALF_UP, at defined points only. Changing a scale, adding or removing a rounding point, or switching to banker's rounding must fail a test here.",
+  "roundingMode": "ROUND_HALF_UP",
+  "scales": {
+    "money": 2,
+    "quantity": 3,
+    "rate": 2
+  },
+  "points": {
+    "moneyStorage": 2,
+    "quantityStorage": 3,
+    "rateStorage": 2,
+    "lineAmount": 2,
+    "documentTotal": 2,
+    "allocationUnit": 2,
+    "wholeUnit": 0
+  },
+  "cases": [
+    {
+      "point": "moneyStorage",
+      "input": "1.005",
+      "expected": "1.01",
+      "why": "the tie case. Exactly .005 goes up; a float would hold 1.00499999... and go down"
+    },
+    {
+      "point": "moneyStorage",
+      "input": "-1.005",
+      "expected": "-1.01",
+      "why": "half-up is away from zero, not towards positive infinity"
+    },
+    {
+      "point": "moneyStorage",
+      "input": "2.675",
+      "expected": "2.68",
+      "why": "the other classic float trap: 2.675 is stored as 2.67499999... in binary"
+    },
+    { "point": "moneyStorage", "input": "-2.675", "expected": "-2.68", "why": "the same, signed" },
+    { "point": "moneyStorage", "input": "1.004", "expected": "1.00", "why": "below the tie" },
+    {
+      "point": "moneyStorage",
+      "input": "0.005",
+      "expected": "0.01",
+      "why": "tie at the smallest unit"
+    },
+    { "point": "moneyStorage", "input": "-0.005", "expected": "-0.01", "why": "signed tie" },
+    { "point": "moneyStorage", "input": "0.004", "expected": "0.00", "why": "rounds to nothing" },
+    {
+      "point": "moneyStorage",
+      "input": "-0.004",
+      "expected": "0.00",
+      "why": "a negative that rounds to zero must not become -0.00 in a column"
+    },
+    {
+      "point": "moneyStorage",
+      "input": "-0",
+      "expected": "0.00",
+      "why": "signed zero is normalised"
+    },
+    { "point": "moneyStorage", "input": "0.015", "expected": "0.02", "why": "tie up" },
+    {
+      "point": "moneyStorage",
+      "input": "0.025",
+      "expected": "0.03",
+      "why": "not banker's rounding, which would give 0.02"
+    },
+    {
+      "point": "moneyStorage",
+      "input": "0.035",
+      "expected": "0.04",
+      "why": "not banker's rounding, which would also give 0.04 — paired with 0.025 this pins the mode"
+    },
+    {
+      "point": "moneyStorage",
+      "input": "100",
+      "expected": "100.00",
+      "why": "an exact value still renders at scale"
+    },
+    {
+      "point": "moneyStorage",
+      "input": "12345678901234.565",
+      "expected": "12345678901234.57",
+      "why": "17 significant digits, well past what a double can hold exactly"
+    },
+    {
+      "point": "lineAmount",
+      "input": "1.005",
+      "expected": "1.01",
+      "why": "line amounts share the money scale"
+    },
+    {
+      "point": "documentTotal",
+      "input": "1.005",
+      "expected": "1.01",
+      "why": "totals share the money scale"
+    },
+    {
+      "point": "documentTotal",
+      "input": "-0.004",
+      "expected": "0.00",
+      "why": "a total that rounds to nothing is not a negative nothing"
+    },
+    {
+      "point": "allocationUnit",
+      "input": "1.005",
+      "expected": "1.01",
+      "why": "an allocation's smallest unit is a paisa"
+    },
+    {
+      "point": "allocationUnit",
+      "input": "33.335",
+      "expected": "33.34",
+      "why": "the amount being split is fixed at the unit before any share is computed"
+    },
+    {
+      "point": "quantityStorage",
+      "input": "1.2345",
+      "expected": "1.235",
+      "why": "quantity ties up at 3dp"
+    },
+    { "point": "quantityStorage", "input": "1.2344", "expected": "1.234", "why": "below the tie" },
+    {
+      "point": "quantityStorage",
+      "input": "0.0005",
+      "expected": "0.001",
+      "why": "tie at the smallest quantity unit"
+    },
+    { "point": "quantityStorage", "input": "-0.0005", "expected": "-0.001", "why": "signed tie" },
+    {
+      "point": "quantityStorage",
+      "input": "1",
+      "expected": "1.000",
+      "why": "quantity renders at 3dp"
+    },
+    {
+      "point": "quantityStorage",
+      "input": "1.005",
+      "expected": "1.005",
+      "why": "already at scale, untouched"
+    },
+    {
+      "point": "rateStorage",
+      "input": "18.005",
+      "expected": "18.01",
+      "why": "rate ties up at 2dp"
+    },
+    { "point": "rateStorage", "input": "2.5", "expected": "2.50", "why": "rate renders at 2dp" },
+    { "point": "rateStorage", "input": "0.125", "expected": "0.13", "why": "tie up" },
+    { "point": "wholeUnit", "input": "0.5", "expected": "1", "why": "half-up" },
+    { "point": "wholeUnit", "input": "-0.5", "expected": "-1", "why": "away from zero" },
+    {
+      "point": "wholeUnit",
+      "input": "2.5",
+      "expected": "3",
+      "why": "not banker's rounding, which would give 2"
+    },
+    {
+      "point": "wholeUnit",
+      "input": "3.5",
+      "expected": "4",
+      "why": "not banker's rounding, which would also give 4"
+    },
+    { "point": "wholeUnit", "input": "0.49", "expected": "0", "why": "below the tie" },
+    { "point": "wholeUnit", "input": "-0.49", "expected": "0", "why": "and no -0" }
+  ],
+  "wholeUnitCases": [
+    {
+      "amount": "9092.40",
+      "rounded": "9092",
+      "adjustment": "-0.40",
+      "why": "rounded down, so the adjustment posted to the round-off line is negative"
+    },
+    {
+      "amount": "9092.60",
+      "rounded": "9093",
+      "adjustment": "0.40",
+      "why": "rounded up, so the adjustment is positive"
+    },
+    {
+      "amount": "19092.00",
+      "rounded": "19092",
+      "adjustment": "0.00",
+      "why": "already whole — a clean zero, never -0"
+    },
+    { "amount": "0.50", "rounded": "1", "adjustment": "0.50", "why": "tie up" },
+    { "amount": "-0.50", "rounded": "-1", "adjustment": "-0.50", "why": "tie away from zero" },
+    {
+      "amount": "-1.40",
+      "rounded": "-1",
+      "adjustment": "0.40",
+      "why": "a negative total rounded towards zero takes a positive adjustment"
+    },
+    {
+      "amount": "-1.60",
+      "rounded": "-2",
+      "adjustment": "-0.40",
+      "why": "and away from zero takes a negative one"
+    },
+    { "amount": "2.50", "rounded": "3", "adjustment": "0.50", "why": "half-up, not banker's" }
+  ]
+}

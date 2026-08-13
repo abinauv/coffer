@@ -1,0 +1,145 @@
+{
+  "$comment": "Golden fixtures for allocation. Every case asserts both the exact split and that the shares sum back to the total. Changing the residue rule — which part absorbs the odd unit, or the order ties break in — must fail a test here.",
+  "cases": [
+    {
+      "name": "the classic: 100.00 three ways",
+      "total": "100.00",
+      "parts": 3,
+      "expected": ["33.34", "33.33", "33.33"],
+      "why": "33.33 three times is 99.99. The lost paisa goes to the first part, and the sum is 100.00"
+    },
+    {
+      "name": "no residue to distribute",
+      "total": "100.00",
+      "parts": 4,
+      "expected": ["25.00", "25.00", "25.00", "25.00"],
+      "why": "an exact split touches nothing"
+    },
+    {
+      "name": "one paisa, three ways",
+      "total": "0.01",
+      "parts": 3,
+      "expected": ["0.01", "0.00", "0.00"],
+      "why": "there is no fraction of a paisa to give the other two"
+    },
+    {
+      "name": "two paise, three ways",
+      "total": "0.02",
+      "parts": 3,
+      "expected": ["0.01", "0.01", "0.00"],
+      "why": "the residue is handed out one unit at a time, not all to one part"
+    },
+    {
+      "name": "negative total, three ways",
+      "total": "-100.00",
+      "parts": 3,
+      "expected": ["-33.34", "-33.33", "-33.33"],
+      "why": "a credit note splits the mirror image of the invoice. Truncation is towards zero, so the residue keeps the total's sign"
+    },
+    {
+      "name": "zero splits into zeros",
+      "total": "0.00",
+      "parts": 3,
+      "expected": ["0.00", "0.00", "0.00"],
+      "why": "and no part receives a signed zero"
+    },
+    {
+      "name": "seven ways, six parts absorb the residue",
+      "total": "10.00",
+      "parts": 7,
+      "expected": ["1.43", "1.43", "1.43", "1.43", "1.43", "1.43", "1.42"],
+      "why": "1.428571... truncates to 1.42, leaving six paise to hand out"
+    },
+    {
+      "name": "half a paisa each, tie broken by position",
+      "total": "0.03",
+      "parts": 2,
+      "expected": ["0.02", "0.01"],
+      "why": "both parts are short by exactly half a unit; the earlier one wins"
+    },
+    {
+      "name": "lakh-scale, still exact",
+      "total": "1000000.00",
+      "parts": 3,
+      "expected": ["333333.34", "333333.33", "333333.33"],
+      "why": "magnitude does not change the argument"
+    },
+    {
+      "name": "weights 3:2:1",
+      "total": "1000.00",
+      "weights": ["3", "2", "1"],
+      "expected": ["500.00", "333.33", "166.67"],
+      "why": "the residue goes to the largest shortfall, which here is the smallest share"
+    },
+    {
+      "name": "weights 4:2:1 — the residue lands on the last part",
+      "total": "100.00",
+      "weights": ["4", "2", "1"],
+      "expected": ["57.14", "28.57", "14.29"],
+      "why": "position does not decide it: 14.285714 is short by more than the other two, so it takes the paisa"
+    },
+    {
+      "name": "a zero weight receives nothing",
+      "total": "10.00",
+      "weights": ["1", "0", "1"],
+      "expected": ["5.00", "0.00", "5.00"],
+      "why": "a zero weight is allowed; only an all-zero set is not"
+    },
+    {
+      "name": "fractional weights",
+      "total": "100.00",
+      "weights": ["0.1", "0.2", "0.7"],
+      "expected": ["10.00", "20.00", "70.00"],
+      "why": "weights need not be whole, or sum to anything in particular"
+    },
+    {
+      "name": "weights that are themselves amounts",
+      "total": "1000.00",
+      "weights": ["333.33", "333.33", "333.34"],
+      "expected": ["333.33", "333.33", "333.34"],
+      "why": "the payment-allocation shape: settle a receipt across outstanding invoices"
+    },
+    {
+      "name": "a payment short of the invoices it settles",
+      "total": "500.00",
+      "weights": ["1000.00", "500.00", "250.00"],
+      "expected": ["285.71", "142.86", "71.43"],
+      "why": "part payment spread pro rata, to the paisa"
+    },
+    {
+      "name": "quantity scale",
+      "total": "1.000",
+      "parts": 3,
+      "point": "quantityStorage",
+      "expected": ["0.334", "0.333", "0.333"],
+      "why": "the smallest unit follows the rounding point, so quantities split at 3dp"
+    },
+    {
+      "name": "whole units",
+      "total": "100",
+      "parts": 3,
+      "point": "wholeUnit",
+      "expected": ["34", "33", "33"],
+      "why": "the same argument with a unit of 1"
+    },
+    {
+      "name": "the total is fixed at the rounding point first",
+      "total": "100.005",
+      "parts": 2,
+      "expected": ["50.01", "50.00"],
+      "why": "100.005 is not representable at money scale; it becomes 100.01 and that is what the shares sum to"
+    }
+  ],
+  "rejected": [
+    { "total": "100.00", "parts": 0, "why": "no parts to split across" },
+    { "total": "100.00", "parts": -3, "why": "a negative count is meaningless" },
+    { "total": "100.00", "parts": 2.5, "why": "a fractional count is meaningless" },
+    { "total": "100.00", "weights": [], "why": "no parts to split across" },
+    { "total": "100.00", "weights": ["0", "0"], "why": "nothing to be proportional to" },
+    {
+      "total": "100.00",
+      "weights": ["1", "-1"],
+      "why": "a negative weight would point a share away from the total"
+    }
+  ]
+}

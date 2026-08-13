@@ -1,0 +1,115 @@
+{
+  "$comment": "Golden fixtures for calendar-date arithmetic. Leap years, month-end clamping and the boundaries either side of them. Every value here is a real calendar fact, so a change to any of it is a bug rather than a preference.",
+  "leapYears": [
+    { "year": 1900, "isLeap": false, "why": "a century not divisible by 400" },
+    { "year": 2000, "isLeap": true, "why": "a century divisible by 400" },
+    { "year": 2024, "isLeap": true },
+    { "year": 2026, "isLeap": false },
+    { "year": 2027, "isLeap": false },
+    { "year": 2028, "isLeap": true },
+    { "year": 2100, "isLeap": false, "why": "the next century that is not" },
+    { "year": 2400, "isLeap": true }
+  ],
+  "daysInMonth": [
+    { "year": 2026, "month": 2, "days": 28 },
+    { "year": 2028, "month": 2, "days": 29 },
+    { "year": 2000, "month": 2, "days": 29 },
+    { "year": 1900, "month": 2, "days": 28 },
+    { "year": 2026, "month": 1, "days": 31 },
+    { "year": 2026, "month": 4, "days": 30 },
+    { "year": 2026, "month": 12, "days": 31 }
+  ],
+  "addDays": [
+    { "date": "2028-02-28", "days": 1, "expected": "2028-02-29", "why": "into the leap day" },
+    { "date": "2028-02-29", "days": 1, "expected": "2028-03-01", "why": "and out of it" },
+    { "date": "2027-02-28", "days": 1, "expected": "2027-03-01", "why": "no leap day to land on" },
+    { "date": "2026-12-31", "days": 1, "expected": "2027-01-01", "why": "across the year" },
+    { "date": "2026-01-01", "days": -1, "expected": "2025-12-31", "why": "and back" },
+    {
+      "date": "2027-04-01",
+      "days": -1,
+      "expected": "2027-03-31",
+      "why": "the fiscal-year boundary, walked backwards"
+    },
+    { "date": "2026-03-01", "days": -1, "expected": "2026-02-28" },
+    { "date": "2028-03-01", "days": -1, "expected": "2028-02-29" },
+    {
+      "date": "2026-01-01",
+      "days": 365,
+      "expected": "2027-01-01",
+      "why": "2026 is not a leap year"
+    },
+    { "date": "2028-01-01", "days": 366, "expected": "2029-01-01", "why": "2028 is" },
+    { "date": "2026-06-15", "days": 0, "expected": "2026-06-15" }
+  ],
+  "addMonths": [
+    {
+      "date": "2026-01-31",
+      "months": 1,
+      "expected": "2026-02-28",
+      "why": "clamped to the end of a short month"
+    },
+    {
+      "date": "2028-01-31",
+      "months": 1,
+      "expected": "2028-02-29",
+      "why": "clamped to the leap day"
+    },
+    {
+      "date": "2026-03-31",
+      "months": -1,
+      "expected": "2026-02-28",
+      "why": "clamping is not reversible; 31 January does not come back"
+    },
+    { "date": "2026-05-31", "months": 1, "expected": "2026-06-30" },
+    { "date": "2026-01-15", "months": 12, "expected": "2027-01-15" },
+    { "date": "2026-12-01", "months": 1, "expected": "2027-01-01", "why": "across the year" },
+    { "date": "2026-01-01", "months": -1, "expected": "2025-12-01" },
+    {
+      "date": "2027-04-01",
+      "months": 12,
+      "expected": "2028-04-01",
+      "why": "a fiscal year's worth"
+    },
+    { "date": "2026-06-15", "months": 0, "expected": "2026-06-15" }
+  ],
+  "daysBetween": [
+    { "from": "2026-01-01", "to": "2026-12-31", "expected": 364 },
+    { "from": "2026-01-01", "to": "2027-01-01", "expected": 365 },
+    { "from": "2028-01-01", "to": "2029-01-01", "expected": 366, "why": "a leap year is longer" },
+    { "from": "2026-03-01", "to": "2026-01-01", "expected": -59, "why": "backwards is negative" },
+    { "from": "2026-01-01", "to": "2026-01-01", "expected": 0 },
+    {
+      "from": "2027-04-01",
+      "to": "2028-03-31",
+      "expected": 365,
+      "why": "an April-to-March year containing 29 February"
+    }
+  ],
+  "monthBounds": [
+    { "date": "2028-02-15", "start": "2028-02-01", "end": "2028-02-29" },
+    { "date": "2026-02-15", "start": "2026-02-01", "end": "2026-02-28" },
+    { "date": "2026-04-30", "start": "2026-04-01", "end": "2026-04-30" },
+    { "date": "2026-12-31", "start": "2026-12-01", "end": "2026-12-31" }
+  ],
+  "invalidDates": [
+    { "text": "2026-02-29", "why": "2026 is not a leap year" },
+    { "text": "2027-02-29", "why": "nor is 2027" },
+    { "text": "1900-02-29", "why": "nor was 1900" },
+    { "text": "2026-04-31", "why": "April has thirty days" },
+    { "text": "2026-13-01", "why": "there is no thirteenth month" },
+    { "text": "2026-00-10", "why": "months are 1-12" },
+    { "text": "2026-01-00", "why": "days start at 1" },
+    { "text": "2026-01-32", "why": "and end at the month's length" },
+    { "text": "2026-1-1", "why": "components are zero-padded, so dates sort as text" },
+    { "text": "20260101", "why": "the separator is not optional" },
+    { "text": "2026/01/01", "why": "and it is a hyphen" },
+    { "text": "0999-01-01", "why": "years before 1000 are out of range" },
+    { "text": "2026-01-01T00:00:00.000Z", "why": "a date is not an instant" },
+    { "text": " 2026-01-01", "why": "no leading whitespace" },
+    { "text": "2026-01-01 ", "why": "no trailing whitespace" },
+    { "text": "", "why": "empty is not a date" },
+    { "text": "today", "why": "not a date" }
+  ],
+  "validDates": ["2028-02-29", "2000-02-29", "2026-02-28", "1000-01-01", "9999-12-31", "2026-12-31"]
+}

@@ -1,0 +1,124 @@
+{
+  "$comment": "Golden fixtures for percentOf — the primitive a tax regime composes with. `exact` is the unrounded result; `money` is the same value rounded once at money scale. That both are pinned is the point: rounding early is what makes a two-part tax stop matching its single-rate equivalent.",
+  "cases": [
+    {
+      "base": "1000.00",
+      "ratePercent": "18.00",
+      "exact": "180",
+      "money": "180.00",
+      "why": "the ordinary case"
+    },
+    {
+      "base": "999.99",
+      "ratePercent": "18.00",
+      "exact": "179.9982",
+      "money": "180.00",
+      "why": "the exact result carries four decimals; only the caller's rounding point flattens it"
+    },
+    {
+      "base": "0.05",
+      "ratePercent": "18.00",
+      "exact": "0.009",
+      "money": "0.01",
+      "why": "a result smaller than the smallest unit still rounds up, not away"
+    },
+    {
+      "base": "10.10",
+      "ratePercent": "5.00",
+      "exact": "0.505",
+      "money": "0.51",
+      "why": "lands exactly on the half-up tie"
+    },
+    {
+      "base": "10.30",
+      "ratePercent": "5.00",
+      "exact": "0.515",
+      "money": "0.52",
+      "why": "the tie again, on an odd unit — banker's rounding would give 0.52 here and 0.50 above"
+    },
+    {
+      "base": "100.00",
+      "ratePercent": "2.50",
+      "exact": "2.5",
+      "money": "2.50",
+      "why": "a fractional rate"
+    },
+    {
+      "base": "1234.56",
+      "ratePercent": "12.50",
+      "exact": "154.32",
+      "money": "154.32",
+      "why": "terminates exactly"
+    },
+    {
+      "base": "-1000.00",
+      "ratePercent": "18.00",
+      "exact": "-180",
+      "money": "-180.00",
+      "why": "a credit note carries the sign through"
+    },
+    {
+      "base": "1000.00",
+      "ratePercent": "0",
+      "exact": "0",
+      "money": "0.00",
+      "why": "an exempt line"
+    },
+    {
+      "base": "0",
+      "ratePercent": "18.00",
+      "exact": "0",
+      "money": "0.00",
+      "why": "nothing taxed is nothing"
+    },
+    {
+      "base": "100",
+      "ratePercent": "33.33",
+      "exact": "33.33",
+      "money": "33.33",
+      "why": "an awkward rate, exact anyway"
+    },
+    {
+      "base": "1",
+      "ratePercent": "0.01",
+      "exact": "0.0001",
+      "money": "0.00",
+      "why": "below the smallest unit: the exact value survives, the stored one does not"
+    },
+    {
+      "base": "12345678.90",
+      "ratePercent": "18.00",
+      "exact": "2222222.202",
+      "money": "2222222.20",
+      "why": "crore scale, well past what a double holds exactly"
+    },
+    {
+      "base": "1000.00",
+      "ratePercent": "100.00",
+      "exact": "1000",
+      "money": "1000.00",
+      "why": "a whole-base rate"
+    }
+  ],
+  "rateCases": [
+    {
+      "portion": "180.00",
+      "base": "1000.00",
+      "exact": "18",
+      "why": "the inverse of the ordinary case"
+    },
+    { "portion": "0", "base": "1000.00", "exact": "0", "why": "no portion is no rate" },
+    {
+      "portion": "100.00",
+      "base": "0",
+      "exact": "0",
+      "why": "a zero base yields zero rather than a division by zero"
+    },
+    {
+      "portion": "1",
+      "base": "3",
+      "exact": "33.33333333333333333333333333333333333333",
+      "why": "non-terminating, carried to the configured 40 significant digits"
+    }
+  ]
+}
