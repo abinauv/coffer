@@ -19,34 +19,34 @@ network dependency for any core function.
 
 These define the product. A change here is a change of product, not of implementation.
 
-| | |
-|---|---|
-| **No server** | Nothing in the core requires a running service. Optional cloud features (GSP filing) must be additive and degrade cleanly to offline. |
-| **One file per company** | A company is a single SQLCipher database. Backup is a file copy. |
-| **Encrypted at rest** | The database is never written unencrypted. The key derives from the user's passphrase. |
-| **Derived balances only** | No table stores a balance that the journal could disagree with. |
-| **Offline compliance** | Return artefacts (JSON, Excel) are produced locally. API filing is an optional adapter, never a requirement. |
+|                           |                                                                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **No server**             | Nothing in the core requires a running service. Optional cloud features (GSP filing) must be additive and degrade cleanly to offline. |
+| **One file per company**  | A company is a single SQLCipher database. Backup is a file copy.                                                                      |
+| **Encrypted at rest**     | The database is never written unencrypted. The key derives from the user's passphrase.                                                |
+| **Derived balances only** | No table stores a balance that the journal could disagree with.                                                                       |
+| **Offline compliance**    | Return artefacts (JSON, Excel) are produced locally. API filing is an optional adapter, never a requirement.                          |
 
 ## 3. Stack
 
 Versions are the current release as of the Phase 0 build. Pin exact versions in
 `package.json`; upgrade deliberately, not incidentally.
 
-| Layer | Choice | Version | Why |
-|---|---|---|---|
-| Shell | Electron | 43.x | Chromium's print-to-PDF is the PDF engine; one codebase, three platforms. |
-| Build | electron-vite | 5.x | Main/preload/renderer builds with HMR, already proven on the reference project. |
-| Language | TypeScript | 5.9.3 | TypeScript 7 (the native compiler) is released and much faster, but `typescript-eslint` still caps at `<6.1.0`. Revisit when the lint toolchain catches up — the codebase should need no changes. |
-| UI | React | 19.x | |
-| Bundler | Vite | 7.3.x | Not 8 — `electron-vite` 5 peers on `^5 \|\| ^6 \|\| ^7`. Upgrading Vite means waiting for electron-vite. |
-| Tests | Vitest | 4.x | |
-| Database | SQLite via `better-sqlite3-multiple-ciphers` | 13.x | Synchronous, embedded, and SQLCipher-capable in one module. |
-| Query builder | Kysely | 0.29.x | Types derive from the schema; no runtime ORM weight. |
-| Money | `decimal.js` | 10.x | Arbitrary precision. See §7. |
-| Hashing | `@node-rs/argon2` | 2.x | Argon2id for the passphrase. |
-| Crypto | `libsodium-wrappers` | 0.7.x | Sealed-box recovery. |
-| Excel | ExcelJS | 4.x | |
-| Packaging | electron-builder | 26.x | NSIS, dmg, AppImage + deb. |
+| Layer         | Choice                                       | Version | Why                                                                                                                                                                                               |
+| ------------- | -------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shell         | Electron                                     | 43.x    | Chromium's print-to-PDF is the PDF engine; one codebase, three platforms.                                                                                                                         |
+| Build         | electron-vite                                | 5.x     | Main/preload/renderer builds with HMR, already proven on the reference project.                                                                                                                   |
+| Language      | TypeScript                                   | 5.9.3   | TypeScript 7 (the native compiler) is released and much faster, but `typescript-eslint` still caps at `<6.1.0`. Revisit when the lint toolchain catches up — the codebase should need no changes. |
+| UI            | React                                        | 19.x    |                                                                                                                                                                                                   |
+| Bundler       | Vite                                         | 7.3.x   | Not 8 — `electron-vite` 5 peers on `^5 \|\| ^6 \|\| ^7`. Upgrading Vite means waiting for electron-vite.                                                                                          |
+| Tests         | Vitest                                       | 4.x     |                                                                                                                                                                                                   |
+| Database      | SQLite via `better-sqlite3-multiple-ciphers` | 13.x    | Synchronous, embedded, and SQLCipher-capable in one module.                                                                                                                                       |
+| Query builder | Kysely                                       | 0.29.x  | Types derive from the schema; no runtime ORM weight.                                                                                                                                              |
+| Money         | `decimal.js`                                 | 10.x    | Arbitrary precision. See §7.                                                                                                                                                                      |
+| Hashing       | `@node-rs/argon2`                            | 2.x     | Argon2id for the passphrase.                                                                                                                                                                      |
+| Crypto        | `libsodium-wrappers`                         | 0.7.x   | Sealed-box recovery.                                                                                                                                                                              |
+| Excel         | ExcelJS                                      | 4.x     |                                                                                                                                                                                                   |
+| Packaging     | electron-builder                             | 26.x    | NSIS, dmg, AppImage + deb.                                                                                                                                                                        |
 
 **Deliberately absent:** no ORM, no state-management library in main, no CSS framework
 in the renderer beyond tokens, no cloud SDKs, no telemetry.
@@ -145,9 +145,9 @@ interface TaxRegime {
   computeTax(basis: TaxBasis): TaxBreakdown
   placeOfSupply(supplier: Party, customer: Party): PlaceOfSupply
   validateRegistrationNumber(value: string): ValidationResult
-  classificationScheme: ClassificationScheme   // HSN/SAC, or NAICS, or none
-  fiscalYear: FiscalYearRule                   // Apr–Mar, or Jan–Dec
-  numberFormat: NumberFormatRule               // lakh/crore, or thousands
+  classificationScheme: ClassificationScheme // HSN/SAC, or NAICS, or none
+  fiscalYear: FiscalYearRule // Apr–Mar, or Jan–Dec
+  numberFormat: NumberFormatRule // lakh/crore, or thousands
   amountInWords(value: Decimal): string
   filings: FilingDefinition[]
 }
@@ -157,7 +157,7 @@ interface TaxRegime {
 outside its own folder.
 
 > The reference project hardcodes `computeGst()` and calls it from screens. Do not
-> reproduce that. It also hardcodes *"freight is never taxed"*, which was one client's
+> reproduce that. It also hardcodes _"freight is never taxed"_, which was one client's
 > policy — freight and packing are configurable charge lines here.
 
 ### 6.3 One encrypted database per company
@@ -206,25 +206,25 @@ IPC.
 
 ## 8. Security
 
-| | |
-|---|---|
-| Passphrase | Argon2id via `@node-rs/argon2` |
-| Database | SQLCipher; opened only after unlock |
+|              |                                                                                   |
+| ------------ | --------------------------------------------------------------------------------- |
+| Passphrase   | Argon2id via `@node-rs/argon2`                                                    |
+| Database     | SQLCipher; opened only after unlock                                               |
 | Key handling | A DEK wrapped by the passphrase-derived key; the DEK never touches disk unwrapped |
-| Recovery | Five single-use recovery codes, generated at setup |
-| Secrets | SMTP app passwords go to OS secure storage, never the database |
-| Renderer | `contextIsolation: true`, `nodeIntegration: false`, no remote module |
-| Audit | Append-only activity log for business actions |
+| Recovery     | Five single-use recovery codes, generated at setup                                |
+| Secrets      | SMTP app passwords go to OS secure storage, never the database                    |
+| Renderer     | `contextIsolation: true`, `nodeIntegration: false`, no remote module              |
+| Audit        | Append-only activity log for business actions                                     |
 
 ## 9. Testing
 
-| Level | Tool | Covers |
-|---|---|---|
-| Unit | Vitest | `domain/` and `regimes/` — pure, fast, the bulk of the suite |
-| Golden fixture | Vitest | Money math, tax splits, amount-in-words, posting rules |
-| Repository | Vitest + in-memory SQLite | Migrations and repos |
-| Integration | Vitest | Document → journal posting, end to end in main |
-| E2E | Playwright | Critical paths only: unlock, create company, issue invoice, close period |
+| Level          | Tool                      | Covers                                                                   |
+| -------------- | ------------------------- | ------------------------------------------------------------------------ |
+| Unit           | Vitest                    | `domain/` and `regimes/` — pure, fast, the bulk of the suite             |
+| Golden fixture | Vitest                    | Money math, tax splits, amount-in-words, posting rules                   |
+| Repository     | Vitest + in-memory SQLite | Migrations and repos                                                     |
+| Integration    | Vitest                    | Document → journal posting, end to end in main                           |
+| E2E            | Playwright                | Critical paths only: unlock, create company, issue invoice, close period |
 
 The accounting-equation test is not optional and is never skipped.
 

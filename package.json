@@ -60,5 +60,6 @@
     "typescript-eslint": "8.67.0",
     "vite": "7.3.6",
     "vitest": "4.1.10"
-  }
+  },
+  "author": "The Coffer contributors <abinauv@users.noreply.github.com>"
 }

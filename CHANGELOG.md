@@ -12,6 +12,7 @@ documents you have already issued.
 ## [Unreleased]
 
 ### Added
+
 - Project scaffolding: build pipeline, TypeScript configuration, linting and test setup
 - Architecture and conventions documentation
 - Contributor, security and community documentation

@@ -1,6 +1,6 @@
 name: Bug report
 description: Something does not work, or a number is wrong
-labels: ["bug", "needs triage"]
+labels: ['bug', 'needs triage']
 body:
   - type: markdown
     attributes:
@@ -64,7 +64,7 @@ body:
     attributes:
       label: Coffer version
       description: Help → About, or the commit you built from
-      placeholder: "0.1.0, or commit a1b2c3d"
+      placeholder: '0.1.0, or commit a1b2c3d'
     validations:
       required: true
 

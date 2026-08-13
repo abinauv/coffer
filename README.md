@@ -34,7 +34,7 @@ one-person company:
 behind a subscription that can lapse, an account that can be locked, and an internet
 connection you might not have.
 
-Open-source ERPs exist, and they are good — but they are *servers*. Running one means
+Open-source ERPs exist, and they are good — but they are _servers_. Running one means
 Docker, a database, a message queue, a VPS, and someone to keep it all alive. A
 two-person consultancy cannot do that and should never have to.
 
@@ -45,15 +45,15 @@ internet doesn't.
 
 ## What it will do
 
-| | |
-|---|---|
-| **Real books** | Double-entry general ledger, chart of accounts, trial balance, P&L, balance sheet, cash flow — not a billing app with reports bolted on. |
-| **Sell** | Quotations → invoices → receipts, with GST computed correctly and PDFs that look professional. |
-| **Buy** | Vendor bills, debit notes, expenses, payments, and input-tax-credit tracking. |
-| **Stock** | Perpetual inventory with moving-average valuation that reconciles to the balance sheet. |
-| **Comply** | GSTR-1, GSTR-3B, GSTR-2B reconciliation, e-invoice and e-way bill payloads — generated offline, ready to upload. |
-| **Several businesses** | Each company is its own encrypted file. Run three firms, or a hundred clients, from one install. |
-| **Leave** | Your data is in SQLite. Export it, read it with any tool, take it elsewhere. No lock-in is a feature, not an oversight. |
+|                        |                                                                                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **Real books**         | Double-entry general ledger, chart of accounts, trial balance, P&L, balance sheet, cash flow — not a billing app with reports bolted on. |
+| **Sell**               | Quotations → invoices → receipts, with GST computed correctly and PDFs that look professional.                                           |
+| **Buy**                | Vendor bills, debit notes, expenses, payments, and input-tax-credit tracking.                                                            |
+| **Stock**              | Perpetual inventory with moving-average valuation that reconciles to the balance sheet.                                                  |
+| **Comply**             | GSTR-1, GSTR-3B, GSTR-2B reconciliation, e-invoice and e-way bill payloads — generated offline, ready to upload.                         |
+| **Several businesses** | Each company is its own encrypted file. Run three firms, or a hundred clients, from one install.                                         |
+| **Leave**              | Your data is in SQLite. Export it, read it with any tool, take it elsewhere. No lock-in is a feature, not an oversight.                  |
 
 ## Design principles
 

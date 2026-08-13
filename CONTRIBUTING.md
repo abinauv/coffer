@@ -20,13 +20,13 @@ next week helps nobody. Once interfaces settle, this section will say so.
 
 ## Ways to help
 
-| | |
-|---|---|
-| **Report a bug** | Especially anything where a number is wrong. Those are the highest-priority issues in the tracker, always. |
-| **Test against real books** | If you run a small business, telling us where Coffer does not match how you actually work is worth more than a patch. |
-| **Domain expertise** | Accountants and CAs: tell us where our GST handling, ledger treatment or return output is wrong. You do not need to write code to open that issue. |
-| **Translations** | Once the i18n layer lands. |
-| **Code** | See below. |
+|                             |                                                                                                                                                    |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Report a bug**            | Especially anything where a number is wrong. Those are the highest-priority issues in the tracker, always.                                         |
+| **Test against real books** | If you run a small business, telling us where Coffer does not match how you actually work is worth more than a patch.                              |
+| **Domain expertise**        | Accountants and CAs: tell us where our GST handling, ledger treatment or return output is wrong. You do not need to write code to open that issue. |
+| **Translations**            | Once the i18n layer lands.                                                                                                                         |
+| **Code**                    | See below.                                                                                                                                         |
 
 ## Reporting bugs
 
@@ -112,6 +112,7 @@ git commit -s -m "fix(ledger): correct rounding on reversal"
 email. Set `git config user.name` and `user.email` once and it is automatic.
 
 Unsigned commits will be asked to amend:
+
 ```bash
 git rebase --signoff main
 ```

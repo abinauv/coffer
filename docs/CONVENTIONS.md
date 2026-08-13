@@ -25,31 +25,31 @@ Breaking any of these is a review rejection, not a discussion.
 
 ## 2. Naming
 
-| Thing | Style | Example |
-|---|---|---|
-| Database tables, columns | `snake_case`, tables plural | `journal_lines`, `posted_at` |
-| TypeScript | `camelCase`, types `PascalCase` | `journalLines`, `JournalLine` |
-| Files | `kebab-case.ts` | `posting-engine.ts` |
-| React components | `PascalCase.tsx` | `InvoiceEditor.tsx` |
-| IPC channels | `group:method` | `invoices:list` |
-| Migrations | `NNNN_snake_summary.ts` | `0007_journal_entries.ts` |
-| Booleans | `is` / `has` prefix | `isGroup`, `hasOpeningBalance` |
+| Thing                    | Style                           | Example                        |
+| ------------------------ | ------------------------------- | ------------------------------ |
+| Database tables, columns | `snake_case`, tables plural     | `journal_lines`, `posted_at`   |
+| TypeScript               | `camelCase`, types `PascalCase` | `journalLines`, `JournalLine`  |
+| Files                    | `kebab-case.ts`                 | `posting-engine.ts`            |
+| React components         | `PascalCase.tsx`                | `InvoiceEditor.tsx`            |
+| IPC channels             | `group:method`                  | `invoices:list`                |
+| Migrations               | `NNNN_snake_summary.ts`         | `0007_journal_entries.ts`      |
+| Booleans                 | `is` / `has` prefix             | `isGroup`, `hasOpeningBalance` |
 
 Repos map `snake_case` rows to `camelCase` DTOs at the repo boundary. Nothing above the
 repo layer sees a snake_case key.
 
 ## 3. Types and storage
 
-| Kind | In TypeScript | In SQLite |
-|---|---|---|
-| Money | `Decimal` | decimal string, 2dp |
-| Quantity | `Decimal` | decimal string, 3dp |
-| Rate / percent | `Decimal` | decimal string, 2dp |
-| Timestamp | ISO-8601 UTC string | `TEXT` — `2026-08-13T09:30:00.000Z` |
-| Date | `YYYY-MM-DD` string | `TEXT` |
-| Boolean | `boolean` | `INTEGER` 0/1 |
-| Enum | union of string literals | `TEXT` + `CHECK` constraint |
-| Money in a DTO | `string` | — |
+| Kind           | In TypeScript            | In SQLite                           |
+| -------------- | ------------------------ | ----------------------------------- |
+| Money          | `Decimal`                | decimal string, 2dp                 |
+| Quantity       | `Decimal`                | decimal string, 3dp                 |
+| Rate / percent | `Decimal`                | decimal string, 2dp                 |
+| Timestamp      | ISO-8601 UTC string      | `TEXT` — `2026-08-13T09:30:00.000Z` |
+| Date           | `YYYY-MM-DD` string      | `TEXT`                              |
+| Boolean        | `boolean`                | `INTEGER` 0/1                       |
+| Enum           | union of string literals | `TEXT` + `CHECK` constraint         |
+| Money in a DTO | `string`                 | —                                   |
 
 Never store a local-time timestamp. Never store a `Date` object.
 

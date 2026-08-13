@@ -20,12 +20,12 @@ request for a private contact channel — no details of the vulnerability.
 
 ### What to expect
 
-| | |
-|---|---|
-| Acknowledgement | Within 5 days |
-| Initial assessment | Within 14 days |
-| Fix or mitigation plan | Communicated once assessed |
-| Credit | Offered in the advisory and changelog, unless you prefer otherwise |
+|                        |                                                                    |
+| ---------------------- | ------------------------------------------------------------------ |
+| Acknowledgement        | Within 5 days                                                      |
+| Initial assessment     | Within 14 days                                                     |
+| Fix or mitigation plan | Communicated once assessed                                         |
+| Credit                 | Offered in the advisory and changelog, unless you prefer otherwise |
 
 Coffer is maintained by one person. These are honest targets, not an SLA. If something
 is being actively exploited, say so prominently and it will be treated accordingly.
@@ -60,7 +60,7 @@ is quietly wrong is as damaging as data that leaks — treat it as a security is
 - Attacks requiring an already-compromised machine or OS account. Coffer protects data
   at rest; it cannot defend against a keylogger already running as the user.
 - Physical access to an unlocked, running session
-- Weak passphrases chosen by the user, though *allowing* one without warning is in scope
+- Weak passphrases chosen by the user, though _allowing_ one without warning is in scope
 - Missing code signing — a known, documented gap; see below
 - Dependency advisories with no demonstrated path to exploitation in Coffer. Report
   those as normal issues.
