@@ -1,0 +1,7 @@
+node_modules
+out
+dist
+release
+package-lock.json
+LICENSE
+*.min.*

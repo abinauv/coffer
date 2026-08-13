@@ -1,0 +1,14 @@
+# Every change is reviewed by the maintainer while the project is pre-alpha.
+* @abinauv
+
+# Areas where a mistake is expensive and review must be especially careful.
+# Listed explicitly so they stay visible as the reviewer list grows.
+
+/src/main/domain/ledger/    @abinauv
+/src/main/domain/money/     @abinauv
+/src/main/regimes/          @abinauv
+/src/main/security/         @abinauv
+/src/main/db/migrations/    @abinauv
+
+/LICENSE                    @abinauv
+/SECURITY.md                @abinauv

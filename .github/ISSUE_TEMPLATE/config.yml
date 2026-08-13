@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/abinauv/coffer/security/advisories/new
+    about: Report privately. Never open a public issue for a security problem.
+  - name: Questions and discussion
+    url: https://github.com/abinauv/coffer/discussions
+    about: Ask how something works, or discuss an idea before filing an issue.
+  - name: Accounting or GST treatment looks wrong
+    url: https://github.com/abinauv/coffer/issues/new?template=bug_report.yml
+    about: File it as a bug. You do not need to write code, and these are high priority.

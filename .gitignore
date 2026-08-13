@@ -1,0 +1,21 @@
+node_modules/
+out/
+dist/
+release/
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.local
+*.local
+
+# Never commit real books, keys, or anything derived from a real company
+*.coffer
+*.sqlite
+*.sqlite3
+*.db
+backups/
+scratch/
+
+# The reference project is a read-only sibling of this repo, never a part of it
+reference/

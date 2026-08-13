@@ -1,0 +1,56 @@
+name: Feature request
+description: Suggest something Coffer should do
+labels: ["enhancement", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The most useful proposals describe a real situation in your business rather than
+        a solution. "I sell to three states and file quarterly" tells us far more than
+        "add better GST support".
+
+        Please note what is **out of scope**: anything requiring an always-on server, a
+        subscription, or sending user data anywhere. Offline and local is the product,
+        not a limitation we are working around.
+
+  - type: textarea
+    id: situation
+    attributes:
+      label: What are you trying to do?
+      description: The situation in your business that Coffer does not handle today.
+      placeholder: |
+        I run a small trading business. Some customers pay a single amount against
+        several invoices at once, and I need that receipt to settle all of them.
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: How do you handle it today?
+      description: |
+        Whatever you do now — in Tally, in Excel, or on paper — tells us what the
+        feature actually has to do.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you think Coffer should do
+      description: Optional. A rough idea is fine; so is leaving this blank.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: role
+    attributes:
+      label: Which describes you?
+      description: Helps us weigh the request. Optional.
+      options:
+        - Business owner
+        - Accountant or CA
+        - Developer
+        - Other
+    validations:
+      required: false

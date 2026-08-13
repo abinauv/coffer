@@ -1,0 +1,59 @@
+{
+  "name": "coffer",
+  "version": "0.0.0",
+  "description": "A local-first, double-entry ERP for small businesses. Your books, in your own safe.",
+  "license": "AGPL-3.0-or-later",
+  "private": true,
+  "type": "module",
+  "main": "./out/main/index.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "build": "electron-vite build",
+    "build:win": "npm run build && electron-builder --win",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:linux": "npm run build && electron-builder --linux",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "npm run typecheck && npm run lint && npm test"
+  },
+  "dependencies": {
+    "@node-rs/argon2": "2.1.0",
+    "better-sqlite3-multiple-ciphers": "13.0.3",
+    "decimal.js": "10.6.0",
+    "electron-log": "5.4.4",
+    "electron-updater": "6.8.9",
+    "exceljs": "4.4.0",
+    "kysely": "0.29.5",
+    "libsodium-wrappers": "0.8.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@types/better-sqlite3": "7.6.13",
+    "@types/libsodium-wrappers": "0.7.14",
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "5.1.4",
+    "electron": "43.4.0",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "eslint": "9.39.1",
+    "prettier": "3.9.6",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.67.0",
+    "vite": "7.3.6",
+    "vitest": "4.1.10"
+  }
+}

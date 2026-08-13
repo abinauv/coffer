@@ -1,0 +1,88 @@
+name: Bug report
+description: Something does not work, or a number is wrong
+labels: ["bug", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this.
+
+        **Never attach a real company database or backup.** It contains your financial
+        records. If a file is needed to reproduce, we will ask you to build a minimal one.
+
+        If this is a **security vulnerability**, do not file it here — see
+        [SECURITY.md](../blob/main/SECURITY.md) for private reporting.
+
+  - type: checkboxes
+    id: wrong-number
+    attributes:
+      label: Is a number wrong?
+      options:
+        - label: Yes — an amount, tax, balance or total is incorrect
+          required: false
+    validations:
+      required: false
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, and what did Coffer do?
+      placeholder: |
+        1. Created an invoice for a customer in another state
+        2. Added a line for 10 units at 1,250.00 with 18% GST
+        3. The IGST line showed 2,250.00 — expected 2,250.00 but the total read 14,000.00
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: figures
+    attributes:
+      label: The figures involved
+      description: |
+        Only if a number is wrong. Include amounts, quantities, tax rates, dates, and
+        both states for place of supply. Redact names and GSTINs freely — we need the
+        arithmetic, not your customers.
+      placeholder: |
+        Supplier state: 33 (Tamil Nadu)
+        Customer state: 29 (Karnataka)
+        Line: qty 10 × 1,250.00, discount 0%, GST 18%
+        Expected: taxable 12,500.00, IGST 2,250.00, total 14,750.00
+        Got:      taxable 12,500.00, IGST 2,250.00, total 14,000.00
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Coffer version
+      description: Help → About, or the commit you built from
+      placeholder: "0.1.0, or commit a1b2c3d"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+
+  - type: textarea
+    id: anything-else
+    attributes:
+      label: Anything else
+      description: Log output, screenshots, or context that might help.
+    validations:
+      required: false

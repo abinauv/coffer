@@ -1,0 +1,87 @@
+/*
+ * Design tokens.
+ *
+ * Placeholder until the renderer shell lands in Batch 0.2, which owns the full token
+ * set, typography scale and component styles. The pattern below is the one to follow:
+ * every colour is defined on bare `:root` first, then redefined for dark. No component
+ * may reference a raw colour value — only a token.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --ground: #f5f7f6;
+  --surface: #ffffff;
+  --ink: #151f1d;
+  --ink-muted: #5c6b68;
+  --rule: #dbe2e0;
+  --accent: #0f6b58;
+
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --ground: #0d1413;
+    --surface: #141d1b;
+    --ink: #e3eae7;
+    --ink-muted: #8a9c98;
+    --rule: #263331;
+    --accent: #52c0a0;
+  }
+}
+
+:root[data-theme='dark'] {
+  --ground: #0d1413;
+  --surface: #141d1b;
+  --ink: #e3eae7;
+  --ink-muted: #8a9c98;
+  --rule: #263331;
+  --accent: #52c0a0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.boot {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.boot h1 {
+  margin: 0;
+  font-size: 2.5rem;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+}
+
+.boot p {
+  margin: 0;
+  color: var(--ink-muted);
+}
+
+.boot__meta {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
