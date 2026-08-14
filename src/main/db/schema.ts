@@ -21,14 +21,10 @@
 
 import type { Generated } from 'kysely'
 
-/** An exact decimal persisted as text. Never a float. */
-export type DecimalString = string
-
-/** ISO-8601 UTC timestamp string. */
-export type Timestamp = string
-
-/** 'YYYY-MM-DD'. */
-export type DateString = string
+/* Declared once in @shared/scalars — the same representations cross IPC, so a second
+ * definition here would be a second source of truth waiting to drift. */
+import type { DateString, DecimalString, Timestamp } from '@shared/scalars'
+export type { DateString, DecimalString, Timestamp }
 
 /** Boolean persisted as SQLite INTEGER 0/1. */
 export type SqlBool = number

@@ -11,14 +11,10 @@
 
 // ---- Scalars --------------------------------------------------------------
 
-/** A monetary or quantity value, as an exact decimal string. Never a float. */
-export type DecimalString = string
-
-/** ISO-8601 UTC timestamp, e.g. '2026-08-13T09:30:00.000Z'. */
-export type Timestamp = string
-
-/** Calendar date, 'YYYY-MM-DD'. No time, no zone. */
-export type DateString = string
+/* Declared once in ./scalars and re-exported here so DTO consumers get them from the
+ * contract they already import. */
+import type { DateString, DecimalString, Timestamp } from './scalars'
+export type { DateString, DecimalString, Timestamp }
 
 // ---- Result envelope ------------------------------------------------------
 

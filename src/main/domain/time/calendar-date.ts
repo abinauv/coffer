@@ -32,7 +32,8 @@ export class TimeError extends Error {
 }
 
 /** A calendar date, 'YYYY-MM-DD'. No time, no zone. */
-export type DateString = string
+import type { DateString } from '@shared/scalars'
+export type { DateString }
 
 /** The parts of a calendar date. `month` is 1-12; `day` is 1-31. */
 export interface CalendarDate {

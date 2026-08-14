@@ -6,7 +6,15 @@
     "baseUrl": ".",
     "paths": {
       "@shared/*": ["src/shared/*"],
-      "@main/*": ["src/main/*"]
+      "@main/*": ["src/main/*"],
+      /* The package ships complete declarations and sets `types` in its package.json,
+       * but its `exports` map has no `types` condition — so `moduleResolution: bundler`
+       * resolves the runtime entry, finds no declarations beside it, and the whole
+       * database layer silently degrades to `any`. Point at the real file.
+       * Remove this when the package publishes a `types` condition. */
+      "better-sqlite3-multiple-ciphers": [
+        "./node_modules/better-sqlite3-multiple-ciphers/index.d.ts"
+      ]
     }
   },
   "include": [

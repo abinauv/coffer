@@ -21,7 +21,8 @@ import {
 import { roundAt, scaleOf, type RoundingPoint } from './scale'
 
 /** An exact decimal as text — the storage and transport representation. */
-export type DecimalString = string
+import type { DecimalString } from '@shared/scalars'
+export type { DecimalString }
 
 /**
  * Parse exact decimal text into a Decimal. Throws on anything else.

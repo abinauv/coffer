@@ -11,21 +11,21 @@ A local-first, double-entry ERP for small businesses. Sales, purchases, inventor
 a real general ledger, financial statements, and India GST compliance — running
 entirely on the user's own machine.
 
-The books for one company live in **one encrypted SQLite file** the user owns and
-can copy to a pen drive. There is no server, no account, no subscription, and no
-network dependency for any core function.
+The books for one company live in **an encrypted SQLite file the user owns**, with a
+one-action backup they can copy to a pen drive. There is no server, no account, no
+subscription, and no network dependency for any core function.
 
 ## 2. Non-negotiables
 
 These define the product. A change here is a change of product, not of implementation.
 
-|                           |                                                                                                                                       |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **No server**             | Nothing in the core requires a running service. Optional cloud features (GSP filing) must be additive and degrade cleanly to offline. |
-| **One file per company**  | A company is a single SQLCipher database. Backup is a file copy.                                                                      |
-| **Encrypted at rest**     | The database is never written unencrypted. The key derives from the user's passphrase.                                                |
-| **Derived balances only** | No table stores a balance that the journal could disagree with.                                                                       |
-| **Offline compliance**    | Return artefacts (JSON, Excel) are produced locally. API filing is an optional adapter, never a requirement.                          |
+|                            |                                                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **No server**              | Nothing in the core requires a running service. Optional cloud features (GSP filing) must be additive and degrade cleanly to offline. |
+| **One company, one place** | A company is a SQLCipher database plus its key vault. Backup produces a single archive holding both — see §6.3.                       |
+| **Encrypted at rest**      | The database is never written unencrypted. The key derives from the user's passphrase.                                                |
+| **Derived balances only**  | No table stores a balance that the journal could disagree with.                                                                       |
+| **Offline compliance**     | Return artefacts (JSON, Excel) are produced locally. API filing is an optional adapter, never a requirement.                          |
 
 ## 3. Stack
 
@@ -163,11 +163,49 @@ outside its own folder.
 ### 6.3 One encrypted database per company
 
 A registry at the OS app-data path lists companies (`id`, `display_name`, `file_path`,
-`last_opened_at`). Each company database holds its own DEK, wrapped by a key derived
-from that company's passphrase.
+`last_opened_at`). Each company has its own DEK, wrapped by a key derived from that
+company's passphrase.
 
 No `company_id` column exists anywhere. A missing `WHERE` clause therefore cannot leak
 one client's data into another's report, and one corrupt file costs one company.
+
+**On disk, a company is two files:**
+
+```
+MyCompany/
+  books.coffer          the SQLCipher database
+  books.coffer.vault    wrapped DEK, salts, KDF parameters, recovery slots
+```
+
+A wrapped key cannot live inside the database it decrypts — something has to be readable
+before the database can be opened. So the vault is a sidecar, and the consequence has to
+be handled honestly rather than papered over:
+
+- **Backup is a first-class action, not a file copy.** It produces one archive
+  containing both files. This is the path the UI steers users toward, and the only one
+  documented as "your backup".
+- **Opening a database with no vault beside it fails with a specific message** — keys
+  missing, restore from a backup that includes them — never a generic decryption error.
+- The database remains a plain SQLCipher file, so the "take your data elsewhere"
+  promise in the README still holds: any SQLCipher-capable tool can open it given the key.
+
+### 6.3.1 No key escrow
+
+There is no maintainer-held key and no recovery path we control. If a user loses their
+passphrase and all five recovery codes, their books are gone.
+
+This is a deliberate product decision, and `SECURITY.md` states it plainly to users. An
+escrow slot would make that statement false, and in an open-source product nobody can
+verify a maintainer is not holding a master key — the only credible claim is one the
+code makes impossible to break.
+
+`sealed-box.ts` is therefore a confidential **support** channel only: it seals vault
+metadata carrying no key material. It deliberately bakes in no maintainer public key,
+because a placeholder key in source is a key that ships by accident.
+
+The mitigations are five independent recovery codes, and a passphrase-strength warning
+at company creation (§8) that is loud but never blocking — with no escrow, refusing a
+user their own passphrase leaves them no fallback at all.
 
 ### 6.4 Perpetual inventory, moving average
 
@@ -206,15 +244,16 @@ IPC.
 
 ## 8. Security
 
-|              |                                                                                   |
-| ------------ | --------------------------------------------------------------------------------- |
-| Passphrase   | Argon2id via `@node-rs/argon2`                                                    |
-| Database     | SQLCipher; opened only after unlock                                               |
-| Key handling | A DEK wrapped by the passphrase-derived key; the DEK never touches disk unwrapped |
-| Recovery     | Five single-use recovery codes, generated at setup                                |
-| Secrets      | SMTP app passwords go to OS secure storage, never the database                    |
-| Renderer     | `contextIsolation: true`, `nodeIntegration: false`, no remote module              |
-| Audit        | Append-only activity log for business actions                                     |
+|              |                                                                                                                                                                                                                                     |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Passphrase   | Argon2id via `@node-rs/argon2`                                                                                                                                                                                                      |
+| Database     | SQLCipher; opened only after unlock                                                                                                                                                                                                 |
+| Key handling | A DEK wrapped by the passphrase-derived key; the DEK never touches disk unwrapped                                                                                                                                                   |
+| Recovery     | Five single-use recovery codes, generated at setup. No escrow — see §6.3.1                                                                                                                                                          |
+| Passphrase   | Strength shown live; a weak one is warned about explicitly but never blocked. `SECURITY.md` treats allowing weak _without warning_ as a vulnerability — refusing outright is not the remedy, since nobody can reset it for the user |
+| Secrets      | SMTP app passwords go to OS secure storage, never the database                                                                                                                                                                      |
+| Renderer     | `contextIsolation: true`, `nodeIntegration: false`, no remote module                                                                                                                                                                |
+| Audit        | Append-only activity log for business actions                                                                                                                                                                                       |
 
 ## 9. Testing
 

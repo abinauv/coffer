@@ -86,6 +86,19 @@ updates:
         update-types: [version-update:semver-major]
       - dependency-name: better-sqlite3-multiple-ciphers
         update-types: [version-update:semver-major]
+      # Peer-constrained: these cannot move until the package they pair with does.
+      # Each was proposed, failed CI, and was closed by hand — see PRs #2 and #3.
+      # @vitejs/plugin-react 6 requires vite ^8; electron-vite 5 caps vite at ^7.
+      - dependency-name: '@vitejs/plugin-react'
+        update-types: [version-update:semver-major]
+      # eslint 10 runs ahead of what typescript-eslint 8 expects.
+      - dependency-name: eslint
+        update-types: [version-update:semver-major]
+      # typescript-eslint caps at typescript <6.1.0, which is what pins TypeScript to 5.x.
+      - dependency-name: typescript-eslint
+        update-types: [version-update:semver-major]
+      - dependency-name: electron-vite
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: /

@@ -5,9 +5,73 @@ import tseslint from 'typescript-eslint'
  * These are linted rather than left to review because they are the constraints that
  * are cheapest to violate accidentally and most expensive to unwind later. */
 
+/* Every Node built-in. The purity of `domain/` is a load-bearing guarantee
+ * (ARCHITECTURE §5), and the first version of this rule named only `fs`, `path` and
+ * `electron` — which let `node:crypto`, `child_process`, `http`, `os`, `net` and
+ * `worker_threads` straight through. A rule that catches only the imports someone
+ * thought of is not a guarantee.
+ *
+ * An allowlist (`['*', '!decimal.js']`) would be stricter still, but ESLint matches
+ * these with gitignore-style patterns, where `*` also matches relative specifiers and
+ * no negation form exempts them — verified empirically, not assumed. So: an exhaustive
+ * denylist of the I/O surface, which is a closed and slow-moving set. */
+const NODE_BUILTINS = [
+  'assert',
+  'async_hooks',
+  'buffer',
+  'child_process',
+  'cluster',
+  'console',
+  'constants',
+  'crypto',
+  'dgram',
+  'diagnostics_channel',
+  'dns',
+  'domain',
+  'events',
+  'fs',
+  'http',
+  'http2',
+  'https',
+  'inspector',
+  'module',
+  'net',
+  'os',
+  'path',
+  'perf_hooks',
+  'process',
+  'punycode',
+  'querystring',
+  'readline',
+  'repl',
+  'stream',
+  'string_decoder',
+  'sys',
+  'timers',
+  'tls',
+  'trace_events',
+  'tty',
+  'url',
+  'util',
+  'v8',
+  'vm',
+  'wasi',
+  'worker_threads',
+  'zlib',
+]
+
 const PURE_DOMAIN = {
-  group: ['electron', 'node:fs', 'node:fs/*', 'fs', 'fs/*', 'node:path', 'path'],
-  message: 'src/main/domain must stay pure — no I/O. Take the data as an argument instead.',
+  group: [
+    'node:*',
+    ...NODE_BUILTINS,
+    ...NODE_BUILTINS.map((name) => `${name}/*`),
+    'electron',
+    'electron/*',
+  ],
+  message:
+    'src/main/domain must stay pure — no I/O and no ambient state. If a domain function ' +
+    'needs data, take it as an argument. Adding a package here needs a conscious decision: ' +
+    'it must be pure computation, with no clock, randomness or filesystem.',
 }
 
 const NO_PERSISTENCE = {

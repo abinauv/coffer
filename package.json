@@ -29,7 +29,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "npm run typecheck && npm run lint && npm test"
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm test",
+    "coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@node-rs/argon2": "2.1.0",
@@ -43,8 +44,6 @@
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",
-    "@types/better-sqlite3": "7.6.13",
-    "@types/libsodium-wrappers": "0.7.14",
     "@types/node": "26.2.0",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",

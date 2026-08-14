@@ -16,7 +16,8 @@
 import { formatDate, parseDate, TimeError, type DateString } from './calendar-date'
 
 /** An ISO-8601 UTC timestamp with milliseconds, e.g. '2026-08-13T09:30:00.000Z'. */
-export type Timestamp = string
+import type { Timestamp } from '@shared/scalars'
+export type { Timestamp }
 
 /** Shape only. A string matching this may still be an impossible instant. */
 export const TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
