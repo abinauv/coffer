@@ -34,7 +34,9 @@ export const API_SURFACE: ApiSurface = {
     getAppInfo: true,
     chooseDirectory: true,
     chooseBackupArchive: true,
+    chooseCompanyFile: true,
     revealInFileManager: true,
+    setTitleBarOverlay: true,
   },
   companies: {
     list: true,

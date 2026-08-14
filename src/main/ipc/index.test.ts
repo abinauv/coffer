@@ -60,8 +60,10 @@ beforeEach(() => {
     appInfo: vi.fn(() => APP_INFO),
     chooseDirectory: vi.fn(async () => null),
     chooseBackupArchive: vi.fn(async () => null),
+    chooseCompanyFile: vi.fn(async () => null),
     revealPath: vi.fn(async () => undefined),
     pathExists: vi.fn(async () => true),
+    setTitleBarOverlay: vi.fn(() => undefined),
   }
   companies = {
     list: vi.fn(async () => [SUMMARY]),
@@ -194,10 +196,12 @@ describe('assertApiSurfaceComplete', () => {
       getAppInfo: { parseArgs: () => [], handle: () => ({ ok: true, data: APP_INFO }) },
       chooseDirectory: { parseArgs: () => [], handle: () => ({ ok: true, data: null }) },
       chooseBackupArchive: { parseArgs: () => [], handle: () => ({ ok: true, data: null }) },
+      chooseCompanyFile: { parseArgs: () => [], handle: () => ({ ok: true, data: null }) },
       revealInFileManager: {
         parseArgs: (raw: readonly unknown[]) => [String(raw[0])],
         handle: () => ({ ok: true, data: undefined }),
       },
+      setTitleBarOverlay: { parseArgs: () => [], handle: () => ({ ok: true, data: undefined }) },
     } as any)
 
     expect(() => assertApiSurfaceComplete(registry)).toThrow(HandlerRegistrationError)

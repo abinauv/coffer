@@ -107,14 +107,18 @@ describe('HandlerRegistry — registerGroup', () => {
       getAppInfo: stub(),
       chooseDirectory: stub(),
       chooseBackupArchive: stub(),
+      chooseCompanyFile: stub(),
       revealInFileManager: stub(),
+      setTitleBarOverlay: stub(),
     } as any)
 
     expect(registry.channels).toEqual([
       'system:getAppInfo',
       'system:chooseDirectory',
       'system:chooseBackupArchive',
+      'system:chooseCompanyFile',
       'system:revealInFileManager',
+      'system:setTitleBarOverlay',
     ])
   })
 
@@ -134,7 +138,9 @@ describe('HandlerRegistry — registerGroup', () => {
         getAppInfo: stub(),
         chooseDirectory: stub(),
         chooseBackupArchive: stub(),
+        chooseCompanyFile: stub(),
         revealInFileManager: stub(),
+        setTitleBarOverlay: stub(),
         runShellCommand: stub(),
       } as any),
     ).toThrow(/declares no such method on 'system'/)

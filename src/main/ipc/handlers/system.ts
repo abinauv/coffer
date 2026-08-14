@@ -9,12 +9,32 @@
  * Electron process anywhere near it.
  */
 
-import type { AppInfo } from '../../../shared/dto'
+import type { AppInfo, TitleBarOverlayColors } from '../../../shared/dto'
 import { IpcError } from '../errors'
 import type { PathAllowlist } from '../path-access'
 import type { GroupHandlers } from '../registry'
 import { ok } from '../surface'
-import { expectAbsolutePath, noArgs } from '../validate'
+import { expectAbsolutePath, expectRecord, expectString, noArgs } from '../validate'
+
+/* The renderer is untrusted, and these values are handed straight to the OS. Anything
+ * that is not a plain #rrggbb is rejected rather than passed along. */
+const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/
+
+function expectHexColour(value: unknown, field: string): string {
+  const text = expectString(value, field)
+  if (!HEX_COLOUR.test(text)) {
+    throw new IpcError('INVALID_ARGUMENT', `${field} must be a colour like #1a2b3c.`)
+  }
+  return text
+}
+
+function expectOverlayColors(value: unknown): TitleBarOverlayColors {
+  const record = expectRecord(value, 'colors')
+  return {
+    color: expectHexColour(record['color'], 'colors.color'),
+    symbolColor: expectHexColour(record['symbolColor'], 'colors.symbolColor'),
+  }
+}
 
 export interface SystemEnvironment {
   appInfo(): AppInfo
@@ -22,6 +42,10 @@ export interface SystemEnvironment {
   chooseDirectory(): Promise<string | null>
   /** Native picker for a backup archive. Null when the user cancels. */
   chooseBackupArchive(): Promise<string | null>
+  /** Native picker for an existing company database. Null when the user cancels. */
+  chooseCompanyFile(): Promise<string | null>
+  /** Repaint the OS-drawn window buttons. A no-op where the OS owns their colours. */
+  setTitleBarOverlay(colors: TitleBarOverlayColors): void
   /** Show the path in Explorer/Finder/the file manager. */
   revealPath(path: string): Promise<void>
   pathExists(path: string): Promise<boolean>
@@ -54,6 +78,25 @@ export function createSystemHandlers(
         const archive = await environment.chooseBackupArchive()
         if (archive !== null) allowlist.allow(archive)
         return ok(archive)
+      },
+    },
+
+    chooseCompanyFile: {
+      parseArgs: noArgs,
+      handle: async () => {
+        const file = await environment.chooseCompanyFile()
+        /* Picked in a native dialog, so the user has already asked for it once — and
+         * `companies.addExisting` will want to reveal it later. */
+        if (file !== null) allowlist.allow(file)
+        return ok(file)
+      },
+    },
+
+    setTitleBarOverlay: {
+      parseArgs: (raw): [TitleBarOverlayColors] => [expectOverlayColors(raw[0])],
+      handle: (colors) => {
+        environment.setTitleBarOverlay(colors)
+        return ok(undefined)
       },
     },
 

@@ -14,7 +14,7 @@ import { access } from 'node:fs/promises'
 import { BrowserWindow, app, dialog, ipcMain, shell } from 'electron'
 import log from 'electron-log/main'
 import { BRAND } from '../../branding'
-import type { AppInfo, Platform } from '../../shared/dto'
+import type { AppInfo, Platform, TitleBarOverlayColors } from '../../shared/dto'
 import type { ErrorMapper } from './errors'
 import type { SystemEnvironment } from './handlers/system'
 import type { CompanyService } from './handlers/companies'
@@ -29,6 +29,14 @@ import type { HandlerRegistry, IpcLogger, IpcTransport } from './registry'
  * list should read from there — see the batch report.
  */
 const BACKUP_ARCHIVE_EXTENSIONS = ['zip']
+
+/**
+ * Height of the renderer's title bar, in CSS pixels.
+ *
+ * Must match `--titlebar-height` in src/renderer/src/styles. The OS draws the window
+ * buttons into a band this tall; if the two disagree the buttons sit off-centre.
+ */
+const TITLEBAR_HEIGHT = 38
 
 /** Adapt `ipcMain` to the registry's transport, dropping the Electron event object. */
 export function createIpcMainTransport(): IpcTransport {
@@ -111,6 +119,28 @@ export function createElectronSystemEnvironment(): SystemEnvironment {
           ],
         }),
       )
+    },
+
+    async chooseCompanyFile(): Promise<string | null> {
+      return firstPath(
+        await showOpenDialog({
+          title: `Choose a ${BRAND.name} company`,
+          properties: ['openFile'],
+          filters: [
+            { name: `${BRAND.name} company`, extensions: [BRAND.companyFileExtension] },
+            { name: 'All files', extensions: ['*'] },
+          ],
+        }),
+      )
+    },
+
+    setTitleBarOverlay(colors: TitleBarOverlayColors): void {
+      /* Windows and Linux only. macOS draws traffic lights whose colours follow the
+       * system appearance, and asking Electron to restyle them there throws. */
+      if (process.platform === 'darwin') return
+      const window = parentWindow()
+      if (window === null) return
+      window.setTitleBarOverlay({ ...colors, height: TITLEBAR_HEIGHT })
     },
 
     async revealPath(path: string): Promise<void> {

@@ -20,7 +20,9 @@ describe('API_SURFACE', () => {
       'getAppInfo',
       'chooseDirectory',
       'chooseBackupArchive',
+      'chooseCompanyFile',
       'revealInFileManager',
+      'setTitleBarOverlay',
     ])
   })
 

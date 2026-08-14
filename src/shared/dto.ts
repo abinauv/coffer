@@ -49,6 +49,18 @@ export interface AppInfo {
   isDevelopment: boolean
 }
 
+/**
+ * Colours for the OS-drawn window buttons on Windows and Linux. Supplied by the
+ * renderer, which is the only side that knows which theme is actually showing.
+ * Values are hex strings taken from the design tokens.
+ */
+export interface TitleBarOverlayColors {
+  /** Background behind the buttons — the `--chrome` token. */
+  color: string
+  /** The glyphs themselves — the `--ink-muted` token. */
+  symbolColor: string
+}
+
 // ---- Companies ------------------------------------------------------------
 
 /*

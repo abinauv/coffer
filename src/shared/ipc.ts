@@ -26,6 +26,7 @@ import type {
   RecoverCompanyInput,
   RestoreInput,
   Result,
+  TitleBarOverlayColors,
 } from './dto'
 
 export interface CofferApi {
@@ -35,8 +36,25 @@ export interface CofferApi {
     chooseDirectory(): Promise<Result<string | null>>
     /** Native file picker for a backup archive. Null when cancelled. */
     chooseBackupArchive(): Promise<Result<string | null>>
+    /**
+     * Native picker for an existing company database, filtered on the company file
+     * extension. Null when cancelled.
+     *
+     * Without this there is no sanctioned way for the renderer to obtain the path
+     * `companies.addExisting` requires — the method existed with no way to call it.
+     */
+    chooseCompanyFile(): Promise<Result<string | null>>
     /** Reveal a path in Explorer/Finder/the file manager. */
     revealInFileManager(path: string): Promise<Result<void>>
+    /**
+     * Repaint the OS-drawn window buttons to match the current theme.
+     *
+     * On Windows and Linux the buttons are drawn by the OS over our title bar, from
+     * colours fixed at window creation — so without this they stay in light-mode
+     * colours when the user switches to dark. A no-op on macOS, where the traffic
+     * lights follow the system appearance on their own.
+     */
+    setTitleBarOverlay(colors: TitleBarOverlayColors): Promise<Result<void>>
   }
 
   companies: {

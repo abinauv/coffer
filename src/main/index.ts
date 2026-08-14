@@ -10,13 +10,13 @@
  * turn a missing handler into a mystery at click time instead of a crash at boot.
  */
 
-import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, shell } from 'electron'
 import log from 'electron-log'
 import { BRAND } from '../branding'
 import { companies, isCompanyError } from './companies'
-import { assertApiSurfaceComplete, registerIpcHandlers } from './ipc'
+import { assertApiSurfaceComplete } from './ipc'
+import { installIpcHandlers } from './ipc/electron'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -27,41 +27,11 @@ const TITLEBAR_HEIGHT = 38
 const TITLEBAR_OVERLAY = { color: '#eceae4', symbolColor: '#47505f', height: TITLEBAR_HEIGHT }
 
 function installHandlers(): void {
-  const registry = registerIpcHandlers({
-    transport: {
-      handle: (channel, listener) => {
-        ipcMain.handle(channel, (_event, ...args: unknown[]) => listener(args))
-      },
-    },
-    logger: {
-      error: (message, cause) => log.error(message, cause),
-      warn: (message) => log.warn(message),
-    },
-    system: {
-      appInfo: () => ({
-        name: BRAND.name,
-        version: app.getVersion(),
-        platform: process.platform as 'win32' | 'darwin' | 'linux',
-        isDevelopment: !app.isPackaged,
-      }),
-      chooseDirectory: async () => {
-        const result = await dialog.showOpenDialog({
-          properties: ['openDirectory', 'createDirectory'],
-        })
-        return result.canceled ? null : (result.filePaths[0] ?? null)
-      },
-      chooseBackupArchive: async () => {
-        const result = await dialog.showOpenDialog({
-          properties: ['openFile'],
-          filters: [{ name: `${BRAND.name} backup`, extensions: ['zip'] }],
-        })
-        return result.canceled ? null : (result.filePaths[0] ?? null)
-      },
-      revealPath: async (path: string) => shell.showItemInFolder(path),
-      pathExists: async (path: string) => existsSync(path),
-    },
+  /* Every Electron call the IPC layer needs is adapted in ./ipc/electron.ts — dialogs,
+   * shell, app metadata, the log scope, the reveal roots. The only thing production
+   * has to supply is the company service and the mapper for its error codes. */
+  const registry = installIpcHandlers({
     companies,
-    revealRoots: [app.getPath('userData')],
     /* CompanyError codes are what the company screens branch on, and nothing under
      * src/main/ipc may import that module. Deliberately narrow: the companies module
      * also exports a broader `describeError` that claims DbError too, and DbError

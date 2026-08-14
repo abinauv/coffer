@@ -42,8 +42,10 @@ beforeEach(() => {
     appInfo: vi.fn(() => APP_INFO),
     chooseDirectory: vi.fn(async () => null),
     chooseBackupArchive: vi.fn(async () => null),
+    chooseCompanyFile: vi.fn(async () => null),
     revealPath: vi.fn(async () => undefined),
     pathExists: vi.fn(async () => true),
+    setTitleBarOverlay: vi.fn(() => undefined),
   }
   allowlist = createPathAllowlist()
   handlers = createSystemHandlers(environment, allowlist)
@@ -150,5 +152,51 @@ describe('system:revealInFileManager', () => {
     await rejection(call(handlers.revealInFileManager, PRIVATE))
 
     expect(environment.pathExists).not.toHaveBeenCalled()
+  })
+})
+
+describe('system:chooseCompanyFile', () => {
+  it('returns null when the user cancels', async () => {
+    await expect(call(handlers.chooseCompanyFile)).resolves.toEqual({ ok: true, data: null })
+  })
+
+  it('returns the chosen file and grants reveal access to it', async () => {
+    const company = join(DATA, 'books.coffer')
+    environment.chooseCompanyFile = vi.fn(async () => company)
+
+    await expect(call(handlers.chooseCompanyFile)).resolves.toEqual({ ok: true, data: company })
+    /* companies.addExisting will want to reveal this later, and the user has already
+     * pointed at it once in a native dialog. */
+    expect(allowlist.isAllowed(company)).toBe(true)
+  })
+})
+
+describe('system:setTitleBarOverlay', () => {
+  const COLORS = { color: '#eceae4', symbolColor: '#47505f' }
+
+  it('passes valid colours through to the environment', async () => {
+    await expect(call(handlers.setTitleBarOverlay, COLORS)).resolves.toEqual({
+      ok: true,
+      data: undefined,
+    })
+    expect(environment.setTitleBarOverlay).toHaveBeenCalledWith(COLORS)
+  })
+
+  /* These values go from an untrusted renderer straight to the OS, so anything that is
+   * not a plain six-digit hex colour is refused rather than forwarded. */
+  it.each([
+    ['a named colour', { color: 'red', symbolColor: '#47505f' }],
+    ['a three-digit hex', { color: '#abc', symbolColor: '#47505f' }],
+    ['a CSS function', { color: 'rgb(1,2,3)', symbolColor: '#47505f' }],
+    ['a missing field', { color: '#eceae4' }],
+    ['a non-string', { color: 123, symbolColor: '#47505f' }],
+    ['an injection attempt', { color: '#fff; drop', symbolColor: '#47505f' }],
+  ])('rejects %s', async (_label, colors) => {
+    /* parseArgs rejects before handle is reached; the boundary is what turns that into
+     * an error Result, and it is tested separately. */
+    const error = await rejection(call(handlers.setTitleBarOverlay, colors))
+
+    expect(error.code).toBe('INVALID_ARGUMENT')
+    expect(environment.setTitleBarOverlay).not.toHaveBeenCalled()
   })
 })
