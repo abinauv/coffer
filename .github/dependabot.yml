@@ -94,6 +94,11 @@ updates:
       # eslint 10 runs ahead of what typescript-eslint 8 expects.
       - dependency-name: eslint
         update-types: [version-update:semver-major]
+      # @eslint/js peers on the matching eslint major, so it cannot move alone.
+      # PR #5 proved it: @eslint/js went to 10.0.1 wanting eslint ^10 while eslint
+      # itself took only a patch, and every job failed.
+      - dependency-name: '@eslint/js'
+        update-types: [version-update:semver-major]
       # typescript-eslint caps at typescript <6.1.0, which is what pins TypeScript to 5.x.
       - dependency-name: typescript-eslint
         update-types: [version-update:semver-major]
