@@ -52,10 +52,18 @@ export interface AppInfo {
 // ---- Companies ------------------------------------------------------------
 
 /*
- * A company is one encrypted SQLite file. The registry lists them; it never holds
- * their contents or their keys. There is deliberately no `companyId` on any other
- * DTO — see docs/ARCHITECTURE.md §6.3.
+ * A company is an encrypted SQLite database plus a sidecar vault holding its wrapped
+ * keys. The registry lists them; it never holds their contents or their keys. There is
+ * deliberately no `companyId` on any other DTO — see docs/ARCHITECTURE.md §6.3.
  */
+
+/** Why a company cannot be opened. `ok` means it can. */
+export type CompanyAvailability =
+  | 'ok'
+  /** The database file is gone or unreadable — moved, deleted, or on an absent drive. */
+  | 'database-missing'
+  /** The database is there but its vault is not. Restore from a backup holding both. */
+  | 'vault-missing'
 
 export interface CompanySummary {
   /** Registry-local identifier. Not a tenant key; nothing else is scoped by it. */
@@ -63,11 +71,33 @@ export interface CompanySummary {
   displayName: string
   /** Absolute path to the encrypted database file. */
   filePath: string
+  /** Absolute path to the sidecar vault. Derived from filePath, stored for clarity. */
+  vaultPath: string
   lastOpenedAt: Timestamp | null
   createdAt: Timestamp
-  /** False when the file is missing or unreadable — a moved or deleted database. */
-  isAvailable: boolean
+  availability: CompanyAvailability
 }
+
+// ---- Passphrase strength --------------------------------------------------
+
+/*
+ * Strength is advisory, never blocking. SECURITY.md treats allowing a weak passphrase
+ * *without warning* as a vulnerability — but with no key escrow (ARCHITECTURE §6.3.1),
+ * refusing a user their own passphrase leaves them no fallback at all.
+ */
+
+export interface PassphraseStrength {
+  /** 0 (trivial) to 4 (strong). */
+  score: 0 | 1 | 2 | 3 | 4
+  /** Short verdict for the meter, e.g. 'Weak'. */
+  label: string
+  /** The single most useful thing this passphrase could do better. Null when strong. */
+  suggestion: string | null
+  /** True below the advisory threshold — show the warning, still allow it through. */
+  isWeak: boolean
+}
+
+// ---- Company operations ---------------------------------------------------
 
 export interface CreateCompanyInput {
   displayName: string
@@ -81,8 +111,51 @@ export interface OpenCompanyInput {
   passphrase: string
 }
 
+/** Opening with a recovery code instead of the passphrase. The code is then spent. */
+export interface RecoverCompanyInput {
+  id: string
+  recoveryCode: string
+  /** The passphrase to set once the code is accepted. Recovery always re-establishes one. */
+  newPassphrase: string
+}
+
 export interface OpenCompanyResult {
   company: CompanySummary
-  /** Recovery codes, returned exactly once at creation and never retrievable again. */
+  /**
+   * Recovery codes, returned exactly once — at creation, or when recovery consumes one
+   * and a fresh set is issued. Never retrievable afterwards.
+   */
   recoveryCodes?: string[]
+  /** How many single-use recovery codes remain unspent. */
+  recoveryCodesRemaining: number
+}
+
+export interface ChangePassphraseInput {
+  currentPassphrase: string
+  newPassphrase: string
+}
+
+// ---- Backup and restore ---------------------------------------------------
+
+/*
+ * Backup is a first-class action, not a file copy: the database is useless without its
+ * vault, so an archive carrying both is the only artefact we call a backup.
+ */
+
+export interface BackupInput {
+  /** Directory to write the archive into. */
+  directoryPath: string
+}
+
+export interface BackupResult {
+  /** Absolute path to the archive that was written. */
+  archivePath: string
+  sizeBytes: number
+  createdAt: Timestamp
+}
+
+export interface RestoreInput {
+  archivePath: string
+  /** Directory to restore the company into. */
+  directoryPath: string
 }
