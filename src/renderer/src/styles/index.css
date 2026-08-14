@@ -1,0 +1,12 @@
+/*
+ * The single stylesheet entry point, imported once from main.tsx.
+ *
+ * Order matters: tokens define the vocabulary, base sets element defaults, then
+ * components use both. No file below may declare a colour, a size or a duration
+ * that is not a token.
+ */
+
+@import './tokens.css';
+@import './base.css';
+@import './atoms.css';
+@import './shell.css';

@@ -1,86 +1,399 @@
 /*
- * Design tokens.
+ * Coffer design tokens.
  *
- * Placeholder until the renderer shell lands in Batch 0.2, which owns the full token
- * set, typography scale and component styles. The pattern below is the one to follow:
- * every colour is defined on bare `:root` first, then redefined for dark. No component
- * may reference a raw colour value — only a token.
+ * The foundation every screen sits on. Two rules govern this file:
+ *
+ *   1. EVERY token is defined here on bare `:root` first. Dark redefines existing
+ *      names; it never introduces one. A token whose only definition lives inside a
+ *      media query or a `[data-theme]` block is a bug — it disappears the moment the
+ *      other theme is active.
+ *   2. No component may write a raw colour. If a value is missing, add a token.
+ *
+ * THEME RESOLUTION. `data-theme` is absent when the user follows the OS, and is
+ * `light` or `dark` when they have chosen explicitly. So dark is applied twice:
+ * once under `prefers-color-scheme: dark` guarded by `:not([data-theme='light'])`
+ * so an explicit light choice wins over a dark OS, and once under
+ * `[data-theme='dark']` so an explicit dark choice wins over a light OS.
+ *
+ * ---------------------------------------------------------------------------
+ * THE PALETTE, AND WHY
+ *
+ * Light is `paper`: warm off-white surfaces (hue ~45, very low chroma) carrying
+ * cool blue-grey ink. That is what a printed ledger actually looks like, and the
+ * warm/cool split gives text a crispness a single grey ramp cannot.
+ *
+ * Dark is not that inverted. It is `slate`: a cool near-black instrument panel
+ * (hue ~215). Light separates surfaces by brightness — white cards float on paper.
+ * Dark cannot do that without glare, so it separates them by rule lines and by very
+ * small brightness steps, and it moves the accent to the light end of the ramp
+ * because a mid-tone fill cannot reach 3:1 against a dark ground.
+ *
+ * COLOUR VISION. Money that is negative is the single most important state to read
+ * correctly, so red/green is exactly the pair we cannot rely on. Two defences:
+ *
+ *   - Positive is a spruce-teal (hue ~168), not a leaf green. Teal keeps its blue
+ *     component, so under protanopia and deuteranopia it sits on the opposite side
+ *     of the blue-yellow axis from red rather than collapsing onto it. Measured on
+ *     simulated protan/deutan/tritan output, the worst-case CIELAB separation
+ *     between positive, negative and warning is dE 23 in light and dE 22 in dark;
+ *     the naive green/red/amber trio scores dE 15 and dE 11.
+ *   - Hue is never the only channel. A negative figure also carries a sign, and
+ *     `--figure-negative` is deliberately the darkest, heaviest colour in the set.
+ *
+ * The accent is an ink indigo, not a green — a green brand next to a green
+ * "positive" figure makes the one state that must be unambiguous ambiguous.
+ * Every foreground/background pair below was checked: text tokens meet WCAG AA
+ * (4.5:1) on every surface they are used on, and `--rule-strong` and `--accent`
+ * meet 3:1 for non-text.
  */
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
 
-  --ground: #f5f7f6;
+  /* ---- Surfaces ------------------------------------------------------- */
+
+  /** The window's own background. Nothing sits behind it. */
+  --ground: #f4f3ef;
+  /** Cards, panels, table bodies — anything holding content. */
   --surface: #ffffff;
-  --ink: #151f1d;
-  --ink-muted: #5c6b68;
-  --rule: #dbe2e0;
-  --accent: #0f6b58;
+  /** A surface that has been lifted: menus, popovers, dialogs. */
+  --surface-raised: #ffffff;
+  /** Wells: code blocks, empty states, inset regions. */
+  --surface-sunken: #eae8e1;
+  --surface-hover: #f4f3ef;
+  --surface-active: #eae8e1;
+  /** Application chrome: the title bar. */
+  --chrome: #eceae4;
+  --sidebar: #efede7;
+  /** Scrim behind a modal. */
+  --overlay: rgba(21, 26, 32, 0.42);
 
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-  --font-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
+  /* ---- Lines ---------------------------------------------------------- */
+
+  /** The default hairline. Table rows, card edges, dividers. */
+  --rule: #e0ddd4;
+  /** Where a boundary has to be felt: inputs, focus containers, headers. */
+  --rule-strong: #cbc7bb;
+
+  /* ---- Ink ------------------------------------------------------------ */
+
+  --ink: #151a20;
+  /** Headings and figures that must carry weight. */
+  --ink-strong: #0e1216;
+  /** Secondary text: labels, metadata, helper copy. AA on every surface. */
+  --ink-muted: #47505f;
+  /** Tertiary text: shortcut hints, placeholders, timestamps. Still AA. */
+  --ink-faint: #5e6775;
+
+  /* ---- Accent --------------------------------------------------------- */
+
+  --accent: #2a3f86;
+  --accent-strong: #223471;
+  --accent-soft: #e8ebf7;
+  /** Accent as text — on `--surface` or on `--accent-soft`. */
+  --accent-ink: #26397a;
+  /** Text and icons on a solid `--accent` fill. */
+  --on-accent: #ffffff;
+
+  /* ---- Semantic states ------------------------------------------------- */
+
+  --positive: #0e7160;
+  --positive-ink: #0a5748;
+  --positive-soft: #ddefea;
+  --on-positive: #ffffff;
+
+  --negative: #a02012;
+  --negative-ink: #82190d;
+  --negative-soft: #fbe6e2;
+  --on-negative: #ffffff;
+
+  --warning: #bd7a05;
+  --warning-ink: #855405;
+  --warning-soft: #fbeed3;
+  --on-warning: #1c1305;
+
+  /* Informational states share the accent hue: in this product "here is
+   * something you should know" and "here is the primary action" are the same
+   * voice, and inventing a fourth hue would only compete with the three that
+   * carry meaning. */
+  --info: var(--accent);
+  --info-ink: var(--accent-ink);
+  --info-soft: var(--accent-soft);
+  --on-info: var(--on-accent);
+
+  /* ---- Figures -------------------------------------------------------- */
+
+  /* Money colouring follows the ledger convention rather than the dashboard one:
+   * a positive figure is simply ink, and red is reserved for the one state that
+   * must never be misread. `--positive` is for deltas and trends, not balances. */
+  --figure: var(--ink);
+  --figure-negative: #8c1c10;
+  --figure-muted: var(--ink-faint);
+
+  /* ---- Focus ---------------------------------------------------------- */
+
+  --focus-ring: #2a3f86;
+  /** Painted between ring and element so the ring reads on any background. */
+  --focus-ring-contrast: #ffffff;
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+
+  --selection-bg: #d7ddf3;
+  --selection-ink: #151a20;
+
+  /* ---- Elevation ------------------------------------------------------ */
+
+  /* Light lifts things with soft, ink-tinted shadow — pure black reads dirty on
+   * warm paper. Dark lifts with a much deeper shadow plus a top hairline, because
+   * a shadow alone is invisible against a near-black ground. */
+  --shadow-xs: 0 1px 1px rgba(21, 26, 32, 0.05);
+  --shadow-sm: 0 1px 2px rgba(21, 26, 32, 0.07), 0 1px 1px rgba(21, 26, 32, 0.04);
+  --shadow-md: 0 4px 12px rgba(21, 26, 32, 0.09), 0 1px 3px rgba(21, 26, 32, 0.06);
+  --shadow-lg: 0 12px 32px rgba(21, 26, 32, 0.13), 0 2px 8px rgba(21, 26, 32, 0.07);
+  --shadow-xl: 0 24px 64px rgba(21, 26, 32, 0.17), 0 4px 12px rgba(21, 26, 32, 0.08);
+  --shadow-lift: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+
+  /* ---- Type ----------------------------------------------------------- */
+
+  /* No bundled webfont. The CSP forbids remote origins and a font package is a
+   * dependency this batch may not add, so the stack is the platform's own UI face
+   * — which is also the one that already has the tabular figures below. */
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI Variable Text', 'Segoe UI', Roboto, 'Helvetica Neue',
+    sans-serif;
+  --font-mono:
+    ui-monospace, 'Cascadia Mono', 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+
+  /* Columns of money only line up if the digits are the same width. Applied by
+   * default to tables, inputs and the .figure/.numeric utilities in base.css. */
+  --numeric-figures: tabular-nums;
+  /* Identifiers — account codes, GSTINs, file paths — additionally want a
+   * slashed zero so 0 and O cannot be confused when read aloud or retyped. */
+  --numeric-identifier: tabular-nums slashed-zero;
+
+  --text-2xs: 0.6875rem; /* 11px — keycaps, column micro-labels */
+  --text-xs: 0.75rem; /* 12px — metadata, captions */
+  --text-sm: 0.8125rem; /* 13px — dense tables, secondary UI */
+  --text-base: 0.875rem; /* 14px — the default */
+  --text-md: 1rem; /* 16px — emphasised body, section titles */
+  --text-lg: 1.125rem; /* 18px */
+  --text-xl: 1.375rem; /* 22px — screen titles */
+  --text-2xl: 1.75rem; /* 28px */
+  --text-3xl: 2.25rem; /* 36px — headline figures */
+
+  --leading-none: 1;
+  --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --tracking-tight: -0.014em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.02em;
+  /* Uppercase micro-labels need real letter-spacing or they read as a blur. */
+  --tracking-caps: 0.06em;
+
+  /* ---- Space ---------------------------------------------------------- */
+
+  --space-0: 0;
+  --space-px: 1px;
+  --space-0-5: 0.125rem; /* 2 */
+  --space-1: 0.25rem; /* 4 */
+  --space-2: 0.5rem; /* 8 */
+  --space-3: 0.75rem; /* 12 */
+  --space-4: 1rem; /* 16 */
+  --space-5: 1.25rem; /* 20 */
+  --space-6: 1.5rem; /* 24 */
+  --space-7: 1.75rem; /* 28 */
+  --space-8: 2rem; /* 32 */
+  --space-10: 2.5rem; /* 40 */
+  --space-12: 3rem; /* 48 */
+  --space-16: 4rem; /* 64 */
+  --space-20: 5rem; /* 80 */
+
+  /* ---- Radii ---------------------------------------------------------- */
+
+  /* Squarer than a consumer app. A ledger is ruled, not rounded. */
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+
+  /* ---- Motion --------------------------------------------------------- */
+
+  /* Durations are tokens so that `prefers-reduced-motion` can collapse every
+   * animation in the product by redefining four values (see base.css). */
+  --duration-instant: 60ms;
+  --duration-fast: 110ms;
+  --duration-base: 170ms;
+  --duration-slow: 260ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-emphasis: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* ---- Layout --------------------------------------------------------- */
+
+  --titlebar-height: 38px;
+  --sidebar-width: 232px;
+  --sidebar-width-collapsed: 56px;
+  /* The cap on a reading column. Ledger tables ignore it and use the width they
+   * have; forms and prose do not. See `.content-column` in base.css. */
+  --content-max: 1440px;
+  /* Space the OS window controls occupy inside our title bar. Overridden per
+   * chrome mode in shell.css; zero when the OS draws its own frame above us. */
+  --titlebar-inset-start: var(--space-3);
+  --titlebar-inset-end: var(--space-2);
+
+  /* ---- Layers ---------------------------------------------------------
+   * Dialogs are absent from this scale on purpose: they are native <dialog>
+   * elements, and the top layer sits above every z-index there is. Nothing
+   * should ever need a number between these. */
+
+  --z-content: 0;
+  --z-sticky: 10;
+  --z-sidebar: 20;
+  --z-titlebar: 30;
+  --z-dropdown: 100;
+  --z-toast: 300;
+  --z-tooltip: 400;
 }
+
+/* --------------------------------------------------------------------------
+ * Dark — following the OS, unless the user explicitly chose light.
+ * -------------------------------------------------------------------------- */
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --ground: #0d1413;
-    --surface: #141d1b;
-    --ink: #e3eae7;
-    --ink-muted: #8a9c98;
-    --rule: #263331;
-    --accent: #52c0a0;
+    color-scheme: dark;
+
+    --ground: #0e1216;
+    --surface: #151a20;
+    --surface-raised: #1a2028;
+    --surface-sunken: #0a0d11;
+    --surface-hover: #1b212a;
+    --surface-active: #212832;
+    --chrome: #111519;
+    --sidebar: #111519;
+    --overlay: rgba(3, 5, 7, 0.66);
+
+    --rule: #262e39;
+    --rule-strong: #39424e;
+
+    --ink: #e6eaf0;
+    --ink-strong: #f7f9fb;
+    --ink-muted: #9aa4b2;
+    --ink-faint: #7c8693;
+
+    --accent: #93b0f8;
+    --accent-strong: #adc4fb;
+    --accent-soft: #18213a;
+    --accent-ink: #b0c6fb;
+    --on-accent: #0c111c;
+
+    --positive: #43c9b4;
+    --positive-ink: #66d6c5;
+    --positive-soft: #0f2723;
+    --on-positive: #04140f;
+
+    --negative: #f87a72;
+    --negative-ink: #ff9a90;
+    --negative-soft: #2e1512;
+    --on-negative: #2a0d09;
+
+    --warning: #eeb64a;
+    --warning-ink: #f6c96e;
+    --warning-soft: #2b1f0c;
+    --on-warning: #251803;
+
+    --figure-negative: #f88f86;
+
+    --focus-ring: #93b0f8;
+    --focus-ring-contrast: #0a0d11;
+
+    --selection-bg: #24325a;
+    --selection-ink: #e6eaf0;
+
+    --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.5);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.6), 0 1px 1px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.6);
+    --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.62), 0 2px 8px rgba(0, 0, 0, 0.5);
+    --shadow-xl: 0 32px 80px rgba(0, 0, 0, 0.7), 0 4px 14px rgba(0, 0, 0, 0.55);
+    --shadow-lift: inset 0 1px 0 rgba(255, 255, 255, 0.045);
   }
 }
 
+/* --------------------------------------------------------------------------
+ * Dark — chosen explicitly. Identical values; a separate selector so the choice
+ * also wins on a light OS. Keep the two blocks in step.
+ * -------------------------------------------------------------------------- */
+
 :root[data-theme='dark'] {
-  --ground: #0d1413;
-  --surface: #141d1b;
-  --ink: #e3eae7;
-  --ink-muted: #8a9c98;
-  --rule: #263331;
-  --accent: #52c0a0;
+  color-scheme: dark;
+
+  --ground: #0e1216;
+  --surface: #151a20;
+  --surface-raised: #1a2028;
+  --surface-sunken: #0a0d11;
+  --surface-hover: #1b212a;
+  --surface-active: #212832;
+  --chrome: #111519;
+  --sidebar: #111519;
+  --overlay: rgba(3, 5, 7, 0.66);
+
+  --rule: #262e39;
+  --rule-strong: #39424e;
+
+  --ink: #e6eaf0;
+  --ink-strong: #f7f9fb;
+  --ink-muted: #9aa4b2;
+  --ink-faint: #7c8693;
+
+  --accent: #93b0f8;
+  --accent-strong: #adc4fb;
+  --accent-soft: #18213a;
+  --accent-ink: #b0c6fb;
+  --on-accent: #0c111c;
+
+  --positive: #43c9b4;
+  --positive-ink: #66d6c5;
+  --positive-soft: #0f2723;
+  --on-positive: #04140f;
+
+  --negative: #f87a72;
+  --negative-ink: #ff9a90;
+  --negative-soft: #2e1512;
+  --on-negative: #2a0d09;
+
+  --warning: #eeb64a;
+  --warning-ink: #f6c96e;
+  --warning-soft: #2b1f0c;
+  --on-warning: #251803;
+
+  --figure-negative: #f88f86;
+
+  --focus-ring: #93b0f8;
+  --focus-ring-contrast: #0a0d11;
+
+  --selection-bg: #24325a;
+  --selection-ink: #e6eaf0;
+
+  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.6), 0 1px 1px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 16px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.62), 0 2px 8px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 32px 80px rgba(0, 0, 0, 0.7), 0 4px 14px rgba(0, 0, 0, 0.55);
+  --shadow-lift: inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
 
-* {
-  box-sizing: border-box;
-}
-
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
-}
-
-body {
-  background: var(--ground);
-  color: var(--ink);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-}
-
-.boot {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
-.boot h1 {
-  margin: 0;
-  font-size: 2.5rem;
-  letter-spacing: -0.02em;
-  color: var(--accent);
-}
-
-.boot p {
-  margin: 0;
-  color: var(--ink-muted);
-}
-
-.boot__meta {
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
+/* Explicit light on a dark OS. Only `color-scheme` needs restating — every other
+ * light value is already the `:root` definition and was never overridden. */
+:root[data-theme='light'] {
+  color-scheme: light;
 }

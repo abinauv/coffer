@@ -31,6 +31,16 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: { index: resolve('src/preload/index.ts') },
+        /* CommonJS, not ESM, and this is not a preference.
+         *
+         * A sandboxed preload is not a real ES module context: Electron loads it with a
+         * restricted CommonJS-ish loader, so an `.mjs` preload dies on `Cannot use
+         * import statement outside a module`, `contextBridge` never runs, and
+         * `window.coffer` is silently undefined — the renderer looks broken with no
+         * error pointing here. Verified both ways: CJS works with `sandbox: true`.
+         *
+         * The fix is NOT to disable the sandbox. See src/main/index.ts. */
+        output: { format: 'cjs', entryFileNames: '[name].js' },
       },
     },
   },

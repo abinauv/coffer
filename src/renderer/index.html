@@ -8,6 +8,11 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'"
     />
+    <!-- Tells the browser to paint its own canvas in the right theme before our
+         stylesheet lands, so a dark-mode launch has no white first frame. The
+         chosen theme is applied in main.tsx; the CSP forbids the inline script a
+         web app would use here. -->
+    <meta name="color-scheme" content="light dark" />
     <title>Coffer</title>
   </head>
   <body>

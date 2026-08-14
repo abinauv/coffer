@@ -1,0 +1,228 @@
+{
+  "$comment": "Golden cases for GSTIN validation. Every check character below was computed with the GSTN base-36 algorithm and is correct; the PANs are invented. Messages are pinned in full, not matched loosely: a message that stops naming the character position stops being useful to the person typing, and that regression should fail a test rather than pass one.",
+  "valid": [
+    {
+      "value": "33AABCC1234D1ZI",
+      "normalised": "33AABCC1234D1ZI",
+      "jurisdictionCode": "33",
+      "jurisdictionName": "Tamil Nadu",
+      "why": "the ordinary case"
+    },
+    {
+      "value": "27ABCDE1234F1Z0",
+      "normalised": "27ABCDE1234F1Z0",
+      "jurisdictionCode": "27",
+      "jurisdictionName": "Maharashtra",
+      "why": "check character is a digit, not a letter"
+    },
+    {
+      "value": "35AAAAA1111A1ZZ",
+      "normalised": "35AAAAA1111A1ZZ",
+      "jurisdictionCode": "35",
+      "jurisdictionName": "Andaman and Nicobar Islands",
+      "why": "check character is Z, the same letter as the fixed position 14"
+    },
+    {
+      "value": "29AAAAA0000A1ZY",
+      "normalised": "29AAAAA0000A1ZY",
+      "jurisdictionCode": "29",
+      "jurisdictionName": "Karnataka",
+      "why": "all-zero PAN digits — a base-36 value of 0 contributes nothing to the sum"
+    },
+    {
+      "value": "24AAACG5555H2ZP",
+      "normalised": "24AAACG5555H2ZP",
+      "jurisdictionCode": "24",
+      "jurisdictionName": "Gujarat",
+      "why": "character 13 is '2' — a second registration for the same PAN in the same state"
+    },
+    {
+      "value": "07AAACD1234E1ZB",
+      "normalised": "07AAACD1234E1ZB",
+      "jurisdictionCode": "07",
+      "jurisdictionName": "Delhi",
+      "why": "a union territory that levies SGST, because it has a legislature"
+    },
+    {
+      "value": "04ABCDE1234F1Z8",
+      "normalised": "04ABCDE1234F1Z8",
+      "jurisdictionCode": "04",
+      "jurisdictionName": "Chandigarh",
+      "why": "a union territory that levies UTGST"
+    },
+    {
+      "value": "38AAECL9999K1ZD",
+      "normalised": "38AAECL9999K1ZD",
+      "jurisdictionCode": "38",
+      "jurisdictionName": "Ladakh",
+      "why": "the highest ordinary state code"
+    },
+    {
+      "value": "97AAACO1111P1ZC",
+      "normalised": "97AAACO1111P1ZC",
+      "jurisdictionCode": "97",
+      "jurisdictionName": "Other Territory",
+      "why": "offshore areas — a code that is valid in a GSTIN but not offered in a picker"
+    },
+    {
+      "value": "99AAACN1234Q1ZZ",
+      "normalised": "99AAACN1234Q1ZZ",
+      "jurisdictionCode": "99",
+      "jurisdictionName": "Centre Jurisdiction",
+      "why": "centrally administered, and likewise not a place of supply"
+    },
+    {
+      "value": "28AABCC1234D1Z9",
+      "normalised": "28AABCC1234D1Z9",
+      "jurisdictionCode": "28",
+      "jurisdictionName": "Andhra Pradesh (before bifurcation)",
+      "why": "a retired code still has to validate — it is on documents already issued"
+    },
+    {
+      "value": "25AABCC1234D1ZF",
+      "normalised": "25AABCC1234D1ZF",
+      "jurisdictionCode": "25",
+      "jurisdictionName": "Daman and Diu",
+      "why": "retired when 25 merged into 26 in 2020"
+    },
+    {
+      "value": "33aabcc1234d1zi",
+      "normalised": "33AABCC1234D1ZI",
+      "jurisdictionCode": "33",
+      "jurisdictionName": "Tamil Nadu",
+      "why": "lower case is a keyboard state, not a mistake"
+    },
+    {
+      "value": "  33 AABCC1234D 1Z I  ",
+      "normalised": "33AABCC1234D1ZI",
+      "jurisdictionCode": "33",
+      "jurisdictionName": "Tamil Nadu",
+      "why": "spaces anywhere: this is how a GSTIN arrives when it is read off a certificate"
+    }
+  ],
+  "invalid": [
+    {
+      "value": "",
+      "message": "Enter a GSTIN.",
+      "jurisdictionCode": null,
+      "why": "empty"
+    },
+    {
+      "value": "     ",
+      "message": "Enter a GSTIN.",
+      "jurisdictionCode": null,
+      "why": "whitespace only, which normalises to empty"
+    },
+    {
+      "value": "33AABCC1234D1Z",
+      "message": "A GSTIN is 15 characters long. This one has 14.",
+      "jurisdictionCode": "33",
+      "why": "one short — the state code is still readable, so it is still reported"
+    },
+    {
+      "value": "33AABCC1234D1ZI9",
+      "message": "A GSTIN is 15 characters long. This one has 16.",
+      "jurisdictionCode": "33",
+      "why": "one too many, the usual result of a double keystroke"
+    },
+    {
+      "value": "3",
+      "message": "A GSTIN is 15 characters long. This one has 1.",
+      "jurisdictionCode": null,
+      "why": "too short to carry a state code at all"
+    },
+    {
+      "value": "A3AABCC1234D1ZI",
+      "message": "A GSTIN starts with a two-digit state code, for example 33 for Tamil Nadu. This one starts with 'A3'.",
+      "jurisdictionCode": null,
+      "why": "letters where the state code goes"
+    },
+    {
+      "value": "33AAB1C1234D1ZI",
+      "message": "Characters 3 to 7 are the five letters that start the PAN, for example ABCDE. This one has 'AAB1C'.",
+      "jurisdictionCode": "33",
+      "why": "a digit inside the PAN letters — 1 typed for I"
+    },
+    {
+      "value": "33AABCC12A4D1ZI",
+      "message": "Characters 8 to 11 are the four digits of the PAN. This one has '12A4'.",
+      "jurisdictionCode": "33",
+      "why": "a letter inside the PAN digits"
+    },
+    {
+      "value": "33AABCC123441ZI",
+      "message": "Character 12 is the last letter of the PAN. This one has '4'.",
+      "jurisdictionCode": "33",
+      "why": "the PAN's check letter typed as a digit"
+    },
+    {
+      "value": "33AABCC1234D-ZI",
+      "message": "Character 13 says which registration this is for the PAN in that state, a letter or a digit. This one has '-'.",
+      "jurisdictionCode": "33",
+      "why": "punctuation where the registration number goes"
+    },
+    {
+      "value": "33AABCC1234D1YI",
+      "message": "Character 14 of every GSTIN is the letter Z. This one has 'Y'.",
+      "jurisdictionCode": "33",
+      "why": "the fixed Z mistyped — adjacent key"
+    },
+    {
+      "value": "33AABCC1234D1Z-",
+      "message": "The last character is a check character, a letter or a digit. This one has '-'.",
+      "jurisdictionCode": "33",
+      "why": "punctuation in the check position"
+    },
+    {
+      "value": "88AABCC1234D1Z3",
+      "message": "'88' is not an Indian state code. A GSTIN starts with the state code, for example 33 for Tamil Nadu.",
+      "jurisdictionCode": null,
+      "why": "structurally perfect, checksum correct, and still not a real state — the check character cannot catch this"
+    },
+    {
+      "value": "00AABCC1234D1ZR",
+      "message": "'00' is not an Indian state code. A GSTIN starts with the state code, for example 33 for Tamil Nadu.",
+      "jurisdictionCode": null,
+      "why": "00 looks like a state code and is not one"
+    },
+    {
+      "value": "33AABCC1234D1ZA",
+      "message": "The last character does not match the rest of this GSTIN, so at least one character is mistyped. Check it against the registration certificate.",
+      "jurisdictionCode": "33",
+      "why": "check character wrong, everything else right"
+    },
+    {
+      "value": "33AABCC1234E1ZI",
+      "message": "The last character does not match the rest of this GSTIN, so at least one character is mistyped. Check it against the registration certificate.",
+      "jurisdictionCode": "33",
+      "why": "one character of the PAN mistyped — this is what the checksum is for"
+    },
+    {
+      "value": "33AABCC2134D1ZI",
+      "message": "The last character does not match the rest of this GSTIN, so at least one character is mistyped. Check it against the registration certificate.",
+      "jurisdictionCode": "33",
+      "why": "two digits transposed, the mistake a format check alone cannot see"
+    },
+    {
+      "value": "27AABCC1234D1ZI",
+      "message": "The last character does not match the rest of this GSTIN, so at least one character is mistyped. Check it against the registration certificate.",
+      "jurisdictionCode": "27",
+      "why": "right GSTIN, wrong state code pasted in front of it"
+    }
+  ],
+  "checkCharacters": [
+    { "firstFourteen": "33AABCC1234D1Z", "checkCharacter": "I" },
+    { "firstFourteen": "27ABCDE1234F1Z", "checkCharacter": "0" },
+    { "firstFourteen": "35AAAAA1111A1Z", "checkCharacter": "Z" },
+    { "firstFourteen": "29AAAAA0000A1Z", "checkCharacter": "Y" },
+    { "firstFourteen": "09AAACX1234M1Z", "checkCharacter": "6" },
+    { "firstFourteen": "32AABCK5678L1Z", "checkCharacter": "7" },
+    { "firstFourteen": "19AAACW7777B1Z", "checkCharacter": "1" },
+    { "firstFourteen": "36AAACT3333R1Z", "checkCharacter": "Z" },
+    { "firstFourteen": "05AAACU4444N1Z", "checkCharacter": "5" },
+    { "firstFourteen": "01AABCJ1234K1Z", "checkCharacter": "3" },
+    { "firstFourteen": "26AABCD1234E1Z", "checkCharacter": "A" },
+    { "firstFourteen": "31AABCL1234M1Z", "checkCharacter": "U" },
+    { "firstFourteen": "34AABCP1234R1Z", "checkCharacter": "A" }
+  ]
+}

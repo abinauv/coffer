@@ -1,0 +1,323 @@
+/*
+ * Element defaults and the handful of utilities every screen may use.
+ *
+ * Everything here reads tokens. If you need a value that is not a token, the token
+ * is missing — add it to tokens.css rather than writing a literal here.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  /* 1rem === 16px. The type scale is expressed in rem against this. */
+  font-size: 100%;
+}
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+  /* A desktop window scrolls its panes, never its frame. */
+  overflow: hidden;
+}
+
+/* Chrome — the title bar, the sidebar, labels — is not selectable text; a stray
+ * drag across it should not highlight it. Content regions opt back in. */
+body {
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable],
+.selectable {
+  user-select: text;
+}
+
+::selection {
+  background: var(--selection-bg);
+  color: var(--selection-ink);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+figure,
+blockquote,
+dl,
+dd {
+  margin: 0;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--ink-strong);
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: var(--accent-ink);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--font-mono);
+  font-variant-numeric: var(--numeric-identifier);
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 0;
+}
+
+/* ---- Figures ------------------------------------------------------------
+ * Numbers in an accounting product must line up in a column, so every context
+ * that can hold one asks for tabular figures by default. */
+
+table,
+th,
+td,
+input,
+.numeric,
+.figure {
+  font-variant-numeric: var(--numeric-figures);
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+/* A monetary amount. `--figure` is plain ink — in a ledger a positive number is
+ * not a coloured number. Red is reserved for the one state that must not be
+ * misread, and it never travels alone: the sign is always printed too. */
+.figure {
+  color: var(--figure);
+  font-feature-settings: 'tnum' 1;
+  white-space: nowrap;
+}
+
+.figure--negative {
+  color: var(--figure-negative);
+}
+
+.figure--zero {
+  color: var(--figure-muted);
+}
+
+/* ---- Focus --------------------------------------------------------------
+ * One ring, everywhere. The offset opens a gap that shows whatever the element
+ * is sitting on, and on a coloured fill that can end up too close to the ring
+ * itself — so the gap is filled with a known contrast colour. Two rings, so the
+ * indicator survives any background (WCAG 2.2 focus appearance). */
+
+:focus {
+  outline: none;
+}
+
+/* The outline already follows the element's own border-radius; nothing needs to
+ * be inherited or restated here. */
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  box-shadow: 0 0 0 var(--focus-ring-offset) var(--focus-ring-contrast);
+}
+
+/* Elements that cannot afford an offset ring — they sit flush in a row, or their
+ * container clips — get the ring drawn inside instead, and no halo, since there
+ * is no gap for one to fill. */
+.focus-inset:focus-visible {
+  outline-offset: calc(var(--focus-ring-width) * -1);
+  box-shadow: none;
+}
+
+/* ---- Scrollbars ---------------------------------------------------------
+ * Quiet by default; the thumb only firms up when the pane is hovered. */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-strong) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--rule);
+  background-clip: content-box;
+  border: 3px solid transparent;
+  border-radius: var(--radius-pill);
+}
+
+:hover::-webkit-scrollbar-thumb {
+  background: var(--rule-strong);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ---- Window drag regions ------------------------------------------------
+ * A frameless window has no OS title bar to grab, so the app declares which of
+ * its own pixels behave like one. Anything clickable inside a drag region must
+ * opt back out or it will never receive a click. */
+
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag,
+.drag-region button,
+.drag-region a,
+.drag-region input,
+.drag-region select,
+.drag-region [role='button'],
+.drag-region [role='radiogroup'] {
+  -webkit-app-region: no-drag;
+}
+
+/* ---- Utilities ---------------------------------------------------------- */
+
+/* Available to assistive technology, invisible on screen. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Skips to content on Tab from the very top of the window. */
+.skip-link {
+  position: absolute;
+  top: var(--space-2);
+  left: 50%;
+  transform: translate(-50%, -200%);
+  z-index: var(--z-tooltip);
+  padding: var(--space-2) var(--space-4);
+  background: var(--accent);
+  color: var(--on-accent);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.skip-link:focus-visible {
+  transform: translate(-50%, 0);
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* The reading column every screen lays itself out in. Ledger tables are wide and
+ * should use the width they have, but a settings form stretched across a 2560px
+ * monitor is unreadable — so screens opt into the cap rather than fight it. */
+.content-column {
+  width: 100%;
+  max-width: var(--content-max);
+  margin-inline: auto;
+}
+
+.caps-label {
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* ---- Reduced motion -----------------------------------------------------
+ * Collapsing the four duration tokens turns off every transition in the product
+ * that was built on them, which is all of them. The belt-and-braces rule below
+ * catches anything with a hard-coded duration. */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 1ms;
+    --duration-fast: 1ms;
+    --duration-base: 1ms;
+    --duration-slow: 1ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Users who ask the OS for more contrast get firmer rules and a heavier ring
+ * rather than a different palette. */
+@media (prefers-contrast: more) {
+  :root {
+    --rule: var(--rule-strong);
+    --focus-ring-width: 3px;
+  }
+}

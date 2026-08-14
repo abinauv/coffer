@@ -1,33 +1,42 @@
 /*
- * Application root.
+ * Application root — the composition point, and nothing more.
  *
- * Placeholder until the renderer shell lands in Batch 0.2. The shell owns routing,
- * the title bar, the command palette and the company picker; this file will become
- * the composition point for those, and nothing more.
+ * The provider order is not arbitrary:
+ *
+ *   Platform    everything below wants to know the OS and the window chrome.
+ *   Theme       independent, but must be above anything that reads it.
+ *   Toasts      above the rest so any provider below can report a failure.
+ *   Company     the fact the shell's structure is derived from.
+ *   Navigation  derives its area from Company, so it sits under it.
+ *   Commands    contributed by everything, consumed by the palette.
+ *
+ * No business logic lives here, and no screen is named here. Screens register
+ * themselves — see store/screens.ts.
  */
 
-import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
-import type { AppInfo } from '@shared/dto'
+import { AppShell } from './components/shell/AppShell'
+import { CommandProvider } from './store/commands'
+import { CompanyProvider } from './store/company'
+import { NavigationProvider } from './store/navigation'
+import { PlatformProvider } from './store/platform'
+import { ThemeProvider } from './store/theme'
+import { ToastProvider } from './store/toasts'
 
 export function App(): JSX.Element {
-  const [info, setInfo] = useState<AppInfo | null>(null)
-
-  useEffect(() => {
-    void window.coffer.system.getAppInfo().then((result) => {
-      if (result.ok) setInfo(result.data)
-    })
-  }, [])
-
   return (
-    <main className="boot">
-      <h1>Coffer</h1>
-      <p>Your books, in your own safe.</p>
-      {info && (
-        <p className="boot__meta">
-          {info.version} · {info.platform}
-        </p>
-      )}
-    </main>
+    <PlatformProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <CompanyProvider>
+            <NavigationProvider>
+              <CommandProvider>
+                <AppShell />
+              </CommandProvider>
+            </NavigationProvider>
+          </CompanyProvider>
+        </ToastProvider>
+      </ThemeProvider>
+    </PlatformProvider>
   )
 }

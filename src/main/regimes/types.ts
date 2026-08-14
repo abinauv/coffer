@@ -184,7 +184,13 @@ export interface TaxRegime {
   readonly fiscalYear: FiscalYearRule
   readonly numberFormat: NumberFormatRule
 
-  /** '1,234.50' -> 'One Thousand Two Hundred Thirty Four Rupees and Fifty Paise Only'. */
+  /**
+   * The amount spelled out, as the regime's invoices say it.
+   *
+   * India: `1234.50` -> 'Rupees One Thousand Two Hundred Thirty Four and Fifty Paise Only'.
+   * The currency word leads, which is the Indian tax-invoice convention. Where a regime
+   * words it differently, it words it differently — that is the point of the adapter.
+   */
   amountInWords(value: Decimal): string
 
   readonly filings: ReadonlyArray<FilingDefinition>

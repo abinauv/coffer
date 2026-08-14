@@ -1,0 +1,544 @@
+{
+  "$comment": "Golden cases for the GST split. Every amount here was worked out by hand from the rule — rate applied once at full precision, line tax rounded once at money scale, then allocated across components — so the file is a statement of what the rule *is*, not a recording of what the code did. Changing the split, the halving, the rounding point or the order of the summary must fail one of these.",
+  "parties": {
+    "tamilNaduSupplier": {
+      "registrationNumber": "33AABCC1234D1ZI",
+      "jurisdictionCode": "33",
+      "countryCode": "in"
+    },
+    "tamilNaduCustomer": {
+      "registrationNumber": "33AABCC1234E1ZG",
+      "jurisdictionCode": "33",
+      "countryCode": "in"
+    },
+    "karnatakaCustomer": {
+      "registrationNumber": "29AAAAA0000A1ZY",
+      "jurisdictionCode": "29",
+      "countryCode": "in"
+    },
+    "chandigarhSupplier": {
+      "registrationNumber": "04ABCDE1234F1Z8",
+      "jurisdictionCode": "04",
+      "countryCode": "in"
+    },
+    "chandigarhCustomer": {
+      "registrationNumber": "04AABCD5678K1ZF",
+      "jurisdictionCode": "04",
+      "countryCode": "in"
+    },
+    "overseasCustomer": {
+      "registrationNumber": null,
+      "jurisdictionCode": null,
+      "countryCode": "ae"
+    }
+  },
+  "places": {
+    "withinTamilNadu": {
+      "jurisdictionCode": "33",
+      "countryCode": "in",
+      "isIntraJurisdiction": true,
+      "isExport": false
+    },
+    "tamilNaduToKarnataka": {
+      "jurisdictionCode": "29",
+      "countryCode": "in",
+      "isIntraJurisdiction": false,
+      "isExport": false
+    },
+    "withinChandigarh": {
+      "jurisdictionCode": "04",
+      "countryCode": "in",
+      "isIntraJurisdiction": true,
+      "isExport": false
+    },
+    "export": {
+      "jurisdictionCode": null,
+      "countryCode": "ae",
+      "isIntraJurisdiction": false,
+      "isExport": true
+    }
+  },
+  "cases": [
+    {
+      "name": "intra-state, one line at 18%",
+      "why": "the ordinary sale: CGST and SGST, each at half the rate, and no IGST",
+      "supplier": "tamilNaduSupplier",
+      "customer": "tamilNaduCustomer",
+      "place": "withinTamilNadu",
+      "date": "2026-08-14",
+      "lines": [
+        {
+          "lineId": "L1",
+          "taxableAmount": "1000.00",
+          "ratePct": "18",
+          "classificationCode": "8471"
+        }
+      ],
+      "expected": {
+        "lines": [
+          {
+            "lineId": "L1",
+            "taxableAmount": "1000.00",
+            "totalTax": "180.00",
+            "components": [
+              { "code": "CGST", "label": "CGST @ 9%", "ratePct": "9", "amount": "90.00" },
+              { "code": "SGST", "label": "SGST @ 9%", "ratePct": "9", "amount": "90.00" }
+            ]
+          }
+        ],
+        "summary": [
+          { "code": "CGST", "label": "CGST @ 9%", "ratePct": "9", "amount": "90.00" },
+          { "code": "SGST", "label": "SGST @ 9%", "ratePct": "9", "amount": "90.00" }
+        ],
+        "totalTax": "180.00"
+      }
+    },
+    {
+      "name": "inter-state, the same line",
+      "why": "IGST at the full rate, and the same total as the intra-state case above",
+      "supplier": "tamilNaduSupplier",
+      "customer": "karnatakaCustomer",
+      "place": "tamilNaduToKarnataka",
+      "date": "2026-08-14",
+      "lines": [
+        {
+          "lineId": "L1",
+          "taxableAmount": "1000.00",
+          "ratePct": "18",
+          "classificationCode": "8471"
+        }
+      ],
+      "expected": {
+        "lines": [
+          {
+            "lineId": "L1",
+            "taxableAmount": "1000.00",
+            "totalTax": "180.00",
+            "components": [
+              { "code": "IGST", "label": "IGST @ 18%", "ratePct": "18", "amount": "180.00" }
+            ]
+          }
+        ],
+        "summary": [{ "code": "IGST", "label": "IGST @ 18%", "ratePct": "18", "amount": "180.00" }],
+        "totalTax": "180.00"
+      }
+    },
+    {
+      "name": "intra-state, an odd paisa",
+      "why": "18% of 100.05 is 18.009 -> 18.01. Rounding each 9% half first would give 9.00 + 9.00 = 18.00, and the invoice would disagree with the inter-state case below by a paisa. The rounded total is allocated instead, and the odd paisa lands on CGST.",
+      "supplier": "tamilNaduSupplier",
+      "customer": "tamilNaduCustomer",
+      "place": "withinTamilNadu",
+      "date": "2026-08-14",
+      "lines": [
+        { "lineId": "L1", "taxableAmount": "100.05", "ratePct": "18", "classificationCode": "8471" }
+      ],
+      "expected": {
+        "lines": [
+          {
+            "lineId": "L1",
+            "taxableAmount": "100.05",
+            "totalTax": "18.01",
+            "components": [
+              { "code": "CGST", "label": "CGST @ 9%", "ratePct": "9", "amount": "9.01" },
+              { "code": "SGST", "label": "SGST @ 9%", "ratePct": "9", "amount": "9.00" }
+            ]
+          }
+        ],
+        "summary": [
+          { "code": "CGST", "label": "CGST @ 9%", "ratePct": "9", "amount": "9.01" },
+          { "code": "SGST", "label": "SGST @ 9%", "ratePct": "9", "amount": "9.00" }
+        ],
+        "totalTax": "18.01"
+      }
+    },
+    {
+      "name": "inter-state, the same odd paisa",
+      "why": "the paired half of the case above: one component, same total",
+      "supplier": "tamilNaduSupplier",
+      "customer": "karnatakaCustomer",
+      "place": "tamilNaduToKarnataka",
+      "date": "2026-08-14",
+      "lines": [
+        { "lineId": "L1", "taxableAmount": "100.05", "ratePct": "18", "classificationCode": "8471" }
+      ],
+      "expected": {
+        "lines": [
+          {
+            "lineId": "L1",
+            "taxableAmount": "100.05",
+            "totalTax": "18.01",
+            "components": [
+              { "code": "IGST", "label": "IGST @ 18%", "ratePct": "18", "amount": "18.01" }
+            ]
+          }
+        ],
+        "summary": [{ "code": "IGST", "label": "IGST @ 18%", "ratePct": "18", "amount": "18.01" }],
+        "totalTax": "18.01"
+      }
+    },
+    {
+      "name": "intra-union-territory: CGST and UTGST",
+      "why": "Chandigarh has no legislature, so the state half is UTGST. Delhi and Puducherry are union territories too and levy SGST — which is why this follows the jurisdiction table rather than the word 'territory'.",
+      "supplier": "chandigarhSupplier",
+      "customer": "chandigarhCustomer",
+      "place": "withinChandigarh",
+      "date": "2026-08-14",
+      "lines": [
+        {
+          "lineId": "L1",
+          "taxableAmount": "5000.00",
+          "ratePct": "12",
+          "classificationCode": "9403"
+        }
+      ],
+      "expected": {
+        "lines": [
+          {
+            "lineId": "L1",
+            "taxableAmount": "5000.00",
+            "totalTax": "600.00",
+            "components": [
+              { "code": "CGST", "label": "CGST @ 6%", "ratePct": "6", "amount": "300.00" },
+              { "code": "UTGST", "label": "UTGST @ 6%", "ratePct": "6", "amount": "300.00" }
+            ]
+          }
+        ],
+        "summary": [
+          { "code": "CGST", "label": "CGST @ 6%", "ratePct": "6", "amount": "300.00" },
+          { "code": "UTGST", "label": "UTGST @ 6%", "ratePct": "6", "amount": "300.00" }
+        ],
+        "totalTax": "600.00"
+      }
+    },
+    {
+      "name": "intra-state, two rates and two charges",
+      "why": "the case the reference project got wrong. Freight is taxed here at 18% because the caller said so; packing is not taxed because the caller said so. Neither decision lives in the tax function. The summary keeps CGST @ 2.5% and CGST @ 9% apart, because a return asks for them separately.",
+      "supplier": "tamilNaduSupplier",
+      "customer": "tamilNaduCustomer",
+      "place": "withinTamilNadu",
+      "date": "2026-08-14",
+      "lines": [
+        {
+          "lineId": "goods",
+          "taxableAmount": "10000.00",
+          "ratePct": "18",
+          "classificationCode": "8471"
+        },
+        {
+          "lineId": "rice",
+          "taxableAmount": "2000.00",
+          "ratePct": "5",
+          "classificationCode": "1006"
+        },
+        {
+          "lineId": "freight",
+          "taxableAmount": "500.00",
+          "ratePct": "18",
+          "classificationCode": "996511",
+          "isCharge": true
+        },
+        {
+          "lineId": "packing",
+          "taxableAmount": "250.00",
+          "ratePct": "0",
+          "classificationCode": null,
+          "isCharge": true
+        }
+      ],
+      "expected": {
+        "lines": [
+          {
+            "lineId": "goods",
+            "taxableAmount": "10000.00",
+            "totalTax": "1800.00",
+            "components": [
+              { "code": "CGST", "label": "CGST @ 9%", "ratePct": "9", "amount": "900.00" },
+              { "code": "SGST", "label": "SGST @ 9%", "ratePct": "9", "amount": "900.00" }
+            ]
+          },
+          {
+            "lineId": "rice",
+            "taxableAmount": "2000.00",
+            "totalTax": "100.00",
+            "components": [
+              { "code": "CGST", "label": "CGST @ 2.5%", "ratePct": "2.5", "amount": "50.00" },
+              { "code": "SGST", "label": "SGST @ 2.5%", "ratePct": "2.5", "amount": "50.00" }
+            ]
+          },
+          {
+            "lineId": "freight",
+            "taxableAmount": "500.00",
+            "totalTax": "90.00",
+            "components": [
+              { "code": "CGST", "label": "CGST @ 9%", "ratePct": "9", "amount": "45.00" },
+              { "code": "SGST", "label": "SGST @ 9%", "ratePct": "9", "amount": "45.00" }
+            ]
+          },
+          {
+            "lineId": "packing",
+            "taxableAmount": "250.00",
+            "totalTax": "0.00",
+            "components": []
+          }
+        ],
+        "summary": [
+          { "code": "CGST", "label": "CGST @ 2.5%", "ratePct": "2.5", "amount": "50.00" },
+          { "code": "CGST", "label": "CGST @ 9%", "ratePct": "9", "amount": "945.00" },
+          { "code": "SGST", "label": "SGST @ 2.5%", "ratePct": "2.5", "amount": "50.00" },
+          { "code": "SGST", "label": "SGST @ 9%", "ratePct": "9", "amount": "945.00" }
+        ],
+        "totalTax": "1990.00"
+      }
+    },
+    {
+      "name": "inter-state, freight at its own rate",
+      "why": "a charge is a line like any other, and it carries whatever rate the caller gave it — 5% here, not the 18% of the goods it is carrying",
+      "supplier": "tamilNaduSupplier",
+      "customer": "karnatakaCustomer",
+      "place": "tamilNaduToKarnataka",
+      "date": "2026-08-14",
+      "lines": [
+        {
+          "lineId": "goods",
+          "taxableAmount": "10000.00",
+          "ratePct": "18",
+          "classificationCode": "8471"
+        },
+        {
+          "lineId": "freight",
+          "taxableAmount": "500.00",
+          "ratePct": "5",
+          "classificationCode": "996511",
+          "isCharge": true
+        }
+      ],
+      "expected": {
+        "lines": [
+          {
+            "lineId": "goods",
+            "taxableAmount": "10000.00",
+            "totalTax": "1800.00",
+            "components": [
+              { "code": "IGST", "label": "IGST @ 18%", "ratePct": "18", "amount": "1800.00" }
+            ]
+          },
+          {
+            "lineId": "freight",
+            "taxableAmount": "500.00",
+            "totalTax": "25.00",
+            "components": [
+              { "code": "IGST", "label": "IGST @ 5%", "ratePct": "5", "amount": "25.00" }
+            ]
+          }
+        ],
+        "summary": [
+          { "code": "IGST", "label": "IGST @ 5%", "ratePct": "5", "amount": "25.00" },
+          { "code": "IGST", "label": "IGST @ 18%", "ratePct": "18", "amount": "1800.00" }
+        ],
+        "totalTax": "1825.00"
+      }
+    },
+    {
+      "name": "export under a letter of undertaking",
+      "why": "zero-rated, so the rate on the line is 0 and there is no tax at all. The regime does not decide this — a LUT is a registration the user holds, so the rate arrives on the line.",
+      "supplier": "tamilNaduSupplier",
+      "customer": "overseasCustomer",
+      "place": "export",
+      "date": "2026-08-14",
+      "lines": [
+        {
+          "lineId": "L1",
+          "taxableAmount": "250000.00",
+          "ratePct": "0",
+          "classificationCode": "8471"
+        }
+      ],
+      "expected": {
+        "lines": [
+          {
+            "lineId": "L1",
+            "taxableAmount": "250000.00",
+            "totalTax": "0.00",
+            "components": []
+          }
+        ],
+        "summary": [],
+        "totalTax": "0.00"
+      }
+    },
+    {
+      "name": "export on payment of IGST",
+      "why": "the other export route. A supply leaving India is inter-state, so it is IGST and never a CGST/SGST pair, whatever states the parties sit in.",
+      "supplier": "tamilNaduSupplier",
+      "customer": "overseasCustomer",
+      "place": "export",
+      "date": "2026-08-14",
+      "lines": [
+        {
+          "lineId": "L1",
+          "taxableAmount": "250000.00",
+          "ratePct": "18",
+          "classificationCode": "8471"
+        }
+      ],
+      "expected": {
+        "lines": [
+          {
+            "lineId": "L1",
+            "taxableAmount": "250000.00",
+            "totalTax": "45000.00",
+            "components": [
+              { "code": "IGST", "label": "IGST @ 18%", "ratePct": "18", "amount": "45000.00" }
+            ]
+          }
+        ],
+        "summary": [
+          { "code": "IGST", "label": "IGST @ 18%", "ratePct": "18", "amount": "45000.00" }
+        ],
+        "totalTax": "45000.00"
+      }
+    },
+    {
+      "name": "credit note: the split carries the sign",
+      "why": "-18.009 rounds to -18.01 away from zero, and the residual paisa still lands on CGST. A credit note that split differently from the invoice it reverses would leave a paisa stranded in the ledger.",
+      "supplier": "tamilNaduSupplier",
+      "customer": "tamilNaduCustomer",
+      "place": "withinTamilNadu",
+      "date": "2026-08-14",
+      "lines": [
+        {
+          "lineId": "L1",
+          "taxableAmount": "-100.05",
+          "ratePct": "18",
+          "classificationCode": "8471"
+        }
+      ],
+      "expected": {
+        "lines": [
+          {
+            "lineId": "L1",
+            "taxableAmount": "-100.05",
+            "totalTax": "-18.01",
+            "components": [
+              { "code": "CGST", "label": "CGST @ 9%", "ratePct": "9", "amount": "-9.01" },
+              { "code": "SGST", "label": "SGST @ 9%", "ratePct": "9", "amount": "-9.00" }
+            ]
+          }
+        ],
+        "summary": [
+          { "code": "CGST", "label": "CGST @ 9%", "ratePct": "9", "amount": "-9.01" },
+          { "code": "SGST", "label": "SGST @ 9%", "ratePct": "9", "amount": "-9.00" }
+        ],
+        "totalTax": "-18.01"
+      }
+    },
+    {
+      "name": "0.25%, the rate a 2dp column cannot halve",
+      "why": "half of 0.25 is 0.125. Reporting it as 0.13 would print a rate that was never applied, so the component carries the exact rate. This is why component rates are not rounded to the rate scale.",
+      "supplier": "tamilNaduSupplier",
+      "customer": "tamilNaduCustomer",
+      "place": "withinTamilNadu",
+      "date": "2026-08-14",
+      "lines": [
+        {
+          "lineId": "L1",
+          "taxableAmount": "400000.00",
+          "ratePct": "0.25",
+          "classificationCode": "7102"
+        }
+      ],
+      "expected": {
+        "lines": [
+          {
+            "lineId": "L1",
+            "taxableAmount": "400000.00",
+            "totalTax": "1000.00",
+            "components": [
+              { "code": "CGST", "label": "CGST @ 0.125%", "ratePct": "0.125", "amount": "500.00" },
+              { "code": "SGST", "label": "SGST @ 0.125%", "ratePct": "0.125", "amount": "500.00" }
+            ]
+          }
+        ],
+        "summary": [
+          { "code": "CGST", "label": "CGST @ 0.125%", "ratePct": "0.125", "amount": "500.00" },
+          { "code": "SGST", "label": "SGST @ 0.125%", "ratePct": "0.125", "amount": "500.00" }
+        ],
+        "totalTax": "1000.00"
+      }
+    },
+    {
+      "name": "28% on an awkward base",
+      "why": "12345.67 at 28% is 3456.7876 -> 3456.79, an odd number of paise; halves of 1728.395 truncate to 1728.39 and CGST takes the remainder",
+      "supplier": "tamilNaduSupplier",
+      "customer": "tamilNaduCustomer",
+      "place": "withinTamilNadu",
+      "date": "2026-08-14",
+      "lines": [
+        {
+          "lineId": "L1",
+          "taxableAmount": "12345.67",
+          "ratePct": "28",
+          "classificationCode": "8415"
+        }
+      ],
+      "expected": {
+        "lines": [
+          {
+            "lineId": "L1",
+            "taxableAmount": "12345.67",
+            "totalTax": "3456.79",
+            "components": [
+              { "code": "CGST", "label": "CGST @ 14%", "ratePct": "14", "amount": "1728.40" },
+              { "code": "SGST", "label": "SGST @ 14%", "ratePct": "14", "amount": "1728.39" }
+            ]
+          }
+        ],
+        "summary": [
+          { "code": "CGST", "label": "CGST @ 14%", "ratePct": "14", "amount": "1728.40" },
+          { "code": "SGST", "label": "SGST @ 14%", "ratePct": "14", "amount": "1728.39" }
+        ],
+        "totalTax": "3456.79"
+      }
+    },
+    {
+      "name": "a taxable line worth nothing",
+      "why": "a rate applies but there is nothing to apply it to. The components still exist, at zero — unlike an exempt line, where they do not exist at all.",
+      "supplier": "tamilNaduSupplier",
+      "customer": "tamilNaduCustomer",
+      "place": "withinTamilNadu",
+      "date": "2026-08-14",
+      "lines": [
+        { "lineId": "L1", "taxableAmount": "0.00", "ratePct": "18", "classificationCode": "8471" }
+      ],
+      "expected": {
+        "lines": [
+          {
+            "lineId": "L1",
+            "taxableAmount": "0.00",
+            "totalTax": "0.00",
+            "components": [
+              { "code": "CGST", "label": "CGST @ 9%", "ratePct": "9", "amount": "0.00" },
+              { "code": "SGST", "label": "SGST @ 9%", "ratePct": "9", "amount": "0.00" }
+            ]
+          }
+        ],
+        "summary": [
+          { "code": "CGST", "label": "CGST @ 9%", "ratePct": "9", "amount": "0.00" },
+          { "code": "SGST", "label": "SGST @ 9%", "ratePct": "9", "amount": "0.00" }
+        ],
+        "totalTax": "0.00"
+      }
+    },
+    {
+      "name": "an empty document",
+      "why": "no lines is not an error; it is an invoice nobody has typed into yet",
+      "supplier": "tamilNaduSupplier",
+      "customer": "tamilNaduCustomer",
+      "place": "withinTamilNadu",
+      "date": "2026-08-14",
+      "lines": [],
+      "expected": { "lines": [], "summary": [], "totalTax": "0.00" }
+    }
+  ]
+}

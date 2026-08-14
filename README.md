@@ -39,7 +39,8 @@ Docker, a database, a message queue, a VPS, and someone to keep it all alive. A
 two-person consultancy cannot do that and should never have to.
 
 Coffer is not a server. **It is a file.** You install an app; your books are one
-encrypted database on your own disk. Copy it to a pen drive and that is your backup.
+encrypted database on your own disk. One click writes a backup you can copy to a pen
+drive.
 No account, no subscription, no vendor who can lock you out, and it works on a day the
 internet doesn't.
 

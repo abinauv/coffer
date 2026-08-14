@@ -1,0 +1,666 @@
+/*
+ * The shell: title bar, sidebar, content frame, command palette, toasts.
+ *
+ * The layout is one grid column of three rows — title bar, body, and whatever the
+ * body contains — sized so that at the 1024×640 minimum window (src/main/index.ts)
+ * the content region still has room for a ledger table.
+ */
+
+.app {
+  display: grid;
+  grid-template-rows: var(--titlebar-height) 1fr;
+  height: 100%;
+  background: var(--ground);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+.app__body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  min-height: 0;
+}
+
+.app__body--welcome {
+  grid-template-columns: 1fr;
+}
+
+.app__main,
+.app__canvas {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* The content region is a skip-link target, not a control. Its ring is drawn
+ * inside so it is not clipped by the frame it fills. */
+.app__main:focus-visible,
+.app__canvas:focus-visible {
+  outline-offset: calc(var(--focus-ring-width) * -2);
+  box-shadow: none;
+}
+
+/* With no company open there is nothing to navigate, so the canvas is a single
+ * centred column rather than a page with a chrome-shaped hole in it. */
+.app__canvas {
+  display: grid;
+  place-items: center;
+  padding: var(--space-8) var(--space-6);
+}
+
+.screen {
+  min-height: 100%;
+}
+
+/* ---- Title bar ----------------------------------------------------------- */
+
+.titlebar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--titlebar-height);
+  padding-inline: var(--titlebar-inset-start) var(--titlebar-inset-end);
+  background: var(--chrome);
+  border-bottom: 1px solid var(--rule);
+  z-index: var(--z-titlebar);
+  user-select: none;
+}
+
+/* macOS traffic lights sit over our top-left. 78px clears all three at the
+ * default spacing; main may move them with `trafficLightPosition`, in which case
+ * this is the number that changes. */
+.titlebar[data-chrome='os-traffic-lights'] {
+  --titlebar-inset-start: 78px;
+}
+
+/* Windows and Linux paint the controls over the top-right. The environment
+ * variables report exactly where, so the reserved strip is never a guess: the
+ * trailing inset is the width of the window minus where the draggable area ends. */
+.titlebar[data-chrome='os-overlay'] {
+  --titlebar-inset-end: calc(100vw - env(titlebar-area-width, 100vw) + var(--space-2));
+}
+
+.titlebar__lead,
+.titlebar__trail {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.titlebar__trail {
+  justify-content: flex-end;
+}
+
+.titlebar__centre {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.titlebar__product {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--ink);
+}
+
+.titlebar__divider {
+  width: 1px;
+  height: 12px;
+  background: var(--rule-strong);
+}
+
+.titlebar__company {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+.titlebar__version {
+  font-size: var(--text-2xs);
+  font-variant-numeric: var(--numeric-identifier);
+  color: var(--ink-faint);
+  padding-inline-start: var(--space-1);
+}
+
+.titlebar__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: clamp(15rem, 34vw, 26rem);
+  height: 24px;
+  padding: 0 var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.titlebar__search:hover {
+  border-color: var(--rule-strong);
+  color: var(--ink-muted);
+}
+
+.titlebar__search-label {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titlebar__search-hint {
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
+  flex: none;
+}
+
+/* ---- Brand mark ---------------------------------------------------------- */
+
+.brand-mark {
+  flex: none;
+}
+
+.brand-mark__body {
+  fill: var(--accent);
+}
+
+.brand-mark__rules {
+  stroke: var(--on-accent);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.brand-mark__dial {
+  fill: none;
+  stroke: var(--on-accent);
+  stroke-width: 1.4;
+}
+
+/* ---- Theme control ------------------------------------------------------- */
+
+.theme-control {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  gap: 2px;
+}
+
+.theme-control__option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 20px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.theme-control--compact .theme-control__option {
+  padding: 0;
+  width: 24px;
+  justify-content: center;
+}
+
+.theme-control__option:hover {
+  color: var(--ink-muted);
+}
+
+.theme-control__option[aria-checked='true'] {
+  background: var(--surface);
+  color: var(--accent-ink);
+  box-shadow: var(--shadow-xs);
+}
+
+/* ---- Sidebar ------------------------------------------------------------- */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: var(--sidebar-width);
+  background: var(--sidebar);
+  border-right: 1px solid var(--rule);
+  overflow: hidden;
+  transition: width var(--duration-base) var(--ease-out);
+}
+
+.sidebar[data-collapsed='true'] {
+  width: var(--sidebar-width-collapsed);
+}
+
+.sidebar__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sidebar__empty {
+  padding: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+  line-height: var(--leading-relaxed);
+}
+
+.sidebar__heading {
+  padding: 0 var(--space-2) var(--space-1);
+}
+
+.sidebar__list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sidebar__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: 30px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.sidebar[data-collapsed='true'] .sidebar__item {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar__item:hover {
+  background: var(--surface-active);
+  color: var(--ink);
+}
+
+.sidebar__item[data-active='true'] {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: var(--weight-semibold);
+}
+
+/* The active marker is a rail, not just a fill — one more channel carrying the
+ * same information, which is the rule this product follows everywhere. */
+.sidebar__item[data-active='true']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+
+.sidebar__item-label {
+  flex: 1;
+}
+
+.sidebar__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-top: 1px solid var(--rule);
+  min-width: 0;
+}
+
+.sidebar[data-collapsed='true'] .sidebar__foot {
+  justify-content: center;
+}
+
+.sidebar__company {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar__company-name {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--ink);
+}
+
+.sidebar__company-path {
+  font-size: var(--text-2xs);
+  font-family: var(--font-mono);
+  color: var(--ink-faint);
+  direction: rtl;
+  text-align: left;
+}
+
+/* ---- Missing screen ------------------------------------------------------ */
+
+.screen--missing {
+  display: grid;
+  place-items: center;
+  padding: var(--space-12) var(--space-6);
+}
+
+.missing-screen {
+  max-width: 34rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  color: var(--ink-muted);
+}
+
+.missing-screen__title {
+  font-size: var(--text-md);
+  color: var(--ink);
+}
+
+.missing-screen__body {
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.missing-screen code {
+  padding: 1px var(--space-1);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-xs);
+  font-size: var(--text-xs);
+  color: var(--ink);
+}
+
+/* ---- Command palette ----------------------------------------------------- */
+
+.palette .dialog__panel {
+  max-height: min(32rem, calc(100vh - var(--space-20)));
+}
+
+.palette .dialog__body {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.palette__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--rule);
+  flex: none;
+}
+
+.palette__search-icon {
+  color: var(--ink-faint);
+  flex: none;
+}
+
+.palette__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-md);
+  border-radius: var(--radius-xs);
+}
+
+/* The palette's only focusable element keeps a visible ring — drawn tight so it
+ * does not push the search row apart. Removing it would leave the palette with
+ * no focus indicator at all. */
+.palette__input:focus-visible {
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+.palette__input::placeholder {
+  color: var(--ink-faint);
+}
+
+.palette__results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-2) 0;
+}
+
+.palette__empty {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+.palette__group + .palette__group {
+  margin-top: var(--space-2);
+}
+
+.palette__group-heading {
+  padding: var(--space-2) var(--space-4) var(--space-1);
+}
+
+.palette__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-left: 2px solid transparent;
+  font-size: var(--text-base);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.palette__item[data-active='true'] {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.palette__item[data-disabled='true'] {
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+.palette__item-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette__item-hint {
+  max-width: 40%;
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+}
+
+.palette__match {
+  background: transparent;
+  color: inherit;
+  font-weight: var(--weight-bold);
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-underline-offset: 0.18em;
+}
+
+.palette__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--rule);
+  background: var(--surface-sunken);
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+  flex: none;
+}
+
+.palette__foot span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* ---- Toasts -------------------------------------------------------------- */
+
+.toasts {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(24rem, calc(100vw - var(--space-8)));
+  /* The container spans the corner but must not swallow clicks meant for the
+   * screen behind it; each toast opts back in. */
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--rule);
+  border-left-width: 3px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg), var(--shadow-lift);
+  animation: toast-in var(--duration-base) var(--ease-emphasis);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.toast[data-tone='info'] {
+  border-left-color: var(--info);
+}
+
+.toast[data-tone='success'] {
+  border-left-color: var(--positive);
+}
+
+.toast[data-tone='warning'] {
+  border-left-color: var(--warning);
+}
+
+.toast[data-tone='danger'] {
+  border-left-color: var(--negative);
+}
+
+.toast__icon {
+  flex: none;
+  margin-top: 1px;
+}
+
+.toast[data-tone='info'] .toast__icon {
+  color: var(--info-ink);
+}
+
+.toast[data-tone='success'] .toast__icon {
+  color: var(--positive-ink);
+}
+
+.toast[data-tone='warning'] .toast__icon {
+  color: var(--warning-ink);
+}
+
+.toast[data-tone='danger'] .toast__icon {
+  color: var(--negative-ink);
+}
+
+.toast__content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.toast__title {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--ink);
+}
+
+.toast__body {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  line-height: var(--leading-snug);
+}
+
+.toast__action {
+  align-self: flex-start;
+  margin-top: var(--space-1);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-ink);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  cursor: pointer;
+}
+
+.toast__dismiss {
+  flex: none;
+}
+
+/* ---- Narrow windows ------------------------------------------------------
+ * The floor is 1024px. Below ~1200 the sidebar collapses itself (lib/layout.ts);
+ * these rules take the remaining chrome down with it so the content column keeps
+ * its width. */
+
+@media (max-width: 1200px) {
+  .titlebar__search {
+    width: clamp(11rem, 28vw, 20rem);
+  }
+}
+
+@media (max-width: 1100px) {
+  .titlebar__company {
+    display: none;
+  }
+
+  .titlebar__divider {
+    display: none;
+  }
+}

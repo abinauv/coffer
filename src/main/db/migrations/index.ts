@@ -45,5 +45,6 @@
  */
 
 import type { Migration } from '../migrate'
+import { m0001 } from './0001_app_metadata'
 
-export const MIGRATIONS: readonly Migration[] = []
+export const MIGRATIONS: readonly Migration[] = [m0001]

@@ -1,0 +1,430 @@
+{
+  "$comment": "Golden cases for the amount-in-words line on an Indian invoice. The word sequences in `numbers` and the numeric part of `cases` come from num2words(lang='en_IN') via the reference project's generated fixtures, normalised the way that project normalised them: no hyphens, no connective 'and', Title Case. The framing around them — the rupee word after the number, the paise tail, 'Only' — is the one documented on TaxRegime.amountInWords, and differs from the reference, which put 'Rupees' first. Changing either the grouping or the framing must fail here.",
+  "cases": [
+    {
+      "amount": "1234.50",
+      "words": "Rupees One Thousand Two Hundred Thirty Four and Fifty Paise Only",
+      "why": "the example written on the TaxRegime contract, verbatim"
+    },
+    {
+      "amount": "0",
+      "words": "Rupees Zero Only",
+      "why": "nil, and still plural"
+    },
+    {
+      "amount": "1",
+      "words": "Rupee One Only",
+      "why": "singular — the only count that takes it"
+    },
+    {
+      "amount": "1.00",
+      "words": "Rupee One Only",
+      "why": "trailing zeros do not make it plural"
+    },
+    {
+      "amount": "2",
+      "words": "Rupees Two Only",
+      "why": "the other side of the singular boundary"
+    },
+    {
+      "amount": "1.01",
+      "words": "Rupee One and One Paisa Only",
+      "why": "both singulars at once — one rupee, one paisa"
+    },
+    {
+      "amount": "10",
+      "words": "Rupees Ten Only"
+    },
+    {
+      "amount": "11",
+      "words": "Rupees Eleven Only",
+      "why": "the teens are single words"
+    },
+    {
+      "amount": "20",
+      "words": "Rupees Twenty Only"
+    },
+    {
+      "amount": "21",
+      "words": "Rupees Twenty One Only",
+      "why": "no hyphen — num2words writes twenty-one, the convention here does not"
+    },
+    {
+      "amount": "40",
+      "words": "Rupees Forty Only",
+      "why": "forty, not fourty"
+    },
+    {
+      "amount": "50",
+      "words": "Rupees Fifty Only"
+    },
+    {
+      "amount": "70",
+      "words": "Rupees Seventy Only"
+    },
+    {
+      "amount": "99",
+      "words": "Rupees Ninety Nine Only"
+    },
+    {
+      "amount": "100",
+      "words": "Rupees One Hundred Only"
+    },
+    {
+      "amount": "101",
+      "words": "Rupees One Hundred One Only",
+      "why": "no connective 'and' before the units"
+    },
+    {
+      "amount": "500",
+      "words": "Rupees Five Hundred Only"
+    },
+    {
+      "amount": "999",
+      "words": "Rupees Nine Hundred Ninety Nine Only"
+    },
+    {
+      "amount": "1000",
+      "words": "Rupees One Thousand Only"
+    },
+    {
+      "amount": "1001",
+      "words": "Rupees One Thousand One Only"
+    },
+    {
+      "amount": "1234.00",
+      "words": "Rupees One Thousand Two Hundred Thirty Four Only"
+    },
+    {
+      "amount": "9999",
+      "words": "Rupees Nine Thousand Nine Hundred Ninety Nine Only"
+    },
+    {
+      "amount": "10000",
+      "words": "Rupees Ten Thousand Only"
+    },
+    {
+      "amount": "19092",
+      "words": "Rupees Nineteen Thousand Ninety Two Only"
+    },
+    {
+      "amount": "99999",
+      "words": "Rupees Ninety Nine Thousand Nine Hundred Ninety Nine Only"
+    },
+    {
+      "amount": "100000",
+      "words": "Rupees One Lakh Only",
+      "why": "the lakh boundary — a western grouping would say one hundred thousand"
+    },
+    {
+      "amount": "100001",
+      "words": "Rupees One Lakh One Only",
+      "why": "one rupee past a lakh is still plural rupees"
+    },
+    {
+      "amount": "200000",
+      "words": "Rupees Two Lakh Only",
+      "why": "lakh does not pluralise"
+    },
+    {
+      "amount": "999999",
+      "words": "Rupees Nine Lakh Ninety Nine Thousand Nine Hundred Ninety Nine Only"
+    },
+    {
+      "amount": "1000000",
+      "words": "Rupees Ten Lakh Only",
+      "why": "a million is ten lakh, not one of anything"
+    },
+    {
+      "amount": "1234567",
+      "words": "Rupees Twelve Lakh Thirty Four Thousand Five Hundred Sixty Seven Only",
+      "why": "the [3,2] grouping in words: 12,34,567"
+    },
+    {
+      "amount": "9999999",
+      "words": "Rupees Ninety Nine Lakh Ninety Nine Thousand Nine Hundred Ninety Nine Only",
+      "why": "one below a crore"
+    },
+    {
+      "amount": "10000000",
+      "words": "Rupees One Crore Only",
+      "why": "the crore boundary"
+    },
+    {
+      "amount": "10000001",
+      "words": "Rupees One Crore One Only"
+    },
+    {
+      "amount": "12345678",
+      "words": "Rupees One Crore Twenty Three Lakh Forty Five Thousand Six Hundred Seventy Eight Only"
+    },
+    {
+      "amount": "50000000",
+      "words": "Rupees Five Crore Only"
+    },
+    {
+      "amount": "100000000",
+      "words": "Rupees Ten Crore Only"
+    },
+    {
+      "amount": "123456789",
+      "words": "Rupees Twelve Crore Thirty Four Lakh Fifty Six Thousand Seven Hundred Eighty Nine Only"
+    },
+    {
+      "amount": "999999999",
+      "words": "Rupees Ninety Nine Crore Ninety Nine Lakh Ninety Nine Thousand Nine Hundred Ninety Nine Only"
+    },
+    {
+      "amount": "1000000000",
+      "words": "Rupees One Hundred Crore Only",
+      "why": "the crore group carries hundreds rather than starting a new scale word"
+    },
+    {
+      "amount": "1234567890",
+      "words": "Rupees One Hundred Twenty Three Crore Forty Five Lakh Sixty Seven Thousand Eight Hundred Ninety Only"
+    },
+    {
+      "amount": "10000000000",
+      "words": "Rupees One Thousand Crore Only",
+      "why": "past 999 crore the grouping recurses instead of stopping"
+    },
+    {
+      "amount": "123456789012",
+      "words": "Rupees Twelve Thousand Three Hundred Forty Five Crore Sixty Seven Lakh Eighty Nine Thousand Twelve Only",
+      "why": "the recursion applied to a crore group that itself needs lakh/thousand grouping"
+    },
+    {
+      "amount": "1000000000000",
+      "words": "Rupees One Lakh Crore Only",
+      "why": "beyond anything a JS number holds exactly; the arithmetic never leaves Decimal"
+    },
+    {
+      "amount": "0.01",
+      "words": "Rupees Zero and One Paisa Only",
+      "why": "the smallest unit"
+    },
+    {
+      "amount": "0.05",
+      "words": "Rupees Zero and Five Paise Only"
+    },
+    {
+      "amount": "0.10",
+      "words": "Rupees Zero and Ten Paise Only"
+    },
+    {
+      "amount": "0.50",
+      "words": "Rupees Zero and Fifty Paise Only"
+    },
+    {
+      "amount": "0.99",
+      "words": "Rupees Zero and Ninety Nine Paise Only"
+    },
+    {
+      "amount": "0.001",
+      "words": "Rupees Zero Only",
+      "why": "below half a paisa: rounds away entirely, and does not become 'and Zero Paise'"
+    },
+    {
+      "amount": "0.004",
+      "words": "Rupees Zero Only",
+      "why": "still below the half-up tie"
+    },
+    {
+      "amount": "0.005",
+      "words": "Rupees Zero and One Paisa Only",
+      "why": "exactly on the tie — half-up, so it becomes a paisa"
+    },
+    {
+      "amount": "0.006",
+      "words": "Rupees Zero and One Paisa Only"
+    },
+    {
+      "amount": "0.015",
+      "words": "Rupees Zero and Two Paise Only",
+      "why": "the tie again on an odd unit; banker's rounding would say one paisa"
+    },
+    {
+      "amount": "1.005",
+      "words": "Rupee One and One Paisa Only"
+    },
+    {
+      "amount": "1.019",
+      "words": "Rupee One and Two Paise Only"
+    },
+    {
+      "amount": "99.99",
+      "words": "Rupees Ninety Nine and Ninety Nine Paise Only"
+    },
+    {
+      "amount": "100.25",
+      "words": "Rupees One Hundred and Twenty Five Paise Only"
+    },
+    {
+      "amount": "1234.56",
+      "words": "Rupees One Thousand Two Hundred Thirty Four and Fifty Six Paise Only"
+    },
+    {
+      "amount": "100000.01",
+      "words": "Rupees One Lakh and One Paisa Only"
+    },
+    {
+      "amount": "99999.995",
+      "words": "Rupees One Lakh Only",
+      "why": "paise rounding carries the whole amount over the lakh boundary"
+    },
+    {
+      "amount": "999999.995",
+      "words": "Rupees Ten Lakh Only",
+      "why": "and over the ten-lakh boundary"
+    },
+    {
+      "amount": "9999999.995",
+      "words": "Rupees One Crore Only",
+      "why": "and over the crore boundary — the carry has to propagate through three groups"
+    },
+    {
+      "amount": "9999999.99",
+      "words": "Rupees Ninety Nine Lakh Ninety Nine Thousand Nine Hundred Ninety Nine and Ninety Nine Paise Only"
+    },
+    {
+      "amount": "12345678.90",
+      "words": "Rupees One Crore Twenty Three Lakh Forty Five Thousand Six Hundred Seventy Eight and Ninety Paise Only"
+    },
+    {
+      "amount": "100000000.01",
+      "words": "Rupees Ten Crore and One Paisa Only"
+    },
+    {
+      "amount": "-1",
+      "words": "Minus Rupee One Only",
+      "why": "a credit note is spoken, not marked with a sign a reader can miss"
+    },
+    {
+      "amount": "-100.50",
+      "words": "Minus Rupees One Hundred and Fifty Paise Only"
+    },
+    {
+      "amount": "-1.005",
+      "words": "Minus Rupee One and One Paisa Only"
+    },
+    {
+      "amount": "-19092",
+      "words": "Minus Rupees Nineteen Thousand Ninety Two Only"
+    },
+    {
+      "amount": "-0.004",
+      "words": "Rupees Zero Only",
+      "why": "rounds to zero, and a zero is never negative"
+    }
+  ],
+  "numbers": [
+    {
+      "value": "0",
+      "words": "Zero"
+    },
+    {
+      "value": "1",
+      "words": "One"
+    },
+    {
+      "value": "13",
+      "words": "Thirteen"
+    },
+    {
+      "value": "15",
+      "words": "Fifteen"
+    },
+    {
+      "value": "19",
+      "words": "Nineteen"
+    },
+    {
+      "value": "45",
+      "words": "Forty Five"
+    },
+    {
+      "value": "78",
+      "words": "Seventy Eight"
+    },
+    {
+      "value": "92",
+      "words": "Ninety Two"
+    },
+    {
+      "value": "199",
+      "words": "One Hundred Ninety Nine"
+    },
+    {
+      "value": "555",
+      "words": "Five Hundred Fifty Five"
+    },
+    {
+      "value": "777",
+      "words": "Seven Hundred Seventy Seven"
+    },
+    {
+      "value": "1099",
+      "words": "One Thousand Ninety Nine"
+    },
+    {
+      "value": "12345",
+      "words": "Twelve Thousand Three Hundred Forty Five"
+    },
+    {
+      "value": "40500",
+      "words": "Forty Thousand Five Hundred"
+    },
+    {
+      "value": "60750",
+      "words": "Sixty Thousand Seven Hundred Fifty"
+    },
+    {
+      "value": "88888",
+      "words": "Eighty Eight Thousand Eight Hundred Eighty Eight"
+    },
+    {
+      "value": "111111",
+      "words": "One Lakh Eleven Thousand One Hundred Eleven"
+    },
+    {
+      "value": "123456",
+      "words": "One Lakh Twenty Three Thousand Four Hundred Fifty Six"
+    },
+    {
+      "value": "222222",
+      "words": "Two Lakh Twenty Two Thousand Two Hundred Twenty Two"
+    },
+    {
+      "value": "300000",
+      "words": "Three Lakh"
+    },
+    {
+      "value": "777777",
+      "words": "Seven Lakh Seventy Seven Thousand Seven Hundred Seventy Seven"
+    },
+    {
+      "value": "3000000",
+      "words": "Thirty Lakh"
+    },
+    {
+      "value": "7777777",
+      "words": "Seventy Seven Lakh Seventy Seven Thousand Seven Hundred Seventy Seven"
+    },
+    {
+      "value": "9999998",
+      "words": "Ninety Nine Lakh Ninety Nine Thousand Nine Hundred Ninety Eight"
+    },
+    {
+      "value": "30000000",
+      "words": "Three Crore"
+    },
+    {
+      "value": "77777777",
+      "words": "Seven Crore Seventy Seven Lakh Seventy Seven Thousand Seven Hundred Seventy Seven"
+    },
+    {
+      "value": "99999999",
+      "words": "Nine Crore Ninety Nine Lakh Ninety Nine Thousand Nine Hundred Ninety Nine"
+    }
+  ]
+}

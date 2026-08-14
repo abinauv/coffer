@@ -79,8 +79,13 @@ const NO_PERSISTENCE = {
   message: 'src/main/domain must not depend on persistence or transport. Invert the dependency.',
 }
 
+// Both forms are needed. The deep pattern alone matches a file *inside* a concrete
+// regime folder but not the folder import itself — `@main/regimes/in-gst` — which is
+// the import someone would actually write. The rule caught nothing until the bare
+// form was added.
+// (Line comments, not a block: these globs contain the characters that close one.)
 const NO_CONCRETE_REGIME = {
-  group: ['**/regimes/in-*/**'],
+  group: ['**/regimes/in-*', '**/regimes/in-*/**'],
   message:
     'Depend on the TaxRegime interface, not a concrete regime. Tax logic lives only in regimes/.',
 }
@@ -120,8 +125,12 @@ export default tseslint.config(
     },
   },
   {
-    /* The renderer computes no money and knows no tax rules — it displays what main sends. */
-    files: ['src/renderer/**/*.{ts,tsx}'],
+    /* Everything except `regimes/` itself goes through the registry, never at a concrete
+     * regime. Previously this guarded only `domain/` and `renderer/`, which left `db/`,
+     * `services/` and `ipc/` free to import `in-gst` directly — and a rule the whole
+     * middle of the app can walk around is not a rule. CONVENTIONS §1.6. */
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/main/regimes/**', 'src/main/domain/**'],
     rules: {
       'no-restricted-imports': ['error', { patterns: [NO_CONCRETE_REGIME] }],
     },
