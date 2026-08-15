@@ -232,6 +232,33 @@ what an entry is.
   component code — `tax-output-cgst` — so each component has its own account while the
   vocabulary reaches the database as data and never as a type.
 
+#### Accounting periods
+
+- Migration `0003`: `accounting_periods`. Periods are generated from the regime's
+  fiscal-year rule — twelve months or four quarters, contiguous, the last ending on the
+  fiscal year's last day, for any start month and any start day from 1 to 28.
+- **[accounting]** Periods cannot overlap, enforced by a trigger. Two periods covering
+  the same day would make an entry's period a matter of which row was found first, and
+  the same figure would appear in two months' returns or in neither.
+- **[accounting]** A consequence of that, and the reason there is no granularity setting:
+  a set of books uses one period length throughout. `Apr 2026` overlaps `Q1 2026-27`, so
+  a company keeping months cannot also keep quarters.
+- **[accounting]** A period's span never changes. Only `status` and `closed_at` may be
+  updated; a trigger refuses an `UPDATE` naming any other column, including one writing
+  the same value back. Moving a boundary would silently move every entry already posted
+  either side of it.
+- **[accounting]** `closed` reopens, `locked` does not. Locking is final — refused on
+  `UPDATE` and on `DELETE`, so that unlocking is not one delete and one insert away.
+  There is deliberately no escape hatch: an error found after filing is corrected in the
+  current open period, which is what an amended return already expects.
+- Periods close in order, and a closed period will not reopen underneath a later locked
+  one. Closing March while January is open would leave the year-end close computing
+  retained earnings over a half-finished year with nothing reporting it.
+- `requirePostablePeriod` separates "the books have no period covering this date" from
+  "that period is closed", because the two need different offers in front of a user.
+- A fiscal year the books have not used can be removed, which is what makes a company
+  created with the wrong rule or the wrong period length recoverable.
+
 #### Documentation
 
 - Architecture, conventions, getting started, the data model, adding a tax regime,

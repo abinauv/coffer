@@ -92,7 +92,7 @@ is created.
 
 ### What is in the database today
 
-Two tables, and neither holds a figure.
+Five tables, and none of them holds a figure yet — the figures arrive with `0004`.
 
 `schema_migrations` — one row per applied migration, created by the runner:
 
@@ -119,19 +119,19 @@ defaults are business data with their own Phase 1 table and their own constraint
 reference project kept a single-row `settings` table that grew into all of that, and
 every new field became a migration that rewrote it.
 
-### What is coming next: the ledger
+### The ledger tables
 
 Typed in [`src/main/db/schema.ts`](../src/main/db/schema.ts) and contracted in
 [`src/main/domain/ledger/types.ts`](../src/main/domain/ledger/types.ts), with migration
 numbers reserved so that parallel work cannot collide.
 
-| Migration | Tables                             | What it is                                    |
-| --------- | ---------------------------------- | --------------------------------------------- |
-| `0002`    | `accounts`, `account_roles`        | The chart of accounts, as a tree              |
-| `0003`    | `accounting_periods`               | Periods that can be opened, closed and locked |
-| `0004`    | `journal_entries`, `journal_lines` | The ledger itself, with the balance triggers  |
+| Migration | Tables                             | What it is                                    | State  |
+| --------- | ---------------------------------- | --------------------------------------------- | ------ |
+| `0002`    | `accounts`, `account_roles`        | The chart of accounts, as a tree              | landed |
+| `0003`    | `accounting_periods`               | Periods that can be opened, closed and locked | landed |
+| `0004`    | `journal_entries`, `journal_lines` | The ledger itself, with the balance triggers  | next   |
 
-Four things about these tables are worth knowing before you read them, because each one
+Six things about these tables are worth knowing before you read them, because each one
 is a decision rather than a detail:
 
 **There is no `status` on an entry, and no draft.** The ledger holds posted entries and
@@ -157,6 +157,27 @@ through inserting an entry's lines. Instead the line's foreign key is
 `journal_entries` sees the complete set and refuses an entry whose debits and credits
 disagree, or which has fewer than two lines. Code that writes the parent first fails the
 foreign key at commit — which is the point.
+
+**Periods never overlap, and a period's span never changes.** Two periods covering the
+same day would make an entry's period a matter of which row was found first, and the
+same figure would appear in two months' returns — or in neither. A trigger refuses an
+overlapping span on insert, and a second one refuses any `UPDATE` that names a column
+other than `status` and `closed_at`, because moving a boundary silently moves every
+entry already posted either side of it.
+
+A useful consequence, and the reason there is no granularity column: **a set of books
+uses one period length throughout.** `Apr 2026` overlaps `Q1 2026-27`, so a company
+keeping months cannot also keep quarters. The rule is not written down anywhere as a
+rule; it falls out of the one about overlap.
+
+**`closed` reopens and `locked` does not.** The ordinary month end is `closed`, and
+reopening it is a decision somebody is allowed to make. `locked` is a filed return or a
+signed audit, and it is final — enforced by a trigger on `UPDATE` and by a second one on
+`DELETE`, so that "unlock" is not one delete and one insert away. There is deliberately
+no escape hatch: an error found after filing is corrected in the current open period,
+which is what an accountant would do anyway and what an amended return already expects.
+A single "closed" flag would have made every close feel dangerous, and a period nobody
+dares close is a period that stays open forever.
 
 An account's _type_ — asset, liability, equity, income, expense — is the one field that
 may never change once anything has posted to it, because every figure already in the

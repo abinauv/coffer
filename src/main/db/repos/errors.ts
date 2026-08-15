@@ -36,6 +36,32 @@ export type RepoErrorCode =
   // ---- Roles ----
   /** No account is mapped to that role. */
   | 'ROLE_UNMAPPED'
+  // ---- Periods ----
+  /** Not a 'YYYY-MM-DD' date. Distinct from `NO_PERIOD`, which is a real date the
+   *  books do not reach — the two need different sentences in front of a user. */
+  | 'INVALID_DATE'
+  /** No period with that id. */
+  | 'PERIOD_NOT_FOUND'
+  /** No period covers that date. The books do not reach it. Shared with the domain. */
+  | 'NO_PERIOD'
+  /** The period covering that date is closed or locked. Shared with the domain. */
+  | 'PERIOD_CLOSED'
+  /** That fiscal year has already been generated. */
+  | 'PERIOD_EXISTS'
+  /** The span collides with a period the books already have. */
+  | 'PERIOD_OVERLAP'
+  /** These books are kept in months and the request was quarters, or the reverse. */
+  | 'PERIOD_GRANULARITY_MISMATCH'
+  /** A period's span never changes — only its status does. */
+  | 'PERIOD_IMMUTABLE'
+  /** The period is locked. Locked is final; correct it in the current open period. */
+  | 'PERIOD_LOCKED'
+  /** The transition is not available from the period's current status. */
+  | 'PERIOD_STATUS_INVALID'
+  /** An earlier period is still open. Periods close in order. */
+  | 'PERIOD_EARLIER_OPEN'
+  /** A later period is locked, so this one cannot reopen underneath it. */
+  | 'PERIOD_LATER_LOCKED'
 
 /** An error raised by a repository. Always carries a stable, machine-readable code. */
 export class RepoError extends Error {
@@ -72,6 +98,9 @@ const TRIGGER_CODES: readonly RepoErrorCode[] = [
   'ACCOUNT_PARENT_NOT_GROUP',
   'ACCOUNT_TYPE_MISMATCH',
   'ACCOUNT_IS_GROUP',
+  'PERIOD_OVERLAP',
+  'PERIOD_IMMUTABLE',
+  'PERIOD_LOCKED',
 ]
 
 export function repoErrorFrom(error: unknown, fallback: RepoErrorCode): RepoError {
