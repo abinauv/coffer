@@ -171,3 +171,148 @@ export interface RestoreInput {
   /** Directory to restore the company into. */
   directoryPath: string
 }
+
+// ---- The ledger -----------------------------------------------------------
+
+/*
+ * The transport side of src/main/domain/ledger/types.ts. Read the five invariants at
+ * the top of that file — they are why there is no `status` on an entry, no `balance` on
+ * an account, and no way to edit either.
+ *
+ * Every amount here is a decimal string at money scale. The renderer displays them and
+ * never computes with them (CONVENTIONS §1).
+ */
+
+export type AccountType = 'asset' | 'liability' | 'equity' | 'income' | 'expense'
+
+export type NormalBalance = 'debit' | 'credit'
+
+export interface Account {
+  id: string
+  code: string
+  name: string
+  type: AccountType
+  /** Which side increases it. Derived from `type`, sent so the renderer need not. */
+  normalBalance: NormalBalance
+  parentId: string | null
+  /** A group totals its children and accepts no postings of its own. */
+  isGroup: boolean
+  isArchived: boolean
+  description: string | null
+  /** Depth in the tree, 0 at the root. For indenting a flattened list. */
+  depth: number
+  /** Semantic slots this account fills, e.g. 'accounts-receivable'. Usually empty. */
+  roles: string[]
+}
+
+export interface CreateAccountInput {
+  code: string
+  name: string
+  type: AccountType
+  parentId: string | null
+  isGroup: boolean
+  description?: string | null
+}
+
+/**
+ * `type` is absent on purpose: an account's type may not change once anything has
+ * posted to it, because every figure already in the books was classified by it. Create
+ * the account you meant and move the balance across with a journal.
+ */
+export interface UpdateAccountInput {
+  id: string
+  code?: string
+  name?: string
+  parentId?: string | null
+  description?: string | null
+  isArchived?: boolean
+}
+
+// ---- Periods --------------------------------------------------------------
+
+export type PeriodStatus = 'open' | 'closed' | 'locked'
+
+export interface AccountingPeriod {
+  id: string
+  fiscalYearLabel: string
+  /** Position within the fiscal year, 1-based. */
+  index: number
+  /** e.g. 'Apr 2026'. */
+  label: string
+  startDate: DateString
+  /** Inclusive. */
+  endDate: DateString
+  status: PeriodStatus
+  closedAt: Timestamp | null
+}
+
+// ---- Journal entries ------------------------------------------------------
+
+export interface JournalLine {
+  id: string
+  lineNumber: number
+  accountId: string
+  /** Denormalised for display, so a journal renders without a join per line. */
+  accountCode: string
+  accountName: string
+  /** Money, 2dp. '0.00' when this is a credit line. */
+  debit: DecimalString
+  /** Money, 2dp. '0.00' when this is a debit line. */
+  credit: DecimalString
+  narration: string | null
+}
+
+export interface JournalEntry {
+  id: string
+  entryNumber: string
+  date: DateString
+  narration: string
+  /** A `SourceDocumentType`. 'manual' for a typed journal. */
+  sourceType: string
+  sourceId: string | null
+  sourceNumber: string | null
+  periodId: string
+  /** The entry this one reverses, when it is a reversal. */
+  reversesEntryId: string | null
+  /** The entry that reversed this one. Derived, not stored — see invariant 3. */
+  reversedByEntryId: string | null
+  lines: JournalLine[]
+  /** Debits, which equal credits. */
+  total: DecimalString
+  postedAt: Timestamp
+}
+
+/** One line of a journal being written. Exactly one of the amounts is non-zero. */
+export interface JournalLineInput {
+  accountId: string
+  debit: DecimalString
+  credit: DecimalString
+  narration?: string | null
+}
+
+export interface CreateJournalEntryInput {
+  date: DateString
+  narration: string
+  lines: JournalLineInput[]
+}
+
+export interface ReverseEntryInput {
+  entryId: string
+  /** The date the reversal is posted as of — not the original's date. */
+  date: DateString
+  narration: string
+}
+
+/**
+ * What came back from writing an entry. Enough to confirm it and to navigate to it,
+ * without shipping the whole entry to a caller that only wanted to know it worked.
+ */
+export interface PostingResult {
+  entryId: string
+  entryNumber: string
+  date: DateString
+  /** Debits, which equal credits. */
+  total: DecimalString
+  lineCount: number
+  postedAt: Timestamp
+}

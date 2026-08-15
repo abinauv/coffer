@@ -256,7 +256,9 @@ the database. Never a float, never a JS `number`, at any layer including JSON cr
 IPC.
 
 - Rounding: `ROUND_HALF_UP`, applied at defined points only — never incidentally.
-- Storage scale: money 2dp, quantity 3dp, rate 2dp.
+- Storage scale: money 2dp, quantity 3dp, rate 3dp. The third place on a rate is not
+  decoration: India's 0.25% slab halves into CGST 0.125% and SGST 0.125%, and at 2dp an
+  invoice would print 0.13% — a rate the tax was never computed from.
 - Tests use golden fixtures. Changing a rounding rule must break a test.
 
 ## 8. Security

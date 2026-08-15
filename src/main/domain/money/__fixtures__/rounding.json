@@ -4,12 +4,12 @@
   "scales": {
     "money": 2,
     "quantity": 3,
-    "rate": 2
+    "rate": 3
   },
   "points": {
     "moneyStorage": 2,
     "quantityStorage": 3,
-    "rateStorage": 2,
+    "rateStorage": 3,
     "lineAmount": 2,
     "documentTotal": 2,
     "allocationUnit": 2,
@@ -139,12 +139,17 @@
     },
     {
       "point": "rateStorage",
-      "input": "18.005",
-      "expected": "18.01",
-      "why": "rate ties up at 2dp"
+      "input": "18.0005",
+      "expected": "18.001",
+      "why": "rate ties up at 3dp"
     },
-    { "point": "rateStorage", "input": "2.5", "expected": "2.50", "why": "rate renders at 2dp" },
-    { "point": "rateStorage", "input": "0.125", "expected": "0.13", "why": "tie up" },
+    { "point": "rateStorage", "input": "2.5", "expected": "2.500", "why": "rate renders at 3dp" },
+    {
+      "point": "rateStorage",
+      "input": "0.125",
+      "expected": "0.125",
+      "why": "half of the 0.25% slab, held exactly — at 2dp this became 0.13%, a rate never applied"
+    },
     { "point": "wholeUnit", "input": "0.5", "expected": "1", "why": "half-up" },
     { "point": "wholeUnit", "input": "-0.5", "expected": "-1", "why": "away from zero" },
     {

@@ -119,6 +119,49 @@ defaults are business data with their own Phase 1 table and their own constraint
 reference project kept a single-row `settings` table that grew into all of that, and
 every new field became a migration that rewrote it.
 
+### What is coming next: the ledger
+
+Typed in [`src/main/db/schema.ts`](../src/main/db/schema.ts) and contracted in
+[`src/main/domain/ledger/types.ts`](../src/main/domain/ledger/types.ts), with migration
+numbers reserved so that parallel work cannot collide.
+
+| Migration | Tables                             | What it is                                    |
+| --------- | ---------------------------------- | --------------------------------------------- |
+| `0002`    | `accounts`, `account_roles`        | The chart of accounts, as a tree              |
+| `0003`    | `accounting_periods`               | Periods that can be opened, closed and locked |
+| `0004`    | `journal_entries`, `journal_lines` | The ledger itself, with the balance triggers  |
+
+Four things about these tables are worth knowing before you read them, because each one
+is a decision rather than a detail:
+
+**There is no `status` on an entry, and no draft.** The ledger holds posted entries and
+nothing else. A draft invoice is a draft in the sales tables; it reaches the ledger when
+it is posted. That is what lets a trial balance be a sum over `journal_lines` with no
+filter — and a filter somebody forgets to write is exactly how a draft leaks into a
+filed return.
+
+**A posted entry is never edited or deleted.** Triggers abort any `UPDATE` or `DELETE`.
+A correction is a reversing entry, dated when the correction was made, linked back
+through `reverses_entry_id`. That column is `UNIQUE`, which is what makes an entry
+reversible at most once — a constraint rather than a check somebody remembered.
+
+**No balance is stored anywhere.** Not on an account, not on a period, not as a
+running total. Every balance is a sum over lines, computed when asked. A cached balance
+is a second source of truth, and the two disagree silently starting on a date nobody can
+afterwards identify.
+
+**Lines are written before the entry they belong to.** This looks like a mistake and is
+not. SQLite has no deferred triggers, so nothing can check a running total midway
+through inserting an entry's lines. Instead the line's foreign key is
+`DEFERRABLE INITIALLY DEFERRED`, the lines go in first, and a `BEFORE INSERT` trigger on
+`journal_entries` sees the complete set and refuses an entry whose debits and credits
+disagree, or which has fewer than two lines. Code that writes the parent first fails the
+foreign key at commit — which is the point.
+
+An account's _type_ — asset, liability, equity, income, expense — is the one field that
+may never change once anything has posted to it, because every figure already in the
+books was classified by it. The `UpdateAccountInput` DTO has no `type` for that reason.
+
 ## 3. The registry
 
 A JSON file listing the companies this machine knows about. Nothing else.

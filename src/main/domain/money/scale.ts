@@ -21,7 +21,16 @@ import { D, Decimal, MoneyError, normaliseZero, type DecimalInput } from './deci
 export const SCALE = {
   money: 2,
   quantity: 3,
-  rate: 2,
+  /*
+   * Three, not two, because a tax component's rate is a real stored figure and India
+   * has a slab that halves into three places: 0.25% on rough diamonds splits into CGST
+   * 0.125% and SGST 0.125%. At 2dp that becomes 0.13%, and the invoice would print a
+   * rate the tax was never computed from.
+   *
+   * Rates a user picks are still whole slabs; the third place exists for what halving
+   * produces, and for regimes with rates like 0.1%.
+   */
+  rate: 3,
 } as const
 
 export type ScaleName = keyof typeof SCALE

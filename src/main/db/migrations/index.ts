@@ -4,9 +4,23 @@
  * Every schema change Coffer has ever made, in order. `runMigrations(db, MIGRATIONS)`
  * applies the ones a given company file has not yet run — see ../migrate.ts.
  *
- * Empty for now, and deliberately so: Phase 0 builds the machinery, Phase 1 brings the
- * ledger. A database at this point has exactly one table, `schema_migrations`, and no
- * business tables at all.
+ * ---------------------------------------------------------------------------
+ * RESERVED NUMBERS — PHASE 1, THE LEDGER
+ *
+ * Claimed at gate 1.0 so that work proceeding in parallel cannot collide. A number is
+ * reserved whether or not its file exists yet; taking a reserved one because it looks
+ * free is how two migrations end up as 0003.
+ *
+ *   0001  app_metadata                                                    LANDED
+ *   0002  accounts, account_roles          — chart of accounts
+ *   0003  accounting_periods               — fiscal periods
+ *   0004  journal_entries, journal_lines   — posting engine, with the balance triggers
+ *
+ * The tables each one creates are already typed in ../schema.ts, and the invariants
+ * they must enforce are in src/main/domain/ledger/types.ts. Read the note there about
+ * inserting lines before their parent entry before writing 0004 — the deferred foreign
+ * key is what makes the balance trigger possible, and it is not an implementation
+ * detail anyone may change.
  *
  * ---------------------------------------------------------------------------
  * ADDING A MIGRATION
@@ -17,8 +31,8 @@
  *
  *        import type { Migration } from '../migrate'
  *
- *        export const m0001: Migration = {
- *          id: '0001',
+ *        export const m0002: Migration = {
+ *          id: '0002',
  *          name: 'accounts',
  *          up(db) {
  *            db.exec(`CREATE TABLE accounts (...) STRICT`)

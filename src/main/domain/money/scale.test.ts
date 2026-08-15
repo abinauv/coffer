@@ -94,7 +94,7 @@ describe('the named helpers agree with their points', () => {
     expect(roundQuantity('1.0005').toFixed(3)).toBe(roundAt('quantityStorage', '1.0005').toFixed(3))
   })
   it('roundRate is rateStorage', () => {
-    expect(roundRate('18.005').toFixed(2)).toBe(roundAt('rateStorage', '18.005').toFixed(2))
+    expect(roundRate('18.0005').toFixed(3)).toBe(roundAt('rateStorage', '18.0005').toFixed(3))
   })
 })
 

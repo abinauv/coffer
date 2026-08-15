@@ -85,8 +85,14 @@
     {
       "point": "rateStorage",
       "input": "18",
-      "storage": "18.00",
-      "why": "rates render at two places"
+      "storage": "18.000",
+      "why": "rates render at three places"
+    },
+    {
+      "point": "rateStorage",
+      "input": "0.125",
+      "storage": "0.125",
+      "why": "half of the 0.25% GST slab survives a round trip"
     },
     {
       "point": "wholeUnit",
@@ -107,7 +113,7 @@
       "why": "and rounding it away on read would hide that"
     },
     { "point": "quantityStorage", "text": "1.2345", "why": "a quantity column holds three" },
-    { "point": "rateStorage", "text": "18.005", "why": "a rate column holds two" },
+    { "point": "rateStorage", "text": "18.0005", "why": "a rate column holds three" },
     { "point": "wholeUnit", "text": "1.0", "why": "whole units hold none" }
   ],
   "scaleAccepted": [
@@ -117,6 +123,7 @@
     { "point": "moneyStorage", "text": "-0" },
     { "point": "quantityStorage", "text": "1.234" },
     { "point": "rateStorage", "text": "18.00" },
+    { "point": "rateStorage", "text": "0.125" },
     { "point": "wholeUnit", "text": "-42" }
   ]
 }

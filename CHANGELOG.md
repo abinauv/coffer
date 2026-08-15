@@ -24,7 +24,8 @@ release has been made, so everything below is new.
   boundary. A JS `number` with a fractional part cannot get in.
 - **[accounting]** A single rounding policy: `ROUND_HALF_UP`, applied only at named
   points in `ROUNDING_POINTS`, never incidentally. Storage scales are money 2dp,
-  quantity 3dp, rate 2dp.
+  quantity 3dp, rate 3dp — a rate carries three places because India's 0.25% slab halves
+  into CGST 0.125% and SGST 0.125%, and 0.13% is a rate no tax was ever computed from.
 - **[accounting]** Largest-remainder allocation (`allocate`, `allocateByWeights`), so a
   split total sums back to the original exactly and the odd paisa lands deterministically.
 - **[accounting]** Golden fixtures for rounding, allocation, percentages and storage
@@ -178,11 +179,54 @@ release has been made, so everything below is new.
 - Grouped Dependabot updates, with majors of the load-bearing toolchain ignored because
   each is an architectural decision with a paragraph attached.
 
+#### The ledger contract
+
+No ledger yet — this is the contract Phase 1 is built against, landed on its own so that
+work on the chart of accounts, the periods and the posting engine cannot disagree about
+what an entry is.
+
+- **[accounting]** The five invariants (`main/domain/ledger/types.ts`): every entry
+  balances; the ledger holds only posted entries, with no draft state and no status
+  column; a posted entry is immutable and corrections are reversals; no balance is ever
+  stored; and a line is a debit or a credit, never both and never neither.
+- **[accounting]** `AccountType` and its normal balances, as definitions rather than
+  configuration, with the accounting equation pinned as a test.
+- Account roles — semantic slots like `accounts-receivable` that posting rules ask for
+  instead of naming an account code, so a user may renumber their whole chart of
+  accounts without breaking a rule. Tax accounts are deliberately not roles; a regime
+  has as many as it has components, and naming them would put GST in `domain/`.
+- `PostingRule`, `PostingContext` and `AccountResolver`: a rule is a pure function from
+  a document to a draft entry, and everything it needs to consult arrives already
+  resolved. A rule that needs something new gets it added to the context, never by
+  importing a repository into `domain/`.
+- **[accounting]** `checkDraft` reports every structural problem in one pass rather than
+  the first, and stays quiet about the balance while a line is malformed — a negative
+  amount unbalances the entry too, and leading with "unbalanced" points at the symptom.
+- Kysely typings and reserved migrations 0002–0004 for `accounts`, `account_roles`,
+  `accounting_periods`, `journal_entries` and `journal_lines`.
+- The balanced-entry invariant is enforced three times: in the domain, in the repository
+  before commit, and by the database. SQLite has no deferred triggers, so the lines are
+  written before their parent entry with a deferred foreign key, which lets a
+  `BEFORE INSERT` trigger on the entry see the complete set and refuse it.
+
 #### Documentation
 
 - Architecture, conventions, getting started, the data model, adding a tax regime,
   security for users, a good-first-issues list, and an index tying them together.
 - Contributor, security and community documentation; issue and pull-request templates;
   CODEOWNERS.
+
+### Changed
+
+Nothing has been released, so these correct decisions made earlier in Phase 0 rather
+than changing behaviour anyone has seen.
+
+- **[accounting]** The rate storage scale is 3dp, not 2dp. Half of India's 0.25% slab is
+  0.125%, and at two places an invoice would print CGST at 0.13% — a rate the tax was
+  never computed from. No stored rate column exists yet, so nothing is migrated.
+- ESLint's purity rule for `domain/` now anchors its patterns to the start of an import
+  specifier. Unanchored, the entry for Node's legacy `domain` module also matched
+  `@main/domain/money`, so the first cross-module import inside `domain/` was reported
+  as a filesystem violation. Both directions are covered by a probe rather than assumed.
 
 [Unreleased]: https://github.com/abinauv/coffer/commits/main

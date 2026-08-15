@@ -101,15 +101,21 @@ describe('toStorageString — golden round trips', () => {
   it('never emits a signed zero', () => {
     expect(toMoneyString('-0.001')).toBe('0.00')
     expect(toQuantityString('-0.0001')).toBe('0.000')
-    expect(toRateString('-0')).toBe('0.00')
+    expect(toRateString('-0')).toBe('0.000')
   })
 })
 
 describe('the named renderers agree with their points', () => {
-  it('money is 2dp, quantity 3dp, rate 2dp', () => {
+  it('money is 2dp, quantity 3dp, rate 3dp', () => {
     expect(toMoneyString('1')).toBe('1.00')
     expect(toQuantityString('1')).toBe('1.000')
-    expect(toRateString('1')).toBe('1.00')
+    expect(toRateString('1')).toBe('1.000')
+  })
+
+  /* The reason the rate scale is three and not two. See SCALE in scale.ts. */
+  it('holds half of the 0.25% slab exactly', () => {
+    expect(toRateString('0.125')).toBe('0.125')
+    expect(parseRate('0.125').toFixed(3)).toBe('0.125')
   })
 })
 
@@ -134,7 +140,7 @@ describe('parseAt — a stored value must already be at its scale', () => {
   it('does not round the extra places away, which would hide the fault', () => {
     expect(() => parseMoney('1.234')).toThrowError(/decimal places/)
     expect(() => parseQuantity('1.2345')).toThrowError(/decimal places/)
-    expect(() => parseRate('18.005')).toThrowError(/decimal places/)
+    expect(() => parseRate('18.0005')).toThrowError(/decimal places/)
   })
 
   it('reads a well-formed value', () => {

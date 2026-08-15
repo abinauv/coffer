@@ -60,13 +60,23 @@ const NODE_BUILTINS = [
   'zlib',
 ]
 
+// Anchored with a leading slash, which in these gitignore-style patterns means "the
+// start of the import specifier" rather than "any segment of it". Unanchored, the
+// entry for Node's legacy `domain` module also matched `@main/domain/money` — so the
+// first cross-module import inside `domain/` was reported as an I/O violation, with a
+// message about the filesystem that explained nothing.
+//
+// Verified both directions rather than assumed: anchored patterns still catch `fs`,
+// `crypto`, `path/posix`, `domain` and `electron`, and no longer catch our own folder.
+const anchored = (name) => `/${name}`
+
 const PURE_DOMAIN = {
   group: [
     'node:*',
-    ...NODE_BUILTINS,
-    ...NODE_BUILTINS.map((name) => `${name}/*`),
-    'electron',
-    'electron/*',
+    ...NODE_BUILTINS.map(anchored),
+    ...NODE_BUILTINS.map((name) => anchored(`${name}/*`)),
+    '/electron',
+    '/electron/*',
   ],
   message:
     'src/main/domain must stay pure — no I/O and no ambient state. If a domain function ' +

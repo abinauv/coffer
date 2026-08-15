@@ -44,7 +44,7 @@ repo layer sees a snake_case key.
 | -------------- | ------------------------ | ----------------------------------- |
 | Money          | `Decimal`                | decimal string, 2dp                 |
 | Quantity       | `Decimal`                | decimal string, 3dp                 |
-| Rate / percent | `Decimal`                | decimal string, 2dp                 |
+| Rate / percent | `Decimal`                | decimal string, 3dp                 |
 | Timestamp      | ISO-8601 UTC string      | `TEXT` — `2026-08-13T09:30:00.000Z` |
 | Date           | `YYYY-MM-DD` string      | `TEXT`                              |
 | Boolean        | `boolean`                | `INTEGER` 0/1                       |
