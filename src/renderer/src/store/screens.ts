@@ -26,16 +26,17 @@
  */
 
 import { useEffect, useSyncExternalStore } from 'react'
-import { createScreenRegistry, isScreenDefinition, type ScreenDefinition } from '../lib/screens'
+import {
+  isScreenDefinition,
+  registerScreens,
+  screenRegistry,
+  type ScreenDefinition,
+} from '../lib/screens'
 
-/* Module scope rather than component state: screens register as their modules
- * load, which happens before any component mounts. */
-const registry = createScreenRegistry()
-
-/** Registers screens for the life of the module. Call at module scope. */
-export function registerScreens(screens: readonly ScreenDefinition[]): () => void {
-  return registry.register(screens)
-}
+/* Re-exported so the documented import path keeps working. The definition lives in
+ * lib/screens.ts because the glob below hoists above this module's body — see the
+ * note there. */
+export { registerScreens }
 
 /**
  * Loads every module under `screens/` so its registration runs.
@@ -69,7 +70,7 @@ function discoverScreens(): void {
     }
   }
 
-  if (found.length > 0) registry.register(found)
+  if (found.length > 0) screenRegistry().register(found)
   if (rejected.length > 0) {
     console.warn(
       `Coffer: ignoring ${rejected.length} export(s) that do not describe a screen:\n  ` +
@@ -81,7 +82,8 @@ function discoverScreens(): void {
 discoverScreens()
 
 export function useScreens(): readonly ScreenDefinition[] {
-  return useSyncExternalStore(registry.subscribe, registry.list, registry.list)
+  const store = screenRegistry()
+  return useSyncExternalStore(store.subscribe, store.list, store.list)
 }
 
 /**
@@ -90,5 +92,5 @@ export function useScreens(): readonly ScreenDefinition[] {
  * depends on something only known at runtime.
  */
 export function useRegisterScreens(screens: readonly ScreenDefinition[]): void {
-  useEffect(() => registry.register(screens), [screens])
+  useEffect(() => screenRegistry().register(screens), [screens])
 }

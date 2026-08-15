@@ -6,7 +6,9 @@ work: slower than most projects, with more tests, and a strong bias toward corre
 over features.
 
 Please read this alongside [`docs/CONVENTIONS.md`](./docs/CONVENTIONS.md), which covers
-naming, types and the rules that are not negotiable.
+naming, types and the rules that are not negotiable, and
+[`docs/getting-started.md`](./docs/getting-started.md), which takes you from a clone to a
+running window. [`docs/README.md`](./docs/README.md) indexes the rest.
 
 ---
 
@@ -63,26 +65,38 @@ tax logic confined to `regimes/`, no stored balances) and it is unpleasant for e
 when a finished PR turns out to violate one.
 
 Issues labelled `good first issue` are scoped and safe to pick up directly.
+[`docs/good-first-issues.md`](./docs/good-first-issues.md) lists the ones drawn from the
+code as it stands, with the files and what "done" looks like for each.
 
 ### Setup
 
 ```bash
-git clone https://github.com/<owner>/coffer.git
+git clone https://github.com/abinauv/coffer.git
 cd coffer
 npm install
 npm run dev
 ```
 
-Node 22 LTS or newer. On first install, native modules are rebuilt for Electron — this
-takes a few minutes and needs no compiler, since prebuilt binaries are used.
+Node 22 LTS or newer. Nothing is compiled: both native modules are Node-API addons that
+ship prebuilt binaries, so there is no rebuild step and no C++ toolchain requirement.
+`postinstall` runs `scripts/native-modules.mjs`, which only checks that those binaries
+load — it takes about a second.
+
+If `npm run dev` builds cleanly and no window appears, read
+[`docs/getting-started.md`](./docs/getting-started.md) §6 before debugging anything else.
+Two known traps produce exactly that.
 
 ### The loop
 
 ```bash
-npm run verify      # typecheck + lint + test — must pass before you push
+npm run verify      # typecheck + lint + format:check + test — must pass before you push
 npm test -- --watch # while working
-npm run format      # prettier
+npm run format      # prettier, writing in place
 ```
+
+`verify` includes `format:check`, so run `npm run format` first if Prettier would reflow
+anything you touched. Every script is listed in
+[`docs/getting-started.md`](./docs/getting-started.md) §4.
 
 ### What a good PR looks like
 

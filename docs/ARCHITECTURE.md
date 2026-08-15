@@ -44,7 +44,7 @@ Versions are the current release as of the Phase 0 build. Pin exact versions in
 | Query builder | Kysely                                       | 0.29.x  | Types derive from the schema; no runtime ORM weight.                                                                                                                                              |
 | Money         | `decimal.js`                                 | 10.x    | Arbitrary precision. See §7.                                                                                                                                                                      |
 | Hashing       | `@node-rs/argon2`                            | 2.x     | Argon2id for the passphrase.                                                                                                                                                                      |
-| Crypto        | `libsodium-wrappers`                         | 0.7.x   | Sealed-box recovery.                                                                                                                                                                              |
+| Crypto        | `libsodium-wrappers`                         | 0.8.x   | Sealed-box recovery.                                                                                                                                                                              |
 | Excel         | ExcelJS                                      | 4.x     |                                                                                                                                                                                                   |
 | Packaging     | electron-builder                             | 26.x    | NSIS, dmg, AppImage + deb.                                                                                                                                                                        |
 
@@ -109,6 +109,11 @@ src/
 └── shared/             types + the IPC contract. Imported by all three.
 ```
 
+**This is the target layout, not an inventory.** As of the end of Phase 0, `main/app/`,
+`db/repos/`, `domain/ledger/`, `domain/documents/`, `domain/inventory/` and `services/`
+do not exist yet — they arrive with Phase 1 and later. What is on disk today is listed in
+[`getting-started.md`](./getting-started.md) §7.
+
 **`domain/` is pure.** It imports nothing from `db`, `electron`, or `node:fs`. This is
 what makes the money and ledger logic testable against golden fixtures, and it is the
 single most important structural rule in the codebase.
@@ -142,19 +147,29 @@ GST must not appear in `domain/` or in any screen. `regimes/types.ts` defines:
 
 ```ts
 interface TaxRegime {
-  computeTax(basis: TaxBasis): TaxBreakdown
-  placeOfSupply(supplier: Party, customer: Party): PlaceOfSupply
+  readonly id: RegimeId // ISO 3166-1 alpha-2, lower case. Persisted.
+  readonly label: string
+
+  computeTax(input: TaxComputationInput): TaxComputationResult
+  placeOfSupply(supplier: TaxParty, customer: TaxParty): PlaceOfSupply
   validateRegistrationNumber(value: string): ValidationResult
-  classificationScheme: ClassificationScheme // HSN/SAC, or NAICS, or none
-  fiscalYear: FiscalYearRule // Apr–Mar, or Jan–Dec
-  numberFormat: NumberFormatRule // lakh/crore, or thousands
+  jurisdictionName(code: string): string | null
+  jurisdictions(): ReadonlyArray<{ code: string; name: string }>
+
+  readonly classification: ClassificationScheme // HSN/SAC, or NAICS, or none
+  readonly fiscalYear: FiscalYearRule // Apr–Mar, or Jan–Dec
+  readonly numberFormat: NumberFormatRule // lakh/crore, or thousands
+
   amountInWords(value: Decimal): string
-  filings: FilingDefinition[]
+
+  readonly filings: ReadonlyArray<FilingDefinition>
 }
 ```
 
-`regimes/in-gst/` is the first implementation. A second regime should require no change
-outside its own folder.
+`regimes/in-gst/` is the first implementation, reached through the registry in
+`regimes/index.ts` — nothing outside `regimes/` names a concrete regime, and eslint
+enforces that. A second regime should require no change outside its own folder. See
+[`adding-a-tax-regime.md`](./adding-a-tax-regime.md).
 
 > The reference project hardcodes `computeGst()` and calls it from screens. Do not
 > reproduce that. It also hardcodes _"freight is never taxed"_, which was one client's
@@ -162,19 +177,19 @@ outside its own folder.
 
 ### 6.3 One encrypted database per company
 
-A registry at the OS app-data path lists companies (`id`, `display_name`, `file_path`,
-`last_opened_at`). Each company has its own DEK, wrapped by a key derived from that
-company's passphrase.
+A registry at the OS app-data path — `companies.json`, not a table — lists companies
+(`id`, `displayName`, `filePath`, `vaultPath`, `createdAt`, `lastOpenedAt`). Each company
+has its own DEK, wrapped by a key derived from that company's passphrase.
 
 No `company_id` column exists anywhere. A missing `WHERE` clause therefore cannot leak
 one client's data into another's report, and one corrupt file costs one company.
 
-**On disk, a company is two files:**
+**On disk, a company is two files**, named from the company's display name:
 
 ```
-MyCompany/
-  books.coffer          the SQLCipher database
-  books.coffer.vault    wrapped DEK, salts, KDF parameters, recovery slots
+Accounts/
+  Acme-Traders.coffer          the SQLCipher database
+  Acme-Traders.coffer.vault    wrapped DEK, salts, KDF parameters, recovery slots
 ```
 
 A wrapped key cannot live inside the database it decrypts — something has to be readable
@@ -221,9 +236,11 @@ Windows (NSIS), macOS (dmg, x64 + arm64), Linux (AppImage + deb). Both native mo
 need prebuilds for all three in CI.
 
 **Builds are unsigned for now.** Windows shows a SmartScreen warning and macOS
-quarantines the download; the README must tell users how to proceed, and the docs site
-must publish SHA-256 checksums for every artefact so the download is at least
-verifiable. Revisit certificates when the project has traction.
+quarantines the download; the README tells users how to proceed, and every release
+publishes SHA-256 checksums for every artefact so the download is at least verifiable.
+`.github/workflows/release.yml` generates `SHA256SUMS.txt` from the artefacts actually
+attached, via `scripts/checksums.mjs`, and puts the verification commands in the release
+notes. Revisit certificates when the project has traction.
 
 ### 6.6 Compliance as a versioned pack
 

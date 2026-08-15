@@ -11,7 +11,8 @@ body:
         records. If a file is needed to reproduce, we will ask you to build a minimal one.
 
         If this is a **security vulnerability**, do not file it here — see
-        [SECURITY.md](../blob/main/SECURITY.md) for private reporting.
+        [SECURITY.md](https://github.com/abinauv/coffer/blob/main/SECURITY.md) for
+        private reporting.
 
   - type: checkboxes
     id: wrong-number
@@ -31,7 +32,8 @@ body:
       placeholder: |
         1. Created an invoice for a customer in another state
         2. Added a line for 10 units at 1,250.00 with 18% GST
-        3. The IGST line showed 2,250.00 — expected 2,250.00 but the total read 14,000.00
+        3. The IGST line read 2,250.00, which is right, but the invoice total came to
+           14,000.00 instead of 14,750.00
     validations:
       required: true
 

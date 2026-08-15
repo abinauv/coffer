@@ -69,13 +69,18 @@ internet doesn't.
 Releases will arrive with the alpha. Until then:
 
 ```bash
-git clone https://github.com/<org>/coffer.git
+git clone https://github.com/abinauv/coffer.git
 cd coffer
 npm install
 npm run dev
 ```
 
-Requires Node 22 LTS or newer. Builds target Windows, macOS and Linux.
+Requires Node 22 LTS or newer. Nothing is compiled — both native modules ship prebuilt
+binaries — so no C++ toolchain is needed. Builds target Windows, macOS and Linux.
+
+[`docs/getting-started.md`](./docs/getting-started.md) covers every script, how the
+three-process build fits together, and what to check if the build succeeds and no window
+appears.
 
 > **On unsigned builds.** Coffer is not yet code-signed — certificates cost more than
 > this project currently has. Windows will show a SmartScreen warning and macOS will
@@ -85,8 +90,18 @@ Requires Node 22 LTS or newer. Builds target Windows, macOS and Linux.
 
 ## Documentation
 
+[`docs/`](./docs/README.md) is the index. The short version:
+
+- [Getting started](./docs/getting-started.md) — clone to a running window, and what each
+  script does
 - [Architecture & stack](./docs/ARCHITECTURE.md) — how it is built and why
 - [Conventions](./docs/CONVENTIONS.md) — read before contributing
+- [The data model](./docs/data-model.md) — what a company is on disk, and how migrations
+  work
+- [Adding a tax regime](./docs/adding-a-tax-regime.md) — the internationalisation seam
+- [Security for users](./docs/security-for-users.md) — passphrases, recovery codes,
+  verifying a download
+- [Good first issues](./docs/good-first-issues.md) — scoped starter tasks
 
 ## Licence
 

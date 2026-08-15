@@ -148,3 +148,39 @@ export function isScreenDefinition(value: unknown): value is ScreenDefinition {
   }
   return true
 }
+
+/* ---- The application's registry ------------------------------------------ */
+
+/*
+ * The singleton lives HERE, in a leaf module, rather than beside `registerScreens`'s
+ * documentation in store/screens.ts. That placement is load-bearing.
+ *
+ * store/screens.ts discovers screens with `import.meta.glob({ eager: true })`, which
+ * Vite compiles into ordinary static imports — and static imports are hoisted above
+ * the module body. Every screen module therefore runs, and calls `registerScreens`,
+ * before any `let` or `const` in store/screens.ts has initialised. A singleton
+ * declared there sits in its temporal dead zone at exactly the moment the first
+ * screen registers, and the app dies with "Cannot access 'registry' before
+ * initialization" and a blank window.
+ *
+ * This module imports only types, so a screen module importing `registerScreens`
+ * from here forces it to be fully evaluated first. That is an ESM guarantee rather
+ * than an ordering we hope holds.
+ */
+
+let instance: ScreenRegistry | null = null
+
+/** The application's screen registry. Created on first use. */
+export function screenRegistry(): ScreenRegistry {
+  instance ??= createScreenRegistry()
+  return instance
+}
+
+/**
+ * Register screens for the life of the module. Call at module scope.
+ *
+ * Import it from here, not from store/screens.ts — see the note above.
+ */
+export function registerScreens(screens: readonly ScreenDefinition[]): () => void {
+  return screenRegistry().register(screens)
+}

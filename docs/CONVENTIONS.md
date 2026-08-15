@@ -59,10 +59,17 @@ The contract in `src/shared/ipc.ts` is the single source of truth:
 
 1. Add the method to its group in the `CofferApi` interface.
 2. Add any DTOs to `src/shared/dto.ts`.
-3. Register a handler in `src/main/ipc/handlers/<group>.ts` under `group:method`.
+3. Add the method name to `API_SURFACE` in `src/main/ipc/surface.ts`. `CofferApi` is an
+   interface and does not exist at runtime; this is its runtime enumeration, and both the
+   preload bridge and the startup check read it. Its type is mapped over the contract, so
+   **typecheck fails until you do this**.
+4. Register a handler in `src/main/ipc/handlers/<group>.ts` under `group:method`.
 
 The renderer proxy is generated — call `api.invoices.list(args)` with no extra wiring.
 Do not add a bare `ipcRenderer.invoke` anywhere.
+
+`assertApiSurfaceComplete` runs at startup, before any window exists, so a contract method
+with no handler behind it crashes the app at boot rather than at click time.
 
 Handlers validate their input, catch, log, and return a typed result. An unhandled
 throw in a handler is a bug.

@@ -87,6 +87,10 @@ the first thing funded if the project finds an audience.
   theft, not against a failed disk.
 - **Verify the checksum** of any release you download, until signing is in place.
 
+[`docs/security-for-users.md`](./docs/security-for-users.md) covers all four at length —
+how to choose a passphrase, what recovery codes are and where to keep them, and the exact
+commands for checking a SHA-256 on each platform.
+
 ## Supported versions
 
 Pre-alpha: only the latest commit on `main` is supported. Once releases begin, this

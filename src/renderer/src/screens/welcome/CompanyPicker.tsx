@@ -1,0 +1,506 @@
+/*
+ * The company picker — what Coffer is when no company is open.
+ *
+ * Everything reachable without a passphrase lives here: the list, and the four ways a
+ * company can get onto it (create one, add a file already on disk, restore a backup, or
+ * have been here already). Nothing on this screen reads a single figure from anybody's
+ * books, because nothing has been decrypted yet.
+ *
+ * ONE RULE WORTH STATING. "Forget" removes a row from a list. It never deletes a file,
+ * and the confirmation says so in those words — a user who reads "remove" as "delete" and
+ * hesitates has been failed by the copy, and one who reads it the other way round has
+ * been failed much worse.
+ */
+
+import { useCallback, useMemo, useState } from 'react'
+import type { JSX } from 'react'
+import { Badge, Button, Dialog, Icon, Input } from '@renderer/components/atoms'
+import { callApi } from '@renderer/lib/api'
+import type { Command } from '@renderer/lib/command-registry'
+import { makeRoute } from '@renderer/lib/routing'
+import { useRegisterCommands } from '@renderer/store/commands'
+import { useNavigation } from '@renderer/store/navigation'
+import { registerScreens } from '@renderer/lib/screens'
+import { useToasts } from '@renderer/store/toasts'
+import type { CompanySummary } from '@shared/dto'
+import { FailureNotice } from '../components/FailureNotice'
+import { Notice } from '../components/Notice'
+import { PathField } from '../components/PathField'
+import { ScreenFrame } from '../components/ScreenFrame'
+import { describeAvailability } from '../lib/availability'
+import { describeCreated, describeLastOpened } from '../lib/dates'
+import { failureTitle } from '../lib/messages'
+import { validateRename, validateRestore } from '../lib/forms'
+import { useCompanies } from '../lib/use-companies'
+
+export function CompanyPicker(): JSX.Element {
+  const { route, navigate } = useNavigation()
+  const { show } = useToasts()
+  const { companies, error, isLoading, refresh } = useCompanies()
+
+  const [renaming, setRenaming] = useState<CompanySummary | null>(null)
+  const [forgetting, setForgetting] = useState<CompanySummary | null>(null)
+  /* A screen that could not restore a backup itself sends the user here asking for the
+   * dialog — `route.params.action`. Read once, at mount: the picker is remounted on the
+   * way in, and the dialog must not spring open again when it is dismissed. */
+  const [isRestoreOpen, setRestoreOpen] = useState(() => route.params['action'] === 'restore')
+  const [isAdding, setAdding] = useState(false)
+
+  const goCreate = useCallback(() => navigate(makeRoute('welcome', 'create')), [navigate])
+
+  /** Point Coffer at a company file that is already on disk. */
+  const addExisting = useCallback(async () => {
+    setAdding(true)
+    try {
+      const chosen = await callApi((api) => api.system.chooseCompanyFile())
+      if (!chosen.ok) {
+        show({ tone: 'danger', title: failureTitle(chosen.error), body: chosen.error.message })
+        return
+      }
+      /* Null is the user closing the dialog. Not an error, and not worth a toast. */
+      const filePath = chosen.data
+      if (filePath === null) return
+
+      const added = await callApi((api) => api.companies.addExisting(filePath))
+      if (!added.ok) {
+        show({ tone: 'danger', title: failureTitle(added.error), body: added.error.message })
+        return
+      }
+      await refresh()
+      show({
+        tone: 'success',
+        title: `${added.data.displayName} is on your list`,
+        body:
+          added.data.availability === 'vault-missing'
+            ? 'Its keys are not beside it, so it cannot be opened yet. The list explains what to do.'
+            : 'Open it with its passphrase whenever you need it.',
+      })
+    } finally {
+      setAdding(false)
+    }
+  }, [refresh, show])
+
+  useRegisterCommands(
+    useMemo<Command[]>(
+      () => [
+        {
+          id: 'company.create',
+          title: 'Create a company',
+          section: 'Company',
+          keywords: ['new', 'start', 'first'],
+          run: goCreate,
+        },
+        {
+          id: 'company.add-existing',
+          title: 'Add an existing company',
+          section: 'Company',
+          keywords: ['open file', 'import', 'locate'],
+          run: () => void addExisting(),
+        },
+      ],
+      [goCreate, addExisting],
+    ),
+  )
+
+  return (
+    <ScreenFrame
+      width="list"
+      title="Your companies"
+      lede="Each company is its own encrypted file, on this machine. Nothing here is readable until you unlock it."
+      actions={
+        <>
+          <Button icon="refresh" variant="ghost" onClick={() => void refresh()} isBusy={isLoading}>
+            Refresh
+          </Button>
+          <Button icon="folder" onClick={() => void addExisting()} isBusy={isAdding}>
+            Add an existing company
+          </Button>
+          <Button icon="archive" onClick={() => setRestoreOpen(true)}>
+            Restore a backup
+          </Button>
+          <Button variant="primary" icon="plus" onClick={goCreate}>
+            Create a company
+          </Button>
+        </>
+      }
+    >
+      {error && (
+        <FailureNotice error={error} context="list" onAction={{ refresh: () => void refresh() }} />
+      )}
+
+      {companies !== null && companies.length === 0 && <EmptyState onCreate={goCreate} />}
+
+      {companies !== null && companies.length > 0 && (
+        <ul className="company-list">
+          {companies.map((company) => (
+            <li key={company.id}>
+              <CompanyRow
+                company={company}
+                onOpen={() => navigate(makeRoute('welcome', 'unlock', { id: company.id }))}
+                onRecover={() => navigate(makeRoute('welcome', 'recover', { id: company.id }))}
+                onRename={() => setRenaming(company)}
+                onForget={() => setForgetting(company)}
+                onFindFile={() => void addExisting()}
+                onRestore={() => setRestoreOpen(true)}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Keyed on the company: the dialog's draft name belongs to the company it was
+          opened for, and remounting is how it starts from the right one. */}
+      <RenameDialog
+        key={renaming?.id ?? 'rename-none'}
+        company={renaming}
+        onClose={() => setRenaming(null)}
+        onDone={refresh}
+      />
+      <ForgetDialog company={forgetting} onClose={() => setForgetting(null)} onDone={refresh} />
+      <RestoreDialog
+        isOpen={isRestoreOpen}
+        onClose={() => setRestoreOpen(false)}
+        onDone={refresh}
+      />
+    </ScreenFrame>
+  )
+}
+
+// ---- The list --------------------------------------------------------------
+
+interface CompanyRowProps {
+  company: CompanySummary
+  onOpen: () => void
+  onRecover: () => void
+  onRename: () => void
+  onForget: () => void
+  onFindFile: () => void
+  onRestore: () => void
+}
+
+function CompanyRow({
+  company,
+  onOpen,
+  onRecover,
+  onRename,
+  onForget,
+  onFindFile,
+  onRestore,
+}: CompanyRowProps): JSX.Element {
+  const { show } = useToasts()
+  const notice = describeAvailability(company)
+
+  const reveal = useCallback(async () => {
+    const result = await callApi((api) => api.system.revealInFileManager(company.filePath))
+    if (!result.ok) {
+      show({ tone: 'danger', title: failureTitle(result.error), body: result.error.message })
+    }
+  }, [company.filePath, show])
+
+  return (
+    <article className="company" data-available={notice.canOpen ? 'true' : 'false'}>
+      <div className="company__identity">
+        <Icon name="building" size={18} className="company__mark" />
+        <div className="company__names">
+          <h2 className="company__name truncate" title={company.displayName}>
+            {company.displayName}
+          </h2>
+          <p className="company__path truncate selectable" title={company.filePath}>
+            {company.filePath}
+          </p>
+          <p className="company__meta">
+            {describeLastOpened(company.lastOpenedAt)} · {describeCreated(company.createdAt)}
+          </p>
+        </div>
+        {notice.badge && <Badge tone={notice.badge.tone}>{notice.badge.label}</Badge>}
+      </div>
+
+      {notice.headline !== null && (
+        <Notice tone={company.availability === 'vault-missing' ? 'danger' : 'warning'}>
+          <p>
+            <strong>{notice.headline}</strong> {notice.body}
+          </p>
+        </Notice>
+      )}
+
+      <div className="company__actions">
+        {notice.canOpen && (
+          <Button variant="primary" icon="lock" onClick={onOpen}>
+            Open
+          </Button>
+        )}
+        {notice.action === 'add-existing' && (
+          <Button icon="folder" onClick={onFindFile}>
+            Find the file
+          </Button>
+        )}
+        {notice.action === 'restore' && (
+          <Button icon="archive" onClick={onRestore}>
+            Restore from a backup
+          </Button>
+        )}
+        {notice.canOpen && (
+          <Button variant="ghost" onClick={onRecover}>
+            Use a recovery code
+          </Button>
+        )}
+        <span className="company__spacer" />
+        <Button variant="ghost" onClick={onRename}>
+          Rename
+        </Button>
+        <Button variant="ghost" onClick={() => void reveal()}>
+          Show in folder
+        </Button>
+        <Button variant="ghost" onClick={onForget}>
+          Remove from list
+        </Button>
+      </div>
+    </article>
+  )
+}
+
+function EmptyState({ onCreate }: { onCreate: () => void }): JSX.Element {
+  return (
+    <div className="empty">
+      <Icon name="ledger" size={26} className="empty__mark" />
+      <h2 className="empty__title">No companies yet</h2>
+      <p className="empty__body">
+        A company is one encrypted file plus the vault holding its keys, kept wherever you choose —
+        a folder on this machine, or a drive you can lock in a cupboard. Create one to start, or add
+        a file you already have.
+      </p>
+      <div className="empty__actions">
+        <Button variant="primary" icon="plus" onClick={onCreate}>
+          Create a company
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// ---- Rename ----------------------------------------------------------------
+
+interface DialogProps {
+  company: CompanySummary | null
+  onClose: () => void
+  onDone: () => Promise<void>
+}
+
+function RenameDialog({ company, onClose, onDone }: DialogProps): JSX.Element {
+  const { show } = useToasts()
+  const current = company?.displayName ?? ''
+  const [value, setName] = useState(current)
+  const [isBusy, setBusy] = useState(false)
+  const state = validateRename(value, current)
+
+  const close = useCallback(() => {
+    onClose()
+  }, [onClose])
+
+  const submit = useCallback(async () => {
+    if (company === null || !state.canSubmit) return
+    setBusy(true)
+    const result = await callApi((api) => api.companies.rename(company.id, value.trim()))
+    setBusy(false)
+    if (!result.ok) {
+      show({ tone: 'danger', title: failureTitle(result.error), body: result.error.message })
+      return
+    }
+    await onDone()
+    close()
+    show({ tone: 'success', title: `Renamed to ${result.data.displayName}` })
+  }, [company, state.canSubmit, value, show, onDone, close])
+
+  return (
+    <Dialog
+      isOpen={company !== null}
+      onClose={close}
+      title="Rename this company"
+      description="The name in your list changes. The file on disk keeps the name it was created with — renaming an open database is a good way to lose one."
+      size="sm"
+      footer={
+        <>
+          <Button onClick={close}>Cancel</Button>
+          <Button
+            variant="primary"
+            onClick={() => void submit()}
+            disabled={!state.canSubmit}
+            isBusy={isBusy}
+          >
+            Rename
+          </Button>
+        </>
+      }
+    >
+      <Input
+        label="Name"
+        value={value}
+        error={state.errors.displayName}
+        onChange={(event) => setName(event.target.value)}
+        maxLength={120}
+      />
+    </Dialog>
+  )
+}
+
+// ---- Forget ----------------------------------------------------------------
+
+function ForgetDialog({ company, onClose, onDone }: DialogProps): JSX.Element {
+  const { show } = useToasts()
+  const [isBusy, setBusy] = useState(false)
+
+  const submit = useCallback(async () => {
+    if (company === null) return
+    setBusy(true)
+    const result = await callApi((api) => api.companies.forget(company.id))
+    setBusy(false)
+    if (!result.ok) {
+      show({ tone: 'danger', title: failureTitle(result.error), body: result.error.message })
+      return
+    }
+    await onDone()
+    onClose()
+    show({
+      tone: 'info',
+      title: `${company.displayName} was removed from your list`,
+      body: 'Its files are untouched. Add them again whenever you want it back.',
+    })
+  }, [company, show, onDone, onClose])
+
+  return (
+    <Dialog
+      isOpen={company !== null}
+      onClose={onClose}
+      title="Remove this company from the list?"
+      size="sm"
+      footer={
+        <>
+          <Button onClick={onClose}>Keep it</Button>
+          <Button variant="danger" onClick={() => void submit()} isBusy={isBusy}>
+            Remove from list
+          </Button>
+        </>
+      }
+    >
+      <p className="prose">
+        This removes <strong>{company?.displayName}</strong> from Coffer&rsquo;s list and leaves the
+        files exactly where they are. <strong>Nothing is deleted.</strong>
+      </p>
+      <p className="prose prose--muted selectable">{company?.filePath}</p>
+      <p className="prose">
+        The database and its vault stay in that folder, and adding them back with &ldquo;Add an
+        existing company&rdquo; restores this entry as it was.
+      </p>
+    </Dialog>
+  )
+}
+
+// ---- Restore ---------------------------------------------------------------
+
+interface RestoreDialogProps {
+  isOpen: boolean
+  onClose: () => void
+  onDone: () => Promise<void>
+}
+
+function RestoreDialog({ isOpen, onClose, onDone }: RestoreDialogProps): JSX.Element {
+  const { show } = useToasts()
+  const [archivePath, setArchivePath] = useState('')
+  const [directoryPath, setDirectoryPath] = useState('')
+  const [isBusy, setBusy] = useState(false)
+  const state = validateRestore({ archivePath, directoryPath })
+
+  const close = useCallback(() => {
+    setArchivePath('')
+    setDirectoryPath('')
+    onClose()
+  }, [onClose])
+
+  const chooseArchive = useCallback(async () => {
+    const result = await callApi((api) => api.system.chooseBackupArchive())
+    if (result.ok && result.data !== null) setArchivePath(result.data)
+  }, [])
+
+  const chooseFolder = useCallback(async () => {
+    const result = await callApi((api) => api.system.chooseDirectory())
+    if (result.ok && result.data !== null) setDirectoryPath(result.data)
+  }, [])
+
+  const submit = useCallback(async () => {
+    if (!state.canSubmit) return
+    setBusy(true)
+    const result = await callApi((api) => api.companies.restore({ archivePath, directoryPath }))
+    setBusy(false)
+    if (!result.ok) {
+      show({
+        tone: 'danger',
+        title: failureTitle(result.error, 'restore'),
+        body: result.error.message,
+      })
+      return
+    }
+    await onDone()
+    close()
+    show({
+      tone: 'success',
+      title: `${result.data.displayName} was restored`,
+      body: 'Open it with the passphrase it had when the backup was taken. Recovery codes from that time still work.',
+    })
+  }, [state.canSubmit, archivePath, directoryPath, show, onDone, close])
+
+  return (
+    <Dialog
+      isOpen={isOpen}
+      onClose={close}
+      title="Restore from a backup"
+      description="A Coffer backup holds the database and its vault together. Both are written out, and neither replaces anything that is already there."
+      footer={
+        <>
+          <Button onClick={close}>Cancel</Button>
+          <Button
+            variant="primary"
+            onClick={() => void submit()}
+            disabled={!state.canSubmit}
+            isBusy={isBusy}
+          >
+            Restore
+          </Button>
+        </>
+      }
+    >
+      <div className="stack">
+        <PathField
+          label="Backup archive"
+          value={archivePath}
+          placeholder="No archive chosen"
+          buttonLabel="Choose archive"
+          onChoose={() => void chooseArchive()}
+          hint="The file Coffer wrote, ending in .coffer-backup.zip."
+        />
+        <PathField
+          label="Restore into"
+          value={directoryPath}
+          placeholder="No folder chosen"
+          buttonLabel="Choose folder"
+          onChoose={() => void chooseFolder()}
+          hint="Choose an empty folder. Coffer will not write over a company that is already there."
+        />
+        <Notice tone="info">
+          <p>
+            Restoring does not open the company: it puts the files back and adds them to your list.
+            You still need the passphrase from the day the backup was taken.
+          </p>
+        </Notice>
+      </div>
+    </Dialog>
+  )
+}
+
+registerScreens([
+  {
+    id: 'companies',
+    title: 'Your companies',
+    area: 'welcome',
+    render: () => <CompanyPicker />,
+  },
+])
