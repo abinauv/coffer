@@ -209,6 +209,29 @@ what an entry is.
   written before their parent entry with a deferred foreign key, which lets a
   `BEFORE INSERT` trigger on the entry see the complete set and refuse it.
 
+#### The chart of accounts
+
+- Migration `0002`: `accounts` and `account_roles`. The tree rules are triggers, not
+  just repository checks — a parent must be a group, and a child carries its parent's
+  type. Each one, if broken, corrupts reports rather than throwing, so it is enforced
+  where nothing can bypass it.
+- The accounts repository: create, rename, renumber, move, archive and delete, with
+  cycle detection on a move. Depth and normal balance are computed on read and never
+  stored; a stored depth is wrong the moment an account is moved.
+- **[accounting]** An account's `type` cannot be changed once the account exists. Every
+  figure posted to it was classified by that type, so changing it would silently move a
+  balance between the balance sheet and the profit and loss with nothing recording it.
+- A seedable default chart of accounts — cash, bank, receivables, payables, stock,
+  sales, purchases and the usual overheads — written into a new company in one
+  transaction, or not at all. It names no tax regime: `Duties and Taxes` is an empty
+  group, and the per-component accounts are added when the company's regime is known.
+- `buildResolver` loads the chart into the pure `AccountResolver` the domain posts
+  against, including archived accounts, so posting to one fails as `ACCOUNT_ARCHIVED`
+  rather than as "no such account".
+- Tax component accounts are found through role names built from the regime's own
+  component code — `tax-output-cgst` — so each component has its own account while the
+  vocabulary reaches the database as data and never as a type.
+
 #### Documentation
 
 - Architecture, conventions, getting started, the data model, adding a tax regime,

@@ -12,7 +12,7 @@
  * free is how two migrations end up as 0003.
  *
  *   0001  app_metadata                                                    LANDED
- *   0002  accounts, account_roles          — chart of accounts
+ *   0002  accounts, account_roles          — chart of accounts             LANDED
  *   0003  accounting_periods               — fiscal periods
  *   0004  journal_entries, journal_lines   — posting engine, with the balance triggers
  *
@@ -60,5 +60,6 @@
 
 import type { Migration } from '../migrate'
 import { m0001 } from './0001_app_metadata'
+import { m0002 } from './0002_accounts'
 
-export const MIGRATIONS: readonly Migration[] = [m0001]
+export const MIGRATIONS: readonly Migration[] = [m0001, m0002]
