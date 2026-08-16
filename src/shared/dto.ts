@@ -436,3 +436,125 @@ export interface AccountBalance {
   /** Positive in the account's normal direction. Negative means it is the other way. */
   balance: DecimalString
 }
+
+// ---- Reports --------------------------------------------------------------
+
+/*
+ * The statements. Every figure below is computed in main and crosses as a decimal
+ * string — CONVENTIONS §1.7: the renderer displays money and never computes it, not even
+ * to total a column it can already see.
+ */
+
+/** One line of a statement. Groups carry their subtree's total and nothing of their own. */
+export interface ReportLine {
+  accountId: string
+  code: string
+  name: string
+  /** 0 at the top of its section. Indent by this; the tree is already flattened. */
+  depth: number
+  isGroup: boolean
+  /** Positive in the account's own normal direction. */
+  amount: DecimalString
+}
+
+export interface ReportSection {
+  type: AccountType
+  lines: ReportLine[]
+  total: DecimalString
+}
+
+export interface BalanceSheet {
+  /** Everything up to and including this date. A balance sheet is always cumulative. */
+  asAtDate: DateString
+  assets: ReportSection
+  liabilities: ReportSection
+  equity: ReportSection
+  /**
+   * Income less expenses that no year-end close has moved into retained earnings yet.
+   *
+   * Shown on the face of the sheet inside equity. Without it the equation does not
+   * close: regrouping every balanced entry by account type gives
+   * `assets = liabilities + equity + (income - expenses)`, and the last bracket is this.
+   */
+  profitForPeriod: DecimalString
+  totalAssets: DecimalString
+  /** Liabilities plus equity plus `profitForPeriod`. */
+  totalLiabilitiesAndEquity: DecimalString
+  /** Whether the two sides agree. Reported rather than assumed, so it can be asserted. */
+  balanced: boolean
+}
+
+export interface ProfitAndLoss {
+  /** Inclusive. Null means from the first entry in the books. */
+  fromDate: DateString | null
+  /** Inclusive. */
+  toDate: DateString | null
+  income: ReportSection
+  expenses: ReportSection
+  totalIncome: DecimalString
+  totalExpenses: DecimalString
+  /** Income less expenses. Negative is a loss, and is not relabelled. */
+  netProfit: DecimalString
+}
+
+/** One movement against an account, carrying the balance as it stood after it. */
+export interface AccountLedgerRow {
+  entryId: string
+  entryNumber: string
+  date: DateString
+  narration: string
+  /** The other side: one account's name, or 'Split' when the entry touched several. */
+  contra: string
+  debit: DecimalString
+  credit: DecimalString
+  /** After this row, in the account's normal direction. */
+  balance: DecimalString
+}
+
+export interface AccountLedger {
+  accountId: string
+  code: string
+  name: string
+  type: AccountType
+  normalBalance: NormalBalance
+  fromDate: DateString | null
+  toDate: DateString | null
+  /**
+   * What the account held immediately before `fromDate`.
+   *
+   * Zero when the range is open at the start. Without it a month's ledger would close on
+   * that month's movement wearing the closing balance's name.
+   */
+  openingBalance: DecimalString
+  rows: AccountLedgerRow[]
+  totalDebit: DecimalString
+  totalCredit: DecimalString
+  /** The last row's balance, not a separate sum — they could not then disagree. */
+  closingBalance: DecimalString
+}
+
+/** A day's entries in the day book, with the day's total. */
+export interface DayBookDay {
+  date: DateString
+  entries: JournalEntry[]
+  /** The day's debits, which equal its credits. */
+  total: DecimalString
+}
+
+export interface DayBook {
+  fromDate: DateString | null
+  toDate: DateString | null
+  days: DayBookDay[]
+  entryCount: number
+  total: DecimalString
+}
+
+export interface AsAtDateInput {
+  asAtDate: DateString
+}
+
+export interface AccountLedgerInput {
+  accountId: string
+  fromDate?: DateString
+  toDate?: DateString
+}
