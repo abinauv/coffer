@@ -98,6 +98,35 @@ apologies, no `Something went wrong`.
 
 Every batch must leave `npm run typecheck && npm test` green.
 
+### Two environments
+
+Vitest runs two projects, chosen by directory:
+
+| Where                                   | Environment | Setup                            |
+| --------------------------------------- | ----------- | -------------------------------- |
+| `src/main`, `src/preload`, `src/shared` | `node`      | none                             |
+| `src/renderer`                          | `happy-dom` | `src/renderer/src/test/setup.ts` |
+
+A renderer test runs in a browser environment because the renderer runs in a browser.
+Not jsdom: it has no `<dialog>.showModal()` and no `matchMedia`, both of which this
+product depends on — the measured comparison is in `setup.ts`.
+
+### Screen tests
+
+Render a screen with `renderScreen` from `src/renderer/src/test/harness.tsx`. It supplies
+the providers a screen expects and a `window.coffer` built by the **real** `createApiProxy`,
+so a stub is looked up by the channel production would actually call. A channel nothing
+answers fails the test by name rather than silently becoming an error notice.
+
+- Assert on **what crossed the bridge**, not only on what is drawn. State that never
+  reaches an input is not observable in the DOM: a `<select>` whose chosen option is
+  removed falls back to the first one on its own, so the field can read correctly while
+  the state behind it is stale.
+- Assert figures **by position**, not by presence. A debit found "somewhere in the row"
+  is found just as happily when the two columns have been swapped.
+- Order fixtures so they **disagree** with the expected output. A chart of accounts
+  listed in its natural order cannot tell a sorted report from an unsorted one.
+
 ## 7. Commits
 
 Conventional commits, with a DCO sign-off:

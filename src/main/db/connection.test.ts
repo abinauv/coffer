@@ -252,7 +252,19 @@ describe('checkIntegrity', () => {
     expect(checkIntegrity(db)).toEqual({ isOk: true, problems: [] })
   })
 
-  it('reports damage instead of throwing', () => {
+  /*
+   * The slowest test in the suite, and legitimately so: 500 individually encrypted
+   * writes with `synchronous = FULL`, then a full `integrity_check` over a file that has
+   * been deliberately damaged — which is the slow path, because SQLite walks the whole
+   * b-tree once it starts finding faults.
+   *
+   * It measured 5.2s against the default 5s timeout on a loaded machine, so it failed
+   * roughly one run in twenty with a message about a hanging test. Nothing was hanging.
+   * The timeout is raised rather than the work reduced: fewer rows would leave the
+   * scribble at offset 6000 landing outside the data pages, and the test would then pass
+   * by finding no damage where it had also caused none.
+   */
+  it('reports damage instead of throwing', { timeout: 30_000 }, () => {
     const path = tempPath()
     const db = open({ filePath: path, key: KEY, journalMode: 'delete' })
     db.exec(`CREATE TABLE notes (body TEXT NOT NULL) STRICT`)

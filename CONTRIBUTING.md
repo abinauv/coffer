@@ -89,10 +89,16 @@ Two known traps produce exactly that.
 ### The loop
 
 ```bash
-npm run verify      # typecheck + lint + format:check + test — must pass before you push
-npm test -- --watch # while working
-npm run format      # prettier, writing in place
+npm run verify              # typecheck + lint + format:check + test — before you push
+npm test -- --watch         # while working
+npm test -- --project=main  # or --project=renderer, to run one side only
+npm run format              # prettier, writing in place
 ```
+
+Tests run as two projects: `main` (Node) and `renderer` (a real DOM, happy-dom). Which
+one a file belongs to is decided by its directory, so there is nothing to declare. To
+render a screen, use `renderScreen` from `src/renderer/src/test/harness.tsx` — see
+[`docs/CONVENTIONS.md`](./docs/CONVENTIONS.md) §6.
 
 `verify` includes `format:check`, so run `npm run format` first if Prettier would reflow
 anything you touched. Every script is listed in

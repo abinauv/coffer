@@ -165,6 +165,26 @@ release has been made, so everything below is new.
   `services/` or `ipc/`; nothing outside `regimes/` may import a concrete regime.
 - Vitest, with coverage thresholds enforced on `domain/`, `regimes/` and `security/` at
   90% lines, 90% functions and 85% branches.
+- Two Vitest projects, split by directory: `main`, `preload` and `shared` run under Node,
+  and `renderer` runs under a real DOM. A renderer test runs in a browser environment
+  because the renderer runs in a browser.
+- happy-dom rather than jsdom, chosen by measurement. jsdom 30 exposes an
+  `HTMLDialogElement` constructor with no `showModal()` on it and no `window.matchMedia`
+  at all — so every modal in the product is unopenable and untestable, while a smoke test
+  checking `typeof HTMLDialogElement` still reports success. It is also fifty times
+  slower to start.
+- A screen-test harness that stubs `window.coffer` through the **real** `createApiProxy`,
+  so a stub is found by the channel production would actually call rather than by a
+  hand-written object that keeps answering after a method is renamed. A channel nothing
+  answers fails the test by name, because `callApi` is built to swallow exactly that and
+  would otherwise render it as an ordinary error notice.
+- The chart of accounts and the trial balance now have rendering tests — 31 of them,
+  every mutation killed. Two conventions came out of the exercise and are written down in
+  `docs/CONVENTIONS.md §6`: assert figures by column position rather than by presence,
+  since a swapped debit and credit passes either way; and assert screen state by what
+  crosses the bridge rather than by what is drawn, since a `<select>` whose chosen option
+  has been removed falls back to the first one on its own and reads correctly whether or
+  not the state behind it was cleared.
 - Native-module verification on install and in CI, under plain Node and inside a real
   Electron main process. Nothing is compiled — both native modules ship Node-API
   prebuilds.
