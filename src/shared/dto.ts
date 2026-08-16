@@ -316,3 +316,89 @@ export interface PostingResult {
   lineCount: number
   postedAt: Timestamp
 }
+
+// ---- Opening balances and the year end ------------------------------------
+
+/** One account's balance as it stood when the books began. */
+export interface OpeningBalanceLine {
+  accountId: string
+  /**
+   * Positive in the account's normal direction — a bank account with 50,000 in it is
+   * '50000.00', and so is a loan of 50,000 owed. Asking for a debit or a credit here
+   * would make somebody translate their old trial balance twice.
+   */
+  amount: DecimalString
+}
+
+export interface PostOpeningBalancesInput {
+  /** Usually the first day the books cover. Must fall in an open period. */
+  date: DateString
+  lines: OpeningBalanceLine[]
+}
+
+export interface CloseFiscalYearInput {
+  /** The calendar year the fiscal year starts in. */
+  startYear: number
+}
+
+/** What a year-end close did, or why it had nothing to do. */
+export interface YearEndCloseResult {
+  fiscalYearLabel: string
+  /** Null when the year had no income or expense to close. */
+  posting: PostingResult | null
+  /** The profit (positive) or loss (negative) moved to retained earnings. */
+  netResult: DecimalString
+  accountsClosed: number
+}
+
+// ---- Balances -------------------------------------------------------------
+
+/*
+ * Every figure below is summed from `journal_lines` when asked. Nothing is stored and
+ * nothing is cached — invariant 4. A balance that disagrees with the lines it came from
+ * is the failure mode this rules out, and it is the one nobody notices for months.
+ */
+
+export interface TrialBalanceRow {
+  accountId: string
+  code: string
+  name: string
+  type: AccountType
+  /** Total debits posted in the range. */
+  debit: DecimalString
+  /** Total credits posted in the range. */
+  credit: DecimalString
+  /** `debit - credit` when that is positive, else '0.00'. The left-hand column. */
+  debitBalance: DecimalString
+  /** `credit - debit` when that is positive, else '0.00'. The right-hand column. */
+  creditBalance: DecimalString
+}
+
+export interface TrialBalance {
+  /** Inclusive. Null means from the first entry in the books. */
+  fromDate: DateString | null
+  /** Inclusive. */
+  toDate: DateString | null
+  /** Accounts with movement in the range, in code order. Groups never appear. */
+  rows: TrialBalanceRow[]
+  totalDebit: DecimalString
+  totalCredit: DecimalString
+  /**
+   * Whether the two totals agree. Always true for books written through this
+   * application — it is reported rather than assumed so that a report can say so, and
+   * so that a test asserting it is testing something.
+   */
+  balanced: boolean
+}
+
+export interface AccountBalance {
+  accountId: string
+  code: string
+  name: string
+  type: AccountType
+  normalBalance: NormalBalance
+  debit: DecimalString
+  credit: DecimalString
+  /** Positive in the account's normal direction. Negative means it is the other way. */
+  balance: DecimalString
+}

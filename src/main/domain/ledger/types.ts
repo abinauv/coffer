@@ -45,10 +45,28 @@
  * sees the complete set of lines for `NEW.id` and aborts unless they balance and there
  * are at least two of them.
  *
- * The insert order is backwards from the obvious one, deliberately and permanently. Any
- * code that writes an entry parent-first will fail the foreign key at commit, which is
- * the intended outcome — the only way to write a journal entry is through the
- * repository that knows this.
+ * The insert order is backwards from the obvious one, deliberately and permanently, and
+ * THREE TRIGGERS RATHER THAN THE FOREIGN KEY ARE WHAT HOLD IT THERE. The deferred key
+ * was originally expected to do it on its own. It does not, and this was measured
+ * rather than assumed: writing the entry first and its lines afterwards commits
+ * perfectly happily, because a deferred key only asks that the parent exist BY COMMIT,
+ * not that it did not exist already. Worse, that order skips the balance check
+ * altogether — the trigger runs when no line has been written yet, and the sum of no
+ * lines is zero, which balances.
+ *
+ * So the order is enforced by:
+ *
+ *   1. `journal_entries_need_two_lines`, which refuses an entry that cannot see at
+ *      least two lines already carrying its id. This is what an entry-first insert
+ *      trips over.
+ *   2. `journal_lines_before_entry`, which refuses a line whose parent entry already
+ *      exists. This is what makes an entry closed the instant it is written, and it is
+ *      the same rule as invariant 3 seen from the other side.
+ *   3. `journal_entries_must_balance`, the sum itself.
+ *
+ * Read all three as one mechanism. Removing any of them reopens a path that writes an
+ * unbalanced entry without any error at all, which is the failure this file exists to
+ * make impossible.
  */
 
 import type { Decimal } from '@main/domain/money'

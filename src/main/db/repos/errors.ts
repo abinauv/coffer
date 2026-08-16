@@ -62,6 +62,27 @@ export type RepoErrorCode =
   | 'PERIOD_EARLIER_OPEN'
   /** A later period is locked, so this one cannot reopen underneath it. */
   | 'PERIOD_LATER_LOCKED'
+  // ---- The journal ----
+  /** Debits did not equal credits. Shared with the domain. */
+  | 'UNBALANCED_ENTRY'
+  /** Fewer than two lines. Shared with the domain. */
+  | 'INSUFFICIENT_LINES'
+  /** A line had both a debit and a credit, or neither. Shared with the domain. */
+  | 'AMBIGUOUS_LINE'
+  /** A negative debit or credit. Move it to the other side instead. */
+  | 'NEGATIVE_AMOUNT'
+  /** Not a decimal amount. Malformed input, as distinct from an amount that is wrong. */
+  | 'INVALID_AMOUNT'
+  /** No entry with that id. */
+  | 'ENTRY_NOT_FOUND'
+  /** An attempt to modify or delete a posted entry. See invariant 3. */
+  | 'ENTRY_IMMUTABLE'
+  /** The entry has already been reversed; it cannot be reversed twice. */
+  | 'ALREADY_REVERSED'
+  /** The entry's date falls outside the period it was assigned to. */
+  | 'ENTRY_PERIOD_MISMATCH'
+  /** An entry number collided. Sequential per fiscal year, and unique. */
+  | 'ENTRY_NUMBER_TAKEN'
 
 /** An error raised by a repository. Always carries a stable, machine-readable code. */
 export class RepoError extends Error {
@@ -101,6 +122,12 @@ const TRIGGER_CODES: readonly RepoErrorCode[] = [
   'PERIOD_OVERLAP',
   'PERIOD_IMMUTABLE',
   'PERIOD_LOCKED',
+  'UNBALANCED_ENTRY',
+  'INSUFFICIENT_LINES',
+  'ENTRY_IMMUTABLE',
+  'ENTRY_PERIOD_MISMATCH',
+  'PERIOD_CLOSED',
+  'ACCOUNT_IN_USE',
 ]
 
 export function repoErrorFrom(error: unknown, fallback: RepoErrorCode): RepoError {

@@ -270,8 +270,11 @@ export async function updateAccount(db: CofferDb, input: UpdateAccountInput): Pr
  *
  * Only ever possible for one nothing refers to. An account that has been posted to is
  * removed by archiving it, not by deleting it — the postings are the books, and a
- * dangling account id in them would be unrecoverable. `journal_lines` does not exist
- * until migration 0004; the reference check widens to cover it there.
+ * dangling account id in them would be unrecoverable.
+ *
+ * `journal_lines.account_id` is `ON DELETE RESTRICT` as well, so the posting check below
+ * is the sentence rather than the enforcement. It is here because "FOREIGN KEY
+ * constraint failed" does not tell somebody that the answer is to archive it instead.
  */
 export async function deleteAccount(db: CofferDb, id: string): Promise<void> {
   const children = await db
@@ -281,6 +284,19 @@ export async function deleteAccount(db: CofferDb, id: string): Promise<void> {
     .executeTakeFirst()
   if (children !== undefined) {
     throw new RepoError('ACCOUNT_HAS_CHILDREN', 'Move or remove its children first.', { id })
+  }
+
+  const posting = await db
+    .selectFrom('journal_lines')
+    .select('id')
+    .where('account_id', '=', id)
+    .executeTakeFirst()
+  if (posting !== undefined) {
+    throw new RepoError(
+      'ACCOUNT_IN_USE',
+      'This account has been posted to. Archive it instead — the postings are the books.',
+      { id },
+    )
   }
 
   const role = await db

@@ -3,9 +3,9 @@
 > What a company is on disk, what the registry knows, why there is no `company_id`,
 > and how migrations work.
 >
-> Coffer is pre-alpha and there is no ledger yet. This describes what Phase 0 actually
-> built — the file format and the machinery around it. The business tables arrive in
-> Phase 1.
+> Coffer is pre-alpha. This describes what has actually been built: the file format and
+> the machinery around it from Phase 0, and the double-entry ledger — chart of accounts,
+> periods, journal — from Phase 1. The document tables arrive in Phase 2.
 
 ---
 
@@ -92,7 +92,8 @@ is created.
 
 ### What is in the database today
 
-Five tables, and none of them holds a figure yet — the figures arrive with `0004`.
+Seven tables. `journal_lines` is the only one that holds a figure, and every balance in
+Coffer is a sum over it.
 
 `schema_migrations` — one row per applied migration, created by the runner:
 
@@ -129,9 +130,9 @@ numbers reserved so that parallel work cannot collide.
 | --------- | ---------------------------------- | --------------------------------------------- | ------ |
 | `0002`    | `accounts`, `account_roles`        | The chart of accounts, as a tree              | landed |
 | `0003`    | `accounting_periods`               | Periods that can be opened, closed and locked | landed |
-| `0004`    | `journal_entries`, `journal_lines` | The ledger itself, with the balance triggers  | next   |
+| `0004`    | `journal_entries`, `journal_lines` | The ledger itself, with the balance triggers  | landed |
 
-Six things about these tables are worth knowing before you read them, because each one
+Seven things about these tables are worth knowing before you read them, because each one
 is a decision rather than a detail:
 
 **There is no `status` on an entry, and no draft.** The ledger holds posted entries and
@@ -155,8 +156,27 @@ not. SQLite has no deferred triggers, so nothing can check a running total midwa
 through inserting an entry's lines. Instead the line's foreign key is
 `DEFERRABLE INITIALLY DEFERRED`, the lines go in first, and a `BEFORE INSERT` trigger on
 `journal_entries` sees the complete set and refuses an entry whose debits and credits
-disagree, or which has fewer than two lines. Code that writes the parent first fails the
-foreign key at commit — which is the point.
+disagree, or which has fewer than two lines.
+
+**Three triggers, not the foreign key, are what hold that order in place.** This was
+originally written down the other way round, and it was wrong — measuring it is what
+found out. A deferred key only asks that the parent exist _by commit_, not that it did
+not exist already, so an entry written before its lines commits perfectly happily. Worse,
+that order skips the balance check completely: the trigger runs when no line carries the
+entry's id yet, and the sum of no lines is zero, which balances. What actually refuses it
+is `journal_entries_need_two_lines`; what stops a line being appended to an entry already
+posted is `journal_lines_before_entry`. Read those two and the balance trigger as one
+mechanism — removing any of them reopens a path that writes an unbalanced entry with no
+error at all.
+
+**Money is summed in SQL as integer paise, never as `REAL`.** `SUM(debit)` over decimal
+text coerces to floating point, and that is not a theoretical objection: `'0.07'` three
+times plus `'1234567.89'` plus `'0.01'` comes back as `1234568.1099999999`. The triggers
+and the balance queries strip the decimal point and sum
+`CAST(REPLACE(debit, '.', '') AS INTEGER)` instead, which is exact. That is only sound
+because every stored amount carries exactly two decimal places and no sign — which is
+why the `GLOB '[0-9]*.[0-9][0-9]'` CHECK on those columns is load-bearing rather than
+cosmetic, and why it rejects `'12.3'`, `'-1.00'` and `'1e5'`.
 
 **Periods never overlap, and a period's span never changes.** Two periods covering the
 same day would make an entry's period a matter of which row was found first, and the

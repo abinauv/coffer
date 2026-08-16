@@ -14,13 +14,13 @@
  *   0001  app_metadata                                                    LANDED
  *   0002  accounts, account_roles          — chart of accounts             LANDED
  *   0003  accounting_periods               — fiscal periods                LANDED
- *   0004  journal_entries, journal_lines   — posting engine, with the balance triggers
+ *   0004  journal_entries, journal_lines   — posting engine                LANDED
  *
- * The tables each one creates are already typed in ../schema.ts, and the invariants
- * they must enforce are in src/main/domain/ledger/types.ts. Read the note there about
- * inserting lines before their parent entry before writing 0004 — the deferred foreign
- * key is what makes the balance trigger possible, and it is not an implementation
- * detail anyone may change.
+ * The tables each one creates are typed in ../schema.ts, and the invariants they enforce
+ * are in src/main/domain/ledger/types.ts. Read the note there about inserting lines
+ * before their parent entry before touching 0004: the deferred foreign key is what makes
+ * the balance trigger possible, but three triggers rather than the key are what hold the
+ * order in place, and none of them is an implementation detail anyone may change.
  *
  * ---------------------------------------------------------------------------
  * ADDING A MIGRATION
@@ -62,5 +62,6 @@ import type { Migration } from '../migrate'
 import { m0001 } from './0001_app_metadata'
 import { m0002 } from './0002_accounts'
 import { m0003 } from './0003_accounting_periods'
+import { m0004 } from './0004_journal'
 
-export const MIGRATIONS: readonly Migration[] = [m0001, m0002, m0003]
+export const MIGRATIONS: readonly Migration[] = [m0001, m0002, m0003, m0004]

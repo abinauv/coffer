@@ -259,6 +259,42 @@ what an entry is.
 - A fiscal year the books have not used can be removed, which is what makes a company
   created with the wrong rule or the wrong period length recoverable.
 
+#### The ledger
+
+- Migration `0004`: `journal_entries` and `journal_lines`. Posting, reversing, drilling
+  back to the document an entry came from, the trial balance, opening balances and the
+  year-end close.
+- **[accounting]** Every entry balances, checked in the domain, in the repository and by
+  the database. Lines are written **before** their parent entry so that a `BEFORE INSERT`
+  trigger can see a complete entry and refuse an unbalanced one.
+- **[accounting]** Three triggers, not the deferred foreign key, are what hold that order
+  in place. The key was expected to do it and does not: an entry written before its lines
+  commits happily, and that order skips the balance check entirely, because the sum of no
+  lines is zero. Measured rather than assumed, and the ledger contract has been corrected.
+- **[accounting]** Money is summed in SQL as integer paise, never as `REAL`. Ten rows of
+  `'0.10'` summed as `REAL` give 1, but three `'0.07'`s plus `'1234567.89'` plus `'0.01'`
+  give `1234568.1099999999`. A `GLOB` CHECK pins every stored amount to exactly two
+  decimal places and no sign, which is what makes the integer arithmetic exact.
+- **[accounting]** A posted entry is never edited or deleted — triggers refuse both, on
+  the entry and on its lines. A correction is a reversing entry, and `reverses_entry_id`
+  is `UNIQUE`, so an entry is reversible at most once by constraint.
+- **[accounting]** A reversal may name an account archived since the original was posted.
+  Archiving is a preference about pickers, not an accounting rule, and an entry that
+  cannot be corrected is a worse problem than the one that check would have solved.
+- Entry numbers are sequential per fiscal year — `JV-2026-27-0043` — taken from the
+  numeric suffix rather than a text sort, so the series keeps counting past 9999.
+- **[accounting]** The trial balance ties, over any date range, and never includes a group
+  account. No balance is stored anywhere; every one is a sum over lines when asked.
+- **[accounting]** Opening balances take one signed amount per account, positive in that
+  account's own normal direction, so a user copies their old trial balance once rather
+  than translating it into sides. The difference goes to opening balance equity — a
+  visible figure to chase rather than a refusal that would send them back to a
+  spreadsheet.
+- **[accounting]** The year-end close moves income and expense to retained earnings and
+  starts the next year at zero. It posts as an ordinary entry, so it balances by the same
+  trigger and can be reversed if it was run too early. It locks nothing: locking is a
+  decision about a filed return, not about arithmetic.
+
 #### Documentation
 
 - Architecture, conventions, getting started, the data model, adding a tax regime,
@@ -278,5 +314,10 @@ than changing behaviour anyone has seen.
   specifier. Unanchored, the entry for Node's legacy `domain` module also matched
   `@main/domain/money`, so the first cross-module import inside `domain/` was reported
   as a filesystem violation. Both directions are covered by a probe rather than assumed.
+- **[accounting]** The ledger contract's account of how the insert order is enforced was
+  wrong. It claimed a parent-first write would fail the deferred foreign key at commit;
+  it does not, and it silently bypasses the balance check. Corrected in
+  `domain/ledger/types.ts`, in migration `0004` and in the data model, with the three
+  triggers that actually enforce it named in all three.
 
 [Unreleased]: https://github.com/abinauv/coffer/commits/main
