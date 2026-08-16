@@ -59,7 +59,10 @@ import { join } from 'node:path'
 
 import { type SqliteDatabase, checkpoint, closeDatabase, openDatabase } from '../db/connection'
 import { isDbError } from '../db/errors'
+import { createQueryBuilder } from '../db/kysely'
 import { runMigrations } from '../db/migrate'
+import { setUpBooks } from '../db/repos/bootstrap'
+import { DEFAULT_REGIME_ID, findRegime, type TaxRegime } from '../regimes'
 import {
   type Argon2Params,
   changeVaultFilePassphrase,
@@ -164,6 +167,7 @@ export class CompanyService {
     return this.exclusive(async () => {
       const displayName = requireDisplayName(input.displayName)
       requirePassphrase(input.passphrase, 'Choose a passphrase for this company.')
+      const regime = requireRegime(input.regimeId)
       const directoryPath = requireDirectoryPath(input.directoryPath, 'to keep this company in')
       const filePath = join(directoryPath, companyFileName(displayName))
       const vaultPath = vaultPathFor(filePath)
@@ -210,6 +214,24 @@ export class CompanyService {
         const createdAt = new Date().toISOString()
         writeMetadata(database, METADATA_KEYS.displayName, displayName)
         writeMetadata(database, METADATA_KEYS.createdAt, createdAt)
+        writeMetadata(database, METADATA_KEYS.regimeId, regime.id)
+
+        /*
+         * The books, in one transaction: the chart of accounts and the first fiscal
+         * periods together. A company with accounts and no periods refuses every posting
+         * with `NO_PERIOD` while looking perfectly finished — see setUpBooks.
+         *
+         * BEFORE THE REGISTRY ENTRY, AND THAT ORDER IS THE POINT. Everything after
+         * `registry.add` below is assignment and return, so nothing can fail once the
+         * company is listed — which is what makes the catch block sufficient without
+         * also having to un-list it. Move this call after the add and that stops being
+         * true: a company would appear in the list, its files would be deleted by the
+         * cleanup, and the user would be left with an entry that cannot be opened.
+         *
+         * No test covers the reordering, because the ordering is what makes the failure
+         * unreachable. It is recorded here instead.
+         */
+        await setUpBooks(createQueryBuilder(database), { rule: regime.fiscalYear })
 
         const registry = await this.registry()
         const record = await registry.add({
@@ -689,6 +711,25 @@ function requireDisplayName(value: string): string {
     throw new CompanyError('COMPANY_NAME_REQUIRED', 'Give this company a name.')
   }
   return value.trim().slice(0, MAX_DISPLAY_NAME_LENGTH)
+}
+
+/**
+ * The regime these books will follow.
+ *
+ * Refused rather than defaulted when the id is unknown. Silently falling back would set
+ * a company up on the wrong fiscal year, and the periods generated from it are on disk
+ * before anybody notices.
+ */
+function requireRegime(id: string | undefined): TaxRegime {
+  const regime = findRegime(id ?? DEFAULT_REGIME_ID)
+  if (regime === undefined) {
+    throw new CompanyError(
+      'COMPANY_REGIME_UNKNOWN',
+      `Coffer has no tax regime called ${JSON.stringify(id)}. This build may be older than ` +
+        'the one that company was made with.',
+    )
+  }
+  return regime
 }
 
 /**

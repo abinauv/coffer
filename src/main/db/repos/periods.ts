@@ -172,6 +172,19 @@ export async function generateFiscalYear(
   db: CofferDb,
   options: GenerateFiscalYearOptions,
 ): Promise<AccountingPeriod[]> {
+  return db.transaction().execute((trx) => generateFiscalYearWithin(trx, options))
+}
+
+/**
+ * The same work, for a caller that already has a transaction open.
+ *
+ * `setUpBooks` writes the chart and the first periods together, and needs both or
+ * neither. See the note on `seedChartWithin`.
+ */
+export async function generateFiscalYearWithin(
+  db: CofferDb,
+  options: GenerateFiscalYearOptions,
+): Promise<AccountingPeriod[]> {
   const granularity = await resolveGranularity(db, options.granularity)
 
   /* Named by the label the books already carry, not by the one the requested rule would
@@ -209,10 +222,11 @@ export async function generateFiscalYear(
     created_at: now,
   }))
 
+  /* One statement, so the twelve rows are already all-or-nothing whether or not a
+   * transaction is open around it. The caller's transaction is what makes the chart and
+   * the periods land together. */
   try {
-    await db.transaction().execute(async (trx) => {
-      await trx.insertInto('accounting_periods').values(rows).execute()
-    })
+    await db.insertInto('accounting_periods').values(rows).execute()
   } catch (error) {
     throw repoErrorFrom(error, 'PERIOD_OVERLAP')
   }
@@ -235,7 +249,7 @@ export async function ensureFiscalYear(
   if (existing.length > 0) {
     return existing
   }
-  return generateFiscalYear(db, options)
+  return generateFiscalYearWithin(db, options)
 }
 
 /**

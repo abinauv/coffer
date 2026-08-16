@@ -17,6 +17,7 @@
 
 import type { AppError } from '@shared/dto'
 import { isDbError } from '../db/errors'
+import { isRepoError } from '../db/repos/errors'
 import { isSecurityError } from '../security'
 
 export type CompanyErrorCode =
@@ -46,6 +47,8 @@ export type CompanyErrorCode =
   | 'REGISTRY_IO_FAILED'
   /** Reading or writing a company file failed for a reason the OS reported. */
   | 'COMPANY_IO_FAILED'
+  /** The named tax regime is not installed in this build. */
+  | 'COMPANY_REGIME_UNKNOWN'
 
 /** An error raised by `src/main/companies`. Always carries a stable, machine-readable code. */
 export class CompanyError extends Error {
@@ -66,13 +69,17 @@ export function isCompanyError(value: unknown): value is CompanyError {
  * Translate anything thrown by this module into the `AppError` envelope.
  *
  * Offered for the IPC boundary, which has to produce one of these anyway
- * (CONVENTIONS §5). Company, security and database errors already carry a message
- * written for the user, so they pass through with their code intact. Anything else is
- * a bug rather than an expected outcome: its message may name internals, so it is
- * replaced rather than shown, and the handler logs the original.
+ * (CONVENTIONS §5). Company, security, database and repository errors already carry a
+ * message written for the user, so they pass through with their code intact. Anything
+ * else is a bug rather than an expected outcome: its message may name internals, so it
+ * is replaced rather than shown, and the handler logs the original.
+ *
+ * `RepoError` is in that list because creating a company now writes a chart of accounts
+ * and a set of fiscal periods, and "this company already has a chart of accounts" is an
+ * expected, actionable failure rather than an internal one.
  */
 export function describeError(error: unknown): AppError {
-  if (isCompanyError(error) || isSecurityError(error) || isDbError(error)) {
+  if (isCompanyError(error) || isSecurityError(error) || isDbError(error) || isRepoError(error)) {
     return { code: error.code, message: error.message }
   }
   return {

@@ -40,10 +40,26 @@ export async function seedChart(
   db: CofferDb,
   options: SeedChartOptions = {},
 ): Promise<SeedChartResult> {
+  return db.transaction().execute((trx) => seedChartWithin(trx, options))
+}
+
+/**
+ * The same work, for a caller that already has a transaction open.
+ *
+ * `setUpBooks` needs the chart and the first fiscal periods to land together — a company
+ * with accounts and nowhere to post them is exactly as unusable as one with neither — so
+ * it opens one transaction and calls this. Kept as a separate export rather than nesting
+ * `seedChart` inside another transaction, because that would rely on savepoint semantics
+ * where a plain function call is unambiguous.
+ */
+export async function seedChartWithin(
+  trx: CofferDb,
+  options: SeedChartOptions = {},
+): Promise<SeedChartResult> {
   const template = options.template ?? SMALL_BUSINESS_CHART
   const accounts = [...template.accounts, ...(options.extraAccounts ?? [])]
 
-  const existing = await db.selectFrom('accounts').select('id').executeTakeFirst()
+  const existing = await trx.selectFrom('accounts').select('id').executeTakeFirst()
   if (existing !== undefined) {
     throw new RepoError(
       'ACCOUNT_CODE_TAKEN',
@@ -52,43 +68,41 @@ export async function seedChart(
     )
   }
 
-  return db.transaction().execute(async (trx) => {
-    /* Codes are what the template refers to parents by; ids are what the database uses.
-     * Built as we go, which is why a parent must appear before its children. */
-    const idByCode = new Map<string, string>()
-    let rolesMapped = 0
+  /* Codes are what the template refers to parents by; ids are what the database uses.
+   * Built as we go, which is why a parent must appear before its children. */
+  const idByCode = new Map<string, string>()
+  let rolesMapped = 0
 
-    for (const account of accounts) {
-      let parentId: string | null = null
-      if (account.parentCode !== null) {
-        const found = idByCode.get(account.parentCode)
-        if (found === undefined) {
-          throw new RepoError(
-            'ACCOUNT_PARENT_NOT_FOUND',
-            `Template ${template.id} places ${account.code} under ${account.parentCode}, ` +
-              'which it has not defined yet. A parent must come before its children.',
-            { code: account.code, parentCode: account.parentCode },
-          )
-        }
-        parentId = found
+  for (const account of accounts) {
+    let parentId: string | null = null
+    if (account.parentCode !== null) {
+      const found = idByCode.get(account.parentCode)
+      if (found === undefined) {
+        throw new RepoError(
+          'ACCOUNT_PARENT_NOT_FOUND',
+          `Template ${template.id} places ${account.code} under ${account.parentCode}, ` +
+            'which it has not defined yet. A parent must come before its children.',
+          { code: account.code, parentCode: account.parentCode },
+        )
       }
-
-      const created = await createAccount(trx, {
-        code: account.code,
-        name: account.name,
-        type: account.type,
-        parentId,
-        isGroup: account.isGroup,
-        description: account.description ?? null,
-      })
-      idByCode.set(account.code, created.id)
-
-      if (account.role !== undefined) {
-        await setAccountRole(trx, account.role, created.id)
-        rolesMapped += 1
-      }
+      parentId = found
     }
 
-    return { templateId: template.id, accountsCreated: accounts.length, rolesMapped }
-  })
+    const created = await createAccount(trx, {
+      code: account.code,
+      name: account.name,
+      type: account.type,
+      parentId,
+      isGroup: account.isGroup,
+      description: account.description ?? null,
+    })
+    idByCode.set(account.code, created.id)
+
+    if (account.role !== undefined) {
+      await setAccountRole(trx, account.role, created.id)
+      rolesMapped += 1
+    }
+  }
+
+  return { templateId: template.id, accountsCreated: accounts.length, rolesMapped }
 }

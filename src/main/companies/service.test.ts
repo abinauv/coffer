@@ -18,6 +18,10 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { DbError } from '../db/errors'
+import { createQueryBuilder } from '../db/kysely'
+import { listAccounts } from '../db/repos/accounts'
+import { trialBalance } from '../db/repos/balances'
+import { postManualEntry } from '../db/repos/journal'
 import { type Argon2Params, MIN_MEMORY_COST, SecurityError } from '../security'
 import { readBackup } from './backup'
 import { CompanyError } from './errors'
@@ -204,6 +208,89 @@ describe('create', () => {
     expect(await exists(`${filePath}.vault`)).toBe(false)
     expect(await now.service.list()).toEqual([])
     expect(now.service.currentCompany()).toBeNull()
+  })
+})
+
+/*
+ * A new company opens to usable books, not to an empty database. Batch 1.1A deliberately
+ * left this unwired until the periods existed too, because a chart of accounts with
+ * nowhere to post to looks finished and refuses everything.
+ */
+describe('create sets up the books', () => {
+  /** Read straight from the created file, so the assertion is about what is on disk. */
+  const countRows = (service: CompanyService, table: string): number =>
+    service
+      .requireDatabase()
+      .prepare<[], { c: number }>(`SELECT COUNT(*) AS c FROM ${table}`)
+      .get()!.c
+
+  it('writes a chart of accounts and two fiscal years of periods', async () => {
+    const now = await fixture()
+    await createCompany(now)
+
+    expect(countRows(now.service, 'accounts')).toBeGreaterThan(30)
+    expect(countRows(now.service, 'account_roles')).toBeGreaterThan(0)
+    expect(countRows(now.service, 'accounting_periods')).toBe(24)
+  })
+
+  it('leaves a company that can post immediately', async () => {
+    const now = await fixture()
+    await createCompany(now)
+    const db = createQueryBuilder(now.service.requireDatabase())
+
+    const accounts = await listAccounts(db)
+    const idOf = (code: string) => accounts.find((account) => account.code === code)!.id
+    const today = new Date().toISOString().slice(0, 10)
+
+    await postManualEntry(db, {
+      date: today,
+      narration: 'Owner introduces capital',
+      lines: [
+        { accountId: idOf('1210'), debit: '100000.00', credit: '0.00' },
+        { accountId: idOf('3100'), debit: '0.00', credit: '100000.00' },
+      ],
+    })
+
+    expect((await trialBalance(db)).balanced).toBe(true)
+  })
+
+  it('records which regime the books were set up under', async () => {
+    const now = await fixture()
+    await createCompany(now)
+
+    expect(readMetadata(now.service.requireDatabase(), METADATA_KEYS.regimeId)).toBe('in')
+  })
+
+  it('uses the regime the caller asked for', async () => {
+    const now = await fixture()
+    await now.service.create({
+      displayName: DISPLAY_NAME,
+      directoryPath: now.companyDirectory,
+      passphrase: PASSPHRASE,
+      regimeId: 'in',
+    })
+
+    expect(readMetadata(now.service.requireDatabase(), METADATA_KEYS.regimeId)).toBe('in')
+  })
+
+  /*
+   * Refused rather than quietly defaulted. Falling back would set the company up on the
+   * wrong fiscal year, and the periods generated from it are on disk before anyone looks.
+   */
+  it('refuses a regime this build does not have, and leaves nothing behind', async () => {
+    const now = await fixture()
+    const code = await codeOf(() =>
+      now.service.create({
+        displayName: DISPLAY_NAME,
+        directoryPath: now.companyDirectory,
+        passphrase: PASSPHRASE,
+        regimeId: 'atlantis',
+      }),
+    )
+
+    expect(code).toBe('COMPANY_REGIME_UNKNOWN')
+    expect(await exists(join(now.companyDirectory, 'Acme-Traders.coffer'))).toBe(false)
+    expect(await now.service.list()).toEqual([])
   })
 })
 

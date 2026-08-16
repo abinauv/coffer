@@ -116,6 +116,13 @@ export interface CreateCompanyInput {
   /** Directory to create the database in. The file name derives from displayName. */
   directoryPath: string
   passphrase: string
+  /**
+   * Which tax regime these books follow, e.g. 'in'. Defaults to the only one installed.
+   *
+   * It decides the fiscal-year rule the opening periods are generated from, so it is
+   * fixed at creation rather than changed later: the periods on disk were built from it.
+   */
+  regimeId?: string
 }
 
 export interface OpenCompanyInput {

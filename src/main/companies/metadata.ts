@@ -26,6 +26,15 @@ export const METADATA_KEYS = {
   formatVersion: 'coffer.format_version',
   displayName: 'company.display_name',
   createdAt: 'company.created_at',
+  /**
+   * Which tax regime these books were set up under, e.g. 'in'.
+   *
+   * File-level provenance rather than a preference: the fiscal periods on disk were
+   * generated from this regime's year rule, and reading them under a different one would
+   * silently mismatch. It is stored so that opening a company can look the regime up
+   * rather than assume the default — which is exactly the case `findRegime` exists for.
+   */
+  regimeId: 'company.regime_id',
 } as const
 
 interface MetadataRow {
