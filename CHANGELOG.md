@@ -315,6 +315,40 @@ what an entry is.
   trigger and can be reversed if it was run too early. It locks nothing: locking is a
   decision about a filed return, not about arithmetic.
 
+#### The statements
+
+- **[accounting]** Balance sheet, profit and loss, an account's ledger with a running
+  balance, and the day book. Nothing is stored and nothing is cached; every figure is
+  summed from `journal_lines` at the moment it is asked for.
+- **[accounting]** The balance sheet carries the profit no year-end close has moved yet,
+  on the face of the sheet inside equity. Without it the equation does not close:
+  regrouping every balanced entry by account type gives
+  `assets = liabilities + equity + (income - expenses)`, and the last bracket is that
+  line. Cumulative-from-inception needs no special case for it, because a close moves
+  each closed year into retained earnings and leaves income and expense at zero.
+- **[accounting]** A statement drops a row when nothing was posted to it, never when it
+  totals zero. A group holding +2,000 of petty cash and -2,000 of bank nets to nothing
+  and still appears with both children under it — four thousand rupees the reader has to
+  be able to see. The first version of the rule tested the total, and made real money
+  disappear from a sheet that still balanced.
+- **[accounting]** An account in credit stays on its own side. An overdrawn bank is a
+  negative asset, marked as contra, not reclassified as a liability — moving it would
+  misstate both sides and nothing in the ledger says it should move.
+- **[accounting]** An account ledger opens with what the account held immediately before
+  the range, from a strict `<` comparison. A `<=` would count the first day into the
+  opening figure and again as a row, putting the ledger out by exactly that day from its
+  first line onward; without an opening balance at all, a month's ledger closes on that
+  month's movement wearing the closing balance's name.
+- The particulars column names the account on the other side, or says `Split` when the
+  entry touched several — the convention every hand-kept ledger uses.
+- A loss is called a loss. The figure stays signed, but `Net profit: -15,000.00` asks a
+  reader to notice a minus sign in a column of figures, and they will not.
+- A read-only `reports` IPC group, separate from `ledger` because nothing in it can
+  change a figure — a `reports:` channel in a log is provably not what altered anyone's
+  books.
+- Four screens: balance sheet, profit and loss, day book and account ledger, each with
+  rendering tests. 41 mutations against them, all killed.
+
 #### Documentation
 
 - Architecture, conventions, getting started, the data model, adding a tax regime,

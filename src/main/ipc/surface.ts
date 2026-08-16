@@ -69,6 +69,12 @@ export const API_SURFACE: ApiSurface = {
     postOpeningBalances: true,
     closeFiscalYear: true,
   },
+  reports: {
+    balanceSheet: true,
+    profitAndLoss: true,
+    accountLedger: true,
+    dayBook: true,
+  },
 }
 
 export const API_GROUPS: readonly ApiGroup[] = Object.keys(API_SURFACE) as ApiGroup[]

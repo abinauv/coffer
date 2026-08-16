@@ -171,6 +171,7 @@ describe('createElectronIpcDependencies', () => {
     const dependencies = createElectronIpcDependencies({
       companies: {} as never,
       ledger: {} as never,
+      reports: {} as never,
     })
 
     expect(dependencies.revealRoots).toEqual(['C:\\Users\\ada\\AppData\\Roaming\\Coffer'])
@@ -180,23 +181,32 @@ describe('createElectronIpcDependencies', () => {
   it('passes the company service straight through', () => {
     const companies = { list: vi.fn() } as never
 
-    expect(createElectronIpcDependencies({ companies, ledger: {} as never }).companies).toBe(
-      companies,
-    )
+    expect(
+      createElectronIpcDependencies({ companies, ledger: {} as never, reports: {} as never })
+        .companies,
+    ).toBe(companies)
   })
 
   it('passes error mappers through when there are any', () => {
     const errorMappers = [() => null]
 
     expect(
-      createElectronIpcDependencies({ companies: {} as never, ledger: {} as never, errorMappers })
-        .errorMappers,
+      createElectronIpcDependencies({
+        companies: {} as never,
+        ledger: {} as never,
+        reports: {} as never,
+        errorMappers,
+      }).errorMappers,
     ).toBe(errorMappers)
   })
 
   it('leaves error mappers absent when there are none', () => {
     expect(
-      createElectronIpcDependencies({ companies: {} as never, ledger: {} as never }),
+      createElectronIpcDependencies({
+        companies: {} as never,
+        ledger: {} as never,
+        reports: {} as never,
+      }),
     ).not.toHaveProperty('errorMappers')
   })
 })

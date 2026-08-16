@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppInfo, CompanySummary, Result } from '../../shared/dto'
 import type { CompanyService } from './handlers/companies'
 import type { LedgerService } from './handlers/ledger'
+import type { ReportService } from './handlers/reports'
 import type { SystemEnvironment } from './handlers/system'
 import {
   HandlerRegistrationError,
@@ -39,6 +40,7 @@ let logger: IpcLogger
 let system: SystemEnvironment
 let companies: CompanyService
 let ledger: LedgerService
+let reports: ReportService
 
 function dependencies(overrides: Partial<IpcDependencies> = {}): IpcDependencies {
   const transport: IpcTransport = {
@@ -46,7 +48,7 @@ function dependencies(overrides: Partial<IpcDependencies> = {}): IpcDependencies
       channels.set(channel, listener)
     },
   }
-  return { transport, logger, system, companies, ledger, ...overrides }
+  return { transport, logger, system, companies, ledger, reports, ...overrides }
 }
 
 function invoke(channel: string, ...args: unknown[]): Promise<Result<unknown>> {
@@ -98,6 +100,13 @@ beforeEach(() => {
     postOpeningBalances: vi.fn(),
     closeFiscalYear: vi.fn(),
   } as unknown as LedgerService
+
+  reports = {
+    balanceSheet: vi.fn(),
+    profitAndLoss: vi.fn(),
+    accountLedger: vi.fn(),
+    dayBook: vi.fn(),
+  } as unknown as ReportService
 })
 
 describe('registerIpcHandlers', () => {

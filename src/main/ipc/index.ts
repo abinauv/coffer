@@ -16,6 +16,7 @@ import type { ChannelName } from '../../shared/ipc'
 import type { ErrorMapper } from './errors'
 import { type CompanyService, createCompaniesHandlers } from './handlers/companies'
 import { type LedgerService, createLedgerHandlers } from './handlers/ledger'
+import { type ReportService, createReportHandlers } from './handlers/reports'
 import { type SystemEnvironment, createSystemHandlers } from './handlers/system'
 import { type PathAllowlist, createPathAllowlist } from './path-access'
 import { HandlerRegistrationError, HandlerRegistry } from './registry'
@@ -25,6 +26,7 @@ import { apiChannels } from './surface'
 export type { ErrorMapper } from './errors'
 export type { CompanyService } from './handlers/companies'
 export type { LedgerService } from './handlers/ledger'
+export type { ReportService } from './handlers/reports'
 export type { SystemEnvironment } from './handlers/system'
 export type { IpcLogger, IpcTransport } from './registry'
 export { HandlerRegistrationError, HandlerRegistry } from './registry'
@@ -47,6 +49,13 @@ export interface IpcDependencies {
    * nothing under src/main/ipc reaches for a database handle.
    */
   ledger: LedgerService
+  /**
+   * THE INJECTION POINT for the read-only side of src/main/ledger.
+   *
+   * A separate dependency from `ledger` because the contract keeps the groups apart, and
+   * one implementation may satisfy both — which is what src/main/ledger does.
+   */
+  reports: ReportService
   /**
    * Directories `system.revealInFileManager` may open before the user has picked
    * anything. In production this is the application data directory and nothing else.
@@ -87,6 +96,7 @@ export function registerIpcHandlers(dependencies: IpcDependencies): HandlerRegis
   registry.registerGroup('system', createSystemHandlers(dependencies.system, allowlist))
   registry.registerGroup('companies', createCompaniesHandlers(dependencies.companies, allowlist))
   registry.registerGroup('ledger', createLedgerHandlers(dependencies.ledger))
+  registry.registerGroup('reports', createReportHandlers(dependencies.reports))
 
   assertApiSurfaceComplete(registry)
 

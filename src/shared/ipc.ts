@@ -15,8 +15,12 @@
 
 import type {
   Account,
+  AccountLedger,
+  AccountLedgerInput,
   AccountingPeriod,
   AppInfo,
+  AsAtDateInput,
+  BalanceSheet,
   BackupInput,
   BackupResult,
   ChangePassphraseInput,
@@ -26,6 +30,7 @@ import type {
   CreateCompanyInput,
   CreateJournalEntryInput,
   DateRangeInput,
+  DayBook,
   JournalEntry,
   ListAccountsInput,
   ListJournalEntriesInput,
@@ -34,6 +39,7 @@ import type {
   PassphraseStrength,
   PostOpeningBalancesInput,
   PostingResult,
+  ProfitAndLoss,
   RecoverCompanyInput,
   RestoreInput,
   Result,
@@ -134,6 +140,28 @@ export interface CofferApi {
     trialBalance(input?: DateRangeInput): Promise<Result<TrialBalance>>
     postOpeningBalances(input: PostOpeningBalancesInput): Promise<Result<PostingResult>>
     closeFiscalYear(input: CloseFiscalYearInput): Promise<Result<YearEndCloseResult>>
+  }
+
+  /**
+   * The statements, of the open company's books.
+   *
+   * A separate group from `ledger` because these only ever read. Nothing here can change
+   * a figure, and a group whose every method is a question is worth being able to say
+   * that about — a `reports:` channel appearing in a log is provably not what altered
+   * anyone's books.
+   *
+   * Every figure arrives as a decimal string, already totalled. The renderer does not do
+   * money arithmetic (CONVENTIONS §1.7), so subtotals, group rollups and the running
+   * balance are all computed here rather than in the screen that draws them.
+   */
+  reports: {
+    /** Cumulative to the date. There is no `fromDate` — a balance sheet is always as-at. */
+    balanceSheet(input: AsAtDateInput): Promise<Result<BalanceSheet>>
+    profitAndLoss(input?: DateRangeInput): Promise<Result<ProfitAndLoss>>
+    /** One account's movements with a running balance. Refuses a group. */
+    accountLedger(input: AccountLedgerInput): Promise<Result<AccountLedger>>
+    /** Entries in the range, grouped by day, with each day's total. */
+    dayBook(input?: DateRangeInput): Promise<Result<DayBook>>
   }
 }
 

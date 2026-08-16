@@ -23,16 +23,22 @@
 
 import type {
   Account,
+  AccountLedger,
+  AccountLedgerInput,
   AccountingPeriod,
+  AsAtDateInput,
+  BalanceSheet,
   CloseFiscalYearInput,
   CreateAccountInput,
   CreateJournalEntryInput,
   DateRangeInput,
+  DayBook,
   JournalEntry,
   ListAccountsInput,
   ListJournalEntriesInput,
   PostOpeningBalancesInput,
   PostingResult,
+  ProfitAndLoss,
   ReverseEntryInput,
   SetAccountRoleInput,
   TrialBalance,
@@ -50,6 +56,7 @@ import {
   updateAccount,
 } from '../db/repos/accounts'
 import { trialBalance } from '../db/repos/balances'
+import { accountLedger, balanceSheet, dayBook, profitAndLoss } from '../db/repos/reports'
 import { getEntry, listEntries, postManualEntry, reverseEntry } from '../db/repos/journal'
 import { postOpeningBalances } from '../db/repos/opening-balances'
 import { closePeriod, listPeriods, lockPeriod, reopenPeriod } from '../db/repos/periods'
@@ -145,6 +152,33 @@ export class LedgerService {
 
   async postOpeningBalances(input: PostOpeningBalancesInput): Promise<PostingResult> {
     return postOpeningBalances(this.db(), input)
+  }
+
+  // ---- The statements -------------------------------------------------------
+
+  /*
+   * The `reports` IPC group is served from here rather than from a service of its own.
+   * The only thing a report service would add is the `db()` seam below — the same
+   * fifteen lines, asking the same question of the same `CompanyService` — and two
+   * copies of "which company is open" is exactly the kind of duplication that ends with
+   * one of them holding a stale handle. The groups stay separate in the contract, where
+   * the read-only distinction is worth stating; the plumbing does not.
+   */
+
+  async balanceSheet(input: AsAtDateInput): Promise<BalanceSheet> {
+    return balanceSheet(this.db(), input.asAtDate)
+  }
+
+  async profitAndLoss(input: DateRangeInput = {}): Promise<ProfitAndLoss> {
+    return profitAndLoss(this.db(), input)
+  }
+
+  async accountLedger(input: AccountLedgerInput): Promise<AccountLedger> {
+    return accountLedger(this.db(), input)
+  }
+
+  async dayBook(input: DateRangeInput = {}): Promise<DayBook> {
+    return dayBook(this.db(), input)
   }
 
   async closeFiscalYear(input: CloseFiscalYearInput): Promise<YearEndCloseResult> {

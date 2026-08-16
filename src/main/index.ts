@@ -32,9 +32,14 @@ function installHandlers(): void {
   /* Every Electron call the IPC layer needs is adapted in ./ipc/electron.ts — dialogs,
    * shell, app metadata, the log scope, the reveal roots. The only thing production
    * has to supply is the company service and the mapper for its error codes. */
+  const ledger = createLedgerService(companies)
+
   const registry = installIpcHandlers({
     companies,
-    ledger: createLedgerService(companies),
+    ledger,
+    /* One object, two contract groups: the read-only methods are on the same service,
+     * so both point at it. See the note beside them in src/main/ledger/service.ts. */
+    reports: ledger,
     /* CompanyError codes are what the company screens branch on, and nothing under
      * src/main/ipc may import that module. Deliberately narrow: the companies module
      * also exports a broader `describeError` that claims DbError too, and DbError

@@ -12,7 +12,7 @@ import {
 
 describe('API_SURFACE', () => {
   it('lists every group in the contract', () => {
-    expect(API_GROUPS).toEqual(['system', 'companies', 'ledger'])
+    expect(API_GROUPS).toEqual(['system', 'companies', 'ledger', 'reports'])
   })
 
   it('lists the system methods', () => {
@@ -85,8 +85,12 @@ describe('apiChannels', () => {
     expect(channels).toContain(toChannelName('companies', 'open'))
     expect(channels).toContain(toChannelName('system', 'getAppInfo'))
     expect(channels).toContain(toChannelName('ledger', 'postEntry'))
+    expect(channels).toContain(toChannelName('reports', 'balanceSheet'))
     expect(channels).toHaveLength(
-      apiMethods('system').length + apiMethods('companies').length + apiMethods('ledger').length,
+      apiMethods('system').length +
+        apiMethods('companies').length +
+        apiMethods('ledger').length +
+        apiMethods('reports').length,
     )
   })
 
