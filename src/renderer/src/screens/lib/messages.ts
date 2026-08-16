@@ -41,7 +41,19 @@ export interface Guidance {
 
 /** Which screen is asking. Only a few codes read differently from one to the next. */
 export type FailureContext =
-  'general' | 'list' | 'create' | 'unlock' | 'recover' | 'restore' | 'backup' | 'change-passphrase'
+  | 'general'
+  | 'list'
+  | 'create'
+  | 'unlock'
+  | 'recover'
+  | 'restore'
+  | 'backup'
+  | 'change-passphrase'
+  /* The ledger screens. No overrides yet — `RepoError` messages are already written as
+   * sentences for a user, so the generic path shows them unchanged. The context exists
+   * so that adding guidance for, say, PERIOD_CLOSED is a table entry rather than a
+   * refactor. */
+  | 'ledger'
 
 interface Entry {
   title: string
