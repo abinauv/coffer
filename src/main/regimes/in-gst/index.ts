@@ -36,6 +36,7 @@ export {
 } from './compliance-pack'
 
 export { INDIA_FILINGS } from './filings'
+export { GST_COMPONENTS, taxComponents } from './components'
 
 export {
   GSTIN_LENGTH,

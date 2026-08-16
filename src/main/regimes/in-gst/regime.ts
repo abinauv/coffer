@@ -14,6 +14,7 @@ import { aprilToMarch } from '@main/domain/time'
 import type { TaxRegime } from '@main/regimes/types'
 import { amountInWords } from './amount-in-words'
 import { indiaClassification } from './classification'
+import { taxComponents } from './components'
 import { INDIA_FILINGS } from './filings'
 import { validateGstin } from './gstin'
 import { jurisdictionName, jurisdictions } from './jurisdictions'
@@ -30,6 +31,7 @@ export const inGstRegime: TaxRegime = {
   validateRegistrationNumber: validateGstin,
   jurisdictionName,
   jurisdictions,
+  taxComponents,
 
   classification: indiaClassification,
   fiscalYear: aprilToMarch,

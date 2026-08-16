@@ -22,6 +22,7 @@
  */
 
 import type { AccountRole, AccountType } from '@main/domain/ledger'
+import type { TaxAccountRole } from './accounts'
 
 export interface TemplateAccount {
   code: string
@@ -30,8 +31,15 @@ export interface TemplateAccount {
   /** Parent's code. Null at the root. The parent must appear earlier in the list. */
   parentCode: string | null
   isGroup: boolean
-  /** The semantic slot this account fills, where it fills one. */
-  role?: AccountRole
+  /**
+   * The semantic slot this account fills, where it fills one.
+   *
+   * `TaxAccountRole` as well as `AccountRole` because a tax component's role is built
+   * from the regime's own component code and cannot be a member of a fixed union — see
+   * `taxRoleName`. The template itself never sets one; the rows come from
+   * `taxAccountsFor`, which the template knows nothing about.
+   */
+  role?: AccountRole | TaxAccountRole
   description?: string
 }
 

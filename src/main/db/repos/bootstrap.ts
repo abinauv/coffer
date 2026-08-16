@@ -41,7 +41,9 @@ export interface SetUpBooksOptions {
   template?: ChartTemplate
   /**
    * Accounts beyond the template — in practice the tax component accounts, one per
-   * component the regime levies. Empty until `TaxRegime` can enumerate them (gate 2.0).
+   * component the regime levies, built by `taxAccountsFor`. The caller supplies them
+   * because the template knows nothing of any regime and this module knows nothing of
+   * any tax.
    */
   extraAccounts?: readonly TemplateAccount[]
   /** Months or quarters. Months unless the caller says otherwise. */

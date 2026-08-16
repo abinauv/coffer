@@ -88,6 +88,35 @@ export interface TaxComponent {
   amount: DecimalString
 }
 
+/**
+ * A tax component the regime can levy, declared independently of any document.
+ *
+ * `TaxComponent` above is a *result* — a figure on a line that has been computed. This
+ * is the standing declaration: which components exist at all, so that a chart of
+ * accounts can be given one account per component before a single invoice is raised.
+ *
+ * WHY THIS IS NOT A LIST OF ACCOUNT NAMES. The regime says what it levies; the chart
+ * says where it lands. Coffer builds the account codes and the role names
+ * (`tax-output-cgst`) from `code`, so a regime never names an account and `CGST` never
+ * appears in `domain/` or `db/` as anything but data.
+ */
+export interface TaxComponentDefinition {
+  /** Stable, and the same string `TaxComponent.code` carries. e.g. 'CGST'. */
+  code: string
+  /** What the chart of accounts calls it. e.g. 'Central GST'. */
+  label: string
+  /**
+   * Which sides of a supply the component arises on.
+   *
+   * Almost always `'both'`, and the distinction is not cosmetic: tax charged on a sale
+   * is money owed to the government, and tax paid on a purchase is money reclaimable
+   * from it. They are opposite sides of the balance sheet and must never share an
+   * account — netting them would hide both figures behind their difference, and the
+   * return asks for each.
+   */
+  levy: 'output' | 'input' | 'both'
+}
+
 /** Per-line result. Components sum to `totalTax`. */
 export interface TaxedLine {
   lineId: string
@@ -179,6 +208,16 @@ export interface TaxRegime {
 
   /** Every jurisdiction in the regime, for pickers. */
   jurisdictions(): ReadonlyArray<{ code: string; name: string }>
+
+  /**
+   * Every tax component this regime can levy, in the order a return lists them.
+   *
+   * Asked once when a company's books are set up, to create an account per component
+   * under `Duties and Taxes`. It takes no arguments on purpose: this is what the regime
+   * *can* levy, not what a particular supply attracts, and a chart has to exist before
+   * there is a supply to ask about.
+   */
+  taxComponents(): ReadonlyArray<TaxComponentDefinition>
 
   readonly classification: ClassificationScheme
   readonly fiscalYear: FiscalYearRule

@@ -233,6 +233,47 @@ describe('create sets up the books', () => {
     expect(countRows(now.service, 'accounting_periods')).toBe(24)
   })
 
+  /*
+   * The deferral from batch 1.1A, closed. `Duties and Taxes` and `Taxes Recoverable`
+   * shipped as empty groups because `TaxRegime` could not yet say what it levied; now it
+   * can, and a new company gets an account per component without anyone adding one.
+   */
+  it('gives the books an account for every tax the regime levies', async () => {
+    const now = await fixture()
+    await createCompany(now)
+    const db = createQueryBuilder(now.service.requireDatabase())
+
+    const accounts = await listAccounts(db)
+    const roleOf = (role: string) => accounts.find((account) => account.roles.includes(role))
+
+    for (const component of ['cgst', 'sgst', 'utgst', 'igst']) {
+      const output = roleOf(`tax-output-${component}`)
+      const input = roleOf(`tax-input-${component}`)
+
+      expect(output, `no output account for ${component}`).toBeDefined()
+      expect(input, `no input account for ${component}`).toBeDefined()
+
+      /* Opposite sides of the balance sheet, and never the same account: tax charged is
+       * owed, tax paid is reclaimable, and the return asks for each separately. */
+      expect(output?.type).toBe('liability')
+      expect(input?.type).toBe('asset')
+      expect(output?.id).not.toBe(input?.id)
+    }
+  })
+
+  it('files the tax accounts under the groups that were waiting for them', async () => {
+    const now = await fixture()
+    await createCompany(now)
+    const db = createQueryBuilder(now.service.requireDatabase())
+
+    const accounts = await listAccounts(db)
+    const byCode = (code: string) => accounts.find((account) => account.code === code)
+    const roleOf = (role: string) => accounts.find((account) => account.roles.includes(role))
+
+    expect(roleOf('tax-output-cgst')?.parentId).toBe(byCode('2200')?.id)
+    expect(roleOf('tax-input-cgst')?.parentId).toBe(byCode('1500')?.id)
+  })
+
   it('leaves a company that can post immediately', async () => {
     const now = await fixture()
     await createCompany(now)

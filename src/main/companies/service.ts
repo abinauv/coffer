@@ -61,6 +61,7 @@ import { type SqliteDatabase, checkpoint, closeDatabase, openDatabase } from '..
 import { isDbError } from '../db/errors'
 import { createQueryBuilder } from '../db/kysely'
 import { runMigrations } from '../db/migrate'
+import { taxAccountsFor } from '../db/repos/tax-accounts'
 import { setUpBooks } from '../db/repos/bootstrap'
 import { DEFAULT_REGIME_ID, findRegime, type TaxRegime } from '../regimes'
 import {
@@ -231,7 +232,14 @@ export class CompanyService {
          * No test covers the reordering, because the ordering is what makes the failure
          * unreachable. It is recorded here instead.
          */
-        await setUpBooks(createQueryBuilder(database), { rule: regime.fiscalYear })
+        await setUpBooks(createQueryBuilder(database), {
+          rule: regime.fiscalYear,
+          /* The chart's tax accounts, one pair per component the regime levies. This
+           * is the only place a regime and a chart of accounts meet, and neither knows
+           * about the other — the regime says what it levies, `taxAccountsFor` turns
+           * that into rows, and nothing in between names a tax. */
+          extraAccounts: taxAccountsFor(regime.taxComponents()),
+        })
 
         const registry = await this.registry()
         const record = await registry.add({

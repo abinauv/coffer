@@ -429,8 +429,17 @@ export async function buildResolver(db: CofferDb): Promise<AccountResolver> {
   }
 }
 
-/** The role name a tax component's account is mapped under. */
-export function taxRoleName(componentCode: string, direction: 'output' | 'input'): string {
+/**
+ * The role name a tax component's account is mapped under.
+ *
+ * Typed as a template literal rather than as `string`, so a tax role is distinguishable
+ * from an arbitrary one at the type level and `TemplateAccount.role` can admit these
+ * without opening itself to every string in the language. The regime's vocabulary still
+ * reaches the database as data — `componentCode` is whatever the regime said.
+ */
+export type TaxAccountRole = `tax-${'output' | 'input'}-${string}`
+
+export function taxRoleName(componentCode: string, direction: 'output' | 'input'): TaxAccountRole {
   return `tax-${direction}-${componentCode.toLowerCase()}`
 }
 
