@@ -2,6 +2,7 @@ import { join, resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppInfo, CompanySummary, Result } from '../../shared/dto'
 import type { CompanyService } from './handlers/companies'
+import type { LedgerService } from './handlers/ledger'
 import type { SystemEnvironment } from './handlers/system'
 import {
   HandlerRegistrationError,
@@ -37,6 +38,7 @@ let channels: Map<string, ChannelListener>
 let logger: IpcLogger
 let system: SystemEnvironment
 let companies: CompanyService
+let ledger: LedgerService
 
 function dependencies(overrides: Partial<IpcDependencies> = {}): IpcDependencies {
   const transport: IpcTransport = {
@@ -44,7 +46,7 @@ function dependencies(overrides: Partial<IpcDependencies> = {}): IpcDependencies
       channels.set(channel, listener)
     },
   }
-  return { transport, logger, system, companies, ...overrides }
+  return { transport, logger, system, companies, ledger, ...overrides }
 }
 
 function invoke(channel: string, ...args: unknown[]): Promise<Result<unknown>> {
@@ -79,6 +81,23 @@ beforeEach(() => {
     rename: vi.fn(),
     checkPassphrase: vi.fn(),
   } as unknown as CompanyService
+  ledger = {
+    listAccounts: vi.fn(async () => []),
+    createAccount: vi.fn(),
+    updateAccount: vi.fn(),
+    setAccountRole: vi.fn(async () => undefined),
+    listPeriods: vi.fn(async () => []),
+    closePeriod: vi.fn(),
+    reopenPeriod: vi.fn(),
+    lockPeriod: vi.fn(),
+    postEntry: vi.fn(),
+    reverseEntry: vi.fn(),
+    listEntries: vi.fn(async () => []),
+    getEntry: vi.fn(async () => null),
+    trialBalance: vi.fn(),
+    postOpeningBalances: vi.fn(),
+    closeFiscalYear: vi.fn(),
+  } as unknown as LedgerService
 })
 
 describe('registerIpcHandlers', () => {

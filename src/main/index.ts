@@ -15,8 +15,10 @@ import { app, BrowserWindow, shell } from 'electron'
 import log from 'electron-log'
 import { BRAND } from '../branding'
 import { companies, isCompanyError } from './companies'
+import { isRepoError } from './db/repos/errors'
 import { assertApiSurfaceComplete } from './ipc'
 import { installIpcHandlers } from './ipc/electron'
+import { createLedgerService } from './ledger/service'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -32,12 +34,18 @@ function installHandlers(): void {
    * has to supply is the company service and the mapper for its error codes. */
   const registry = installIpcHandlers({
     companies,
+    ledger: createLedgerService(companies),
     /* CompanyError codes are what the company screens branch on, and nothing under
      * src/main/ipc may import that module. Deliberately narrow: the companies module
      * also exports a broader `describeError` that claims DbError too, and DbError
-     * messages interpolate file paths that must not reach the renderer. */
+     * messages interpolate file paths that must not reach the renderer.
+     *
+     * `RepoError` is mapped for the same reason and with the same care: its codes are
+     * the ledger's vocabulary — PERIOD_CLOSED, UNBALANCED_ENTRY, ACCOUNT_IS_GROUP — and
+     * its messages are written as sentences for a user, never with a path in them. */
     errorMappers: [
       (cause) => (isCompanyError(cause) ? { code: cause.code, message: cause.message } : null),
+      (cause) => (isRepoError(cause) ? { code: cause.code, message: cause.message } : null),
     ],
   })
 

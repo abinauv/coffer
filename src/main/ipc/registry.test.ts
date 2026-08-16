@@ -75,7 +75,7 @@ describe('HandlerRegistry — registration', () => {
     expect(() => (registry as any).register('system', 'selfDestruct', stub())).toThrow(
       HandlerRegistrationError,
     )
-    expect(() => (registry as any).register('ledger', 'postEntry', stub())).toThrow(
+    expect(() => (registry as any).register('inventory', 'adjustStock', stub())).toThrow(
       /declares no such method/,
     )
   })

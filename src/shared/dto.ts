@@ -358,6 +358,33 @@ export interface YearEndCloseResult {
   accountsClosed: number
 }
 
+// ---- Query inputs ---------------------------------------------------------
+
+export interface ListAccountsInput {
+  /** Include archived accounts. Off by default — a picker should not offer them. */
+  includeArchived?: boolean
+}
+
+/** Inclusive on both ends. An omitted bound means "as far as the books go". */
+export interface DateRangeInput {
+  fromDate?: DateString
+  toDate?: DateString
+}
+
+export interface ListJournalEntriesInput extends DateRangeInput {
+  periodId?: string
+  sourceType?: string
+  /** Only entries touching this account. */
+  accountId?: string
+  limit?: number
+  offset?: number
+}
+
+export interface SetAccountRoleInput {
+  role: string
+  accountId: string
+}
+
 // ---- Balances -------------------------------------------------------------
 
 /*

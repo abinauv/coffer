@@ -168,7 +168,10 @@ describe('createElectronSystemEnvironment — the filesystem', () => {
 
 describe('createElectronIpcDependencies', () => {
   it('seeds the reveal allowlist with the application data directory', () => {
-    const dependencies = createElectronIpcDependencies({ companies: {} as never })
+    const dependencies = createElectronIpcDependencies({
+      companies: {} as never,
+      ledger: {} as never,
+    })
 
     expect(dependencies.revealRoots).toEqual(['C:\\Users\\ada\\AppData\\Roaming\\Coffer'])
     expect(electron.app.getPath).toHaveBeenCalledWith('userData')
@@ -177,20 +180,23 @@ describe('createElectronIpcDependencies', () => {
   it('passes the company service straight through', () => {
     const companies = { list: vi.fn() } as never
 
-    expect(createElectronIpcDependencies({ companies }).companies).toBe(companies)
+    expect(createElectronIpcDependencies({ companies, ledger: {} as never }).companies).toBe(
+      companies,
+    )
   })
 
   it('passes error mappers through when there are any', () => {
     const errorMappers = [() => null]
 
     expect(
-      createElectronIpcDependencies({ companies: {} as never, errorMappers }).errorMappers,
+      createElectronIpcDependencies({ companies: {} as never, ledger: {} as never, errorMappers })
+        .errorMappers,
     ).toBe(errorMappers)
   })
 
   it('leaves error mappers absent when there are none', () => {
-    expect(createElectronIpcDependencies({ companies: {} as never })).not.toHaveProperty(
-      'errorMappers',
-    )
+    expect(
+      createElectronIpcDependencies({ companies: {} as never, ledger: {} as never }),
+    ).not.toHaveProperty('errorMappers')
   })
 })

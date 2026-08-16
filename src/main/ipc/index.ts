@@ -15,6 +15,7 @@
 import type { ChannelName } from '../../shared/ipc'
 import type { ErrorMapper } from './errors'
 import { type CompanyService, createCompaniesHandlers } from './handlers/companies'
+import { type LedgerService, createLedgerHandlers } from './handlers/ledger'
 import { type SystemEnvironment, createSystemHandlers } from './handlers/system'
 import { type PathAllowlist, createPathAllowlist } from './path-access'
 import { HandlerRegistrationError, HandlerRegistry } from './registry'
@@ -23,6 +24,7 @@ import { apiChannels } from './surface'
 
 export type { ErrorMapper } from './errors'
 export type { CompanyService } from './handlers/companies'
+export type { LedgerService } from './handlers/ledger'
 export type { SystemEnvironment } from './handlers/system'
 export type { IpcLogger, IpcTransport } from './registry'
 export { HandlerRegistrationError, HandlerRegistry } from './registry'
@@ -38,6 +40,13 @@ export interface IpcDependencies {
    * See `CompanyService` in ./handlers/companies.ts for the shape expected.
    */
   companies: CompanyService
+  /**
+   * THE INJECTION POINT for src/main/ledger.
+   *
+   * Every method on it needs an open company, and the service is what knows which one —
+   * nothing under src/main/ipc reaches for a database handle.
+   */
+  ledger: LedgerService
   /**
    * Directories `system.revealInFileManager` may open before the user has picked
    * anything. In production this is the application data directory and nothing else.
@@ -77,6 +86,7 @@ export function registerIpcHandlers(dependencies: IpcDependencies): HandlerRegis
 
   registry.registerGroup('system', createSystemHandlers(dependencies.system, allowlist))
   registry.registerGroup('companies', createCompaniesHandlers(dependencies.companies, allowlist))
+  registry.registerGroup('ledger', createLedgerHandlers(dependencies.ledger))
 
   assertApiSurfaceComplete(registry)
 

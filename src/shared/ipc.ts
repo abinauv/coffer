@@ -14,19 +14,35 @@
  */
 
 import type {
+  Account,
+  AccountingPeriod,
   AppInfo,
   BackupInput,
   BackupResult,
   ChangePassphraseInput,
+  CloseFiscalYearInput,
   CompanySummary,
+  CreateAccountInput,
   CreateCompanyInput,
+  CreateJournalEntryInput,
+  DateRangeInput,
+  JournalEntry,
+  ListAccountsInput,
+  ListJournalEntriesInput,
   OpenCompanyInput,
   OpenCompanyResult,
   PassphraseStrength,
+  PostOpeningBalancesInput,
+  PostingResult,
   RecoverCompanyInput,
   RestoreInput,
   Result,
+  ReverseEntryInput,
+  SetAccountRoleInput,
   TitleBarOverlayColors,
+  TrialBalance,
+  UpdateAccountInput,
+  YearEndCloseResult,
 } from './dto'
 
 export interface CofferApi {
@@ -81,6 +97,43 @@ export interface CofferApi {
      * ARCHITECTURE §6.3.1 for why refusing a passphrase is not an option here.
      */
     checkPassphrase(passphrase: string): Promise<Result<PassphraseStrength>>
+  }
+
+  /**
+   * The books of the open company.
+   *
+   * Every method here needs one, and fails with `NO_COMPANY_OPEN` when there is none —
+   * there is no company id in any signature, because a company is a whole database file
+   * rather than a tenant row (ARCHITECTURE §6.3).
+   *
+   * Read the five invariants at the top of src/main/domain/ledger/types.ts before adding
+   * anything. In particular: there is no `updateEntry` and no `deleteEntry`, and there
+   * never will be — a posted entry is corrected by `reverseEntry` and nothing else.
+   */
+  ledger: {
+    listAccounts(input?: ListAccountsInput): Promise<Result<Account[]>>
+    createAccount(input: CreateAccountInput): Promise<Result<Account>>
+    /** No `type` field: an account's type may not change once it exists. */
+    updateAccount(input: UpdateAccountInput): Promise<Result<Account>>
+    /** Point a semantic slot at an account, replacing whatever filled it. */
+    setAccountRole(input: SetAccountRoleInput): Promise<Result<void>>
+
+    listPeriods(): Promise<Result<AccountingPeriod[]>>
+    closePeriod(id: string): Promise<Result<AccountingPeriod>>
+    reopenPeriod(id: string): Promise<Result<AccountingPeriod>>
+    /** Final. A locked period never reopens — see `PeriodStatus`. */
+    lockPeriod(id: string): Promise<Result<AccountingPeriod>>
+
+    postEntry(input: CreateJournalEntryInput): Promise<Result<PostingResult>>
+    /** The only way to correct a posted entry. Writes a new, mirrored one. */
+    reverseEntry(input: ReverseEntryInput): Promise<Result<PostingResult>>
+    listEntries(input?: ListJournalEntriesInput): Promise<Result<JournalEntry[]>>
+    getEntry(id: string): Promise<Result<JournalEntry | null>>
+
+    /** Summed from the lines every time. Nothing is cached — invariant 4. */
+    trialBalance(input?: DateRangeInput): Promise<Result<TrialBalance>>
+    postOpeningBalances(input: PostOpeningBalancesInput): Promise<Result<PostingResult>>
+    closeFiscalYear(input: CloseFiscalYearInput): Promise<Result<YearEndCloseResult>>
   }
 }
 

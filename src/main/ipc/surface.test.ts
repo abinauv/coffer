@@ -12,7 +12,7 @@ import {
 
 describe('API_SURFACE', () => {
   it('lists every group in the contract', () => {
-    expect(API_GROUPS).toEqual(['system', 'companies'])
+    expect(API_GROUPS).toEqual(['system', 'companies', 'ledger'])
   })
 
   it('lists the system methods', () => {
@@ -42,6 +42,40 @@ describe('API_SURFACE', () => {
       'checkPassphrase',
     ])
   })
+
+  it('lists the ledger methods', () => {
+    expect(apiMethods('ledger')).toEqual([
+      'listAccounts',
+      'createAccount',
+      'updateAccount',
+      'setAccountRole',
+      'listPeriods',
+      'closePeriod',
+      'reopenPeriod',
+      'lockPeriod',
+      'postEntry',
+      'reverseEntry',
+      'listEntries',
+      'getEntry',
+      'trialBalance',
+      'postOpeningBalances',
+      'closeFiscalYear',
+    ])
+  })
+
+  /*
+   * A posted entry is immutable (invariant 3) and the database refuses an UPDATE or a
+   * DELETE outright. A channel for either would exist only to return an error, and its
+   * presence in the contract would suggest to a future reader that one is possible.
+   */
+  it('offers no way to edit or delete a posted entry', () => {
+    const methods: readonly string[] = apiMethods('ledger')
+
+    expect(methods).not.toContain('updateEntry')
+    expect(methods).not.toContain('deleteEntry')
+    expect(methods).not.toContain('editEntry')
+    expect(methods).toContain('reverseEntry')
+  })
 })
 
 describe('apiChannels', () => {
@@ -50,7 +84,10 @@ describe('apiChannels', () => {
 
     expect(channels).toContain(toChannelName('companies', 'open'))
     expect(channels).toContain(toChannelName('system', 'getAppInfo'))
-    expect(channels).toHaveLength(apiMethods('system').length + apiMethods('companies').length)
+    expect(channels).toContain(toChannelName('ledger', 'postEntry'))
+    expect(channels).toHaveLength(
+      apiMethods('system').length + apiMethods('companies').length + apiMethods('ledger').length,
+    )
   })
 
   it('produces no duplicates', () => {
@@ -79,7 +116,12 @@ describe('isApiChannel', () => {
   })
 
   it('rejects an unknown group', () => {
-    expect(isApiChannel('ledger:postEntry')).toBe(false)
+    expect(isApiChannel('inventory:adjustStock')).toBe(false)
+  })
+
+  it('accepts a method the ledger group really declares', () => {
+    expect(isApiChannel('ledger:postEntry')).toBe(true)
+    expect(isApiChannel('ledger:deleteEntry')).toBe(false)
   })
 
   it('rejects a bare group name', () => {

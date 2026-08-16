@@ -18,6 +18,7 @@ import type { AppInfo, Platform, TitleBarOverlayColors } from '../../shared/dto'
 import type { ErrorMapper } from './errors'
 import type { SystemEnvironment } from './handlers/system'
 import type { CompanyService } from './handlers/companies'
+import type { LedgerService } from './handlers/ledger'
 import { type IpcDependencies, registerIpcHandlers } from './index'
 import type { HandlerRegistry, IpcLogger, IpcTransport } from './registry'
 
@@ -161,6 +162,8 @@ export function createElectronSystemEnvironment(): SystemEnvironment {
 export interface ElectronIpcOptions {
   /** The company service from src/main/companies. The one part that has to be supplied. */
   companies: CompanyService
+  /** The ledger service from src/main/ledger, reading the open company's books. */
+  ledger: LedgerService
   /** Extra error types to recognise — see `IpcDependencies.errorMappers`. */
   errorMappers?: readonly ErrorMapper[]
 }
@@ -172,6 +175,7 @@ export function createElectronIpcDependencies(options: ElectronIpcOptions): IpcD
     logger: createElectronLogger(),
     system: createElectronSystemEnvironment(),
     companies: options.companies,
+    ledger: options.ledger,
     ...(options.errorMappers === undefined ? {} : { errorMappers: options.errorMappers }),
     /* The registry of companies lives here, so it is revealable from the moment the app
      * starts. Every other path has to be earned — see ./path-access.ts. */

@@ -52,6 +52,23 @@ export const API_SURFACE: ApiSurface = {
     rename: true,
     checkPassphrase: true,
   },
+  ledger: {
+    listAccounts: true,
+    createAccount: true,
+    updateAccount: true,
+    setAccountRole: true,
+    listPeriods: true,
+    closePeriod: true,
+    reopenPeriod: true,
+    lockPeriod: true,
+    postEntry: true,
+    reverseEntry: true,
+    listEntries: true,
+    getEntry: true,
+    trialBalance: true,
+    postOpeningBalances: true,
+    closeFiscalYear: true,
+  },
 }
 
 export const API_GROUPS: readonly ApiGroup[] = Object.keys(API_SURFACE) as ApiGroup[]
