@@ -251,6 +251,20 @@ what an entry is.
 - Tax component accounts are found through role names built from the regime's own
   component code — `tax-output-cgst` — so each component has its own account while the
   vocabulary reaches the database as data and never as a type.
+- **[accounting]** A new company's chart now holds those accounts. `TaxRegime` gained
+  `taxComponents()`, and `taxAccountsFor` turns each component into two accounts on
+  opposite sides of the balance sheet: output tax as a liability under `Duties and
+Taxes`, input tax as an asset under `Taxes Recoverable`. Netting them into one would
+  hide both figures behind their difference, and GSTR-3B asks for output tax in table
+  3.1 and input credit in table 4.
+- Nothing in that path knows what GST is. A component arrives as a code and a label, and
+  the account's name, code and role are derived — read `db/repos/tax-accounts.ts` for
+  `CGST` and you will not find it.
+- All four Indian components get accounts, UTGST included, though most companies never
+  levy it. The alternative is worse than an unused row: the accounts a company holds
+  would depend on where it was sitting when the books were made, and invoicing a customer
+  in a union territory for the first time would need a chart migration to post an
+  ordinary sale.
 
 #### Accounting periods
 
@@ -348,6 +362,53 @@ what an entry is.
   books.
 - Four screens: balance sheet, profit and loss, day book and account ledger, each with
   rendering tests. 41 mutations against them, all killed.
+
+#### The document contract
+
+The shapes and rules Phase 2 is built against. Types and pure functions only — no table
+exists yet, and migrations `0005`–`0009` are reserved for the ones that will.
+
+- **[accounting]** A document is a draft until it is issued, and frozen afterwards. An
+  issued tax invoice is corrected by a credit note, never by an edit: the customer holds
+  a copy and the return may already be filed. This is the ledger's immutability
+  invariant seen from the document side.
+- **[accounting]** The number is allocated at issue and never released. Rule 46(b)
+  requires an invoice series to be consecutive for a financial year, so a draft holds no
+  number — one handed out and then abandoned leaves a gap somebody has to explain — and
+  cancelling keeps the number rather than freeing it. That is why cancelling and deleting
+  are different operations rather than one with a flag.
+- **[accounting]** Issuing is one transaction: status, number and journal entry together
+  or not at all. There is no "issued but not yet posted" state, because that is a window
+  in which the sales register and the trial balance disagree and no query can say which
+  one is right.
+- **[accounting]** Nothing derivable is stored. A document has no `grand_total` column;
+  its figures are a fold over its lines, computed when asked. What _is_ stored is the tax
+  the regime returned, per line and per component — that is the regime's answer as of the
+  document's own date, and an invoice must reprint years later exactly as it was taxed
+  and exactly as it was filed.
+- **[accounting]** What is outstanding against a document is a ledger fact, not a
+  document field: the movement its entry made on the party's control account, less what
+  has been allocated to it. A cancelled invoice's entry is reversed, so its outstanding
+  reaches zero without any code making it; and an aged receivables report cannot disagree
+  with the balance sheet, because they are the same sum grouped differently.
+- One table for every trade document — quotation, sales invoice, credit note, purchase
+  bill, debit note. They differ in three fields and are otherwise identical, and five
+  tables would mean five copies of the tax summary and a Phase 3 that is a schema change
+  rather than a posting rule.
+- **[accounting]** The tax summary keeps one row per component _and_ rate. A document
+  carrying 18% goods and 5% freight has two CGST figures on it, and a single combined
+  `CGST` line is a figure no customer can check and no return has a box for.
+- **[accounting]** Rounding is recorded on the document, not read from settings when it
+  is opened. Totals are derived every time, possibly years later, and a company setting
+  that has changed since would otherwise silently restate an issued invoice.
+- Numbering is data: prefix, suffix, separator, width, whether the fiscal year appears,
+  and whether the counter resets. Whether the year is _shown_ and whether it _resets_ are
+  independent, because businesses ask for both combinations. A sequence that outgrows its
+  width gets longer rather than being truncated into a number an earlier document holds.
+- `TaxRegime.validateDocumentNumber` — India caps an invoice number at sixteen
+  characters and allows only letters, digits, `-` and `/`. `INV/2026-27/0001` is exactly
+  sixteen. Breaking the rule fails at the portal weeks later, not at the desk where it
+  was typed, by which time every invoice in the month carries it.
 
 #### Documentation
 

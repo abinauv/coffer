@@ -203,6 +203,19 @@ export interface TaxRegime {
   /** GSTIN, VAT number, EIN. Also derives the jurisdiction when the format encodes it. */
   validateRegistrationNumber(value: string): ValidationResult
 
+  /**
+   * Whether a document number is one this regime will accept on a tax document.
+   *
+   * India caps an invoice number at sixteen characters and allows only letters, digits,
+   * '-' and '/'. That is not a preference — it is the width of the field in the return
+   * schema, and a number that breaks it fails at the portal weeks later rather than at
+   * the desk where it was typed.
+   *
+   * Uniqueness is not asked about here, because no function given one string can answer
+   * it. That belongs to the numbering counter and the index behind it.
+   */
+  validateDocumentNumber(value: string): ValidationResult
+
   /** Human-readable jurisdiction name for a code, e.g. '33' -> 'Tamil Nadu'. */
   jurisdictionName(code: string): string | null
 

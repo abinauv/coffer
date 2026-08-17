@@ -16,8 +16,10 @@ describe('the regime satisfies its own contract', () => {
     expect(typeof regime.computeTax).toBe('function')
     expect(typeof regime.placeOfSupply).toBe('function')
     expect(typeof regime.validateRegistrationNumber).toBe('function')
+    expect(typeof regime.validateDocumentNumber).toBe('function')
     expect(typeof regime.jurisdictionName).toBe('function')
     expect(typeof regime.jurisdictions).toBe('function')
+    expect(typeof regime.taxComponents).toBe('function')
     expect(typeof regime.amountInWords).toBe('function')
     expect(regime.classification).toBeDefined()
     expect(regime.fiscalYear).toBeDefined()
@@ -30,6 +32,14 @@ describe('the regime satisfies its own contract', () => {
     expect(regime.jurisdictionName('33')).toBe('Tamil Nadu')
     expect(regime.jurisdictions().length).toBe(36)
     expect(regime.classification.validate('8471').isValid).toBe(true)
+    expect(regime.validateDocumentNumber('INV/2026-27/0001').isValid).toBe(true)
+    expect(regime.validateDocumentNumber('INV 0001').isValid).toBe(false)
+    expect(regime.taxComponents().map((component) => component.code)).toEqual([
+      'CGST',
+      'SGST',
+      'UTGST',
+      'IGST',
+    ])
     expect(regime.amountInWords(D('1234.50'))).toBe(
       'Rupees One Thousand Two Hundred Thirty Four and Fifty Paise Only',
     )

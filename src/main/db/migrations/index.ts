@@ -23,6 +23,37 @@
  * order in place, and none of them is an implementation detail anyone may change.
  *
  * ---------------------------------------------------------------------------
+ * RESERVED NUMBERS — PHASE 2, MASTERS AND SALES
+ *
+ * Claimed at gate 2.0. The invariants they enforce are in
+ * src/main/domain/documents/types.ts — the four rules at the top of that file.
+ *
+ *   0005  parties, plus journal_lines.party_id       — who a document is with
+ *   0006  items, units_of_measure                    — what is on its lines
+ *   0007  numbering_series, numbering_counters       — what its number is
+ *   0008  documents, document_lines,
+ *         document_line_taxes                        — the document itself
+ *   0009  receipts, allocations                      — what has been paid against one
+ *
+ * TWO OF THESE DESERVE A WARNING BEFORE ANYONE WRITES THEM.
+ *
+ * 0005 adds a column to a table 0004 created. `journal_lines.party_id` is what makes a
+ * receivables ledger a sum over lines rather than a second set of books — see the note
+ * on outstanding amounts in domain/documents/types.ts. It is nullable, because most
+ * lines have no party, and a trigger requires it on lines posting to the accounts mapped
+ * to `accounts-receivable` and `accounts-payable`: a line to a control account without a
+ * party is money that appears on the balance sheet and against nobody, which corrupts a
+ * report rather than throwing, and that is this codebase's test for what becomes a
+ * trigger. Opening balances will need a party per line at the same time; they can
+ * currently name a control account without one.
+ *
+ * 0008 holds every trade document — quotation, invoice, credit note, bill, debit note —
+ * in one table with a `kind` column. Read the note in domain/documents/types.ts on why
+ * before splitting it: the five differ in three fields and are otherwise identical, and
+ * five tables would mean five copies of the tax summary and a Phase 3 that is a schema
+ * change rather than a posting rule.
+ *
+ * ---------------------------------------------------------------------------
  * ADDING A MIGRATION
  *
  *   1. Use the migration number reserved for your task. Never take "the next free

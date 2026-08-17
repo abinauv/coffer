@@ -15,6 +15,7 @@ import type { TaxRegime } from '@main/regimes/types'
 import { amountInWords } from './amount-in-words'
 import { indiaClassification } from './classification'
 import { taxComponents } from './components'
+import { validateDocumentNumber } from './document-number'
 import { INDIA_FILINGS } from './filings'
 import { validateGstin } from './gstin'
 import { jurisdictionName, jurisdictions } from './jurisdictions'
@@ -29,6 +30,7 @@ export const inGstRegime: TaxRegime = {
   computeTax,
   placeOfSupply,
   validateRegistrationNumber: validateGstin,
+  validateDocumentNumber,
   jurisdictionName,
   jurisdictions,
   taxComponents,
