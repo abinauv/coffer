@@ -60,6 +60,14 @@ describe('what it deliberately does not check', () => {
     expect(validateDocumentNumber('INV/2026-27/0001').isValid).toBe(true)
   })
 
+  /* Unlike a GSTIN, a document number has no canonical spelling to impose: it is a label
+   * the business chose, and `inv/2026-27/0001` is what somebody meant to write. */
+  it('keeps a valid number exactly as it was written', () => {
+    expect(validateDocumentNumber('inv/2026-27/0001').normalisedValue).toBe('inv/2026-27/0001')
+    expect(validateDocumentNumber('').normalisedValue).toBeNull()
+    expect(validateDocumentNumber('INV 0001').normalisedValue).toBeNull()
+  })
+
   it('derives no jurisdiction, unlike a GSTIN', () => {
     expect(validateDocumentNumber('INV/2026-27/0001').derivedJurisdictionCode).toBeNull()
   })

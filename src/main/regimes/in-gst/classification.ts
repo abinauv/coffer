@@ -65,13 +65,14 @@ export function validateClassificationCode(code: string): ValidationResult {
   const value = normaliseClassificationCode(code)
 
   if (value === '') {
-    return { isValid: false, message: 'Enter an HSN or SAC code.' }
+    return { isValid: false, message: 'Enter an HSN or SAC code.', normalisedValue: null }
   }
 
   if (!DIGITS.test(value)) {
     return {
       isValid: false,
       message: `An HSN or SAC code is digits only. This one is '${value}'.`,
+      normalisedValue: null,
     }
   }
 
@@ -79,6 +80,7 @@ export function validateClassificationCode(code: string): ValidationResult {
     return {
       isValid: false,
       message: `A code starting 99 is a service code, which is always ${String(SAC_LENGTH)} digits. This one has ${String(value.length)}.`,
+      normalisedValue: null,
     }
   }
 
@@ -86,10 +88,13 @@ export function validateClassificationCode(code: string): ValidationResult {
     return {
       isValid: false,
       message: `An HSN code is 4, 6 or 8 digits and a service code is ${String(SAC_LENGTH)}. This one has ${String(value.length)}.`,
+      normalisedValue: null,
     }
   }
 
-  return { isValid: true, message: null }
+  /* The normalised code, not the one typed — separators and spaces are already gone by
+   * here, and a code stored with them in would never match the tariff again. */
+  return { isValid: true, message: null, normalisedValue: value }
 }
 
 /** The bundled entry for a code, or null. Exact match on the normalised code. */

@@ -149,6 +149,16 @@ export interface ValidationResult {
   message: string | null
   /** Jurisdiction derived from the number, where the format encodes one. */
   derivedJurisdictionCode?: string | null
+  /**
+   * The value in the form the regime says it should be kept in. Null when invalid.
+   *
+   * Required, and required for a reason. A regime that accepts `33aabcc1234d1zi` is
+   * saying that number is right, not that its spelling is — GSTIN validation upper-cases
+   * and strips spaces before it looks at anything, so a lower-case one passes and would
+   * then be stored, and printed on a tax invoice, exactly as it was typed. Only the
+   * regime knows what the canonical form is, so only the regime can be asked for it.
+   */
+  normalisedValue: string | null
 }
 
 // ---- Classification -------------------------------------------------------

@@ -156,6 +156,14 @@ function parseJournalLine(value: unknown, index: number): JournalLineInput {
     credit: expectDecimalString(line['credit'], `lines[${index}].credit`),
     narration:
       optional(line['narration'], (v) => expectString(v, `lines[${index}].narration`)) ?? null,
+    /* Without this the boundary silently drops the party, and a line to a control
+     * account is then refused by 0005's trigger for a reason nothing in the renderer
+     * could have caused — the entry named a customer and the entry that arrived did
+     * not. `null` and absent mean the same thing to the repository. */
+    partyId:
+      line['partyId'] == null
+        ? null
+        : expectNonEmptyString(line['partyId'], `lines[${index}].partyId`),
   }
 }
 
@@ -206,6 +214,13 @@ function parseOpeningBalanceLine(value: unknown, index: number): OpeningBalanceL
   return {
     accountId: expectNonEmptyString(line['accountId'], `lines[${index}].accountId`),
     amount: expectDecimalString(line['amount'], `lines[${index}].amount`),
+    /* An opening receivable is entered one customer at a time, so the same account may
+     * appear on several lines and the party is what distinguishes them. Dropping it here
+     * would collapse those lines into a duplicate-account error. */
+    partyId:
+      line['partyId'] == null
+        ? null
+        : expectNonEmptyString(line['partyId'], `lines[${index}].partyId`),
   }
 }
 

@@ -12,7 +12,7 @@ import {
 
 describe('API_SURFACE', () => {
   it('lists every group in the contract', () => {
-    expect(API_GROUPS).toEqual(['system', 'companies', 'ledger', 'reports'])
+    expect(API_GROUPS).toEqual(['system', 'companies', 'ledger', 'parties', 'reports'])
   })
 
   it('lists the system methods', () => {
@@ -63,6 +63,10 @@ describe('API_SURFACE', () => {
     ])
   })
 
+  it('lists the parties methods', () => {
+    expect(apiMethods('parties')).toEqual(['list', 'get', 'create', 'update', 'archive', 'delete'])
+  })
+
   /*
    * A posted entry is immutable (invariant 3) and the database refuses an UPDATE or a
    * DELETE outright. A channel for either would exist only to return an error, and its
@@ -86,11 +90,13 @@ describe('apiChannels', () => {
     expect(channels).toContain(toChannelName('system', 'getAppInfo'))
     expect(channels).toContain(toChannelName('ledger', 'postEntry'))
     expect(channels).toContain(toChannelName('reports', 'balanceSheet'))
+    expect(channels).toContain(toChannelName('parties', 'create'))
+
+    /* Summed over API_GROUPS rather than over a list of groups written out here. The
+     * hand-written version silently stopped covering a group the day one was added,
+     * which is the only day it mattered. */
     expect(channels).toHaveLength(
-      apiMethods('system').length +
-        apiMethods('companies').length +
-        apiMethods('ledger').length +
-        apiMethods('reports').length,
+      API_GROUPS.reduce((total, group) => total + apiMethods(group).length, 0),
     )
   })
 

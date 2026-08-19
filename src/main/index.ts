@@ -19,6 +19,7 @@ import { isRepoError } from './db/repos/errors'
 import { assertApiSurfaceComplete } from './ipc'
 import { installIpcHandlers } from './ipc/electron'
 import { createLedgerService } from './ledger/service'
+import { createPartiesService } from './parties/service'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -37,6 +38,7 @@ function installHandlers(): void {
   const registry = installIpcHandlers({
     companies,
     ledger,
+    parties: createPartiesService(companies),
     /* One object, two contract groups: the read-only methods are on the same service,
      * so both point at it. See the note beside them in src/main/ledger/service.ts. */
     reports: ledger,

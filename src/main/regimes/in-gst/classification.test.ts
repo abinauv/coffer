@@ -31,6 +31,10 @@ describe('validateClassificationCode — accepted', () => {
       const result = validateClassificationCode(code)
       expect(result.isValid).toBe(true)
       expect(result.message).toBeNull()
+      /* The digits, not what was typed. `8471.30` and ` 8471 ` are both valid and
+       * neither is what should be stored — a code kept with a dot in it would never
+       * match the tariff again. */
+      expect(result.normalisedValue).toBe(code.replace(/[\s.]/g, ''))
     })
   }
 })

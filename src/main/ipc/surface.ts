@@ -69,6 +69,14 @@ export const API_SURFACE: ApiSurface = {
     postOpeningBalances: true,
     closeFiscalYear: true,
   },
+  parties: {
+    list: true,
+    get: true,
+    create: true,
+    update: true,
+    archive: true,
+    delete: true,
+  },
   reports: {
     balanceSheet: true,
     profitAndLoss: true,

@@ -42,6 +42,11 @@ describe('validateGstin — accepted', () => {
       expect(result.isValid).toBe(true)
       expect(result.message).toBeNull()
       expect(result.derivedJurisdictionCode).toBe(entry.jurisdictionCode)
+      /* The form it should be KEPT in, not the form it arrived in. Validation
+       * upper-cases and strips spaces before it looks at anything, so what the caller
+       * typed can differ from what is right — and what is right is what goes on the
+       * invoice. */
+      expect(result.normalisedValue).toBe(entry.normalised)
     })
 
     it(`${entry.value} normalises and resolves its state`, () => {
@@ -58,6 +63,9 @@ describe('validateGstin — rejected, with the reason the user needs', () => {
       const result = validateGstin(entry.value)
       expect(result.isValid).toBe(false)
       expect(result.message).toBe(entry.message)
+      /* Nothing to keep. A number that is wrong has no canonical form, and offering one
+       * would invite a caller to store it anyway. */
+      expect(result.normalisedValue).toBeNull()
       expect(result.derivedJurisdictionCode ?? null).toBe(entry.jurisdictionCode)
     })
   }

@@ -38,6 +38,7 @@ export function validateDocumentNumber(value: string): ValidationResult {
       isValid: false,
       message: 'A document number is required.',
       derivedJurisdictionCode: null,
+      normalisedValue: null,
     }
   }
 
@@ -46,6 +47,7 @@ export function validateDocumentNumber(value: string): ValidationResult {
       isValid: false,
       message: `A document number may be at most ${String(MAX_DOCUMENT_NUMBER_LENGTH)} characters. This one is ${String(value.length)}.`,
       derivedJurisdictionCode: null,
+      normalisedValue: null,
     }
   }
 
@@ -54,8 +56,12 @@ export function validateDocumentNumber(value: string): ValidationResult {
       isValid: false,
       message: 'A document number may contain only letters, digits, hyphens and slashes.',
       derivedJurisdictionCode: null,
+      normalisedValue: null,
     }
   }
 
-  return { isValid: true, message: null, derivedJurisdictionCode: null }
+  /* Kept exactly as typed. A document number is a label the business chose and the
+   * regime constrains only its shape — `inv/2026-27/0001` is a number somebody meant to
+   * write that way, not a mis-spelling of anything. */
+  return { isValid: true, message: null, derivedJurisdictionCode: null, normalisedValue: value }
 }

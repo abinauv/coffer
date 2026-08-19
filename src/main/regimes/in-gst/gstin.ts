@@ -89,7 +89,7 @@ export function gstinJurisdictionCode(value: string): string | null {
 }
 
 function invalid(message: string, derivedJurisdictionCode: string | null): ValidationResult {
-  return { isValid: false, message, derivedJurisdictionCode }
+  return { isValid: false, message, derivedJurisdictionCode, normalisedValue: null }
 }
 
 /**
@@ -184,7 +184,15 @@ export function validateGstin(value: string): ValidationResult {
     )
   }
 
-  return { isValid: true, message: null, derivedJurisdictionCode: stateCode }
+  /* `gstin` is the normalised form — upper-cased and stripped of whitespace at the top
+   * of this function. Handing it back is what stops a pasted lower-case number being
+   * stored and printed as it was typed. */
+  return {
+    isValid: true,
+    message: null,
+    derivedJurisdictionCode: stateCode,
+    normalisedValue: gstin,
+  }
 }
 
 /** The state name behind a GSTIN, for showing beside the field. Null when unreadable. */

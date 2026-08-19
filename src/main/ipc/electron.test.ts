@@ -171,6 +171,7 @@ describe('createElectronIpcDependencies', () => {
     const dependencies = createElectronIpcDependencies({
       companies: {} as never,
       ledger: {} as never,
+      parties: {} as never,
       reports: {} as never,
     })
 
@@ -182,8 +183,12 @@ describe('createElectronIpcDependencies', () => {
     const companies = { list: vi.fn() } as never
 
     expect(
-      createElectronIpcDependencies({ companies, ledger: {} as never, reports: {} as never })
-        .companies,
+      createElectronIpcDependencies({
+        companies,
+        ledger: {} as never,
+        parties: {} as never,
+        reports: {} as never,
+      }).companies,
     ).toBe(companies)
   })
 
@@ -194,6 +199,7 @@ describe('createElectronIpcDependencies', () => {
       createElectronIpcDependencies({
         companies: {} as never,
         ledger: {} as never,
+        parties: {} as never,
         reports: {} as never,
         errorMappers,
       }).errorMappers,
@@ -205,6 +211,7 @@ describe('createElectronIpcDependencies', () => {
       createElectronIpcDependencies({
         companies: {} as never,
         ledger: {} as never,
+        parties: {} as never,
         reports: {} as never,
       }),
     ).not.toHaveProperty('errorMappers')

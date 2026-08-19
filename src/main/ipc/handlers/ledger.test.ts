@@ -149,6 +149,31 @@ describe('posting', () => {
     expect(parsed.lines).toHaveLength(2)
   })
 
+  /*
+   * The boundary is the only reason a credit sale can be posted at all. Migration 0005
+   * refuses a line to a control account that names nobody, so a party dropped here
+   * becomes PARTY_REQUIRED on an entry that did name one — an error with no cause the
+   * user can see and nothing in the renderer to fix.
+   */
+  it('carries the party on a line, and defaults it to nobody', () => {
+    const [parsed] = parse('postEntry', {
+      date: '2026-04-15',
+      narration: 'Credit sale',
+      lines: [line({ partyId: 'p1' }), line({ accountId: 'a2', debit: '0.00', credit: '100.00' })],
+    }) as [{ lines: { partyId: unknown }[] }]
+
+    expect(parsed.lines[0]?.partyId).toBe('p1')
+    expect(parsed.lines[1]?.partyId).toBeNull()
+  })
+
+  it('refuses a party sent as something other than an id', () => {
+    const post = (partyId: unknown) => () =>
+      parse('postEntry', { date: '2026-04-15', narration: 'x', lines: [line({ partyId })] })
+
+    expect(post('')).toThrow()
+    expect(post(7)).toThrow()
+  })
+
   /* The rule with teeth. A JS number cannot represent 12.34 exactly, and everything
    * below this line assumes the amount arrived as text. */
   it('refuses an amount sent as a number', () => {
@@ -211,7 +236,34 @@ describe('opening balances and the year end', () => {
         date: '2026-04-01',
         lines: [{ accountId: 'a1', amount: '-500.00' }],
       }),
-    ).toEqual([{ date: '2026-04-01', lines: [{ accountId: 'a1', amount: '-500.00' }] }])
+    ).toEqual([
+      { date: '2026-04-01', lines: [{ accountId: 'a1', amount: '-500.00', partyId: null }] },
+    ])
+  })
+
+  /*
+   * The boundary is what an opening receivable per customer depends on. Dropping the
+   * party here would collapse two customers' figures into one account named twice, which
+   * the repository refuses as AMBIGUOUS_LINE — an error nothing in the renderer caused.
+   */
+  it('carries the party on an opening balance', () => {
+    expect(
+      parse('postOpeningBalances', {
+        date: '2026-04-01',
+        lines: [
+          { accountId: 'a1', amount: '500.00', partyId: 'p1' },
+          { accountId: 'a1', amount: '250.00', partyId: 'p2' },
+        ],
+      }),
+    ).toEqual([
+      {
+        date: '2026-04-01',
+        lines: [
+          { accountId: 'a1', amount: '500.00', partyId: 'p1' },
+          { accountId: 'a1', amount: '250.00', partyId: 'p2' },
+        ],
+      },
+    ])
   })
 
   it('refuses an opening balance sent as a number', () => {

@@ -3,22 +3,10 @@
  *
  * The same shape as `CompanyService`: handlers should be a line each, and everything
  * this module offers beyond the contract is its own business. What it adds over calling
- * the repositories directly is the two things a repository has no business knowing:
- *
- *   WHICH DATABASE. Repositories take a `CofferDb`. Exactly one company is open at a
- *   time and it is `CompanyService` that knows which, so this asks for the handle on
- *   every call rather than holding one — a cached handle would outlive a `close()` and
- *   write into a company the user believes they have shut.
- *
- *   WHICH REGIME. The year-end close needs a fiscal-year rule, and the rule belongs to
- *   the regime the company was set up under. That id is in `app_metadata`, written at
- *   creation, so it is read from the file rather than assumed — a build with a different
- *   default must not close a year on the wrong dates.
- *
- * The Kysely wrapper is memoised per connection, not per call. It is a type layer over
- * the handle rather than a second connection (see db/kysely.ts), so rebuilding it every
- * call would be waste; keying the cache on the handle is what makes it correct across a
- * close and reopen.
+ * the repositories directly is the two things a repository has no business knowing —
+ * which database is open, and which regime these books were set up under — and both of
+ * those now live in `OpenBooks`, because parties, items and documents need them too.
+ * Read ../books/open-books.ts for why that is one object rather than four copies.
  */
 
 import type {
@@ -46,8 +34,8 @@ import type {
   YearEndCloseResult,
 } from '@shared/dto'
 
-import type { SqliteDatabase } from '../db/connection'
-import { createQueryBuilder, type CofferDb } from '../db/kysely'
+import type { CofferDb } from '../db/kysely'
+import { OpenBooks, type OpenCompanyHandle } from '../books/open-books'
 import {
   clearAccountRole,
   createAccount,
@@ -61,29 +49,14 @@ import { getEntry, listEntries, postManualEntry, reverseEntry } from '../db/repo
 import { postOpeningBalances } from '../db/repos/opening-balances'
 import { closePeriod, listPeriods, lockPeriod, reopenPeriod } from '../db/repos/periods'
 import { closeFiscalYear } from '../db/repos/year-end'
-import { METADATA_KEYS, readMetadata } from '../companies/metadata'
-import { CompanyError } from '../companies/errors'
-import { DEFAULT_REGIME_ID, findRegime, type TaxRegime } from '../regimes'
 
-/**
- * What the ledger service needs from the companies module.
- *
- * Deliberately two methods rather than the whole `CompanyService`: the ledger has no
- * business opening, closing or backing up anything.
- */
-export interface OpenCompanyHandle {
-  /** The open company's database handle, or null when none is open. */
-  currentDatabase(): SqliteDatabase | null
-}
+export type { OpenCompanyHandle } from '../books/open-books'
 
 export class LedgerService {
-  private readonly companies: OpenCompanyHandle
-
-  /** Keyed on the handle, so a close and reopen gets a fresh builder. */
-  private cached: { connection: SqliteDatabase; db: CofferDb } | null = null
+  private readonly books: OpenBooks
 
   constructor(companies: OpenCompanyHandle) {
-    this.companies = companies
+    this.books = new OpenBooks(companies)
   }
 
   // ---- Accounts -----------------------------------------------------------
@@ -183,54 +156,16 @@ export class LedgerService {
 
   async closeFiscalYear(input: CloseFiscalYearInput): Promise<YearEndCloseResult> {
     return closeFiscalYear(this.db(), {
-      rule: this.regime().fiscalYear,
+      rule: this.books.regime().fiscalYear,
       startYear: input.startYear,
     })
   }
 
   // ---- Internals ----------------------------------------------------------
 
-  /**
-   * The open company's books.
-   *
-   * @throws CompanyError `NO_COMPANY_OPEN`
-   */
+  /** The open company's books. @throws CompanyError `NO_COMPANY_OPEN` */
   private db(): CofferDb {
-    const connection = this.companies.currentDatabase()
-    if (connection === null) {
-      throw new CompanyError('NO_COMPANY_OPEN', 'Open a company first.')
-    }
-    if (this.cached?.connection !== connection) {
-      this.cached = { connection, db: createQueryBuilder(connection) }
-    }
-    return this.cached.db
-  }
-
-  /**
-   * The regime the open company's books were set up under.
-   *
-   * Read from the file, not from the default. The fiscal periods on disk were generated
-   * from this rule; closing a year under a different one would use the wrong dates and
-   * produce a plausible, wrong figure.
-   */
-  private regime(): TaxRegime {
-    const connection = this.companies.currentDatabase()
-    if (connection === null) {
-      throw new CompanyError('NO_COMPANY_OPEN', 'Open a company first.')
-    }
-
-    /* Companies created before the regime was recorded fall back to the default, which
-     * is what they were necessarily created under — it was the only one. */
-    const id = readMetadata(connection, METADATA_KEYS.regimeId) ?? DEFAULT_REGIME_ID
-    const regime = findRegime(id)
-    if (regime === undefined) {
-      throw new CompanyError(
-        'COMPANY_REGIME_UNKNOWN',
-        `These books were set up under a tax regime called ${JSON.stringify(id)}, which this ` +
-          'build does not have. A newer version of Coffer will open them.',
-      )
-    }
-    return regime
+    return this.books.db()
   }
 }
 

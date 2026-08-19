@@ -35,6 +35,21 @@ export function expectString(value: unknown, field: string): string {
   return value
 }
 
+/**
+ * Narrow to a string no longer than `max`.
+ *
+ * `MAX_STRING_LENGTH` is the ceiling that stops a hostile renderer exhausting memory;
+ * this is for the much tighter bounds a particular field has — a city is not eight
+ * thousand characters. It exists so those bounds are still rejections rather than
+ * exceptions: a handler throwing its own `RangeError` would reach the renderer as an
+ * internal error instead of `INVALID_ARGUMENT`, naming no field.
+ */
+export function expectBoundedString(value: unknown, field: string, max: number): string {
+  const text = expectString(value, field)
+  if (text.length > max) invalid(field, `is longer than ${String(max)} characters`)
+  return text
+}
+
 /** Narrow to a string with at least one non-whitespace character. */
 export function expectNonEmptyString(value: unknown, field: string): string {
   const text = expectString(value, field)

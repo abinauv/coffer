@@ -32,11 +32,16 @@ import type {
   DateRangeInput,
   DayBook,
   JournalEntry,
+  ArchivePartyInput,
+  CreatePartyInput,
   ListAccountsInput,
   ListJournalEntriesInput,
+  ListPartiesInput,
   OpenCompanyInput,
   OpenCompanyResult,
   PassphraseStrength,
+  Party,
+  PartySummary,
   PostOpeningBalancesInput,
   PostingResult,
   ProfitAndLoss,
@@ -48,6 +53,7 @@ import type {
   TitleBarOverlayColors,
   TrialBalance,
   UpdateAccountInput,
+  UpdatePartyInput,
   YearEndCloseResult,
 } from './dto'
 
@@ -140,6 +146,34 @@ export interface CofferApi {
     trialBalance(input?: DateRangeInput): Promise<Result<TrialBalance>>
     postOpeningBalances(input: PostOpeningBalancesInput): Promise<Result<PostingResult>>
     closeFiscalYear(input: CloseFiscalYearInput): Promise<Result<YearEndCloseResult>>
+  }
+
+  /**
+   * Customers and vendors, of the open company's books.
+   *
+   * One group, because they are one table: in a small business the firm you sell to is
+   * very often the firm you buy transport from, and `PartyRole` filters a list rather
+   * than naming a second kind of record.
+   *
+   * A party has no balance here, and will not. What they owe is a sum over the journal
+   * lines carrying their id, and it belongs with the reports it will be aged alongside —
+   * a figure on this group would invite somebody to store it (invariant 4).
+   */
+  parties: {
+    list(input?: ListPartiesInput): Promise<Result<PartySummary[]>>
+    get(id: string): Promise<Result<Party | null>>
+    /**
+     * The registration number is checked against the regime, and where it encodes a
+     * jurisdiction that jurisdiction is filled in — a GSTIN's first two digits are the
+     * state, and a party's state decides the place of supply.
+     */
+    create(input: CreatePartyInput): Promise<Result<Party>>
+    /** Absent means "leave it"; `null` means "clear it". See `UpdatePartyInput`. */
+    update(input: UpdatePartyInput): Promise<Result<Party>>
+    /** Archived parties take nothing new. Reversible, unlike `delete`. */
+    archive(input: ArchivePartyInput): Promise<Result<Party>>
+    /** Refused once anything has been posted against them. Archive instead. */
+    delete(id: string): Promise<Result<void>>
   }
 
   /**

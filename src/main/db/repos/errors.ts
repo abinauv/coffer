@@ -100,6 +100,24 @@ export type RepoErrorCode =
   | 'PARTY_IN_USE'
   /** A line posting to a party control account did not say whose money it is. */
   | 'PARTY_REQUIRED'
+  /**
+   * The registration number is not one this regime will accept.
+   *
+   * Raised by the parties service, not by a repository: what a valid GSTIN looks like is
+   * the regime's business, and `db/` may not name a concrete regime. It carries a
+   * `RepoError` because the code is part of the same vocabulary the party screens branch
+   * on, and a second error class reaching the same UI would buy nothing.
+   */
+  | 'PARTY_REGISTRATION_INVALID'
+  /**
+   * The registration number encodes a jurisdiction, and it is not the one supplied.
+   *
+   * Refused rather than silently corrected. A party's jurisdiction decides the place of
+   * supply, which decides CGST+SGST against IGST — so the disagreement changes the tax
+   * on every invoice raised for them, and whichever value were chosen quietly would be
+   * wrong half the time.
+   */
+  | 'PARTY_JURISDICTION_MISMATCH'
 
 /** An error raised by a repository. Always carries a stable, machine-readable code. */
 export class RepoError extends Error {

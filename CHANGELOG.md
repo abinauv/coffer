@@ -456,6 +456,38 @@ exists yet, and migrations `0005`–`0009` are reserved for the ones that will.
 - The repository does not validate registration numbers. What a valid one looks like is
   the regime's business, and `db/` may not name a concrete regime.
 
+#### Parties, reachable from the app
+
+- The `parties` IPC group — list, get, create, update, archive, delete. Customers and
+  vendors are one group because they are one table; `PartyRole` filters a list rather than
+  naming a second kind of record. There is no balance on it and will not be: what a party
+  owes is a sum over the journal lines carrying their id, and it belongs with the reports
+  it will be aged alongside.
+- **[accounting]** A journal line and an opening balance now carry the party across the
+  IPC boundary. Until this landed the boundary silently dropped it, so a credit sale
+  posted through the app was refused by the database for naming nobody — an error with no
+  cause the user could see and nothing in the screen to fix.
+- **[accounting]** A registration number is checked by the regime the books were created
+  under, not by the build's default, and where it encodes a jurisdiction that jurisdiction
+  is filled in. A GSTIN's first two digits are the state, the state decides the place of
+  supply, and the place of supply decides CGST+SGST against IGST.
+- **[accounting]** A registration number and a jurisdiction that disagree are refused
+  rather than quietly reconciled. Picking either one silently would be wrong on half the
+  invoices raised for that party, and invisible on all of them.
+- **[accounting]** `ValidationResult.normalisedValue` — a regime that accepts a number now
+  also says what form it should be kept in. GSTIN validation upper-cases and strips
+  whitespace before it checks anything, so `33aabcc1234d1zi` is a _valid_ number that
+  would have been stored, and printed on a tax invoice, exactly as it was typed.
+  Classification codes normalise the same way: `8471.30` is valid and `847130` is what is
+  stored, because a code kept with a dot in it would never match the tariff again.
+- A blank registration number is the absence of one, not a bad one. A form with an empty
+  GSTIN box sends `''`, and putting that to the regime would tell somebody who correctly
+  has no registration that their registration is invalid.
+- `OpenBooks` (`main/books/`) — one object answering which database is open and which
+  regime these books were set up under, composed by every service above the repositories
+  rather than copied into each. Two answers to "which company is open" ends with one of
+  them stale after a close and reopen.
+
 #### Documentation
 
 - Architecture, conventions, getting started, the data model, adding a tax regime,
