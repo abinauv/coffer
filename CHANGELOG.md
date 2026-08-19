@@ -488,6 +488,32 @@ exists yet, and migrations `0005`–`0009` are reserved for the ones that will.
   rather than copied into each. Two answers to "which company is open" ends with one of
   them stale after a close and reopen.
 
+#### Customers and vendors, on screen
+
+- Two entries in the sidebar — **Customers** under Sales and **Vendors** under Purchases —
+  and one screen behind them. Those are the words a business uses; the record underneath
+  is the same one, and both screens say so, because somebody who only ever opens Vendors
+  would otherwise never learn that the firm they buy transport from is the same record as
+  the firm they sell to. An unfiltered **Parties** list is registered without a sidebar
+  entry, for when the side is what somebody cannot remember.
+- Search covers the name, the registration number and the city — the city because that is
+  what tells two firms called `Sharma Enterprises` apart, which is exactly the case the
+  unique name index forces somebody to resolve. Filtered in the renderer, so it is instant
+  and cannot fall behind what was typed; `parties.list` still takes a `search` argument,
+  for the long list an invoice's party picker will be.
+- A new record starts on the side the screen was opened from. A party must be a customer,
+  a vendor or both, so defaulting to neither would make the first save fail for everybody,
+  and defaulting to customer on the Vendors screen would quietly create the wrong thing.
+- **No balances on this screen**, for the reason the chart of accounts carries none. This
+  is who the parties are; what they owe is a sum over the ledger and belongs with the aged
+  report it will be grouped by.
+- Archive rather than delete, and the confirmation says what survives — everything already
+  posted stays exactly as it is. An edit that takes a party off the list it was made on
+  says where they went rather than letting the row vanish like a deletion.
+- The registration number is not judged in the renderer. Whether a GSTIN is real is the
+  regime's question, its answer is a sentence written for the user, and a second weaker
+  check here would either disagree with it or repeat it.
+
 #### Documentation
 
 - Architecture, conventions, getting started, the data model, adding a tax regime,
