@@ -410,6 +410,52 @@ exists yet, and migrations `0005`–`0009` are reserved for the ones that will.
   sixteen. Breaking the rule fails at the portal weeks later, not at the desk where it
   was typed, by which time every invoice in the month carries it.
 
+#### Parties — customers and vendors (migration `0005`)
+
+- A customer and a vendor are one table with two flags, because in a small business they
+  are very often the same firm: you buy transport from someone you sell to, and your
+  landlord buys from you. Two tables would mean two records for one company, two
+  outstanding balances, two opening figures, and a set-off nobody reconciles.
+  `isCustomer` and `isVendor` say what a party _may_ be, not what it has done — a
+  customer who has never bought is still a customer — and only a party that is neither is
+  refused.
+- **[accounting]** A party is not a ledger account. Tally gives every customer its own
+  account under Sundry Debtors; Coffer keeps one control account and puts `party_id` on
+  the journal line. A chart of accounts holding four hundred customers is not a chart
+  anybody can read, and reports drop nothing that has been posted to, so every one of
+  those accounts would appear on the balance sheet. A party's balance is a sum over the
+  same lines the control account totals, grouped differently — which is why an aged
+  receivables report and the balance sheet cannot disagree.
+- **[accounting]** A line posting to the account mapped to `accounts-receivable` or
+  `accounts-payable` must name a party. This is a database trigger rather than a check in
+  code, because money on the balance sheet that is owed by nobody is not an error anyone
+  sees — it is a control account that quietly stops agreeing with the party balances
+  beneath it, from that day on. The rule reads `account_roles` live, so remapping the
+  role moves the rule with it, and it looks the account up by role rather than by type:
+  most assets are not receivables, and `Advances to staff` is nobody's unpaid invoice.
+- A party is _required_ on a control line and _permitted_ anywhere else. The mirror rule
+  was written and then removed: an advance received from a customer sits under a
+  liability account that is not the receivables control, and it is unambiguously that
+  customer's money.
+- **[accounting]** An opening balance is taken one party at a time. A business adopting
+  Coffer is owed money by five customers, and a single opening receivable produces no
+  aged report, allocates against nothing, and disagrees with every statement from day
+  one. The same account may therefore appear twice when the parties differ — and not
+  otherwise.
+- Names are unique ignoring case, and a registration number is unique when it is present.
+  Two customers really can both be called `Sharma Enterprises`, and this forces whoever
+  enters the second to say which; two parties carrying one GSTIN are one party entered
+  twice. Unregistered parties are common and are not duplicates of each other.
+- An archived party takes nothing new, refused in the repository rather than by a
+  trigger. A reversal re-inserts the original entry's lines carrying the party they
+  already had, so a trigger would make every entry involving a party unreversible the
+  moment that party was archived — the same decision archived accounts got, and for the
+  same reason: an entry that cannot be corrected is the worse problem.
+- A journal line reads back with its party's name, over a left join. An inner one would
+  drop every line that has no party, which is most of them.
+- The repository does not validate registration numbers. What a valid one looks like is
+  the regime's business, and `db/` may not name a concrete regime.
+
 #### Documentation
 
 - Architecture, conventions, getting started, the data model, adding a tax regime,

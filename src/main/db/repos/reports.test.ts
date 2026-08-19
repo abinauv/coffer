@@ -22,6 +22,7 @@ import { aprilToMarch } from '@main/domain/time'
 import { D, type Decimal } from '@main/domain/money'
 import { MANUAL_SOURCE, type EntryDraft } from '@main/domain/ledger'
 
+import { createParty } from './parties'
 import { seedChart } from './seed-chart'
 import { createAccount, listAccounts, updateAccount } from './accounts'
 import { generateFiscalYear } from './periods'
@@ -38,6 +39,9 @@ const handles: SqliteDatabase[] = []
 let connection: SqliteDatabase
 let db: CofferDb
 let account: Record<string, string>
+/** Seeded parties, because a control-account line must name one (0005). */
+let customer: string
+let vendor: string
 
 beforeEach(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'coffer-reports-'))
@@ -55,6 +59,14 @@ beforeEach(async () => {
   for (const row of await listAccounts(db)) {
     account[row.code] = row.id
   }
+
+  /* Migration 0005 requires a party on any line posting to a control account — money on
+   * the balance sheet owed by nobody is a control account that stops agreeing with the
+   * parties beneath it. Which party is not what these tests are about; that there is one
+   * is now part of what a receivable IS. */
+  customer = (await createParty(db, { name: 'Test Customer', countryCode: 'in', isCustomer: true }))
+    .id
+  vendor = (await createParty(db, { name: 'Test Vendor', countryCode: 'in', isVendor: true })).id
 })
 
 afterEach(() => {
@@ -92,10 +104,33 @@ function entry(
     narration,
     source: MANUAL_SOURCE,
     lines: [
-      { accountId: account[debitCode]!, debit: D(amount), credit: D(0) },
-      { accountId: account[creditCode]!, debit: D(0), credit: D(amount) },
+      {
+        accountId: account[debitCode]!,
+        debit: D(amount),
+        credit: D(0),
+        partyId: partyFor(debitCode),
+      },
+      {
+        accountId: account[creditCode]!,
+        debit: D(0),
+        credit: D(amount),
+        partyId: partyFor(creditCode),
+      },
     ],
   }
+}
+
+/**
+ * The party a control-account line must name (0005).
+ *
+ * Keyed by code rather than by looking up the role, because these tests seed the default
+ * chart and a hardcoded pair here would go stale silently if the template moved
+ * receivables. `1300` and `2100` are the template's control accounts.
+ */
+function partyFor(code: string): string | null {
+  if (code === '1300') return customer
+  if (code === '2100') return vendor
+  return null
 }
 
 const post = (draft: EntryDraft) => postEntry(db, draft)

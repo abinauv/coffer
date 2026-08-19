@@ -46,6 +46,7 @@ import type {
 
 import type { CofferDb } from '../kysely'
 import { RepoError, repoErrorFrom, type RepoErrorCode } from './errors'
+import { assertPartiesActive } from './parties'
 import { requirePostablePeriod } from './periods'
 
 /** How wide an entry number's sequence is padded. It grows past this rather than wrapping. */
@@ -92,6 +93,21 @@ export async function postEntry(
       const period = await requirePostablePeriod(trx, draft.date)
       await assertAccountsPostable(trx, draft.lines, options.allowArchived === true)
 
+      /*
+       * An archived party is refused here rather than by a trigger, for the reason
+       * `allowArchived` exists at all: a reversal re-inserts the original lines carrying
+       * the party they already named, and a trigger would make every entry involving a
+       * party unreversible the moment that party was archived. See 0005.
+       */
+      if (!(options.allowArchived === true)) {
+        await assertPartiesActive(
+          trx,
+          draft.lines
+            .map((line) => line.partyId)
+            .filter((partyId): partyId is string => typeof partyId === 'string'),
+        )
+      }
+
       const entryId = randomUUID()
       const entryNumber = await nextEntryNumber(trx, period.fiscalYearLabel)
       const postedAt = new Date().toISOString()
@@ -108,6 +124,7 @@ export async function postEntry(
             debit: toMoneyString(line.debit),
             credit: toMoneyString(line.credit),
             narration: line.narration?.trim() ?? null,
+            party_id: line.partyId ?? null,
           })),
         )
         .execute()
@@ -153,6 +170,7 @@ export async function postManualEntry(
     debit: amountOf(line.debit, index, 'debit'),
     credit: amountOf(line.credit, index, 'credit'),
     narration: line.narration ?? undefined,
+    partyId: line.partyId ?? null,
   }))
 
   return postEntry(db, {
@@ -188,11 +206,15 @@ export async function reverseEntry(db: CofferDb, input: ReverseEntryInput): Prom
     )
   }
 
+  /* The party comes across with the line. A reversal that dropped it would post to the
+   * control account naming nobody, which the trigger refuses — loudly, but only after a
+   * user has been told their correction failed for no reason they can act on. */
   const lines: EntryLineDraft[] = original.lines.map((line) => ({
     accountId: line.accountId,
     debit: parseMoney(line.debit),
     credit: parseMoney(line.credit),
     narration: line.narration ?? undefined,
+    partyId: line.partyId,
   }))
 
   const source: SourceDocument = {
@@ -323,6 +345,9 @@ async function linesOf(db: CofferDb, entryIds: string[]): Promise<Map<string, Jo
   const rows = await db
     .selectFrom('journal_lines')
     .innerJoin('accounts', 'accounts.id', 'journal_lines.account_id')
+    /* Left, not inner: most lines have no party, and an inner join here would silently
+     * drop every line that does not — a trial balance short by its own bank side. */
+    .leftJoin('parties', 'parties.id', 'journal_lines.party_id')
     .select([
       'journal_lines.id as id',
       'journal_lines.entry_id as entry_id',
@@ -331,8 +356,10 @@ async function linesOf(db: CofferDb, entryIds: string[]): Promise<Map<string, Jo
       'journal_lines.debit as debit',
       'journal_lines.credit as credit',
       'journal_lines.narration as narration',
+      'journal_lines.party_id as party_id',
       'accounts.code as account_code',
       'accounts.name as account_name',
+      'parties.name as party_name',
     ])
     .where('journal_lines.entry_id', 'in', entryIds)
     .orderBy('journal_lines.line_number')
@@ -349,6 +376,8 @@ async function linesOf(db: CofferDb, entryIds: string[]): Promise<Map<string, Jo
       debit: row.debit,
       credit: row.credit,
       narration: row.narration,
+      partyId: row.party_id,
+      partyName: row.party_name,
     }
     const existing = byEntry.get(row.entry_id)
     if (existing === undefined) {

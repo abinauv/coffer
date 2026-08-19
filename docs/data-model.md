@@ -92,7 +92,7 @@ is created.
 
 ### What is in the database today
 
-Seven tables. `journal_lines` is the only one that holds a figure, and every balance in
+Eight tables. `journal_lines` is the only one that holds a figure, and every balance in
 Coffer is a sum over it.
 
 `schema_migrations` — one row per applied migration, created by the runner:
@@ -126,13 +126,14 @@ Typed in [`src/main/db/schema.ts`](../src/main/db/schema.ts) and contracted in
 [`src/main/domain/ledger/types.ts`](../src/main/domain/ledger/types.ts), with migration
 numbers reserved so that parallel work cannot collide.
 
-| Migration | Tables                             | What it is                                    | State  |
-| --------- | ---------------------------------- | --------------------------------------------- | ------ |
-| `0002`    | `accounts`, `account_roles`        | The chart of accounts, as a tree              | landed |
-| `0003`    | `accounting_periods`               | Periods that can be opened, closed and locked | landed |
-| `0004`    | `journal_entries`, `journal_lines` | The ledger itself, with the balance triggers  | landed |
+| Migration | Tables                              | What it is                                        | State  |
+| --------- | ----------------------------------- | ------------------------------------------------- | ------ |
+| `0002`    | `accounts`, `account_roles`         | The chart of accounts, as a tree                  | landed |
+| `0003`    | `accounting_periods`                | Periods that can be opened, closed and locked     | landed |
+| `0004`    | `journal_entries`, `journal_lines`  | The ledger itself, with the balance triggers      | landed |
+| `0005`    | `parties`, `journal_lines.party_id` | Who a document is with, and whose money a line is | landed |
 
-Seven things about these tables are worth knowing before you read them, because each one
+Eight things about these tables are worth knowing before you read them, because each one
 is a decision rather than a detail:
 
 **There is no `status` on an entry, and no draft.** The ledger holds posted entries and
@@ -198,6 +199,18 @@ no escape hatch: an error found after filing is corrected in the current open pe
 which is what an accountant would do anyway and what an amended return already expects.
 A single "closed" flag would have made every close feel dangerous, and a period nobody
 dares close is a period that stays open forever.
+
+**A party is not an account.** Tally gives every customer its own ledger account under
+Sundry Debtors. Coffer keeps one control account per side and puts `party_id` on the
+line instead, because a chart of accounts holding four hundred customers is not a chart
+anybody can read, and reports drop nothing that has been posted to — so every one of
+those accounts would appear on the balance sheet. A party's balance is then a sum over
+the same rows the control account totals, grouped differently, which is what makes it
+impossible for an aged receivables report and the balance sheet to disagree. A trigger
+requires a party on any line posting to the accounts mapped to `accounts-receivable` or
+`accounts-payable`, looked up by role live rather than pinned to an account id; a party
+is permitted on any other line, because an advance from a customer is that customer's
+money even though it sits under a liability that is not the control account.
 
 An account's _type_ — asset, liability, equity, income, expense — is the one field that
 may never change once anything has posted to it, because every figure already in the

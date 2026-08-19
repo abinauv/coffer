@@ -45,16 +45,26 @@ export async function postOpeningBalances(
     throw new RepoError('INSUFFICIENT_LINES', 'There are no opening balances to post.', {})
   }
 
+  /*
+   * One figure per account — except on a control account, where one figure per party is
+   * the whole point. A business adopting Coffer is owed 4,50,000 by five customers, and
+   * a single opening receivable produces no aged report, allocates against nothing, and
+   * disagrees with every statement from day one. So the key is the account AND the
+   * party, and a repeated account with no party is still the mistake it always was.
+   */
   const seen = new Set<string>()
   for (const line of input.lines) {
-    if (seen.has(line.accountId)) {
+    const key = `${line.accountId}#${line.partyId ?? ''}`
+    if (seen.has(key)) {
       throw new RepoError(
         'AMBIGUOUS_LINE',
-        'An account appears twice in the opening balances. Combine them into one figure.',
-        { accountId: line.accountId },
+        line.partyId === undefined || line.partyId === null
+          ? 'An account appears twice in the opening balances. Combine them into one figure.'
+          : 'A party appears twice against one account. Combine them into one figure.',
+        { accountId: line.accountId, partyId: line.partyId ?? null },
       )
     }
-    seen.add(line.accountId)
+    seen.add(key)
   }
 
   const accounts = await db
@@ -107,6 +117,7 @@ export async function postOpeningBalances(
       debit: debitSide ? magnitude : ZERO,
       credit: debitSide ? ZERO : magnitude,
       narration: 'Opening balance',
+      partyId: line.partyId ?? null,
     })
     difference = difference.plus(debitSide ? magnitude : magnitude.negated())
   }

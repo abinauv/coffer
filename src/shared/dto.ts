@@ -267,6 +267,10 @@ export interface JournalLine {
   /** Money, 2dp. '0.00' when this is a debit line. */
   credit: DecimalString
   narration: string | null
+  /** Whose money this line is. Null on most lines — see `JournalLineInput.partyId`. */
+  partyId: string | null
+  /** Denormalised for display, for the same reason `accountName` is. Null with the id. */
+  partyName: string | null
 }
 
 export interface JournalEntry {
@@ -295,6 +299,16 @@ export interface JournalLineInput {
   debit: DecimalString
   credit: DecimalString
   narration?: string | null
+  /**
+   * Whose money this line is.
+   *
+   * Required on a line posting to the account mapped to `accounts-receivable` or
+   * `accounts-payable`, and refused there when absent — money on the balance sheet owed
+   * by nobody makes the control account stop agreeing with the parties beneath it, with
+   * nothing to say when it started. Permitted elsewhere: an advance from a customer is
+   * that customer's money and is not a receivable.
+   */
+  partyId?: string | null
 }
 
 export interface CreateJournalEntryInput {
@@ -335,6 +349,17 @@ export interface OpeningBalanceLine {
    * would make somebody translate their old trial balance twice.
    */
   amount: DecimalString
+  /**
+   * Whose money, for an opening balance on a control account.
+   *
+   * Receivables and payables are the one place a single opening figure is not enough. A
+   * business adopting Coffer has 4,50,000 outstanding *from somebody*, and a control
+   * account carrying that as one lump cannot produce an aged report, cannot be allocated
+   * against, and disagrees with every party statement from day one. So an opening
+   * receivable is entered one customer at a time — which is also why `accountId` may
+   * repeat across lines when, and only when, the party differs.
+   */
+  partyId?: string | null
 }
 
 export interface PostOpeningBalancesInput {
@@ -356,6 +381,101 @@ export interface YearEndCloseResult {
   /** The profit (positive) or loss (negative) moved to retained earnings. */
   netResult: DecimalString
   accountsClosed: number
+}
+
+// ---- Parties --------------------------------------------------------------
+
+/*
+ * A customer, a vendor, or both. One record with two flags rather than two tables,
+ * because in a small business the same firm is very often both — see migration 0005.
+ *
+ * A party is not an account. Their balance is a sum over the journal lines carrying their
+ * id, which is what stops an aged receivables report and the balance sheet disagreeing.
+ */
+
+/** Which side of the trade a list is for. */
+export type PartyRole = 'customer' | 'vendor'
+
+/** Enough of a party for a list or a picker. */
+export interface PartySummary {
+  id: string
+  name: string
+  /** GSTIN in India. Null when the party is not registered. */
+  registrationNumber: string | null
+  /** Sub-national code — the Indian state code. Decides the place of supply. */
+  jurisdictionCode: string | null
+  /** ISO 3166-1 alpha-2, lower case. */
+  countryCode: string
+  isCustomer: boolean
+  isVendor: boolean
+  /** On the summary because it is what tells two similarly named firms apart. */
+  city: string | null
+  isArchived: boolean
+}
+
+/** The whole record, for an editor. */
+export interface Party extends PartySummary {
+  legalName: string | null
+  addressLine1: string | null
+  addressLine2: string | null
+  postalCode: string | null
+  email: string | null
+  phone: string | null
+  /** Days from invoice date to due date. Null when nothing has been agreed. */
+  paymentTermsDays: number | null
+  /**
+   * Money, 2dp. Null for no limit.
+   *
+   * Null and '0.00' are different answers: no limit at all, versus a limit of nothing,
+   * which is how a business says "this one pays up front".
+   */
+  creditLimit: DecimalString | null
+  notes: string | null
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+export interface CreatePartyInput {
+  name: string
+  countryCode: string
+  isCustomer?: boolean
+  isVendor?: boolean
+  legalName?: string | null
+  registrationNumber?: string | null
+  jurisdictionCode?: string | null
+  addressLine1?: string | null
+  addressLine2?: string | null
+  city?: string | null
+  postalCode?: string | null
+  email?: string | null
+  phone?: string | null
+  paymentTermsDays?: number | null
+  creditLimit?: DecimalString | null
+  notes?: string | null
+}
+
+/**
+ * A change to a party. Absent means "leave it"; `null` means "clear it".
+ *
+ * The distinction is the point: a screen that edits one field sends one field, and cannot
+ * blank the six it never showed.
+ */
+export interface UpdatePartyInput extends Partial<CreatePartyInput> {
+  id: string
+}
+
+export interface ListPartiesInput {
+  /** Include archived parties. Off by default — a picker should not offer them. */
+  includeArchived?: boolean
+  /** Only customers, or only vendors. Both when absent. */
+  role?: PartyRole
+  /** Matches the name, the registration number or the city, ignoring case. */
+  search?: string
+}
+
+export interface ArchivePartyInput {
+  id: string
+  archived: boolean
 }
 
 // ---- Query inputs ---------------------------------------------------------

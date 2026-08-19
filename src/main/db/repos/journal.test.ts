@@ -22,11 +22,12 @@ import { createQueryBuilder, type CofferDb } from '../kysely'
 import { runMigrations, rollbackMigrations } from '../migrate'
 import { MIGRATIONS } from '../migrations'
 import { aprilToMarch } from '@main/domain/time'
-import { D, toMoneyString } from '@main/domain/money'
+import { D, ZERO, toMoneyString } from '@main/domain/money'
 import { MANUAL_SOURCE, type EntryDraft } from '@main/domain/ledger'
 
 import { seedChart } from './seed-chart'
 import { createAccount, deleteAccount, listAccounts, updateAccount } from './accounts'
+import { archiveParty, createParty, deleteParty } from './parties'
 import { closePeriod, generateFiscalYear, periodForDate, reopenPeriod } from './periods'
 import {
   getEntry,
@@ -48,6 +49,9 @@ let connection: SqliteDatabase
 let db: CofferDb
 /** Account ids by code, from the seeded chart. */
 let account: Record<string, string>
+/** Seeded parties, because a control-account line must name one (0005). */
+let customer: string
+let vendor: string
 
 beforeEach(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'coffer-journal-'))
@@ -64,6 +68,14 @@ beforeEach(async () => {
   for (const row of await listAccounts(db)) {
     account[row.code] = row.id
   }
+
+  /* Migration 0005 requires a party on any line posting to a control account — money on
+   * the balance sheet owed by nobody is a control account that stops agreeing with the
+   * parties beneath it. Which party is not what these tests are about; that there is one
+   * is now part of what a receivable IS. */
+  customer = (await createParty(db, { name: 'Test Customer', countryCode: 'in', isCustomer: true }))
+    .id
+  vendor = (await createParty(db, { name: 'Test Vendor', countryCode: 'in', isVendor: true })).id
 })
 
 afterEach(() => {
@@ -368,7 +380,7 @@ describe('the balance rule', () => {
       narration: 'Invoice with GST',
       source: MANUAL_SOURCE,
       lines: [
-        { accountId: account['1300']!, debit: D('1234567.89'), credit: D(0) },
+        { accountId: account['1300']!, partyId: customer, debit: D('1234567.89'), credit: D(0) },
         { accountId: account['4100']!, debit: D(0), credit: D('1046243.97') },
         { accountId: cgst.id, debit: D(0), credit: D('94161.96') },
         { accountId: sgst.id, debit: D(0), credit: D('94161.96') },
@@ -744,6 +756,153 @@ describe('reversing', () => {
   })
 })
 
+describe('whose money a line is', () => {
+  /*
+   * Migration 0005. The rule is a trigger because breaking it corrupts a report rather
+   * than throwing: a receivables control account carrying money owed by nobody stops
+   * agreeing with the sum of the parties beneath it, silently, from that day on.
+   */
+
+  const toControl = (accountId: string, partyId: string | null): EntryDraft => ({
+    date: '2026-05-01',
+    narration: 'A sale on credit',
+    source: MANUAL_SOURCE,
+    lines: [
+      { accountId, debit: D('1000.00'), credit: ZERO, partyId },
+      { accountId: account['4100']!, debit: ZERO, credit: D('1000.00') },
+    ],
+  })
+
+  it('refuses a receivable owed by nobody', async () => {
+    expect(await codeOf(() => postEntry(db, toControl(account['1300']!, null)))).toBe(
+      'PARTY_REQUIRED',
+    )
+  })
+
+  it('refuses a payable owed to nobody', async () => {
+    const draft: EntryDraft = {
+      date: '2026-05-01',
+      narration: 'A purchase on credit',
+      source: MANUAL_SOURCE,
+      lines: [
+        { accountId: account['5100']!, debit: D('1000.00'), credit: ZERO },
+        { accountId: account['2100']!, debit: ZERO, credit: D('1000.00') },
+      ],
+    }
+    expect(await codeOf(() => postEntry(db, draft))).toBe('PARTY_REQUIRED')
+  })
+
+  it('takes a receivable that names one', async () => {
+    const posted = await postEntry(db, toControl(account['1300']!, customer))
+    const entry = await getEntry(db, posted.entryId)
+
+    expect(entry?.lines[0]?.partyId).toBe(customer)
+    expect(entry?.lines[0]?.partyName).toBe('Test Customer')
+  })
+
+  it('leaves an ordinary line with no party at all', async () => {
+    const posted = await postEntry(db, toControl(account['1300']!, customer))
+    const entry = await getEntry(db, posted.entryId)
+
+    /* The sales line. Tagging it too would make the party's statement show the same
+     * transaction twice — once as what they owe and once as the revenue. */
+    expect(entry?.lines[1]?.partyId).toBeNull()
+    expect(entry?.lines[1]?.partyName).toBeNull()
+  })
+
+  it('permits a party on a line that is not a control account', async () => {
+    /* An advance received from a customer is a liability and is unambiguously theirs.
+     * Required on a control line, permitted anywhere — see 0005. */
+    const draft: EntryDraft = {
+      date: '2026-05-01',
+      narration: 'Advance received',
+      source: MANUAL_SOURCE,
+      lines: [
+        { accountId: account['1210']!, debit: D('5000.00'), credit: ZERO },
+        { accountId: account['2810']!, debit: ZERO, credit: D('5000.00'), partyId: customer },
+      ],
+    }
+    const posted = await postEntry(db, draft)
+    expect((await getEntry(db, posted.entryId))?.lines[1]?.partyId).toBe(customer)
+  })
+
+  it('refuses a party that does not exist', async () => {
+    expect(await codeOf(() => postEntry(db, toControl(account['1300']!, 'nobody')))).toBe(
+      'PARTY_NOT_FOUND',
+    )
+  })
+
+  it('carries the party through a reversal', async () => {
+    /* Dropping it would post the mirror to the control account naming nobody, which the
+     * trigger refuses — so the correction fails for a reason the user cannot act on. */
+    const posted = await postEntry(db, toControl(account['1300']!, customer))
+    const reversal = await reverseEntry(db, {
+      entryId: posted.entryId,
+      date: '2026-05-02',
+      narration: 'Reversing',
+    })
+
+    const entry = await getEntry(db, reversal.entryId)
+    expect(entry?.lines[0]?.partyId).toBe(customer)
+    expect(entry?.lines[0]?.credit).toBe('1000.00')
+  })
+
+  it('reverses an entry whose party has since been archived', async () => {
+    /*
+     * The archived-account decision in 0004, arriving the same way for parties: an entry
+     * that cannot be corrected is worse than a posting nobody meant. This is why the
+     * archived check is in the repository and not a trigger.
+     */
+    const posted = await postEntry(db, toControl(account['1300']!, vendor))
+    await archiveParty(db, vendor, true)
+
+    const reversal = await reverseEntry(db, {
+      entryId: posted.entryId,
+      date: '2026-05-02',
+      narration: 'Reversing',
+    })
+    expect((await getEntry(db, reversal.entryId))?.lines[0]?.partyId).toBe(vendor)
+  })
+
+  it('refuses a new posting to an archived party', async () => {
+    await archiveParty(db, customer, true)
+    expect(await codeOf(() => postEntry(db, toControl(account['1300']!, customer)))).toBe(
+      'PARTY_ARCHIVED',
+    )
+  })
+
+  it('reports the archived party from the repository, not from a trigger', async () => {
+    /* `details` is only populated by the repository. Without this the test would pass
+     * against a repository that had stopped checking, which is the trap batches 1.1A and
+     * 1.1B each fell into twice. */
+    await archiveParty(db, customer, true)
+    const failure = await failureOf(() => postEntry(db, toControl(account['1300']!, customer)))
+
+    expect(failure.code).toBe('PARTY_ARCHIVED')
+    expect(failure.details).toMatchObject({ partyId: customer, name: 'Test Customer' })
+  })
+
+  it('refuses to delete a party with entries against them', async () => {
+    await postEntry(db, toControl(account['1300']!, customer))
+    expect(await codeOf(() => deleteParty(db, customer))).toBe('PARTY_IN_USE')
+  })
+
+  it('refuses the same deletion at the database, not only in the repository', async () => {
+    /*
+     * `ON DELETE RESTRICT` and not `SET NULL`, put to the database directly because the
+     * repository check above answers first and would otherwise be the only thing tested.
+     * Under SET NULL a deletion would quietly empty the party out of lines already
+     * posted, leaving a receivable owed by nobody — which is exactly what the insert
+     * trigger exists to prevent, reached from the other end.
+     */
+    await postEntry(db, toControl(account['1300']!, customer))
+
+    expect(() => connection.prepare(`DELETE FROM parties WHERE id = ?`).run(customer)).toThrow(
+      /FOREIGN KEY/i,
+    )
+  })
+})
+
 describe('reading back', () => {
   it('returns an entry with its lines in order and its total', async () => {
     const posted = await postEntry(db, sale('120.50'))
@@ -846,7 +1005,7 @@ describe('the trial balance', () => {
       date: '2026-04-15',
       narration: 'Sale on credit',
       lines: [
-        { accountId: account['1300']!, debit: '23600.00', credit: '0.00' },
+        { accountId: account['1300']!, partyId: customer, debit: '23600.00', credit: '0.00' },
         { accountId: account['4100']!, debit: '0.00', credit: '23600.00' },
       ],
     })

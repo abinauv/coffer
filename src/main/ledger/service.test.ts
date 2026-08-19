@@ -134,8 +134,12 @@ describe('posting through the service', () => {
     const posted = await ledger.postEntry({
       date: TODAY,
       narration: 'Sale',
+      /* A cash sale rather than a credit one. From 0005 a line posting to receivables
+       * must name a party, and the service has no way to create one until the parties
+       * IPC group lands — which is itself the gap that batch closes. What this test is
+       * about is the reversal, and bank is as good an account for that as any. */
       lines: [
-        { accountId: await idOf(ledger, '1300'), debit: '5000.00', credit: '0.00' },
+        { accountId: await idOf(ledger, '1210'), debit: '5000.00', credit: '0.00' },
         { accountId: await idOf(ledger, '4100'), debit: '0.00', credit: '5000.00' },
       ],
     })

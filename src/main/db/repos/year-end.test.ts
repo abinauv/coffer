@@ -18,6 +18,7 @@ import { runMigrations } from '../migrate'
 import { MIGRATIONS } from '../migrations'
 import { aprilToMarch } from '@main/domain/time'
 
+import { createParty } from './parties'
 import { seedChart } from './seed-chart'
 import { clearAccountRole, listAccounts } from './accounts'
 import { generateFiscalYear } from './periods'
@@ -35,6 +36,9 @@ const handles: SqliteDatabase[] = []
 let connection: SqliteDatabase
 let db: CofferDb
 let account: Record<string, string>
+/** Seeded parties, because a control-account line must name one (0005). */
+let customer: string
+let vendor: string
 
 beforeEach(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'coffer-yearend-'))
@@ -51,6 +55,14 @@ beforeEach(async () => {
   for (const row of await listAccounts(db)) {
     account[row.code] = row.id
   }
+
+  /* Migration 0005 requires a party on any line posting to a control account — money on
+   * the balance sheet owed by nobody is a control account that stops agreeing with the
+   * parties beneath it. Which party is not what these tests are about; that there is one
+   * is now part of what a receivable IS. */
+  customer = (await createParty(db, { name: 'Test Customer', countryCode: 'in', isCustomer: true }))
+    .id
+  vendor = (await createParty(db, { name: 'Test Vendor', countryCode: 'in', isVendor: true })).id
 })
 
 afterEach(() => {
@@ -89,14 +101,30 @@ async function failureOf(action: () => Promise<unknown>): Promise<RepoError> {
 
 const balanceOf = async (code: string) => (await accountBalance(db, account[code]!)).balance
 
+/**
+ * What one party is owed, in whole rupees.
+ *
+ * Summed straight from the lines rather than through a repository, because there is no
+ * party-balance repository yet — and because the point being made is that the figure is
+ * a grouping of the very same rows the control account totals, not a second store.
+ */
+async function receivableOf(partyId: string): Promise<number> {
+  const row = connection
+    .prepare<[string], { total: number }>(
+      `SELECT COALESCE(SUM(CAST(REPLACE(debit, '.', '') AS INTEGER) - CAST(REPLACE(credit, '.', '') AS INTEGER)), 0) AS total FROM journal_lines WHERE party_id = ?`,
+    )
+    .get(partyId)
+  return (row?.total ?? 0) / 100
+}
+
 describe('opening balances', () => {
   it('takes one signed amount per account and works out the sides', async () => {
     await postOpeningBalances(db, {
       date: '2026-04-01',
       lines: [
         { accountId: account['1210']!, amount: '250000.00' },
-        { accountId: account['1300']!, amount: '80000.00' },
-        { accountId: account['2100']!, amount: '45000.00' },
+        { accountId: account['1300']!, partyId: customer, amount: '80000.00' },
+        { accountId: account['2100']!, partyId: vendor, amount: '45000.00' },
         { accountId: account['2810']!, amount: '150000.00' },
       ],
     })
@@ -108,12 +136,69 @@ describe('opening balances', () => {
     expect(await balanceOf('2810')).toBe('150000.00')
   })
 
+  /*
+   * The reason an opening balance takes a party at all (0005). A business adopting
+   * Coffer is owed money by several customers, and one lump against the control account
+   * produces no aged report, allocates against nothing, and disagrees with every
+   * statement from day one. So the same account may appear more than once, and what
+   * makes two lines distinct is the party.
+   */
+  it('takes an opening receivable one customer at a time', async () => {
+    const second = await createParty(db, {
+      name: 'Second Customer',
+      countryCode: 'in',
+      isCustomer: true,
+    })
+
+    await postOpeningBalances(db, {
+      date: '2026-04-01',
+      lines: [
+        { accountId: account['1300']!, partyId: customer, amount: '80000.00' },
+        { accountId: account['1300']!, partyId: second.id, amount: '45000.00' },
+      ],
+    })
+
+    /* The control account carries the total, and each customer carries their own share —
+     * the same lines, grouped two ways, which is the whole design. */
+    expect(await balanceOf('1300')).toBe('125000.00')
+    expect(await receivableOf(customer)).toBe(80000)
+    expect(await receivableOf(second.id)).toBe(45000)
+  })
+
+  it('still refuses the same account twice for the same party', async () => {
+    expect(
+      await codeOf(() =>
+        postOpeningBalances(db, {
+          date: '2026-04-01',
+          lines: [
+            { accountId: account['1300']!, partyId: customer, amount: '80000.00' },
+            { accountId: account['1300']!, partyId: customer, amount: '45000.00' },
+          ],
+        }),
+      ),
+    ).toBe('AMBIGUOUS_LINE')
+  })
+
+  it('still refuses the same account twice when neither line names a party', async () => {
+    expect(
+      await codeOf(() =>
+        postOpeningBalances(db, {
+          date: '2026-04-01',
+          lines: [
+            { accountId: account['1210']!, amount: '80000.00' },
+            { accountId: account['1210']!, amount: '45000.00' },
+          ],
+        }),
+      ),
+    ).toBe('AMBIGUOUS_LINE')
+  })
+
   it('sends the difference to opening balance equity', async () => {
     await postOpeningBalances(db, {
       date: '2026-04-01',
       lines: [
         { accountId: account['1210']!, amount: '250000.00' },
-        { accountId: account['2100']!, amount: '45000.00' },
+        { accountId: account['2100']!, partyId: vendor, amount: '45000.00' },
       ],
     })
 
@@ -127,7 +212,7 @@ describe('opening balances', () => {
       lines: [
         { accountId: account['1210']!, amount: '250000.00' },
         { accountId: account['1400']!, amount: '61234.56' },
-        { accountId: account['2100']!, amount: '45000.00' },
+        { accountId: account['2100']!, partyId: vendor, amount: '45000.00' },
       ],
     })
 
@@ -259,7 +344,7 @@ describe('the year-end close', () => {
       date: '2026-04-10',
       narration: 'Sales',
       lines: [
-        { accountId: account['1300']!, debit: '500000.00', credit: '0.00' },
+        { accountId: account['1300']!, partyId: customer, debit: '500000.00', credit: '0.00' },
         { accountId: account['4100']!, debit: '0.00', credit: '500000.00' },
       ],
     })
@@ -268,7 +353,7 @@ describe('the year-end close', () => {
       narration: 'Purchases',
       lines: [
         { accountId: account['5100']!, debit: '300000.00', credit: '0.00' },
-        { accountId: account['2100']!, debit: '0.00', credit: '300000.00' },
+        { accountId: account['2100']!, partyId: vendor, debit: '0.00', credit: '300000.00' },
       ],
     })
     await postManualEntry(db, {
@@ -328,7 +413,7 @@ describe('the year-end close', () => {
       date: '2026-04-10',
       narration: 'Sales',
       lines: [
-        { accountId: account['1300']!, debit: '10000.00', credit: '0.00' },
+        { accountId: account['1300']!, partyId: customer, debit: '10000.00', credit: '0.00' },
         { accountId: account['4100']!, debit: '0.00', credit: '10000.00' },
       ],
     })
@@ -355,7 +440,7 @@ describe('the year-end close', () => {
       date: '2027-04-05',
       narration: 'First sale of the new year',
       lines: [
-        { accountId: account['1300']!, debit: '1000.00', credit: '0.00' },
+        { accountId: account['1300']!, partyId: customer, debit: '1000.00', credit: '0.00' },
         { accountId: account['4100']!, debit: '0.00', credit: '1000.00' },
       ],
     })
@@ -411,7 +496,7 @@ describe('the year-end close', () => {
       date: '2027-05-10',
       narration: 'Next year sale',
       lines: [
-        { accountId: account['1300']!, debit: '7000.00', credit: '0.00' },
+        { accountId: account['1300']!, partyId: customer, debit: '7000.00', credit: '0.00' },
         { accountId: account['4100']!, debit: '0.00', credit: '7000.00' },
       ],
     })
@@ -436,7 +521,7 @@ describe('the year-end close', () => {
       date: '2027-07-01',
       narration: 'A sale in the second year',
       lines: [
-        { accountId: account['1300']!, debit: '9000.00', credit: '0.00' },
+        { accountId: account['1300']!, partyId: customer, debit: '9000.00', credit: '0.00' },
         { accountId: account['4100']!, debit: '0.00', credit: '9000.00' },
       ],
     })
@@ -472,7 +557,7 @@ describe('the year-end close', () => {
         date: '2027-03-30',
         narration: 'A late invoice',
         lines: [
-          { accountId: account['1300']!, debit: '100.00', credit: '0.00' },
+          { accountId: account['1300']!, partyId: customer, debit: '100.00', credit: '0.00' },
           { accountId: account['4100']!, debit: '0.00', credit: '100.00' },
         ],
       }),
@@ -503,7 +588,7 @@ describe('a full year, end to end', () => {
       lines: [
         { accountId: account['1210']!, amount: '200000.00' },
         { accountId: account['1400']!, amount: '75000.00' },
-        { accountId: account['2100']!, amount: '30000.00' },
+        { accountId: account['2100']!, partyId: vendor, amount: '30000.00' },
       ],
     })
     expect((await trialBalance(db)).balanced).toBe(true)
@@ -512,7 +597,7 @@ describe('a full year, end to end', () => {
       date: '2026-08-20',
       narration: 'Sale',
       lines: [
-        { accountId: account['1300']!, debit: '123456.78', credit: '0.00' },
+        { accountId: account['1300']!, partyId: customer, debit: '123456.78', credit: '0.00' },
         { accountId: account['4100']!, debit: '0.00', credit: '123456.78' },
       ],
     })

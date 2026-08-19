@@ -127,6 +127,31 @@ answers fails the test by name rather than silently becoming an error notice.
 - Order fixtures so they **disagree** with the expected output. A chart of accounts
   listed in its natural order cannot tell a sorted report from an unsorted one.
 
+### Mutation testing
+
+A passing test is not evidence until it has failed. Before a batch is called done, break
+each rule it claims to enforce — one edit at a time, run the tests, put it back — and
+check that something fails. Every batch so far has found a rule nothing was testing.
+
+The harness that does this needs three things, and each has been learned by losing time
+to its absence:
+
+- A **CONTROL** that changes nothing. If the control is reported as killed, one test was
+  already failing and no other number in the report can be believed. Stop there.
+- A **CANARY** that must be killed, anchored on something a test pins by value. It is the
+  only proof that a kill was still possible at all.
+- An **anchor check**. When the text being replaced does not appear exactly once, say so
+  instead of skipping — a reformatted file silently drops mutations otherwise. Run the
+  harness _after_ `npm run format`.
+
+Snapshot the files to disk, not only to memory: an interrupted run does not execute its
+`finally`, and the mutation left behind becomes the next run's "original".
+
+**Defence in depth makes tests blind.** Where a rule lives in both a migration and a
+repository, a test that goes through the repository passes whichever layer answers first
+— and the database constraint can be deleted with nothing failing. This has now been
+found in three separate batches. Test the constraint by writing straight to the table.
+
 ## 7. Commits
 
 Conventional commits, with a DCO sign-off:

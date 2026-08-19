@@ -83,6 +83,23 @@ export type RepoErrorCode =
   | 'ENTRY_PERIOD_MISMATCH'
   /** An entry number collided. Sequential per fiscal year, and unique. */
   | 'ENTRY_NUMBER_TAKEN'
+  // ---- Parties ----
+  /** No party with that id. */
+  | 'PARTY_NOT_FOUND'
+  /** A party needs a name. */
+  | 'PARTY_NAME_REQUIRED'
+  /** Another party already uses that name. Names are unique, ignoring case. */
+  | 'PARTY_NAME_TAKEN'
+  /** Another party already carries that registration number. */
+  | 'PARTY_REGISTRATION_TAKEN'
+  /** A party must be a customer, a vendor, or both. */
+  | 'PARTY_HAS_NO_ROLE'
+  /** The party is archived and takes nothing new. */
+  | 'PARTY_ARCHIVED'
+  /** Something is posted against the party. Archive rather than delete. */
+  | 'PARTY_IN_USE'
+  /** A line posting to a party control account did not say whose money it is. */
+  | 'PARTY_REQUIRED'
 
 /** An error raised by a repository. Always carries a stable, machine-readable code. */
 export class RepoError extends Error {
@@ -128,6 +145,7 @@ const TRIGGER_CODES: readonly RepoErrorCode[] = [
   'ENTRY_PERIOD_MISMATCH',
   'PERIOD_CLOSED',
   'ACCOUNT_IN_USE',
+  'PARTY_REQUIRED',
 ]
 
 export function repoErrorFrom(error: unknown, fallback: RepoErrorCode): RepoError {

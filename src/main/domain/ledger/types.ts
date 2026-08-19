@@ -280,6 +280,20 @@ export interface EntryLineDraft {
   credit: Decimal
   /** Line-level note. The entry's narration covers the whole entry. */
   narration?: string
+  /**
+   * Whose money this line is. Required on a line posting to a party control account.
+   *
+   * This is what makes a receivables ledger a grouping of the same lines the balance
+   * sheet reads, rather than a second set of books that has to be reconciled with it. A
+   * party is an opaque id here, and deliberately: the domain has no business knowing
+   * what a customer record contains, only that a figure belongs to one.
+   *
+   * Permitted on any line and required on few — an advance received from a customer is
+   * that customer's money and is not a receivable. Which accounts require it is a
+   * question about the company's role mapping, which lives in `db/` and is enforced
+   * there.
+   */
+  partyId?: string | null
 }
 
 export interface EntryDraft {

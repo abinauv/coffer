@@ -23,6 +23,8 @@ function jline(id: string, code: string, name: string, debit: string, credit: st
     debit,
     credit,
     narration: null,
+    partyId: null,
+    partyName: null,
   }
 }
 

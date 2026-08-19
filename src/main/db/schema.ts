@@ -154,6 +154,56 @@ export interface JournalLinesTable {
   /** Money, 2dp decimal string. '0.00' when this is a debit line. */
   credit: DecimalString
   narration: string | null
+  /**
+   * Whose money this line is (0005). Null on most lines.
+   *
+   * Required by trigger on any line posting to the accounts mapped to
+   * `accounts-receivable` or `accounts-payable`, which is what makes a party's balance a
+   * sum over lines rather than a second set of books. Permitted, not required, elsewhere
+   * — an advance from a customer is that customer's money and is not a receivable.
+   */
+  party_id: string | null
+}
+
+// ---- Parties (0005) -------------------------------------------------------
+
+/**
+ * A customer, a vendor, or both — one table with two flags rather than two tables.
+ *
+ * In a small business the same firm is very often both, and two tables would mean two
+ * records, two outstanding figures and a set-off nobody reconciles. A party is
+ * deliberately not an account: see the migration for why a chart of accounts does not
+ * hold four hundred customers.
+ */
+export interface PartiesTable {
+  id: string
+  /** Unique ignoring case, so two identical rows cannot sit in a picker. */
+  name: string
+  /** As it appears on the registration, when that differs from the trading name. */
+  legal_name: string | null
+  /** GSTIN in India. Unique ignoring case among the parties that have one. */
+  registration_number: string | null
+  /** Sub-national code — Indian state code, US state. Decides the place of supply. */
+  jurisdiction_code: string | null
+  /** ISO 3166-1 alpha-2, lower case. */
+  country_code: string
+  is_customer: SqlBool
+  is_vendor: SqlBool
+  address_line1: string | null
+  address_line2: string | null
+  city: string | null
+  postal_code: string | null
+  email: string | null
+  phone: string | null
+  /** Days from invoice date to due date. Null when nothing has been agreed. */
+  payment_terms_days: number | null
+  /** Money, 2dp decimal string. Null for no limit — never '0.00', which is a limit. */
+  credit_limit: DecimalString | null
+  notes: string | null
+  /** Archived parties keep their history and take nothing new. */
+  is_archived: SqlBool
+  created_at: Timestamp
+  updated_at: Timestamp
 }
 
 /**
@@ -169,6 +219,7 @@ export interface Database {
   accounting_periods: AccountingPeriodsTable
   journal_entries: JournalEntriesTable
   journal_lines: JournalLinesTable
+  parties: PartiesTable
 }
 
 export type { Generated }
