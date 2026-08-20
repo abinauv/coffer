@@ -618,6 +618,57 @@ them going red.
   balance among themselves. Found by auditing every `isPositive()` in the codebase after
   the same trap made a test in the posting rule fail.
 
+#### The document itself (migration `0008`)
+
+`documents`, `document_lines`, `document_line_taxes` — one table for all five kinds, and
+the draft side of a document's life. Issuing and cancelling come next; they are one
+transaction spanning the numbering counter, the posting rule and the ledger.
+
+- **[accounting]** Rule 1, as triggers: a document is frozen the moment it leaves draft,
+  and so are its lines. A line has no status of its own and never will — a document and
+  its lines could then disagree about whether the document was editable, and there is no
+  answer to which is right.
+- **[accounting]** Rule 2, as one CHECK in both directions: a draft has no number and
+  anything else has one. The failure it prevents is not only a numbered draft but an
+  **issued document with no number**, which would print blank and file as nothing. A
+  cancelled document keeps its number, which is why cancelling and deleting are two
+  operations rather than one with a flag.
+- **[accounting]** Rule 3, as a CHECK: an issued document has a journal entry. There is no
+  representable state in which a document is issued and has not posted, so the window in
+  which the sales register and the trial balance disagree is not one anybody has to
+  remember to close — it is a row the database will not hold. `entry_id` is UNIQUE, so two
+  documents cannot claim the same entry.
+- **[accounting]** Rule 4, as an absence: no `grand_total`, no `total_tax`, no
+  `outstanding`. Every figure on the foot of a document is folded over its lines on the
+  way out, by the same `documentTotals` the posting rule uses — so the printed total and
+  the journal entry are one piece of arithmetic run twice rather than two figures kept in
+  step. The cost is stated in the repository: listing a register totals every document on
+  the page.
+- **[accounting]** Line figures may be **negative** — a rebate shown as a line, a returned
+  quantity — while the ledger's own columns stay unsigned, because a journal line's side
+  _is_ its sign. Measured, not read: `CAST(REPLACE('-200.00', '.', '') AS INTEGER)` is
+  -20000, and the shape still refuses `200.0`, `200`, `1e5` and `-.50`, which is what
+  makes the cast safe.
+- A document's number is unique **within its kind**, not overall. `INV/1` on an invoice
+  and on a credit note are two documents in two series, and a business numbering both from
+  1 is doing nothing wrong; two sales invoices carrying one number is what an officer
+  matches against, and the second is unfileable.
+- Lines are **replaced, never patched**. The grid the user is looking at is the document,
+  so a per-line protocol would be a second way to say the same thing, with its own
+  ordering and identity bugs.
+- **[accounting]** A line's stated taxable amount is checked against its own quantity,
+  price and discount. The caller computes it because the caller asked the regime; this is
+  what stops a bug there putting a figure in the books that the invoice does not show.
+- A draft may be created empty and filled in. The rule that matters is that an empty
+  document cannot be **issued**, which is about the transition rather than the row.
+
+### Fixed
+
+- `TaxRegime` rate helpers documented themselves as two decimal places. The scale has been
+  three since Phase 0 — 0.125% is half of India's 0.25% slab — and only the comments were
+  wrong, but a reader trusting them would have built the two-place column the scale exists
+  to prevent.
+
 #### Documentation
 
 - Architecture, conventions, getting started, the data model, adding a tax regime,

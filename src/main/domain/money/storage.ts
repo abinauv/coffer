@@ -88,7 +88,7 @@ export function parseQuantity(text: string, what = 'quantity'): Decimal {
   return parseAt('quantityStorage', text, what)
 }
 
-/** Read a rate column. Rejects more than 2 decimal places. */
+/** Read a rate column. Rejects more than 3 decimal places — see `SCALE.rate`. */
 export function parseRate(text: string, what = 'rate'): Decimal {
   return parseAt('rateStorage', text, what)
 }
@@ -114,7 +114,7 @@ export function toQuantityString(value: DecimalInput): DecimalString {
   return toStorageString('quantityStorage', value)
 }
 
-/** Render for a rate column: exactly 2 decimal places. */
+/** Render for a rate column: exactly 3 decimal places — see `SCALE.rate`. */
 export function toRateString(value: DecimalInput): DecimalString {
   return toStorageString('rateStorage', value)
 }

@@ -173,6 +173,28 @@ export type RepoErrorCode =
    * exists to prevent — so it is refused rather than filled in with a guess.
    */
   | 'FISCAL_YEAR_REQUIRED'
+  // ---- Documents (0008) ----
+  /*
+   * These share their names with `DocumentErrorCode` in domain/documents where they mean
+   * the same thing, exactly as the ledger codes do — so "this is no longer a draft" is
+   * one code whether the domain or the database noticed it.
+   */
+  /** No document with that id. */
+  | 'DOCUMENT_NOT_FOUND'
+  /** An edit or a delete against a document that has left draft. Rule 1. */
+  | 'DOCUMENT_NOT_DRAFT'
+  /** An issue against a document with no lines, or with every line at zero. */
+  | 'DOCUMENT_EMPTY'
+  /** A quantity, price or discount that is not a decimal string. */
+  | 'INVALID_LINE_AMOUNT'
+  /** A discount larger than the line it is taken off. */
+  | 'DISCOUNT_EXCEEDS_LINE'
+  /** A line's stated taxable amount is not what its own figures come to. */
+  | 'LINE_TOTAL_MISMATCH'
+  /** Two lines claim the same position on one document. */
+  | 'DUPLICATE_LINE_NUMBER'
+  /** A line names a unit these books do not have. */
+  | 'UNIT_UNKNOWN'
 
 /** An error raised by a repository. Always carries a stable, machine-readable code. */
 export class RepoError extends Error {
@@ -223,6 +245,8 @@ const TRIGGER_CODES: readonly RepoErrorCode[] = [
    * series that has handed out a number cannot have that undone — so a counter driven
    * backwards, a counter deleted and a shape changed after issuing all answer with it. */
   'SERIES_IN_USE',
+  /* 0008's four triggers, which freeze a document and its lines once it has issued. */
+  'DOCUMENT_NOT_DRAFT',
 ]
 
 export function repoErrorFrom(error: unknown, fallback: RepoErrorCode): RepoError {

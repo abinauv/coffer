@@ -503,6 +503,158 @@ export interface ArchiveItemInput {
   archived: boolean
 }
 
+// ---- Documents ------------------------------------------------------------
+
+/*
+ * A trade document as it crosses the boundary.
+ *
+ * Every figure is a decimal string, already totalled. Nothing derivable is stored (rule
+ * 4), so the totals below are computed on the way out — the renderer does no money
+ * arithmetic (CONVENTIONS §1.7) and there is no stored total for them to disagree with.
+ */
+
+export type DocumentStatusDto = 'draft' | 'issued' | 'cancelled'
+
+/** What the regime answered for one line, per component. Stored as given. */
+export interface DocumentLineTaxDto {
+  code: string
+  /** What prints, e.g. 'CGST @ 9%'. The wording is the regime's. */
+  label: string
+  ratePct: DecimalString
+  amount: DecimalString
+}
+
+export interface DocumentLineDto {
+  id: string
+  lineNumber: number
+  itemId: string | null
+  description: string
+  /** Quantity, 3dp. May be negative on a document that returns something. */
+  quantity: DecimalString
+  unitCode: string | null
+  unitPrice: DecimalString
+  discount: DecimalString
+  /** `quantity x unitPrice - discount`. What tax was charged on. */
+  taxableAmount: DecimalString
+  ratePct: DecimalString
+  classificationCode: string | null
+  isCharge: boolean
+  accountId: string | null
+  taxes: readonly DocumentLineTaxDto[]
+}
+
+/** Everything on the foot of a document. Derived, never stored. */
+export interface DocumentTotalsDto {
+  taxableValue: DecimalString
+  totalDiscount: DecimalString
+  totalTax: DecimalString
+  netTotal: DecimalString
+  /** What rounding added, signed. Zero when the policy is `none`. */
+  roundOff: DecimalString
+  grandTotal: DecimalString
+  /** One row per component AND rate — an invoice may print CGST twice. */
+  taxSummary: readonly DocumentLineTaxDto[]
+}
+
+/** Enough of a document for a register or a list. */
+export interface DocumentSummary {
+  id: string
+  kind: string
+  status: DocumentStatusDto
+  /** Null while draft. Kept through cancellation. */
+  number: string | null
+  date: DateString
+  partyId: string
+  /** Denormalised for display, as `JournalLine.partyName` is. */
+  partyName: string
+  /** Derived on the way out, like every other figure. */
+  grandTotal: DecimalString
+}
+
+export interface Document extends DocumentSummary {
+  seriesId: string | null
+  partyReference: string | null
+  placeOfSupplyJurisdiction: string | null
+  placeOfSupplyCountry: string
+  roundingPolicy: 'whole-unit' | 'none'
+  narration: string
+  /** The entry it posted as. Null while draft — there is no state between (rule 3). */
+  entryId: string | null
+  lines: readonly DocumentLineDto[]
+  totals: DocumentTotalsDto
+  createdAt: Timestamp
+  updatedAt: Timestamp
+  issuedAt: Timestamp | null
+  cancelledAt: Timestamp | null
+}
+
+/**
+ * A line on the way in.
+ *
+ * `taxableAmount` and the taxes are supplied rather than computed here, because they are
+ * the regime's answer as of the document's date and the caller is what has just asked the
+ * regime. The repository checks that the amount agrees with the line's own figures rather
+ * than trusting it — a mismatch is a caller bug, and one that would put a figure in the
+ * books the invoice does not show.
+ */
+export interface DocumentLineInput {
+  itemId?: string | null
+  description: string
+  quantity: DecimalString
+  unitCode?: string | null
+  unitPrice: DecimalString
+  discount?: DecimalString
+  taxableAmount: DecimalString
+  ratePct?: DecimalString
+  classificationCode?: string | null
+  isCharge?: boolean
+  accountId?: string | null
+  taxes?: readonly DocumentLineTaxDto[]
+}
+
+export interface CreateDocumentInput {
+  kind: string
+  date: DateString
+  partyId: string
+  partyReference?: string | null
+  placeOfSupplyJurisdiction?: string | null
+  placeOfSupplyCountry: string
+  roundingPolicy?: 'whole-unit' | 'none'
+  narration?: string
+  lines?: readonly DocumentLineInput[]
+}
+
+/**
+ * A change to a draft.
+ *
+ * `lines`, when present, REPLACES every line. A draft's lines are edited as a set — the
+ * grid the user is looking at is the whole document — and a per-line patch protocol would
+ * be a second way to say the same thing, with its own ordering bugs.
+ */
+export interface UpdateDocumentInput {
+  id: string
+  date?: DateString
+  partyId?: string
+  partyReference?: string | null
+  placeOfSupplyJurisdiction?: string | null
+  placeOfSupplyCountry?: string
+  roundingPolicy?: 'whole-unit' | 'none'
+  narration?: string
+  lines?: readonly DocumentLineInput[]
+}
+
+export interface ListDocumentsInput {
+  kind?: string
+  status?: DocumentStatusDto
+  partyId?: string
+  fromDate?: DateString
+  toDate?: DateString
+  /** Matches the number, the party name or the narration, ignoring case. */
+  search?: string
+  limit?: number
+  offset?: number
+}
+
 // ---- Numbering ------------------------------------------------------------
 
 /*

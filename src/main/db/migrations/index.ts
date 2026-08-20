@@ -92,5 +92,15 @@ import { m0004 } from './0004_journal'
 import { m0005 } from './0005_parties'
 import { m0006 } from './0006_items'
 import { m0007 } from './0007_numbering'
+import { m0008 } from './0008_documents'
 
-export const MIGRATIONS: readonly Migration[] = [m0001, m0002, m0003, m0004, m0005, m0006, m0007]
+export const MIGRATIONS: readonly Migration[] = [
+  m0001,
+  m0002,
+  m0003,
+  m0004,
+  m0005,
+  m0006,
+  m0007,
+  m0008,
+]

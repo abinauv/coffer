@@ -350,6 +350,120 @@ export interface NumberingCountersTable {
   updated_at: Timestamp
 }
 
+// ---- documents, document_lines, document_line_taxes (0008) ----------------
+
+/**
+ * A trade document. One table for all five kinds — see domain/documents/types.ts.
+ *
+ * The columns that are NOT here are as much of the design as the ones that are. There is
+ * no `grand_total`, no `taxable_value` and no `total_tax`: every figure on the foot of a
+ * document is a fold over its lines, computed when asked (rule 4). A stored total is a
+ * second answer to the same question, and the two disagree silently from the day
+ * somebody edits a line without going through the code that maintains both.
+ */
+export interface DocumentsTable {
+  id: string
+  /** A `DocumentKind`. Constrained by a CHECK naming the five, as data. */
+  kind: string
+  /** 'draft' | 'issued' | 'cancelled'. */
+  status: string
+  /**
+   * Null while draft, allocated at issue, kept through cancellation (rule 2).
+   *
+   * A cancelled document keeps its number rather than returning it: rule 46(b) wants a
+   * consecutive series, and a number handed back leaves a gap somebody has to explain.
+   */
+  number: string | null
+  /** Which series the number came from. Null while draft, and null for a kind with none. */
+  series_id: string | null
+  /** The date the document bears, which is also the date it posts as of. */
+  document_date: DateString
+  party_id: string
+  /** The other party's own reference — their PO number. Never Coffer's. */
+  party_reference: string | null
+  /** Sub-national code where the regime has one; null where the concept does not apply. */
+  place_of_supply_jurisdiction: string | null
+  /** ISO 3166-1 alpha-2, lower case. */
+  place_of_supply_country: string
+  /** 'whole-unit' | 'none'. Frozen on the document, never read from settings later. */
+  rounding_policy: string
+  narration: string
+  /**
+   * The entry this document posted as. Null while draft, required once issued.
+   *
+   * The whole of rule 3 in one column: there is no "issued but not yet posted" state to
+   * represent, because the CHECK below does not permit one.
+   */
+  entry_id: string | null
+  created_at: Timestamp
+  updated_at: Timestamp
+  /** When it was issued, and when it was cancelled. Null until each happens. */
+  issued_at: Timestamp | null
+  cancelled_at: Timestamp | null
+}
+
+/**
+ * One line of a document.
+ *
+ * `description`, `unit_price` and `rate_pct` are STORED rather than looked up from the
+ * item, and that is the point: renaming an item or repricing it must not rewrite an
+ * invoice already issued. The item id is kept for reporting, not for reading values back.
+ */
+export interface DocumentLinesTable {
+  id: string
+  document_id: string
+  /** 1-based, and the order the user put them in. */
+  line_number: number
+  /** Null for a free-text line, which every business needs occasionally. */
+  item_id: string | null
+  description: string
+  /** Quantity, 3dp decimal string. */
+  quantity: DecimalString
+  /** The unit as text, copied from the item. Null for a line with no real quantity. */
+  unit_code: string | null
+  /** Money, 2dp. */
+  unit_price: DecimalString
+  /** Money, 2dp. Reduction agreed at supply, already out of `taxable_amount`. */
+  discount: DecimalString
+  /**
+   * `quantity x unit_price - discount`, at money scale. What tax was charged on.
+   *
+   * Stored, and the one deliberate exception to rule 4: it is the number handed to the
+   * regime, and the multiplication that produced it rounds. Recomputing it later from a
+   * price with more places than the line shows would give a figure the tax was never
+   * calculated from.
+   */
+  taxable_amount: DecimalString
+  /** Rate, 3dp. The full rate, before it splits into components. */
+  rate_pct: DecimalString
+  /** HSN or SAC in India. Null where none applies. */
+  classification_code: string | null
+  /** Freight, packing, insurance — taxable, but not turnover. */
+  is_charge: SqlBool
+  /** Overrides the account the kind implies. Null for the usual case. */
+  account_id: string | null
+}
+
+/**
+ * What the regime answered for one line, per component.
+ *
+ * Stored rather than recomputed, and this is rule 4's other exception, argued in
+ * domain/documents/types.ts: it is the regime's answer as of the document's own date. An
+ * invoice must reprint years later exactly as it was taxed and exactly as it was filed,
+ * and rates change.
+ */
+export interface DocumentLineTaxesTable {
+  document_line_id: string
+  /** The regime's own code, e.g. 'CGST'. Part of the key. */
+  code: string
+  /** What prints, e.g. 'CGST @ 9%'. Stored because the wording is the regime's. */
+  label: string
+  /** Rate, 3dp — 0.125 is half of India's 0.25% slab. */
+  rate_pct: DecimalString
+  /** Money, 2dp. */
+  amount: DecimalString
+}
+
 export interface Database {
   app_metadata: AppMetadataTable
   accounts: AccountsTable
@@ -362,6 +476,9 @@ export interface Database {
   items: ItemsTable
   numbering_series: NumberingSeriesTable
   numbering_counters: NumberingCountersTable
+  documents: DocumentsTable
+  document_lines: DocumentLinesTable
+  document_line_taxes: DocumentLineTaxesTable
 }
 
 export type { Generated }
