@@ -8,9 +8,13 @@
  *
  * Rules this runner enforces:
  *
- *   - Each migration runs inside its own transaction. SQLite makes DDL transactional,
- *     so a migration that throws half way leaves no trace. The run then stops: the
- *     migrations that already succeeded stay applied, and the version reflects that.
+ *   - Each migration runs inside its own transaction, with foreign keys switched off and
+ *     `foreign_key_check` run before the commit. SQLite makes DDL transactional, so a
+ *     migration that throws half way leaves no trace. The run then stops: the migrations
+ *     that already succeeded stay applied, and the version reflects that. See
+ *     `withoutForeignKeys` for why the keys come off — the short version is that
+ *     `defer_foreign_keys` does not stop `ON DELETE CASCADE` firing on a `DROP TABLE`,
+ *     and a table rebuild would silently take every child row with it.
  *   - A database carrying migrations this build does not know is refused outright.
  *     That is an older build opening a newer company file, and the worst thing it
  *     could do is "helpfully" write to it.
@@ -230,6 +234,77 @@ export function rollbackMigrations(
 
 // ---- Internals ------------------------------------------------------------
 
+/**
+ * Run a migration with foreign keys switched off, and switch them back on afterwards.
+ *
+ * THE REASON IS A TABLE REBUILD, AND THE PREVIOUS ANSWER HERE WAS WRONG. SQLite cannot
+ * alter or drop a CHECK constraint, so changing one means building a new table, copying
+ * the rows into it, dropping the old one and renaming. This code used to set
+ * `defer_foreign_keys = ON` for that and said in a comment that it was sufficient. It is
+ * not, and the difference is silent data loss:
+ *
+ *   `defer_foreign_keys` defers the CHECKING of violations to COMMIT. It does not stop
+ *   REFERENTIAL ACTIONS from running. `DROP TABLE documents` performs an implicit
+ *   `DELETE FROM`, that delete fires `ON DELETE CASCADE` on every child, and the cascade
+ *   chains — measured, not read: rebuilding `documents` took `document_lines` with it and
+ *   then `document_line_taxes` with those. Afterwards `foreign_key_check` reports nothing
+ *   wrong, because nothing IS wrong: the rows are simply gone.
+ *
+ * With foreign keys off, no cascade runs and the child rows sit untouched while their
+ * parent is replaced underneath them. What replaces the enforcement is
+ * `assertReferencesIntact` below, run INSIDE the transaction so that a migration which
+ * really did break a reference is rolled back rather than committed.
+ *
+ * This is SQLite's own twelve-step ALTER TABLE procedure, in the order it gives: foreign
+ * keys off, begin, rebuild, `foreign_key_check`, commit, foreign keys on.
+ *
+ * `foreign_keys` cannot be toggled inside a transaction, which is why this wraps the
+ * transaction rather than sitting in it. `finally` puts it back even when the migration
+ * throws — a connection left with foreign keys off would enforce nothing for the rest of
+ * the session, which is a far worse failure than the one that got us there.
+ */
+function withoutForeignKeys(db: SqliteDatabase, build: () => () => void): () => void {
+  const run = build()
+  return () => {
+    db.pragma('foreign_keys = OFF')
+    try {
+      run()
+    } finally {
+      db.pragma('foreign_keys = ON')
+    }
+  }
+}
+
+interface ForeignKeyViolation {
+  table: string
+  rowid: number | null
+  parent: string
+}
+
+/**
+ * Refuse a migration that left a row pointing at a parent that is not there.
+ *
+ * Called inside the transaction, so a throw rolls the whole migration back. This is the
+ * enforcement that `withoutForeignKeys` trades away for the duration of the migration,
+ * and it is stricter than what it replaces: it checks EVERY table in the database rather
+ * than only the rows the migration happened to touch.
+ */
+function assertReferencesIntact(db: SqliteDatabase, migration: Migration): void {
+  const violations = db.pragma('foreign_key_check') as ForeignKeyViolation[]
+  if (violations.length === 0) {
+    return
+  }
+
+  const summary = violations
+    .slice(0, 5)
+    .map((row) => `${row.table} -> ${row.parent}`)
+    .join(', ')
+  throw new Error(
+    `Migration ${migration.id} (${migration.name}) left ${String(violations.length)} row(s) ` +
+      `referencing a parent that is not there: ${summary}. Nothing it did was written.`,
+  )
+}
+
 function ensureMigrationsTable(db: SqliteDatabase): void {
   db.exec(
     `CREATE TABLE IF NOT EXISTS ${MIGRATIONS_TABLE} (
@@ -274,18 +349,17 @@ function assertSchemaIsKnown(ordered: Migration[], applied: AppliedMigration[]):
 }
 
 function applyMigration(db: SqliteDatabase, migration: Migration): void {
-  const run = db.transaction(() => {
-    /* Table rebuilds inside a migration momentarily break their own references.
-     * foreign_keys cannot be toggled inside a transaction; defer_foreign_keys can,
-     * and still enforces every constraint at COMMIT. */
-    db.pragma('defer_foreign_keys = ON')
-    migration.up(db)
-    db.prepare(`INSERT INTO ${MIGRATIONS_TABLE} (id, name, applied_at) VALUES (?, ?, ?)`).run(
-      migration.id,
-      migration.name,
-      new Date().toISOString(),
-    )
-  })
+  const run = withoutForeignKeys(db, () =>
+    db.transaction(() => {
+      migration.up(db)
+      assertReferencesIntact(db, migration)
+      db.prepare(`INSERT INTO ${MIGRATIONS_TABLE} (id, name, applied_at) VALUES (?, ?, ?)`).run(
+        migration.id,
+        migration.name,
+        new Date().toISOString(),
+      )
+    }),
+  )
 
   try {
     run()
@@ -308,11 +382,13 @@ function revertMigration(db: SqliteDatabase, migration: Migration): void {
     )
   }
 
-  const run = db.transaction(() => {
-    db.pragma('defer_foreign_keys = ON')
-    down(db)
-    db.prepare(`DELETE FROM ${MIGRATIONS_TABLE} WHERE id = ?`).run(migration.id)
-  })
+  const run = withoutForeignKeys(db, () =>
+    db.transaction(() => {
+      down(db)
+      assertReferencesIntact(db, migration)
+      db.prepare(`DELETE FROM ${MIGRATIONS_TABLE} WHERE id = ?`).run(migration.id)
+    }),
+  )
 
   try {
     run()

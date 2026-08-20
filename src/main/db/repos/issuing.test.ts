@@ -463,35 +463,20 @@ describe('issueDocument', () => {
    * no amount of building would change that. One code, because from the caller's side
    * both are "not this document, not this build".
    */
+  /*
+   * A credit note posts, and its rule is not written. That is the only reason left for
+   * this refusal: a quotation reaches none of it (see the `quotation` group below), so
+   * `requireRule` no longer has to work out which kind of missing it is looking at.
+   */
   it('refuses a kind whose posting rule is not built, and says so', async () => {
     const id = await drafted({ kind: 'credit-note' })
 
     const failure = await failureOf(() => issueDocument(db, { id }, NOW))
 
     expect(failure.code).toBe('DOCUMENT_KIND_UNSUPPORTED')
-    expect(failure.details).toMatchObject({ kind: 'credit-note', postsToLedger: true })
-  })
-
-  it('refuses a quotation for a different reason', async () => {
-    const quotation = await drafted({ kind: 'quotation' })
-    const creditNote = await drafted({ kind: 'credit-note' })
-
-    const failure = await failureOf(() => issueDocument(db, { id: quotation }, NOW))
-
-    expect(failure.code).toBe('DOCUMENT_KIND_UNSUPPORTED')
-    expect(failure.details).toMatchObject({ kind: 'quotation', postsToLedger: false })
-
-    /*
-     * Same code, different sentence — and the assertion is on WHAT each sentence says,
-     * not merely that the two differ. An earlier version compared the two messages for
-     * inequality and survived a mutation that gave both kinds the same reason: the
-     * messages still differed, because each one names its own kind. A user reading the
-     * wrong half of that would wait for a build that is never coming.
-     */
-    expect(failure.message).toContain('does not post to the ledger')
-    const other = await failureOf(() => issueDocument(db, { id: creditNote }, NOW))
-    expect(other.message).toContain('cannot be issued yet')
-    expect(other.message).not.toContain('does not post to the ledger')
+    expect(failure.details).toMatchObject({ kind: 'credit-note' })
+    expect(failure.message).toContain('cannot be issued yet')
+    expect(await nextSequence()).toBe(1)
   })
 
   it('refuses when no series is configured for the kind', async () => {
@@ -743,6 +728,111 @@ describe('cancelDocument', () => {
 
     expect(cancelled.status).toBe('cancelled')
     expect((await accountBalance(db, account['1300']!)).balance).toBe('0.00')
+  })
+})
+
+// ---- A kind that posts nothing ---------------------------------------------
+
+/*
+ * QUOTATIONS, which 0010 made issuable.
+ *
+ * The domain contract has said since it was written that every kind is issued and only
+ * the kinds with a `sourceType` are also posted. 0008 disagreed by constraint — its CHECK
+ * required an `entry_id` on anything issued — so a quotation could never leave draft, and
+ * therefore could never be numbered, because rule 2 allocates the number at issue.
+ *
+ * What is worth asserting is not that the status changes. It is that a quotation goes
+ * through the whole of issuing and touches the ledger nowhere.
+ */
+describe('issuing a quotation', () => {
+  let quotationSeries: string
+
+  beforeEach(async () => {
+    quotationSeries = (
+      await createSeries(db, {
+        kind: 'quotation',
+        label: 'Quotations',
+        prefix: 'QT',
+        separator: '/',
+        includeFiscalYear: true,
+        width: 4,
+        resetOn: 'fiscal-year',
+      })
+    ).id
+  })
+
+  it('numbers it and issues it, and writes no journal entry', async () => {
+    const id = await drafted({ kind: 'quotation' })
+
+    const issued = await issueDocument(db, { id }, NOW)
+
+    expect(issued.status).toBe('issued')
+    expect(issued.number).toBe('QT/2026-27/0001')
+    expect(issued.seriesId).toBe(quotationSeries)
+    expect(issued.issuedAt).toBe(NOW)
+    expect(issued.entryId).toBeNull()
+    expect(await listEntries(db)).toHaveLength(0)
+  })
+
+  /* The ledger is untouched, which is the whole claim. A quotation that moved receivables
+   * would be revenue recognised on a document nobody has agreed to. */
+  it('leaves every balance where it was', async () => {
+    await issueDocument(db, { id: await drafted({ kind: 'quotation' }) }, NOW)
+
+    expect((await accountBalance(db, account['1300']!)).balance).toBe('0.00')
+    expect((await accountBalance(db, account['4100']!)).balance).toBe('0.00')
+  })
+
+  /* Its own series and its own counter. An invoice issued afterwards is unaffected, which
+   * is what having a series per kind is for. */
+  it('draws from the quotation series, not the invoice one', async () => {
+    await issueDocument(db, { id: await drafted({ kind: 'quotation' }) }, NOW)
+
+    expect((await issueDocument(db, { id: await drafted() }, NOW)).number).toBe('INV/2026-27/0001')
+    expect((await previewNumber(db, quotationSeries, YEAR)).nextSequence).toBe(2)
+  })
+
+  /*
+   * A CLOSED MONTH DOES NOT STOP A QUOTATION. Whether a period is open is a statement
+   * about the ledger, and a quotation never reaches it — refusing to quote a customer
+   * because last month's books were closed would be a rule with no reason behind it. The
+   * invoice beside it is still refused, which is what makes this a distinction rather
+   * than a hole.
+   */
+  it('is issued into a closed month, where an invoice is not', async () => {
+    const quotation = await drafted({ kind: 'quotation' })
+    const invoice = await drafted()
+    const april = (await listPeriods(db)).find((row) => row.startDate === '2026-04-01')!
+    await closePeriod(db, april.id)
+
+    expect((await issueDocument(db, { id: quotation }, NOW)).status).toBe('issued')
+    expect(await codeOf(() => issueDocument(db, { id: invoice }, NOW))).toBe('PERIOD_CLOSED')
+  })
+
+  /* The books must still reach the date, because the fiscal year the counter is scoped by
+   * comes from the period. */
+  it('is refused when the books do not reach its date', async () => {
+    const id = await drafted({ kind: 'quotation', date: '2031-01-15' })
+
+    expect(await codeOf(() => issueDocument(db, { id }, NOW))).toBe('NO_PERIOD')
+  })
+
+  it('cancels with nothing to reverse, and keeps its number', async () => {
+    const id = await drafted({ kind: 'quotation' })
+    await issueDocument(db, { id }, NOW)
+
+    const cancelled = await cancelDocument(db, { id }, LATER)
+
+    expect(cancelled.status).toBe('cancelled')
+    expect(cancelled.number).toBe('QT/2026-27/0001')
+    expect(cancelled.cancelledAt).toBe(LATER)
+    expect(await listEntries(db)).toHaveLength(0)
+  })
+
+  it('still refuses a quotation with nothing on it', async () => {
+    const id = await drafted({ kind: 'quotation', lines: [] })
+
+    expect(await codeOf(() => issueDocument(db, { id }, NOW))).toBe('DOCUMENT_EMPTY')
   })
 })
 

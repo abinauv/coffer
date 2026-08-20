@@ -30,6 +30,7 @@ import {
   listDocuments,
   updateDocument,
 } from './documents'
+import { DOCUMENT_KINDS, postsToLedger } from '@main/domain/documents'
 import type { CreateDocumentInput, DocumentLineInput } from '@shared/dto'
 
 const KEY = new Uint8Array(DATABASE_KEY_BYTES).fill(0x5a)
@@ -367,6 +368,78 @@ describe('migration 0008', () => {
     expect(() =>
       connection.prepare(`UPDATE documents SET series_id = NULL WHERE id = 'd-1'`).run(),
     ).toThrow(/DOCUMENT_NOT_DRAFT/)
+  })
+
+  /*
+   * 0010, AND THE LIST IT KEEPS IN SQL.
+   *
+   * The corrected rule is "a document that POSTS and is issued has an entry", and a CHECK
+   * cannot import a TypeScript union — so the kinds that post nothing are enumerated in
+   * the migration. This is the test the migration's header promises: it asks the database
+   * about every kind the domain knows and requires the two to agree, so a sixth kind that
+   * posts nothing cannot be added to `DOCUMENT_KINDS` without something going red here.
+   *
+   * Put straight to the table on purpose. The repository answers first, so a test going
+   * through `issueDocument` would pass with no CHECK at all.
+   */
+  it('lets exactly the kinds that post nothing be issued without an entry', () => {
+    for (const definition of DOCUMENT_KINDS) {
+      const write = () =>
+        writeDocument(`d-${definition.kind}`, {
+          kind: definition.kind,
+          status: 'issued',
+          number: `X/${definition.kind}`,
+          issued_at: NOW,
+          entry_id: null,
+        })
+
+      if (postsToLedger(definition.kind)) {
+        expect(write, `${definition.kind} must not be issuable without an entry`).toThrow(/CHECK/i)
+      } else {
+        expect(write, `${definition.kind} posts nothing and must be issuable`).not.toThrow()
+      }
+    }
+  })
+
+  const issuedQuotation = (id: string) => () =>
+    writeDocument(id, {
+      kind: 'quotation',
+      status: 'issued',
+      number: `QT/${id}`,
+      issued_at: NOW,
+      entry_id: null,
+    })
+
+  /*
+   * Rolling 0010 off puts 0008's stricter rule back — every issued document must have
+   * posted — rather than merely leaving the table rebuilt. A `down` that returned the same
+   * relaxed CHECK would look identical on every other test: the rows are all there, the
+   * triggers all fire, and only a quotation would tell the difference.
+   */
+  it('makes a quotation unissuable again when 0010 is rolled off', () => {
+    rollbackMigrations(connection, MIGRATIONS, { to: '0009' })
+
+    expect(issuedQuotation('q-1')).toThrow(/CHECK/i)
+  })
+
+  /*
+   * And the rollback is refused outright once one exists, rather than dropping it.
+   *
+   * The `down` copies every row into a table carrying 0008's rule, and an issued quotation
+   * has no representation under it — so the copy fails and the whole migration rolls back.
+   * That is the honest outcome: the alternative is a `down` that quietly discards numbered
+   * documents, which is worse than refusing.
+   */
+  it('refuses to roll 0010 off while an issued quotation exists', () => {
+    expect(issuedQuotation('q-2')).not.toThrow()
+
+    expect(() => rollbackMigrations(connection, MIGRATIONS, { to: '0009' })).toThrow(/0010/)
+
+    /* Nothing was lost, and the relaxed rule is still in force. */
+    expect(connection.prepare(`SELECT status FROM documents WHERE id = 'q-2'`).get()).toMatchObject(
+      { status: 'issued' },
+    )
+    expect(issuedQuotation('q-3')).not.toThrow()
   })
 
   /*

@@ -49,15 +49,28 @@
  * user can already create, so the refusal has to be a code with a message rather than a
  * thrown programmer error — the user did nothing wrong.
  *
- * A quotation is refused for a different reason and gets a different sentence. It never
- * posts, so 0008's CHECK makes `issued` unreachable for it and no posting rule would
- * help; where a sent quotation sits in a document's life is a question 0008 deferred and
- * this file does not answer. Both share `DOCUMENT_KIND_UNSUPPORTED`, because from the
- * caller's side they are the same refusal: not this build, not this document.
+ * A QUOTATION IS ISSUED WITHOUT POSTING ANYTHING, and that is not a special case bolted
+ * on — it is what the domain contract has said since it was written: "every kind is
+ * issued; only the kinds with a `sourceType` are also posted". 0008 disagreed by
+ * constraint and 0010 corrected it. So a quotation takes a number from its series, gets a
+ * status and an issue stamp, and writes no journal entry; cancelling one has nothing to
+ * reverse. The number is still spent, because rule 2 does not care whether the series was
+ * a tax series.
+ *
+ * What that costs in this file is one branch, and it is worth naming why the branch is on
+ * `postsToLedger` rather than on `postingRuleFor` returning null. Those two nulls mean
+ * opposite things: a credit note has no rule because nobody has written it, and a
+ * quotation has no rule because there is nothing to write. Branching on the second and
+ * treating the first the same way would silently issue an unposted credit note.
  */
 
 import { D } from '@main/domain/money'
-import { isPostingError, type EntryDraft, type PostingContext } from '@main/domain/ledger'
+import {
+  isPostingError,
+  type AccountingPeriodRef,
+  type EntryDraft,
+  type PostingContext,
+} from '@main/domain/ledger'
 import {
   definitionOf,
   postingRuleFor,
@@ -73,7 +86,7 @@ import { getDocument, toDomainLine } from './documents'
 import { RepoError, type RepoErrorCode } from './errors'
 import { postEntry, reverseEntry } from './journal'
 import { allocateNumber, defaultSeriesFor } from './numbering'
-import { requirePostablePeriod } from './periods'
+import { periodRefForDate } from './periods'
 import { inTransaction } from './transaction'
 
 /**
@@ -95,52 +108,64 @@ export async function issueDocument(
     assertDraft(document)
 
     const kind = definitionOf(document.kind as DocumentKind).kind
-    const rule = requireRule(kind)
+    const rule = postsToLedger(kind) ? requireRule(kind) : null
     assertHasSomethingOnIt(document)
 
     const seriesId = input.seriesId ?? (await requireDefaultSeries(trx, kind, document))
 
     /*
-     * The period is required before the counter moves, even though `postEntry` asks for
-     * it again a few lines later. Not a duplicated check: the fiscal year label the
-     * number is drawn against comes from the period, so there is no allocation to make
-     * until this has answered. Asking twice inside one transaction is one extra read of
-     * a row nothing else can have changed.
+     * The period is read before the counter moves, because the fiscal year the number is
+     * scoped by comes from it — there is no allocation to make until this has answered.
+     *
+     * IT DOES NOT ASK WHETHER THE PERIOD IS OPEN, and that is deliberate. Whether a month
+     * will take a posting is the ledger's question and `postEntry` asks it a few lines
+     * below, where the answer belongs; asking it here as well would be a second place that
+     * decides whether a document may be issued. It also would not change anything a caller
+     * can see — measured, not assumed: a mutation swapping the two survived the whole
+     * suite, because `postEntry` refuses the closed month either way and the transaction
+     * takes the allocation back with it.
+     *
+     * What that leaves is exactly right for a quotation, which never reaches the ledger at
+     * all: a closed month is no reason to refuse to quote a customer, and the books still
+     * have to reach the date for the counter to be scoped.
      */
-    const period = await requirePostablePeriod(trx, document.date)
+    const period = await requireCoveringPeriod(trx, document.date)
     const number = await allocateNumber(trx, seriesId, period.fiscalYearLabel)
 
-    const postable: PostableDocument = {
-      id: document.id,
-      kind,
-      status: 'issued',
-      number,
-      date: document.date,
-      partyReference: document.partyReference,
-      partyId: document.partyId,
-      placeOfSupply: {
-        jurisdictionCode: document.placeOfSupplyJurisdiction,
-        countryCode: document.placeOfSupplyCountry,
-      },
-      roundingPolicy: document.roundingPolicy,
-      narration: document.narration,
-      lines: document.lines.map(toDomainLine),
+    let entryId: string | null = null
+    if (rule !== null) {
+      const postable: PostableDocument = {
+        id: document.id,
+        kind,
+        status: 'issued',
+        number,
+        date: document.date,
+        partyReference: document.partyReference,
+        partyId: document.partyId,
+        placeOfSupply: {
+          jurisdictionCode: document.placeOfSupplyJurisdiction,
+          countryCode: document.placeOfSupplyCountry,
+        },
+        roundingPolicy: document.roundingPolicy,
+        narration: document.narration,
+        lines: document.lines.map(toDomainLine),
+      }
+
+      const draft = buildEntry(rule.toEntry, postable, {
+        accounts: await buildResolver(trx),
+        period,
+        /*
+         * Nothing reads it yet. The company's own jurisdiction has no column to come
+         * from — there is no company settings table — and the sales invoice rule does not
+         * branch on it, because the document already carries the place of supply the
+         * regime decided from. It is on `PostingContext` for a rule that will, and a guess
+         * put here would be a fact invented in `db/` about a regime `db/` may not name.
+         */
+        homeJurisdictionCode: null,
+      })
+
+      entryId = (await postEntry(trx, draft)).entryId
     }
-
-    const draft = buildEntry(rule.toEntry, postable, {
-      accounts: await buildResolver(trx),
-      period,
-      /*
-       * Nothing reads it yet. The company's own jurisdiction has no column to come from
-       * — there is no company settings table — and the sales invoice rule does not branch
-       * on it, because the document already carries the place of supply the regime
-       * decided from. It is on `PostingContext` for a rule that will, and a guess put
-       * here would be a fact invented in `db/` about a regime `db/` may not name.
-       */
-      homeJurisdictionCode: null,
-    })
-
-    const posted = await postEntry(trx, draft)
 
     await trx
       .updateTable('documents')
@@ -148,7 +173,7 @@ export async function issueDocument(
         status: 'issued',
         number,
         series_id: seriesId,
-        entry_id: posted.entryId,
+        entry_id: entryId,
         issued_at: now,
         updated_at: now,
       })
@@ -176,12 +201,20 @@ export async function cancelDocument(
     const document = await requireDocument(trx, input.id)
     assertIssued(document)
 
-    if (document.entryId === null) {
+    const kind = definitionOf(document.kind as DocumentKind).kind
+
+    if (document.entryId === null && postsToLedger(kind)) {
       /*
-       * Unreachable: 0008 CHECKs that an issued document has an entry, which is rule 3
-       * written as a constraint. A throw rather than a skipped reversal, because the skip
-       * would be the one path that cancels a document while leaving its posting in the
-       * books — silently, and in exactly the state the CHECK exists to forbid.
+       * Unreachable, and kept. 0010 CHECKs that an issued document of a kind that posts
+       * has an entry, which is rule 3 written as a constraint, so nothing can reach this
+       * branch through SQLite.
+       *
+       * A DELIBERATE MUTATION SURVIVOR: removing this guard changes no test, and cannot,
+       * because no test can construct the state. It stays because of what the alternative
+       * does if a file ever IS in that state — a corrupted database, a build that wrote to
+       * the table another way — which is to cancel the document and leave its posting in
+       * the books, silently, in exactly the state the CHECK exists to forbid. A plain
+       * Error rather than a `RepoError`: no user can act on it (CONVENTIONS §5).
        */
       throw new Error(
         `${document.number ?? document.id} is issued and has no journal entry. ` +
@@ -189,12 +222,19 @@ export async function cancelDocument(
       )
     }
 
+    /*
+     * A quotation has nothing to reverse, so cancelling it is the status and the stamp
+     * and nothing else. It keeps its number like every other kind: rule 2 does not care
+     * whether the series was a tax series.
+     */
     const date: DateString = input.date ?? document.date
-    await reverseEntry(trx, {
-      entryId: document.entryId,
-      date,
-      narration: reversalNarration(document, input.narration),
-    })
+    if (document.entryId !== null) {
+      await reverseEntry(trx, {
+        entryId: document.entryId,
+        date,
+        narration: reversalNarration(document, input.narration),
+      })
+    }
 
     await trx
       .updateTable('documents')
@@ -245,24 +285,22 @@ function assertIssued(document: Document): void {
 }
 
 /**
- * The posting rule for a kind, or the sentence explaining why there is none.
+ * The posting rule for a kind that posts, or the sentence explaining why there is none.
  *
- * The two nulls `postingRuleFor` returns mean different things and get different words —
- * see the header. `postsToLedger` is what tells them apart, and it is the domain's answer
- * rather than a list of kinds repeated here.
+ * Only ever called for a kind `postsToLedger` says true of, so the only reason to be
+ * missing a rule is that nobody has written it yet. `postingRuleFor` also returns null for
+ * a quotation, and that null means something completely different — it means there is
+ * nothing to write — which is why the branch is above rather than in here. A single
+ * function answering both would have to re-derive which case it was in.
  */
 function requireRule(kind: DocumentKind): { toEntry: ToEntry } {
   const rule = postingRuleFor(kind)
   if (rule !== null) return rule
 
-  const definition = definitionOf(kind)
   throw new RepoError(
     'DOCUMENT_KIND_UNSUPPORTED',
-    postsToLedger(kind)
-      ? `${definition.pluralLabel} cannot be issued yet — how one posts is not built.`
-      : `A ${definition.label.toLowerCase()} does not post to the ledger, and how it is ` +
-          'issued is not settled. Keep it as a draft for now.',
-    { kind, postsToLedger: postsToLedger(kind) },
+    `${definitionOf(kind).pluralLabel} cannot be issued yet — how one posts is not built.`,
+    { kind },
   )
 }
 
@@ -291,6 +329,21 @@ function assertHasSomethingOnIt(document: Document): void {
     'There is nothing on this document to issue. Add a line with a value on it.',
     { id: document.id, lineCount: document.lines.length },
   )
+}
+
+/**
+ * The period covering a date, open or not.
+ *
+ * Which fiscal year a document falls in, and nothing more. Whether that period will take
+ * a posting is `requirePostablePeriod`'s question and `postEntry`'s to ask — see the note
+ * at the call site for why issuing does not ask it twice.
+ */
+async function requireCoveringPeriod(db: CofferDb, date: DateString): Promise<AccountingPeriodRef> {
+  const period = await periodRefForDate(db, date)
+  if (period === null) {
+    throw new RepoError('NO_PERIOD', `The books have no period covering ${date}.`, { date })
+  }
+  return period
 }
 
 async function requireDefaultSeries(

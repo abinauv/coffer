@@ -33,8 +33,12 @@
  *   0007  numbering_series, numbering_counters       — what its number is  LANDED
  *   0008  documents, document_lines,
  *         document_line_taxes                        — the document itself  LANDED
- *   0009  documents_frozen_once_issued, replaced     — narration and series, frozen too
- *   0010  receipts, allocations                      — what has been paid against one
+ *   0009  documents_frozen_once_issued, replaced     — narration and series, frozen too  LANDED
+ *   0010  documents, rebuilt                         — a quotation may be issued
+ *   0011  receipts, allocations                      — what has been paid against one
+ *
+ * RECEIPTS HAVE MOVED TWICE, from 0009 to 0010 to 0011, and both times for a correction to
+ * the documents table that had to land before anything was built on top of it. See below.
  *
  * 0009 WAS RESERVED FOR RECEIPTS AND IS NOT ANY MORE. Building `issueDocument` showed
  * that 0008 left a document's narration editable after issue, while the entry it had
@@ -101,6 +105,7 @@ import { m0006 } from './0006_items'
 import { m0007 } from './0007_numbering'
 import { m0008 } from './0008_documents'
 import { m0009 } from './0009_document_freeze'
+import { m0010 } from './0010_quotation_issuable'
 
 export const MIGRATIONS: readonly Migration[] = [
   m0001,
@@ -112,4 +117,5 @@ export const MIGRATIONS: readonly Migration[] = [
   m0007,
   m0008,
   m0009,
+  m0010,
 ]

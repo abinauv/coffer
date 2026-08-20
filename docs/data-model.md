@@ -137,6 +137,7 @@ numbers reserved so that parallel work cannot collide.
 | `0007`    | `numbering_series`, `numbering_counters`             | What a document's number is                       | landed |
 | `0008`    | `documents`, `document_lines`, `document_line_taxes` | The trade document itself                         | landed |
 | `0009`    | `documents_frozen_once_issued`, replaced             | Narration and series, frozen after issue          | landed |
+| `0010`    | `documents`, rebuilt                                 | A quotation may be issued without posting         | landed |
 
 Ten things about these tables are worth knowing before you read them, because each one
 is a decision rather than a detail:

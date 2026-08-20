@@ -453,3 +453,224 @@ describe('currentVersion', () => {
     expect(currentVersion(db)).toBe('0010')
   })
 })
+
+/*
+ * TABLE REBUILDS — the reason foreign keys come off for a migration.
+ *
+ * SQLite cannot alter or drop a CHECK constraint, so changing one means building a new
+ * table, copying the rows, dropping the old one and renaming. The runner used to do that
+ * with `defer_foreign_keys = ON` and a comment saying it was enough. It was not: deferring
+ * postpones the CHECKING of violations, and does nothing about REFERENTIAL ACTIONS. The
+ * implicit `DELETE FROM` inside `DROP TABLE` fires `ON DELETE CASCADE` on every child, the
+ * cascade chains to the grandchildren, and `foreign_key_check` then reports nothing wrong
+ * — because nothing is wrong. The rows are simply gone.
+ *
+ * These tests exist because no test in this file could have told the difference. Every
+ * migration written so far creates tables; none had rebuilt one with children.
+ */
+describe('a migration that rebuilds a table with children', () => {
+  const rows = (db: SqliteDatabase, table: string): number =>
+    db.prepare<[], { n: number }>(`SELECT count(*) AS n FROM ${table}`).get()!.n
+
+  /** Parent, child and grandchild, each cascading from the one above. */
+  function family(id: string): Migration {
+    return {
+      id,
+      name: 'family',
+      up(db) {
+        db.exec(`CREATE TABLE parent (id TEXT PRIMARY KEY, kind TEXT NOT NULL,
+          CHECK (kind <> 'forbidden')) STRICT`)
+        db.exec(`CREATE TABLE child (id TEXT PRIMARY KEY,
+          parent_id TEXT NOT NULL REFERENCES parent(id) ON DELETE CASCADE) STRICT`)
+        db.exec(`CREATE TABLE grandchild (id TEXT PRIMARY KEY,
+          child_id TEXT NOT NULL REFERENCES child(id) ON DELETE CASCADE) STRICT`)
+        db.prepare(`INSERT INTO parent VALUES ('p-1', 'allowed')`).run()
+        db.prepare(`INSERT INTO child VALUES ('c-1', 'p-1')`).run()
+        db.prepare(`INSERT INTO grandchild VALUES ('g-1', 'c-1')`).run()
+      },
+    }
+  }
+
+  /** The twelve-step rebuild, relaxing the parent's CHECK. */
+  function relaxesTheCheck(id: string): Migration {
+    return {
+      id,
+      name: 'relax',
+      up(db) {
+        db.exec(`CREATE TABLE parent_new (id TEXT PRIMARY KEY, kind TEXT NOT NULL) STRICT`)
+        db.exec(`INSERT INTO parent_new SELECT id, kind FROM parent`)
+        db.exec(`DROP TABLE parent`)
+        db.exec(`ALTER TABLE parent_new RENAME TO parent`)
+      },
+      down(db) {
+        db.exec(`CREATE TABLE parent_new (id TEXT PRIMARY KEY, kind TEXT NOT NULL,
+          CHECK (kind <> 'forbidden')) STRICT`)
+        db.exec(`INSERT INTO parent_new SELECT id, kind FROM parent`)
+        db.exec(`DROP TABLE parent`)
+        db.exec(`ALTER TABLE parent_new RENAME TO parent`)
+      },
+    }
+  }
+
+  it('keeps every child and grandchild row', () => {
+    const db = freshDb()
+    runMigrations(db, [family('0001'), relaxesTheCheck('0002')])
+
+    expect(rows(db, 'parent')).toBe(1)
+    expect(rows(db, 'child')).toBe(1)
+    expect(rows(db, 'grandchild')).toBe(1)
+  })
+
+  /* The rebuild is pointless if the constraint it was for did not actually change. */
+  it('really did relax the constraint', () => {
+    const db = freshDb()
+    runMigrations(db, [family('0001')])
+    expect(() => db.prepare(`INSERT INTO parent VALUES ('p-2', 'forbidden')`).run()).toThrow(
+      /CHECK/i,
+    )
+
+    runMigrations(db, [family('0001'), relaxesTheCheck('0002')])
+
+    expect(() => db.prepare(`INSERT INTO parent VALUES ('p-2', 'forbidden')`).run()).not.toThrow()
+  })
+
+  /*
+   * The child's foreign key must still point at the rebuilt table and still cascade. A
+   * rebuild that left it dangling would pass every test above — the rows are all there —
+   * and fail the first time anybody deleted a parent.
+   */
+  it('leaves the foreign key live, not merely present', () => {
+    const db = freshDb()
+    runMigrations(db, [family('0001'), relaxesTheCheck('0002')])
+
+    db.prepare(`DELETE FROM parent WHERE id = 'p-1'`).run()
+
+    expect(rows(db, 'child')).toBe(0)
+    expect(rows(db, 'grandchild')).toBe(0)
+  })
+
+  it('turns foreign keys back on afterwards', () => {
+    const db = freshDb()
+    runMigrations(db, [family('0001'), relaxesTheCheck('0002')])
+
+    expect(db.pragma('foreign_keys', { simple: true })).toBe(1)
+    expect(() => db.prepare(`INSERT INTO child VALUES ('c-2', 'nobody')`).run()).toThrow(
+      /FOREIGN KEY/i,
+    )
+  })
+
+  /* And back on even when the migration threw, which is the case that would otherwise
+   * leave a connection enforcing nothing for the rest of the session. */
+  it('turns foreign keys back on after a migration fails', () => {
+    const db = freshDb()
+
+    expect(codeOf(() => runMigrations(db, [family('0001'), throwsHalfWay('0002', 'boom')]))).toBe(
+      'DB_MIGRATION_FAILED',
+    )
+
+    expect(db.pragma('foreign_keys', { simple: true })).toBe(1)
+  })
+
+  /*
+   * What replaces the enforcement that was switched off. A migration that drops a row the
+   * child still points at is caught by `foreign_key_check` INSIDE the transaction, so the
+   * whole thing rolls back rather than committing a broken database.
+   */
+  it('refuses a rebuild that leaves a row pointing at nothing', () => {
+    const db = freshDb()
+    const losesARow: Migration = {
+      id: '0002',
+      name: 'loses',
+      up(db) {
+        db.exec(`CREATE TABLE parent_new (id TEXT PRIMARY KEY, kind TEXT NOT NULL) STRICT`)
+        /* Copies everything except the row the child references. */
+        db.exec(`INSERT INTO parent_new SELECT id, kind FROM parent WHERE id <> 'p-1'`)
+        db.exec(`DROP TABLE parent`)
+        db.exec(`ALTER TABLE parent_new RENAME TO parent`)
+      },
+    }
+
+    expect(codeOf(() => runMigrations(db, [family('0001'), losesARow]))).toBe('DB_MIGRATION_FAILED')
+
+    /* Rolled back whole: the old table, its CHECK and every row are still there. */
+    expect(currentVersion(db)).toBe('0001')
+    expect(rows(db, 'parent')).toBe(1)
+    expect(rows(db, 'child')).toBe(1)
+    expect(() => db.prepare(`INSERT INTO parent VALUES ('p-2', 'forbidden')`).run()).toThrow(
+      /CHECK/i,
+    )
+  })
+
+  /*
+   * The pragma that makes the rename possible must not be left on. `ALTER TABLE ... RENAME
+   * TO` normally rewrites references to the old name across the schema; `legacy_alter_table`
+   * turns that off, which a table rebuild needs and a later column rename would be quietly
+   * broken by. Migrations set it themselves, so what is checked here is the connection they
+   * hand back.
+   */
+  it('leaves legacy_alter_table off', () => {
+    const db = freshDb()
+    const rebuilds: Migration = {
+      id: '0002',
+      name: 'rebuilds',
+      up(db) {
+        db.pragma('legacy_alter_table = ON')
+        try {
+          db.exec(`CREATE TABLE parent_new (id TEXT PRIMARY KEY, kind TEXT NOT NULL) STRICT`)
+          db.exec(`INSERT INTO parent_new SELECT id, kind FROM parent`)
+          db.exec(`DROP TABLE parent`)
+          db.exec(`ALTER TABLE parent_new RENAME TO parent`)
+        } finally {
+          db.pragma('legacy_alter_table = OFF')
+        }
+      },
+    }
+    runMigrations(db, [family('0001'), rebuilds])
+
+    expect(db.pragma('legacy_alter_table', { simple: true })).toBe(0)
+  })
+
+  /*
+   * The reference check guards a rollback as well as a migration. A `down` that drops a
+   * row its children still point at is the same failure in the other direction, and it is
+   * the direction nobody exercises until the day they need it.
+   */
+  it('refuses a rollback that leaves a row pointing at nothing', () => {
+    const db = freshDb()
+    const losesARowOnTheWayBack: Migration = {
+      id: '0002',
+      name: 'loses-back',
+      up(db) {
+        db.exec(`ALTER TABLE parent ADD COLUMN note TEXT`)
+      },
+      down(db) {
+        db.exec(`DELETE FROM parent WHERE id = 'p-1'`)
+      },
+    }
+    const registry = [family('0001'), losesARowOnTheWayBack]
+    runMigrations(db, registry)
+
+    expect(codeOf(() => rollbackMigrations(db, registry, { to: '0001' }))).toBe(
+      'DB_MIGRATION_FAILED',
+    )
+
+    /* Rolled back whole: the migration is still applied and the rows are all there. */
+    expect(currentVersion(db)).toBe('0002')
+    expect(rows(db, 'parent')).toBe(1)
+    expect(rows(db, 'child')).toBe(1)
+  })
+
+  it('protects a rollback the same way', () => {
+    const db = freshDb()
+    const registry = [family('0001'), relaxesTheCheck('0002')]
+    runMigrations(db, registry)
+
+    rollbackMigrations(db, registry, { to: '0001' })
+
+    expect(rows(db, 'child')).toBe(1)
+    expect(rows(db, 'grandchild')).toBe(1)
+    expect(() => db.prepare(`INSERT INTO parent VALUES ('p-2', 'forbidden')`).run()).toThrow(
+      /CHECK/i,
+    )
+  })
+})

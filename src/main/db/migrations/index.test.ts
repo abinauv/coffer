@@ -103,3 +103,52 @@ describe('MIGRATIONS', () => {
     expect(offenders).toEqual([])
   })
 })
+
+/*
+ * PRAGMAS THE REAL MIGRATIONS LEAVE BEHIND.
+ *
+ * A migration that rebuilds a table has to reach for pragmas the rest of the code never
+ * touches — 0010 needs `legacy_alter_table` for its rename, because `ALTER TABLE ...
+ * RENAME TO` otherwise re-parses every trigger in the schema and two of `document_lines`'s
+ * read a table that has just been dropped.
+ *
+ * What matters is that it puts them back. A connection left in legacy mode would silently
+ * stop rewriting references for every later rename on it, and the failure would show up
+ * somewhere else entirely. Asserted against the whole real registry rather than a fixture,
+ * because the point is what an opened company file is actually left in.
+ */
+describe('the pragmas a migrated database is left with', () => {
+  const setting = (db: SqliteDatabase, name: string): unknown => db.pragma(name, { simple: true })
+
+  it('leaves legacy_alter_table off', () => {
+    const db = freshDb()
+    runMigrations(db, MIGRATIONS)
+
+    expect(setting(db, 'legacy_alter_table')).toBe(0)
+  })
+
+  it('leaves foreign keys on and enforcing', () => {
+    const db = freshDb()
+    runMigrations(db, MIGRATIONS)
+
+    expect(setting(db, 'foreign_keys')).toBe(1)
+    expect(() =>
+      db
+        .prepare(
+          `INSERT INTO document_lines (id, document_id, line_number, description, quantity,
+             unit_price, taxable_amount)
+           VALUES ('l-1', 'no-such-document', 1, 'x', '1.000', '1.00', '1.00')`,
+        )
+        .run(),
+    ).toThrow(/FOREIGN KEY/i)
+  })
+
+  /* And nothing the migrations did left a row pointing at a parent that is not there.
+   * Cheap, and it is the whole class of damage a table rebuild can do. */
+  it('leaves no broken references', () => {
+    const db = freshDb()
+    runMigrations(db, MIGRATIONS)
+
+    expect(db.pragma('foreign_key_check')).toEqual([])
+  })
+})
