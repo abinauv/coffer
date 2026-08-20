@@ -565,6 +565,59 @@ exists yet, and migrations `0005`–`0009` are reserved for the ones that will.
   it, and no test failed, because the repository's own check answers first on every path
   except the one the mapping exists for.
 
+#### The sales invoice posting rule
+
+The first `PostingRule` in the codebase, and the point at which `AccountResolver`,
+`documentTotals` and `forTaxComponent` stop being contracts. Pure — same document and
+same context, same entry, every time — so each test is a document written down beside the
+entry it must produce, and a change in accounting treatment cannot happen without one of
+them going red.
+
+- **[accounting]** Receivables is debited with the **grand total** — what the customer
+  owes, which is what the document says at the bottom. Any other figure makes the
+  receivables ledger disagree with the paper the customer is holding.
+- **[accounting]** Revenue is credited with the **taxable value**, never the tax. Tax is
+  the government's money passing through; a business that credited sales with it would
+  overstate turnover by the rate of GST, consistently, so nothing would look wrong.
+- **[accounting]** A charge — freight, packing, insurance — recovered from the customer is
+  taxable at the same rate as the supply it sits on and is **not turnover**. It posts to
+  `freight-outward`, which is an expense account in the shipped chart, so the recovery
+  nets against freight actually paid. A business wanting it shown separately names an
+  account on the line.
+- **[accounting]** The ledger groups tax by **component**; the printed document groups it
+  by **component and rate**. An invoice carrying 18% goods and 5% freight prints
+  `CGST @ 9%` and `CGST @ 2.5%` as two lines a customer can check, and posts one credit to
+  output CGST. The sums across the two groupings are identical, which is the property the
+  tests pin.
+- **[accounting]** Rounding posts to `round-off` from the document's **own frozen policy**,
+  never from a setting read today — reprinting an invoice years later cannot restate it.
+  A policy of `none` writes no line at all rather than a zero one.
+- Lines sharing an account are gathered into one posting line. The document holds the line
+  detail; repeating fifty lines in the ledger makes the day book unreadable and tells a
+  reader nothing the invoice does not.
+- **[accounting]** A line whose account total comes to nothing produces no posting line,
+  and one that comes to a negative becomes a debit rather than a negative credit — a free
+  sample and an agreed rebate respectively, both of which invariant 5 would otherwise
+  refuse.
+- A missing account is fatal and says which one. An invoice with nowhere to put the
+  receivable cannot post, and a tax component with no account is refused rather than
+  quietly sent to sales — which would overstate turnover and understate a liability in a
+  way every report agrees with.
+- `PostingError` in `domain/ledger` — the one error class the pure layer owns. `checkDraft`
+  beside it returns its problems, because a user who typed a journal wants every bad line
+  at once; a posting rule returns an `EntryDraft` and has no half-built entry to hand back.
+
+### Fixed
+
+- **[accounting]** A fiscal year that broke exactly even could not be closed. The
+  retained-earnings line came out as debit `0.00` and credit `0.00` — a both-zero line,
+  which invariant 5 refuses — so the close failed with `AMBIGUOUS_LINE`, an error nothing
+  on that screen could act on. The cause is that **`isPositive()` is true for zero in
+  decimal.js**, because zero carries a positive sign. A year that nets to nothing now
+  writes no profit line at all, which is the honest entry: the closing lines already
+  balance among themselves. Found by auditing every `isPositive()` in the codebase after
+  the same trap made a test in the posting rule fail.
+
 #### Documentation
 
 - Architecture, conventions, getting started, the data model, adding a tax regime,

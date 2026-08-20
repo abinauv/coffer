@@ -25,6 +25,8 @@ export {
   type EntryDraft,
   type EntryLineDraft,
   type EntryTotals,
+  PostingError,
+  isPostingError,
   type LedgerErrorCode,
   type NormalBalance,
   type PeriodStatus,

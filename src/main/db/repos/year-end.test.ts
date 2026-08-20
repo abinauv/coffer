@@ -366,6 +366,44 @@ describe('the year-end close', () => {
     })
   }
 
+  /*
+   * A year that broke exactly even. Rare and entirely possible — and it was a genuine
+   * defect: `netResult.isPositive()` is TRUE for zero in decimal.js, because zero carries
+   * a positive sign, so the retained-earnings line came out as debit 0 and credit 0. That
+   * is a both-zero line, which invariant 5 refuses, and the close failed with
+   * AMBIGUOUS_LINE — an error nothing on that screen could act on.
+   *
+   * Found while auditing an unrelated `isPositive()` in the sales invoice posting rule.
+   */
+  it('closes a year that broke exactly even', async () => {
+    await postManualEntry(db, {
+      date: '2026-06-01',
+      narration: 'One sale',
+      lines: [
+        { accountId: account['1300']!, partyId: customer, debit: '50000.00', credit: '0.00' },
+        { accountId: account['4100']!, debit: '0.00', credit: '50000.00' },
+      ],
+    })
+    await postManualEntry(db, {
+      date: '2026-06-02',
+      narration: 'Rent, exactly cancelling it',
+      lines: [
+        { accountId: account['6200']!, debit: '50000.00', credit: '0.00' },
+        { accountId: account['1210']!, debit: '0.00', credit: '50000.00' },
+      ],
+    })
+
+    const result = await closeFiscalYear(db, { rule: aprilToMarch, startYear: 2026 })
+
+    expect(result.netResult).toBe('0.00')
+    expect(result.accountsClosed).toBe(2)
+    /* Both accounts closed, and nothing posted to retained earnings — there was no
+     * profit or loss to carry, and a zero line would say there was one worth recording. */
+    expect(await balanceOf('4100')).toBe('0.00')
+    expect(await balanceOf('6200')).toBe('0.00')
+    expect(await balanceOf('3300')).toBe('0.00')
+  })
+
   it('moves the profit to retained earnings', async () => {
     await tradingYear()
     const result = await closeFiscalYear(db, { rule: aprilToMarch, startYear: 2026 })

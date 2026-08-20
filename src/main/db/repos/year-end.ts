@@ -109,18 +109,36 @@ export async function closeFiscalYear(
    * and the figure posted cannot drift apart: it is arithmetically the amount that makes
    * the entry balance.
    */
+  /* Counted here, before anything else joins the list. `lines.length - 1` at the end
+   * was the same number by arithmetic only while the retained-earnings line was
+   * unconditional, and it stopped being that the moment an even year skipped it. */
+  const accountsClosed = lines.length
+
   const netResult = lines.reduce(
     (total, line) => total.plus(line.debit).minus(line.credit),
     ZERO as Decimal,
   )
 
-  const retainedEarnings = await accountForRole(db, 'retained-earnings')
-  lines.push({
-    accountId: retainedEarnings,
-    debit: netResult.isNegative() ? netResult.negated() : ZERO,
-    credit: netResult.isPositive() ? netResult : ZERO,
-    narration: `Profit or loss for ${fiscalYearLabel}`,
-  })
+  /*
+   * A year that broke exactly even carries nothing to retained earnings, and must not
+   * write a line saying it did.
+   *
+   * Measured, not assumed: `netResult.isPositive()` is TRUE for zero, because decimal.js
+   * gives zero a positive sign. Without this guard the line came out as debit '0.00' and
+   * credit '0.00' — a both-zero line, which invariant 5 refuses — and the close failed
+   * with AMBIGUOUS_LINE, an error nothing on that screen could act on. The closing lines
+   * above already balance among themselves when the net is zero, so the entry is complete
+   * without this one.
+   */
+  if (!netResult.isZero()) {
+    const retainedEarnings = await accountForRole(db, 'retained-earnings')
+    lines.push({
+      accountId: retainedEarnings,
+      debit: netResult.isNegative() ? netResult.negated() : ZERO,
+      credit: netResult.isPositive() ? netResult : ZERO,
+      narration: `Profit or loss for ${fiscalYearLabel}`,
+    })
+  }
 
   const posting: PostingResult = await postEntry(db, {
     date,
@@ -133,7 +151,7 @@ export async function closeFiscalYear(
     fiscalYearLabel,
     posting,
     netResult: toMoneyString(netResult),
-    accountsClosed: lines.length - 1,
+    accountsClosed,
   }
 }
 

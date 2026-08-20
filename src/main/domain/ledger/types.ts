@@ -420,3 +420,38 @@ export type LedgerErrorCode =
   | 'ALREADY_REVERSED'
   /** A reversal was asked for against an entry that is not in the books. */
   | 'ENTRY_NOT_FOUND'
+
+/**
+ * A posting that cannot be built, raised by a posting rule.
+ *
+ * `checkDraft` beside this file RETURNS its problems, because a user who typed a journal
+ * wants every bad line at once. A posting rule cannot: it returns an `EntryDraft`, and
+ * there is no half-built entry to hand back. So the one shape of failure it has — the
+ * books are missing an account this document needs — is thrown, carrying the same
+ * `LedgerErrorCode` vocabulary everything else reports, so the repository has nothing to
+ * translate and the user reads one sentence rather than two.
+ *
+ * It stays in `domain/` and stays free of any dependency: this is the only error class
+ * the pure layer owns, and it exists because `toEntry` has no other way to say no.
+ */
+export class PostingError extends Error {
+  readonly code: LedgerErrorCode
+  /** Structured context for the message the user eventually sees. Never a path. */
+  readonly details: Record<string, unknown>
+
+  constructor(
+    code: LedgerErrorCode,
+    message: string,
+    details: Record<string, unknown> = {},
+    options?: ErrorOptions,
+  ) {
+    super(message, options)
+    this.name = 'PostingError'
+    this.code = code
+    this.details = details
+  }
+}
+
+export function isPostingError(value: unknown): value is PostingError {
+  return value instanceof PostingError
+}
