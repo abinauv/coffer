@@ -183,6 +183,20 @@ export type RepoErrorCode =
   | 'DOCUMENT_NOT_FOUND'
   /** An edit or a delete against a document that has left draft. Rule 1. */
   | 'DOCUMENT_NOT_DRAFT'
+  /** A cancel against a document still in draft. A draft is deleted, not cancelled. */
+  | 'DOCUMENT_NOT_ISSUED'
+  /** A cancel against a document that has already been cancelled. */
+  | 'DOCUMENT_ALREADY_CANCELLED'
+  /**
+   * This build cannot issue a document of that kind.
+   *
+   * Two causes, one code, two sentences. A quotation never posts and its place in a
+   * document's life is not settled (see 0008); the other kinds post but their posting
+   * rules are not written yet. Neither is something a user can fix, and both are
+   * something a user can hit by drafting a document the screens offered them — which is
+   * why it is a code with a message rather than a thrown programmer error.
+   */
+  | 'DOCUMENT_KIND_UNSUPPORTED'
   /** An issue against a document with no lines, or with every line at zero. */
   | 'DOCUMENT_EMPTY'
   /** A quantity, price or discount that is not a decimal string. */

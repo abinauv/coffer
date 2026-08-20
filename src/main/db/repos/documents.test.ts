@@ -20,6 +20,7 @@ import { createQueryBuilder, type CofferDb } from '../kysely'
 import { runMigrations, rollbackMigrations } from '../migrate'
 import { MIGRATIONS } from '../migrations'
 import { createParty } from './parties'
+import { createSeries } from './numbering'
 import { isRepoError, type RepoError, type RepoErrorCode } from './errors'
 import {
   MAX_DOCUMENT_PAGE,
@@ -293,8 +294,43 @@ describe('migration 0008', () => {
     )
   })
 
-  /* Narration and the updated stamp are not part of the supply, so they still move. */
-  it('still lets an issued document record what happened to it', () => {
+  /*
+   * 0009 goes back as cleanly as it came, which for a trigger means the OLD rule is in
+   * place again rather than no rule at all. A `down` that dropped the trigger and stopped
+   * would leave a database at 0008 with less protection than 0008 ever shipped, and
+   * nothing would report it — the tables would all be there.
+   */
+  it('gives the looser rule back when 0009 is rolled off', () => {
+    writeDocument('d-1', {
+      status: 'cancelled',
+      number: 'INV/1',
+      issued_at: NOW,
+      cancelled_at: NOW,
+    })
+    const editNarration = () =>
+      connection.prepare(`UPDATE documents SET narration = 'Note' WHERE id = 'd-1'`).run()
+
+    expect(editNarration).toThrow(/DOCUMENT_NOT_DRAFT/)
+
+    rollbackMigrations(connection, MIGRATIONS, { to: '0008' })
+
+    expect(editNarration).not.toThrow()
+    /* The rest of 0008's rule is back too, not merely absent. */
+    expect(() =>
+      connection.prepare(`UPDATE documents SET number = 'INV/2' WHERE id = 'd-1'`).run(),
+    ).toThrow(/DOCUMENT_NOT_DRAFT/)
+  })
+
+  /*
+   * THE NARRATION IS FROZEN TOO, and it was not until 0009.
+   *
+   * 0008 let it move, on the grounds that it is not part of the supply. Then issuing was
+   * built and the narration turned out to be what goes on the JOURNAL ENTRY — which is
+   * immutable — so an editable narration was a document that could be made to print
+   * something its own day book entry does not say. See 0009 for the whole argument; what
+   * is asserted here is the rule that replaced it.
+   */
+  it('freezes the narration of an issued document, because the entry carries it', () => {
     writeDocument('d-1', {
       status: 'cancelled',
       number: 'INV/1',
@@ -306,6 +342,82 @@ describe('migration 0008', () => {
       connection
         .prepare(`UPDATE documents SET narration = 'Cancelled in error' WHERE id = 'd-1'`)
         .run(),
+    ).toThrow(/DOCUMENT_NOT_DRAFT/)
+  })
+
+  /*
+   * The number was frozen from 0008 and the series that produced it was not, so a
+   * document that had left draft could be repointed at a series whose shape its number
+   * does not match. Also 0009.
+   *
+   * Cancelled rather than issued, for the reason the rule-2 test above gives: an ISSUED
+   * document needs an `entry_id`, and a journal entry cannot be written straight to its
+   * table. The trigger reads `status <> 'draft'`, so cancelled exercises it exactly.
+   */
+  it('freezes the series a document that has left draft was numbered from', async () => {
+    const series = await createSeries(db, { kind: 'sales-invoice', label: 'Domestic' })
+    writeDocument('d-1', {
+      status: 'cancelled',
+      number: 'INV/1',
+      series_id: series.id,
+      issued_at: NOW,
+      cancelled_at: NOW,
+    })
+
+    expect(() =>
+      connection.prepare(`UPDATE documents SET series_id = NULL WHERE id = 'd-1'`).run(),
+    ).toThrow(/DOCUMENT_NOT_DRAFT/)
+  })
+
+  /*
+   * UN-ISSUING, which is what the IFNULLs in that trigger are actually for.
+   *
+   * `NEW.number <> OLD.number` is NULL when either side is NULL, and a trigger whose WHEN
+   * evaluates to NULL does not fire — measured, not assumed: `0 OR NULL` is NULL in
+   * SQLite, so a disjunction whose only true-ish term went NULL is a disjunction that
+   * says nothing. An UPDATE clearing the status, the number and the stamps together
+   * satisfies every CHECK on the row, so without the IFNULL the whole thing goes through
+   * and the document is a draft again — editable, re-issuable under a second number, with
+   * its journal entry still sitting in the ledger.
+   *
+   * A mutation removing the IFNULL survived the entire suite before this existed.
+   */
+  it('will not let a document that has left draft be turned back into one', () => {
+    writeDocument('d-1', {
+      status: 'cancelled',
+      number: 'INV/1',
+      issued_at: NOW,
+      cancelled_at: NOW,
+    })
+
+    expect(() =>
+      connection
+        .prepare(
+          `UPDATE documents
+           SET status = 'draft', number = NULL, issued_at = NULL, cancelled_at = NULL
+           WHERE id = 'd-1'`,
+        )
+        .run(),
+    ).toThrow(/DOCUMENT_NOT_DRAFT/)
+
+    expect(
+      connection.prepare(`SELECT status, number FROM documents WHERE id = 'd-1'`).get(),
+    ).toMatchObject({ status: 'cancelled', number: 'INV/1' })
+  })
+
+  /* What still moves, and must. `updated_at` is not on the frozen list, because
+   * cancelling writes it — see `cancelDocument`, where the whole transition goes through
+   * this trigger against a real issued document. */
+  it('still lets the updated stamp move', () => {
+    writeDocument('d-1', {
+      status: 'cancelled',
+      number: 'INV/1',
+      issued_at: NOW,
+      cancelled_at: NOW,
+    })
+
+    expect(() =>
+      connection.prepare(`UPDATE documents SET updated_at = ? WHERE id = 'd-1'`).run(NOW),
     ).not.toThrow()
   })
 

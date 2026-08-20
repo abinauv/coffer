@@ -32,8 +32,15 @@
  *   0006  items, units_of_measure                    — what is on its lines  LANDED
  *   0007  numbering_series, numbering_counters       — what its number is  LANDED
  *   0008  documents, document_lines,
- *         document_line_taxes                        — the document itself
- *   0009  receipts, allocations                      — what has been paid against one
+ *         document_line_taxes                        — the document itself  LANDED
+ *   0009  documents_frozen_once_issued, replaced     — narration and series, frozen too
+ *   0010  receipts, allocations                      — what has been paid against one
+ *
+ * 0009 WAS RESERVED FOR RECEIPTS AND IS NOT ANY MORE. Building `issueDocument` showed
+ * that 0008 left a document's narration editable after issue, while the entry it had
+ * become could not be — so the two could be made to disagree. That earned the next number
+ * rather than an edit to 0008, and receipts moved to 0010. Renumbering a reservation
+ * nothing has been built on costs a line; editing a landed migration cannot be undone.
  *
  * 0005 HAS LANDED, and its reasoning lives in its own file. Read that header before
  * writing anything that touches `journal_lines.party_id` — in particular the measured
@@ -93,6 +100,7 @@ import { m0005 } from './0005_parties'
 import { m0006 } from './0006_items'
 import { m0007 } from './0007_numbering'
 import { m0008 } from './0008_documents'
+import { m0009 } from './0009_document_freeze'
 
 export const MIGRATIONS: readonly Migration[] = [
   m0001,
@@ -103,4 +111,5 @@ export const MIGRATIONS: readonly Migration[] = [
   m0006,
   m0007,
   m0008,
+  m0009,
 ]

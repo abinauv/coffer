@@ -47,4 +47,4 @@ export {
 
 export { documentTotals, lineTax, lineTotal, type DocumentTotals, type Summable } from './totals'
 
-export { salesInvoiceRule, type PostableDocument } from './posting'
+export { postingRuleFor, salesInvoiceRule, type PostableDocument } from './posting'

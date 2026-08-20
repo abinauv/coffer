@@ -643,6 +643,47 @@ export interface UpdateDocumentInput {
   lines?: readonly DocumentLineInput[]
 }
 
+/**
+ * Issuing a draft: the one call that allocates the number and posts the entry.
+ *
+ * Nothing about the document itself is on it. Issuing does not edit — the draft is
+ * already exactly what it will be — so an input carrying a date or a line would be a
+ * second way to change a document, arriving at the moment it stops being changeable.
+ */
+export interface IssueDocumentInput {
+  id: string
+  /**
+   * Which series to draw the number from. Absent takes the kind's default.
+   *
+   * A choice rather than a setting, because a business with an export series and a
+   * domestic one picks per invoice, and the pick has to be made before the number is
+   * spent rather than corrected afterwards — there is no correcting it.
+   */
+  seriesId?: string
+}
+
+/**
+ * Cancelling an issued document: reverse what it posted, keep what it was.
+ *
+ * The number stays (rule 2), the lines stay, and the entry it posted stays — what
+ * changes is that a second entry now cancels the first. Deleting is a different
+ * operation and only reaches a draft.
+ */
+export interface CancelDocumentInput {
+  id: string
+  /**
+   * The date the reversal posts as of. Absent uses the document's own date.
+   *
+   * Its own date is right when nothing has been filed: the invoice leaves the month it
+   * was in, as if it had not been raised. Once that period is closed the reversal has to
+   * land somewhere open, and saying so is the caller's decision rather than a silent
+   * shift to today.
+   */
+  date?: DateString
+  /** What the day book says about the reversal. Defaulted from the document's number. */
+  narration?: string
+}
+
 export interface ListDocumentsInput {
   kind?: string
   status?: DocumentStatusDto

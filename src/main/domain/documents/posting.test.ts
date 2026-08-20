@@ -20,9 +20,9 @@ import { D, ZERO, sum, type Decimal } from '@main/domain/money'
 import type { AccountRef, AccountResolver, PostingContext } from '@main/domain/ledger'
 import { isPostingError } from '@main/domain/ledger'
 
-import { salesInvoiceRule, type PostableDocument } from './posting'
+import { postingRuleFor, salesInvoiceRule, type PostableDocument } from './posting'
 import { documentTotals } from './totals'
-import type { DocumentLine, DocumentLineTax } from './types'
+import { DOCUMENT_KINDS, postsToLedger, type DocumentLine, type DocumentLineTax } from './types'
 
 // ---- The chart these tests post into ---------------------------------------
 
@@ -398,6 +398,95 @@ describe('lines that are not a plain positive sale', () => {
     expect(sum(entry.lines.map((l) => l.debit)).toString()).toBe(
       sum(entry.lines.map((l) => l.credit)).toString(),
     )
+  })
+})
+
+/*
+ * An invoice that comes to nothing with real lines on it — a rebate cancelling exactly
+ * the goods line it corrects. The customer owes nothing, so receivables must not move,
+ * and a zero debit is not "no movement": invariant 5 refuses a line that is neither a
+ * debit nor a credit, so it is an `AMBIGUOUS_LINE` refusal arriving at a user who was
+ * told their invoice would not post, with no line on it to point at.
+ *
+ * The same bug the year-end close had, and found the same way. A `Buckets` entry that
+ * comes to nothing is already skipped; the receivable line was written before that and
+ * had to learn it.
+ */
+describe('an invoice that comes to nothing', () => {
+  const nothingDue = () =>
+    invoice({
+      lines: [
+        line({ lineNumber: 1, taxes: [] }),
+        line({
+          lineNumber: 2,
+          description: 'Agreed rebate, in full',
+          accountId: ACCOUNTS['exports']!.id,
+          unitPrice: D('-1000.00'),
+          taxableAmount: D('-1000.00'),
+          taxes: [],
+        }),
+      ],
+    })
+
+  it('writes no receivable line', () => {
+    expect(documentTotals(nothingDue()).grandTotal.toString()).toBe('0')
+    expect(post(nothingDue()).lines.some((l) => l.accountId === ACCOUNTS['receivable']?.id)).toBe(
+      false,
+    )
+  })
+
+  /* What is left is a real entry: the sale and the rebate, against each other. It
+   * balances without the receivable line precisely because the figure that line would
+   * have carried is zero. */
+  it('still posts what did happen, and balances', () => {
+    const entry = post(nothingDue())
+
+    expect(entry.lines).toHaveLength(2)
+    expect(sum(entry.lines.map((l) => l.debit)).toString()).toBe('1000')
+    expect(sum(entry.lines.map((l) => l.credit)).toString()).toBe('1000')
+  })
+
+  /* Every line on it is neither a debit nor a credit — which is what invariant 5 calls
+   * ambiguous, and what a zero receivable line would have been. */
+  it('leaves no line that is neither a debit nor a credit', () => {
+    for (const entryLine of post(nothingDue()).lines) {
+      expect(entryLine.debit.isZero() && entryLine.credit.isZero()).toBe(false)
+    }
+  })
+})
+
+/*
+ * WHICH KINDS HAVE A RULE. Two different nulls come back from here and the caller has to
+ * tell them apart — a quotation has no rule because it never posts, a credit note has no
+ * rule because nobody has written it yet. `postsToLedger` is the fact that separates
+ * them, and the repository says different sentences for each.
+ */
+describe('postingRuleFor', () => {
+  it('gives the sales rule for a sales invoice', () => {
+    expect(postingRuleFor('sales-invoice')).toBe(salesInvoiceRule)
+  })
+
+  it('gives nothing for a kind whose rule is not written yet', () => {
+    expect(postingRuleFor('credit-note')).toBeNull()
+    expect(postingRuleFor('purchase-bill')).toBeNull()
+    expect(postingRuleFor('debit-note')).toBeNull()
+  })
+
+  it('gives nothing for a quotation, which never posts at all', () => {
+    expect(postingRuleFor('quotation')).toBeNull()
+    expect(postsToLedger('quotation')).toBe(false)
+  })
+
+  /* A rule that exists posts what its kind says it posts. The day a second rule is
+   * written, this is what catches it being registered under the wrong kind — which
+   * would put a purchase in the sales register and balance perfectly. */
+  it('never returns a rule whose source disagrees with the kind it was asked for', () => {
+    for (const definition of DOCUMENT_KINDS) {
+      const rule = postingRuleFor(definition.kind)
+      if (rule !== null) {
+        expect(rule.source).toBe(definition.sourceType)
+      }
+    }
   })
 })
 

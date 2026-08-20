@@ -83,7 +83,13 @@ import type {
 import { PostingError } from '@main/domain/ledger'
 
 import { documentTotals } from './totals'
-import { definitionOf, levyOf, type DocumentLine, type TradeDocument } from './types'
+import {
+  definitionOf,
+  levyOf,
+  type DocumentKind,
+  type DocumentLine,
+  type TradeDocument,
+} from './types'
 
 /**
  * A document that is ready to post.
@@ -134,6 +140,23 @@ export const salesInvoiceRule: PostingRule<PostableDocument> = {
   toEntry: (document, context) => toEntry(document, context),
 }
 
+/**
+ * The rule that turns a document of this kind into an entry, or null when there is none.
+ *
+ * TWO DIFFERENT NULLS, AND THE CALLER HAS TO TELL THEM APART. A quotation has no rule
+ * because it never posts — `sourceType` is null and always will be, and issuing one is
+ * not blocked on anybody writing code. A credit note has no rule because the rule is not
+ * written yet. Both come back null here; `postsToLedger` is what separates them, and the
+ * repository says different sentences to the user for each.
+ *
+ * A lookup rather than a `switch` in the repository, because "which rule posts this kind"
+ * is a fact about the domain. A `switch` in `db/` would be a second table of document
+ * kinds, kept in step by whoever remembers.
+ */
+export function postingRuleFor(kind: DocumentKind): PostingRule<PostableDocument> | null {
+  return kind === 'sales-invoice' ? salesInvoiceRule : null
+}
+
 function toEntry(document: PostableDocument, context: PostingContext): EntryDraft {
   const definition = definitionOf(document.kind)
   if (definition.sourceType !== 'sales-invoice') {
@@ -169,15 +192,29 @@ function toEntry(document: PostableDocument, context: PostingContext): EntryDraf
     }
   }
 
-  const lines: EntryLineDraft[] = [
-    {
+  const lines: EntryLineDraft[] = []
+
+  /*
+   * Skipped when the grand total is nothing, the same way a bucket that comes to nothing
+   * is skipped. Invariant 5 refuses a line that is neither a debit nor a credit, so a
+   * zero receivable line is not a harmless no-op — it is an `AMBIGUOUS_LINE` refusal
+   * arriving at a user who was told their invoice would not post, with no line on it to
+   * point at. The same bug the year-end close had, and found the same way.
+   *
+   * An invoice can reach zero with real lines on it — a rebate line cancelling the goods
+   * line it corrects — and when it does, the customer owes nothing and a receivable
+   * movement of nothing is the correct posting. Whatever is left balances among itself,
+   * because the total it was measured against is zero.
+   */
+  if (!totals.grandTotal.isZero()) {
+    lines.push({
       accountId: required(accounts.forRole('accounts-receivable'), 'accounts-receivable').id,
       debit: totals.grandTotal,
       credit: ZERO,
       /* The whole reason a control line carries one — see 0005. */
       partyId: document.partyId,
-    },
-  ]
+    })
+  }
 
   for (const bucket of [...revenue.entries(), ...tax.entries()]) {
     lines.push(credit(bucket))

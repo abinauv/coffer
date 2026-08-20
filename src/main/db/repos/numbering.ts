@@ -43,12 +43,13 @@
  * `inTransaction`, which starts a transaction when it is handed a plain connection and
  * joins the caller's when it is handed one already open.
  *
- * That test is not decoration. Measured, not read: Kysely refuses `trx.transaction()`
- * outright — "calling the transaction method for a Transaction is not supported" — so a
- * repository function that always opens its own is a repository function that cannot be
- * called from inside `postEntry`. The consequence that matters is at the other end: a
- * document that fails to post rolls the allocation back with it, and the number is not
- * spent on a document that does not exist.
+ * That test is not decoration. Kysely refuses `trx.transaction()` outright rather than
+ * opening a savepoint, so a repository function that always opens its own transaction is
+ * one that cannot be called from inside `postEntry` — the measurement and the rest of the
+ * argument are in ./transaction.ts, which `postEntry` now goes through for the same
+ * reason. The consequence that matters is at the other end: a document that fails to post
+ * rolls the allocation back with it, and the number is not spent on a document that does
+ * not exist.
  *
  * ---------------------------------------------------------------------------
  * THE FISCAL YEAR IS REFUSED HERE AS WELL AS IN THE DOMAIN, AND NOT TWICE OVER
@@ -89,6 +90,7 @@ import type {
 import type { CofferDb } from '../kysely'
 import type { NumberingSeriesTable } from '../schema'
 import { RepoError } from './errors'
+import { inTransaction } from './transaction'
 
 type SeriesColumns = {
   [K in keyof NumberingSeriesTable]: NumberingSeriesTable[K]
@@ -453,18 +455,6 @@ export async function allocateNumber(
 }
 
 // ---- Guards ----------------------------------------------------------------
-
-/**
- * Run the work in the caller's transaction, or in one of our own when there is none.
- *
- * Measured, not read: Kysely throws `calling the transaction method for a Transaction is
- * not supported` rather than opening a savepoint, so a function that unconditionally
- * calls `db.transaction()` cannot be called from inside `postEntry` — and issuing a
- * document is one transaction (rule 3), which is the only place allocation ever happens.
- */
-async function inTransaction<T>(db: CofferDb, work: (trx: CofferDb) => Promise<T>): Promise<T> {
-  return db.isTransaction ? work(db) : db.transaction().execute(work)
-}
 
 async function requireSeries(db: CofferDb, id: string): Promise<NumberingSeriesRecord> {
   const series = await getSeries(db, id)

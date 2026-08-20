@@ -48,6 +48,7 @@ import type { CofferDb } from '../kysely'
 import { RepoError, repoErrorFrom, type RepoErrorCode } from './errors'
 import { assertPartiesActive } from './parties'
 import { requirePostablePeriod } from './periods'
+import { inTransaction } from './transaction'
 
 /** How wide an entry number's sequence is padded. It grows past this rather than wrapping. */
 const SEQUENCE_WIDTH = 4
@@ -74,6 +75,17 @@ export interface PostEntryOptions {
  * Everything happens in one transaction, including the reads: the period status, the
  * account list and the next entry number are all things that another write could change
  * underneath a check made outside one.
+ *
+ * IT JOINS THE CALLER'S TRANSACTION WHEN THERE IS ONE. Issuing a document allocates a
+ * number, posts the entry and changes the document's status together or not at all (rule
+ * 3), so this cannot be the function that insists on opening its own — Kysely throws
+ * rather than nesting, and the throw arrives at runtime. See ./transaction.ts.
+ *
+ * What that costs is worth stating: inside a caller's transaction, a failure here rolls
+ * back the caller's earlier work too. That is the behaviour issuing needs — a document
+ * that fails to post must not keep the number it spent — and it is the reason
+ * `nextEntryNumber` reading `MAX(entry_number)` is still safe when the caller wrote
+ * something before calling.
  */
 export async function postEntry(
   db: CofferDb,
@@ -89,7 +101,7 @@ export async function postEntry(
   }
 
   try {
-    return await db.transaction().execute(async (trx) => {
+    return await inTransaction(db, async (trx) => {
       const period = await requirePostablePeriod(trx, draft.date)
       await assertAccountsPostable(trx, draft.lines, options.allowArchived === true)
 

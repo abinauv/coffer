@@ -127,14 +127,16 @@ Typed in [`src/main/db/schema.ts`](../src/main/db/schema.ts) and contracted in
 [`src/main/domain/ledger/types.ts`](../src/main/domain/ledger/types.ts), with migration
 numbers reserved so that parallel work cannot collide.
 
-| Migration | Tables                                   | What it is                                        | State  |
-| --------- | ---------------------------------------- | ------------------------------------------------- | ------ |
-| `0002`    | `accounts`, `account_roles`              | The chart of accounts, as a tree                  | landed |
-| `0003`    | `accounting_periods`                     | Periods that can be opened, closed and locked     | landed |
-| `0004`    | `journal_entries`, `journal_lines`       | The ledger itself, with the balance triggers      | landed |
-| `0005`    | `parties`, `journal_lines.party_id`      | Who a document is with, and whose money a line is | landed |
-| `0006`    | `units_of_measure`, `items`              | What goes on a document line                      | landed |
-| `0007`    | `numbering_series`, `numbering_counters` | What a document's number is                       | landed |
+| Migration | Tables                                               | What it is                                        | State  |
+| --------- | ---------------------------------------------------- | ------------------------------------------------- | ------ |
+| `0002`    | `accounts`, `account_roles`                          | The chart of accounts, as a tree                  | landed |
+| `0003`    | `accounting_periods`                                 | Periods that can be opened, closed and locked     | landed |
+| `0004`    | `journal_entries`, `journal_lines`                   | The ledger itself, with the balance triggers      | landed |
+| `0005`    | `parties`, `journal_lines.party_id`                  | Who a document is with, and whose money a line is | landed |
+| `0006`    | `units_of_measure`, `items`                          | What goes on a document line                      | landed |
+| `0007`    | `numbering_series`, `numbering_counters`             | What a document's number is                       | landed |
+| `0008`    | `documents`, `document_lines`, `document_line_taxes` | The trade document itself                         | landed |
+| `0009`    | `documents_frozen_once_issued`, replaced             | Narration and series, frozen after issue          | landed |
 
 Ten things about these tables are worth knowing before you read them, because each one
 is a decision rather than a detail:
