@@ -514,6 +514,57 @@ exists yet, and migrations `0005`–`0009` are reserved for the ones that will.
   regime's question, its answer is a sentence written for the user, and a second weaker
   check here would either disagree with it or repeat it.
 
+#### What goes on a line, and what a number is (migrations `0006`, `0007`)
+
+- **[accounting]** Items and units of measure. Every column on an item is a **default for
+  a document line, never a lookup the line performs later** — a line stores its own
+  description, price, unit and tax rate, so repricing an item or renaming it cannot rewrite
+  an invoice already issued.
+- Custom units are the point. A business measures in bags, bundles or dozens, and being
+  forced onto a fixed list is the thing that makes software feel foreign. India's UQC is a
+  closed set, but that is a _filing_ concern: a separate `regime_code` maps a company's own
+  unit onto it when a return is prepared, so a company invoicing in `BAGS` keeps saying
+  `BAGS` on its own paperwork.
+- A unit's code is its identity — it is what the user types, what prints, and what an item
+  refers to, so there is no surrogate id to join through. Codes are upper case and trimmed,
+  enforced by the database rather than by convention: `kg`, ` KG` and `KG ` are all a second
+  row that prints as the first one and totals separately from it.
+- An item is sold, purchased, or both — a party's two flags in another table, for the same
+  reason. A record that is neither cannot reach any picker or any document line.
+- **[accounting]** An item's price is money at two places and its tax rate is a rate at
+  three, each with the CHECK that makes the integer-paise arithmetic sound. Half of India's
+  0.25% slab is 0.125%, and at two places an invoice would print a rate the tax was never
+  computed from.
+- **[accounting]** Numbering series, and the counters behind them. The number is allocated
+  at issue and never released: a draft holds none, because one handed out and abandoned
+  leaves a gap somebody has to explain to an officer, and a cancelled document keeps its.
+- **[accounting]** Whether the fiscal year is _printed_ and whether the counter _resets_ on
+  it are independent, and both combinations are real. A number is refused rather than
+  guessed when the series needs a year and none was given — either because the year prints
+  and cannot be built without it, or because the counter to draw from is chosen by it and
+  guessing would hand out a number twice.
+- **[accounting]** At most one default series per document kind, among the series a
+  document could actually take. Two defaults means "which series does a new invoice get?"
+  is answered by whichever row the query found first.
+- **[accounting]** Three triggers guard one fact: a series that has handed out a number
+  cannot have that undone. A counter may only move forward, may not be deleted, and a
+  series that has issued may not change its prefix, width, separator, year flag or reset
+  rule. Reissuing a number is not an error anybody sees — it is a second invoice carrying a
+  number an officer will match against the first.
+- A counter's scope key is **never NULL**: the empty string stands for a series that never
+  resets, and the repository maps that to and from the domain's `null`. A NULL in a unique
+  index does not collide, so a nullable scope column would admit two counter rows for one
+  series, and two counters hand the same number to two invoices.
+- Allocation reads and advances in a single statement inside the issuing transaction, so
+  two documents issued at the same moment cannot take the same number. Demonstrated by
+  allocating in bulk and asserting the set has no duplicates and no gaps, rather than
+  asserted in a comment.
+- `repoErrorFrom` now maps every code a trigger raises, checked by a test that **reads the
+  migrations** rather than a list somebody remembered to update. The two had silently
+  fallen out of step: `0007` raised `SERIES_IN_USE` from three triggers and nothing mapped
+  it, and no test failed, because the repository's own check answers first on every path
+  except the one the mapping exists for.
+
 #### Documentation
 
 - Architecture, conventions, getting started, the data model, adding a tax regime,

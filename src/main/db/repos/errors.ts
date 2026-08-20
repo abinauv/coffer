@@ -118,6 +118,61 @@ export type RepoErrorCode =
    * wrong half the time.
    */
   | 'PARTY_JURISDICTION_MISMATCH'
+  // ---- Units and items (0006) ----
+  /** No unit with that code. */
+  | 'UNIT_NOT_FOUND'
+  /** A unit with that code already exists, ignoring case. */
+  | 'UNIT_CODE_TAKEN'
+  /** A unit code with no characters in it. */
+  | 'UNIT_CODE_REQUIRED'
+  /** An item still uses this unit. Archive it instead. */
+  | 'UNIT_IN_USE'
+  /** The unit is archived and takes nothing new. */
+  | 'UNIT_ARCHIVED'
+  /** No item with that id. */
+  | 'ITEM_NOT_FOUND'
+  /** An item name with no characters in it. */
+  | 'ITEM_NAME_REQUIRED'
+  /** Another item already has that name, ignoring case. */
+  | 'ITEM_NAME_TAKEN'
+  /** Another item already has that code, ignoring case. */
+  | 'ITEM_CODE_TAKEN'
+  /** An item must be sold, purchased, or both. */
+  | 'ITEM_HAS_NO_SIDE'
+  /** The item is archived and takes nothing new. */
+  | 'ITEM_ARCHIVED'
+  /** Something references the item — a document line. Archive it instead. */
+  | 'ITEM_IN_USE'
+  /**
+   * The classification code is not one this regime will accept.
+   *
+   * Raised by the items service, not by a repository: what a valid HSN or SAC looks like
+   * is the regime's business and `db/` may not name a concrete regime. Carried as a
+   * `RepoError` for the reason `PARTY_REGISTRATION_INVALID` is.
+   */
+  | 'ITEM_CLASSIFICATION_INVALID'
+  /** An item posts to an account that holds no figures of its own. */
+  | 'ITEM_ACCOUNT_IS_GROUP'
+  // ---- Numbering (0007) ----
+  /** No numbering series with that id. */
+  | 'SERIES_NOT_FOUND'
+  /** No series is configured for that document kind. */
+  | 'SERIES_NOT_CONFIGURED'
+  /** A series label with no characters in it. */
+  | 'SERIES_LABEL_REQUIRED'
+  /** Another series for this kind already has that label, ignoring case. */
+  | 'SERIES_LABEL_TAKEN'
+  /** The width is outside what a sequence may be padded to. */
+  | 'SERIES_WIDTH_INVALID'
+  /** A series that has handed out a number does not change shape — see 0007. */
+  | 'SERIES_IN_USE'
+  /**
+   * The series is set to include the fiscal year and none was supplied.
+   *
+   * A number whose year is silently omitted collides with last year's, which rule 46(b)
+   * exists to prevent — so it is refused rather than filled in with a guess.
+   */
+  | 'FISCAL_YEAR_REQUIRED'
 
 /** An error raised by a repository. Always carries a stable, machine-readable code. */
 export class RepoError extends Error {
@@ -164,6 +219,10 @@ const TRIGGER_CODES: readonly RepoErrorCode[] = [
   'PERIOD_CLOSED',
   'ACCOUNT_IN_USE',
   'PARTY_REQUIRED',
+  /* Raised by all three of 0007's triggers. They guard one fact from three sides — a
+   * series that has handed out a number cannot have that undone — so a counter driven
+   * backwards, a counter deleted and a shape changed after issuing all answer with it. */
+  'SERIES_IN_USE',
 ]
 
 export function repoErrorFrom(error: unknown, fallback: RepoErrorCode): RepoError {

@@ -212,6 +212,144 @@ export interface PartiesTable {
  * Table interfaces are added here as migrations introduce them, keyed by the exact
  * SQL table name in snake_case.
  */
+// ---- units_of_measure, items (0006) ---------------------------------------
+
+/**
+ * A unit a quantity is counted in.
+ *
+ * Keyed by its own code rather than a surrogate id, because the code is what a user
+ * types, what prints on the invoice, and what an item refers to. A table of ids would
+ * mean a join to answer "what does this line say".
+ */
+export interface UnitsOfMeasureTable {
+  /** Short and upper case: 'NOS', 'KGS', 'MTR'. The primary key. */
+  code: string
+  /** What it is called in full, e.g. 'Kilograms'. */
+  name: string
+  /**
+   * How many decimal places a quantity in this unit may carry, 0 to 3.
+   *
+   * Storage scale is 3dp throughout (CONVENTIONS §3); this is narrower, and it is about
+   * the unit rather than the column. Half a box is not a quantity, and a screen that
+   * accepts one produces an invoice line nobody can pick.
+   */
+  decimal_places: number
+  /**
+   * The code this unit reports as in a return, where the regime fixes a list.
+   *
+   * India's UQC is a closed set and a business's own units are not, so the two are
+   * separate columns rather than one constrained one — a company that measures in
+   * `BAGS` must keep saying `BAGS` on its own paperwork while filing `BAG`. Null until
+   * the filing layer maps it; nothing in Phase 2 reads it.
+   */
+  regime_code: string | null
+  is_archived: SqlBool
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+/** Goods or a service. Decides which classification scheme applies, and prints. */
+export type ItemKind = 'goods' | 'service'
+
+/**
+ * Something that goes on a document line.
+ *
+ * Every field here is a DEFAULT for a line, never a lookup the line performs later. A
+ * document line stores its own description, price and rate (see domain/documents), so
+ * renaming an item or changing its price cannot rewrite an invoice already issued.
+ */
+export interface ItemsTable {
+  id: string
+  /** The business's own SKU. Unique ignoring case among the items that have one. */
+  code: string | null
+  /** Unique ignoring case. Two identical rows in a picker is the failure this prevents. */
+  name: string
+  description: string | null
+  kind: ItemKind
+  /** References units_of_measure(code). Null for a service with no countable quantity. */
+  unit_code: string | null
+  /** HSN or SAC in India. Validated by the regime above `db/`, never here. */
+  classification_code: string | null
+  /** Rate, 3dp decimal string — 0.125 is half of India's 0.25% slab (CONVENTIONS §3). */
+  tax_rate_pct: DecimalString | null
+  /** Money, 2dp. Null when nothing standard has been agreed. */
+  sale_price: DecimalString | null
+  purchase_price: DecimalString | null
+  /**
+   * A charge — freight, packing, insurance — rather than goods or a service supplied.
+   *
+   * Taxable like anything else. What differs is where it posts: a charge is not sales
+   * revenue, and putting it there overstates turnover in every report and in the return.
+   */
+  is_charge: SqlBool
+  /** What this item may appear on. At least one, like a party's two flags. */
+  is_sold: SqlBool
+  is_purchased: SqlBool
+  /**
+   * Where this item's value posts, overriding the role the document kind implies.
+   *
+   * An id and not a role, because it is a choice about this item while a role is a
+   * company-wide mapping. Null means "whatever the kind says", which is the usual case.
+   */
+  sales_account_id: string | null
+  purchase_account_id: string | null
+  is_archived: SqlBool
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+// ---- numbering_series, numbering_counters (0007) --------------------------
+
+/** Where a counter restarts. Mirrors `NumberingReset` in domain/documents. */
+export type NumberingResetColumn = 'fiscal-year' | 'never'
+
+/**
+ * How one kind of document is numbered.
+ *
+ * Every part of the shape is data, because the shape is the business's own choice and
+ * matching the series they already use is the first thing anyone leaving another system
+ * asks for. The domain's `NumberingSeries` is the same shape without the row's
+ * bookkeeping — see domain/documents/types.ts, and `formatDocumentNumber` beside it.
+ */
+export interface NumberingSeriesTable {
+  id: string
+  /** A `DocumentKind`. Constrained by a CHECK naming the five, as data. */
+  kind: string
+  label: string
+  prefix: string
+  suffix: string
+  separator: string
+  /** Whether the fiscal year's label sits between the prefix and the sequence. */
+  include_fiscal_year: SqlBool
+  /** Zero-padded width: 4 gives '0001'. A sequence that outgrows it gets longer. */
+  width: number
+  reset_on: NumberingResetColumn
+  /** The series a new document of this kind takes. At most one per kind. */
+  is_default: SqlBool
+  is_archived: SqlBool
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+/**
+ * What one series has reached, in one scope.
+ *
+ * `fiscal_year_label` IS NOT NULLABLE, and that is load-bearing. The domain models the
+ * never-resetting scope as `null`, but a NULL in a unique index does not collide — so a
+ * nullable key column would let a second counter row exist for the same series, and the
+ * two would hand out the same number to two invoices. The scope is therefore the empty
+ * string for a series that never resets, and the repository maps `'' <-> null` at its
+ * boundary. Same trap as 0005's registration index, reached from the other side.
+ */
+export interface NumberingCountersTable {
+  series_id: string
+  /** The fiscal year's label, e.g. '2026-27'. Empty string when the series never resets. */
+  fiscal_year_label: string
+  /** The next sequence to hand out. Starts at 1 and only ever goes up. */
+  next_sequence: number
+  updated_at: Timestamp
+}
+
 export interface Database {
   app_metadata: AppMetadataTable
   accounts: AccountsTable
@@ -220,6 +358,10 @@ export interface Database {
   journal_entries: JournalEntriesTable
   journal_lines: JournalLinesTable
   parties: PartiesTable
+  units_of_measure: UnitsOfMeasureTable
+  items: ItemsTable
+  numbering_series: NumberingSeriesTable
+  numbering_counters: NumberingCountersTable
 }
 
 export type { Generated }

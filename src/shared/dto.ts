@@ -383,6 +383,203 @@ export interface YearEndCloseResult {
   accountsClosed: number
 }
 
+// ---- Units and items ------------------------------------------------------
+
+/*
+ * What goes on a document line, and the units quantities are counted in.
+ *
+ * Every field on an item is a DEFAULT for a line, never a lookup the line performs
+ * later — a document line stores its own description, price and rate, so repricing an
+ * item cannot rewrite an invoice already issued.
+ */
+
+/** Goods or a service. Decides which classification scheme applies, and prints. */
+export type ItemKind = 'goods' | 'service'
+
+export interface UnitOfMeasure {
+  /** Short and upper case: 'NOS', 'KGS'. The identity — there is no separate id. */
+  code: string
+  name: string
+  /**
+   * Decimal places a quantity in this unit may carry, 0 to 3.
+   *
+   * Narrower than the 3dp storage scale, and about the unit rather than the column: half
+   * a box is not a quantity, and an invoice line for one cannot be picked.
+   */
+  decimalPlaces: number
+  /** What it reports as in a return, where the regime fixes a list. Null until mapped. */
+  regimeCode: string | null
+  isArchived: boolean
+}
+
+export interface CreateUnitInput {
+  code: string
+  name: string
+  decimalPlaces?: number
+  regimeCode?: string | null
+}
+
+export interface UpdateUnitInput {
+  /** The unit being changed. A code is identity and is not editable. */
+  code: string
+  name?: string
+  decimalPlaces?: number
+  regimeCode?: string | null
+  isArchived?: boolean
+}
+
+export interface ListUnitsInput {
+  includeArchived?: boolean
+}
+
+/** Enough of an item for a list or a picker. */
+export interface ItemSummary {
+  id: string
+  /** The business's own SKU. Null when they do not use one. */
+  code: string | null
+  name: string
+  kind: ItemKind
+  unitCode: string | null
+  /** HSN or SAC in India. Null where none applies. */
+  classificationCode: string | null
+  /** Rate, 3dp decimal string. Null when the item has no standard rate. */
+  taxRatePct: DecimalString | null
+  /** Money, 2dp. Null when nothing standard has been agreed. */
+  salePrice: DecimalString | null
+  isSold: boolean
+  isPurchased: boolean
+  /** Freight, packing, insurance — taxable, but not sales revenue. */
+  isCharge: boolean
+  isArchived: boolean
+}
+
+/** The whole record, for an editor. */
+export interface Item extends ItemSummary {
+  description: string | null
+  purchasePrice: DecimalString | null
+  /** Overrides the account the document kind implies. Null for the usual case. */
+  salesAccountId: string | null
+  purchaseAccountId: string | null
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+export interface CreateItemInput {
+  name: string
+  kind: ItemKind
+  code?: string | null
+  description?: string | null
+  unitCode?: string | null
+  classificationCode?: string | null
+  taxRatePct?: DecimalString | null
+  salePrice?: DecimalString | null
+  purchasePrice?: DecimalString | null
+  isSold?: boolean
+  isPurchased?: boolean
+  isCharge?: boolean
+  salesAccountId?: string | null
+  purchaseAccountId?: string | null
+}
+
+/** Absent means "leave it"; `null` means "clear it". As `UpdatePartyInput`. */
+export interface UpdateItemInput extends Partial<CreateItemInput> {
+  id: string
+}
+
+/** Which side an item list is for. */
+export type ItemSide = 'sold' | 'purchased'
+
+export interface ListItemsInput {
+  includeArchived?: boolean
+  /** Only what is sold, or only what is bought. Both when absent. */
+  side?: ItemSide
+  kind?: ItemKind
+  /** Matches the name, the code or the classification code, ignoring case. */
+  search?: string
+}
+
+export interface ArchiveItemInput {
+  id: string
+  archived: boolean
+}
+
+// ---- Numbering ------------------------------------------------------------
+
+/*
+ * How a document's number is built. Every part of the shape is data, because the shape
+ * is the business's own choice and matching the series they already use is the first
+ * thing anyone leaving another system asks for.
+ */
+
+/** Where a counter restarts. Mirrors `NumberingReset` in main/domain/documents. */
+export type NumberingReset = 'fiscal-year' | 'never'
+
+export interface NumberingSeriesRecord {
+  id: string
+  /** A document kind: 'sales-invoice', 'credit-note', and so on. */
+  kind: string
+  label: string
+  prefix: string
+  suffix: string
+  separator: string
+  includeFiscalYear: boolean
+  /** Zero-padded width: 4 gives '0001'. A sequence that outgrows it gets longer. */
+  width: number
+  resetOn: NumberingReset
+  /** The series a new document of this kind takes. At most one per kind. */
+  isDefault: boolean
+  isArchived: boolean
+  /** True once it has handed out a number — after which its shape is fixed. */
+  hasIssued: boolean
+}
+
+export interface CreateNumberingSeriesInput {
+  kind: string
+  label: string
+  prefix?: string
+  suffix?: string
+  separator?: string
+  includeFiscalYear?: boolean
+  width?: number
+  resetOn?: NumberingReset
+  isDefault?: boolean
+}
+
+/**
+ * A change to a series.
+ *
+ * `kind` is absent by design: moving a series to another kind would renumber documents
+ * already issued under it. The shape fields are refused once it has issued anything —
+ * see 0007.
+ */
+export interface UpdateNumberingSeriesInput {
+  id: string
+  label?: string
+  prefix?: string
+  suffix?: string
+  separator?: string
+  includeFiscalYear?: boolean
+  width?: number
+  resetOn?: NumberingReset
+  isDefault?: boolean
+  isArchived?: boolean
+}
+
+export interface ListNumberingSeriesInput {
+  includeArchived?: boolean
+  kind?: string
+}
+
+/** What a series would produce next, without spending it. */
+export interface NumberPreview {
+  seriesId: string
+  /** The fiscal year label the number would carry. Null for a series that never resets. */
+  fiscalYearLabel: string | null
+  nextSequence: number
+  /** The whole number as it would print. */
+  preview: string
+}
+
 // ---- Parties --------------------------------------------------------------
 
 /*

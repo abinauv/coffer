@@ -29,8 +29,8 @@
  * src/main/domain/documents/types.ts — the four rules at the top of that file.
  *
  *   0005  parties, plus journal_lines.party_id       — who a document is with  LANDED
- *   0006  items, units_of_measure                    — what is on its lines
- *   0007  numbering_series, numbering_counters       — what its number is
+ *   0006  items, units_of_measure                    — what is on its lines  LANDED
+ *   0007  numbering_series, numbering_counters       — what its number is  LANDED
  *   0008  documents, document_lines,
  *         document_line_taxes                        — the document itself
  *   0009  receipts, allocations                      — what has been paid against one
@@ -90,5 +90,7 @@ import { m0002 } from './0002_accounts'
 import { m0003 } from './0003_accounting_periods'
 import { m0004 } from './0004_journal'
 import { m0005 } from './0005_parties'
+import { m0006 } from './0006_items'
+import { m0007 } from './0007_numbering'
 
-export const MIGRATIONS: readonly Migration[] = [m0001, m0002, m0003, m0004, m0005]
+export const MIGRATIONS: readonly Migration[] = [m0001, m0002, m0003, m0004, m0005, m0006, m0007]

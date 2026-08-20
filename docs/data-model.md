@@ -92,8 +92,9 @@ is created.
 
 ### What is in the database today
 
-Eight tables. `journal_lines` is the only one that holds a figure, and every balance in
-Coffer is a sum over it.
+Twelve tables. `journal_lines` is the only one that holds a figure, and every balance in
+Coffer is a sum over it. The masters — parties, items, units, numbering series — hold
+defaults and identities, never totals.
 
 `schema_migrations` — one row per applied migration, created by the runner:
 
@@ -126,14 +127,16 @@ Typed in [`src/main/db/schema.ts`](../src/main/db/schema.ts) and contracted in
 [`src/main/domain/ledger/types.ts`](../src/main/domain/ledger/types.ts), with migration
 numbers reserved so that parallel work cannot collide.
 
-| Migration | Tables                              | What it is                                        | State  |
-| --------- | ----------------------------------- | ------------------------------------------------- | ------ |
-| `0002`    | `accounts`, `account_roles`         | The chart of accounts, as a tree                  | landed |
-| `0003`    | `accounting_periods`                | Periods that can be opened, closed and locked     | landed |
-| `0004`    | `journal_entries`, `journal_lines`  | The ledger itself, with the balance triggers      | landed |
-| `0005`    | `parties`, `journal_lines.party_id` | Who a document is with, and whose money a line is | landed |
+| Migration | Tables                                   | What it is                                        | State  |
+| --------- | ---------------------------------------- | ------------------------------------------------- | ------ |
+| `0002`    | `accounts`, `account_roles`              | The chart of accounts, as a tree                  | landed |
+| `0003`    | `accounting_periods`                     | Periods that can be opened, closed and locked     | landed |
+| `0004`    | `journal_entries`, `journal_lines`       | The ledger itself, with the balance triggers      | landed |
+| `0005`    | `parties`, `journal_lines.party_id`      | Who a document is with, and whose money a line is | landed |
+| `0006`    | `units_of_measure`, `items`              | What goes on a document line                      | landed |
+| `0007`    | `numbering_series`, `numbering_counters` | What a document's number is                       | landed |
 
-Eight things about these tables are worth knowing before you read them, because each one
+Ten things about these tables are worth knowing before you read them, because each one
 is a decision rather than a detail:
 
 **There is no `status` on an entry, and no draft.** The ledger holds posted entries and
@@ -211,6 +214,22 @@ requires a party on any line posting to the accounts mapped to `accounts-receiva
 `accounts-payable`, looked up by role live rather than pinned to an account id; a party
 is permitted on any other line, because an advance from a customer is that customer's
 money even though it sits under a liability that is not the control account.
+
+**An item is a default for a line, never a lookup.** Every column on `items` — the
+description, the price, the tax rate, the account — is where a document line _starts_. The
+line then stores its own copy, so renaming an item or repricing it cannot rewrite an
+invoice already issued. The same reasoning as `DocumentLine` in `domain/documents`, seen
+from the masters end. Units are keyed by their own code rather than a surrogate id,
+because the code is what a user types, what prints, and what an item refers to.
+
+**A counter's scope key is never NULL.** `numbering_counters.fiscal_year_label` is the
+empty string for a series that never resets, and the repository maps that to and from the
+domain's `null`. A NULL in a unique index does not collide, so a nullable scope column
+would admit two counter rows for one series — and two counters hand the same number to two
+invoices. Three triggers guard the rest of the same fact: a counter may only move forward,
+may not be deleted, and a series that has handed out a number may not change shape.
+Reissuing a number is not an error anybody sees; it is a second invoice carrying a number
+an officer will match against the first.
 
 An account's _type_ — asset, liability, equity, income, expense — is the one field that
 may never change once anything has posted to it, because every figure already in the
