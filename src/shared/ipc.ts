@@ -57,6 +57,7 @@ import type {
   RestoreInput,
   Result,
   SaveCompanyProfileInput,
+  RegimeDescription,
   ReverseEntryInput,
   SetAccountRoleInput,
   TitleBarOverlayColors,
@@ -245,6 +246,26 @@ export interface CofferApi {
      * nothing about the documents would look wrong afterwards.
      */
     save(input: SaveCompanyProfileInput): Promise<Result<CompanyProfile>>
+  }
+
+  /**
+   * What rules these books run under — the tax regime, as data.
+   *
+   * ONE METHOD, AND IT IS A NOUN. `describe` rather than `get` because what comes back is
+   * not the regime: `TaxRegime` has `computeTax` and `placeOfSupply` on it, and neither
+   * crosses this boundary — a description cannot be asked a question. That is what keeps
+   * CONVENTIONS §1.6 true with the renderer now knowing which rates exist and which
+   * jurisdictions there are. It has the lists; it still has no way to work out a tax, and
+   * src/main/documents/service.ts remains the only caller of `computeTax` anywhere.
+   *
+   * The answer is fixed for as long as the company is open — the regime is read off the
+   * file when it opens and cannot change under it — so a screen fetches this once and
+   * holds it, rather than calling it per row. See `RegimeDescription` in ./dto.ts for
+   * what is in it, what is deliberately not, and why a number format arriving here is
+   * not a licence to do arithmetic.
+   */
+  regime: {
+    describe(): Promise<Result<RegimeDescription>>
   }
 
   /**

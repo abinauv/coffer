@@ -6,6 +6,7 @@ import type { LedgerService } from './handlers/ledger'
 import type { CompanyProfileService } from './handlers/company-profile'
 import type { DocumentsService } from './handlers/documents'
 import type { PartiesService } from './handlers/parties'
+import type { RegimeService } from './handlers/regime'
 import type { ReportService } from './handlers/reports'
 import type { SystemEnvironment } from './handlers/system'
 import {
@@ -46,6 +47,7 @@ let ledger: LedgerService
 let parties: PartiesService
 let companyProfile: CompanyProfileService
 let documents: DocumentsService
+let regime: RegimeService
 let reports: ReportService
 
 function dependencies(overrides: Partial<IpcDependencies> = {}): IpcDependencies {
@@ -63,6 +65,7 @@ function dependencies(overrides: Partial<IpcDependencies> = {}): IpcDependencies
     parties,
     documents,
     companyProfile,
+    regime,
     reports,
     ...overrides,
   }
@@ -141,6 +144,10 @@ beforeEach(() => {
     issue: vi.fn(),
     cancel: vi.fn(),
   } as unknown as DocumentsService
+
+  regime = {
+    describe: vi.fn(),
+  } as unknown as RegimeService
 
   reports = {
     balanceSheet: vi.fn(),

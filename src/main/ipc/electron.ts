@@ -22,6 +22,7 @@ import type { CompanyProfileService } from './handlers/company-profile'
 import type { DocumentsService } from './handlers/documents'
 import type { LedgerService } from './handlers/ledger'
 import type { PartiesService } from './handlers/parties'
+import type { RegimeService } from './handlers/regime'
 import type { ReportService } from './handlers/reports'
 import { type IpcDependencies, registerIpcHandlers } from './index'
 import type { HandlerRegistry, IpcLogger, IpcTransport } from './registry'
@@ -174,6 +175,8 @@ export interface ElectronIpcOptions {
   companyProfile: CompanyProfileService
   /** The documents service from src/main/documents — where the regime is asked for tax. */
   documents: DocumentsService
+  /** The regime service from src/main/regime — the tax rules, described for the screens. */
+  regime: RegimeService
   /** The same service, read-only half. See the `reports` group in src/shared/ipc.ts. */
   reports: ReportService
   /** Extra error types to recognise — see `IpcDependencies.errorMappers`. */
@@ -191,6 +194,7 @@ export function createElectronIpcDependencies(options: ElectronIpcOptions): IpcD
     parties: options.parties,
     companyProfile: options.companyProfile,
     documents: options.documents,
+    regime: options.regime,
     reports: options.reports,
     ...(options.errorMappers === undefined ? {} : { errorMappers: options.errorMappers }),
     /* The registry of companies lives here, so it is revealable from the moment the app

@@ -22,6 +22,7 @@ import {
 import { type DocumentsService, createDocumentsHandlers } from './handlers/documents'
 import { type LedgerService, createLedgerHandlers } from './handlers/ledger'
 import { type PartiesService, createPartiesHandlers } from './handlers/parties'
+import { type RegimeService, createRegimeHandlers } from './handlers/regime'
 import { type ReportService, createReportHandlers } from './handlers/reports'
 import { type SystemEnvironment, createSystemHandlers } from './handlers/system'
 import { type PathAllowlist, createPathAllowlist } from './path-access'
@@ -35,6 +36,7 @@ export type { CompanyProfileService } from './handlers/company-profile'
 export type { DocumentsService } from './handlers/documents'
 export type { LedgerService } from './handlers/ledger'
 export type { PartiesService } from './handlers/parties'
+export type { RegimeService } from './handlers/regime'
 export type { ReportService } from './handlers/reports'
 export type { SystemEnvironment } from './handlers/system'
 export type { IpcLogger, IpcTransport } from './registry'
@@ -81,6 +83,15 @@ export interface IpcDependencies {
    * same reason `parties` does.
    */
   companyProfile: CompanyProfileService
+  /**
+   * THE INJECTION POINT for src/main/regime — note the singular.
+   *
+   * `src/main/regimes/` is the adapters and their rules; this is the service that hands
+   * the renderer a description of the one these books use. Nothing executable comes back
+   * from it, so a screen gets the rates and the jurisdictions and still has no way to
+   * compute a tax.
+   */
+  regime: RegimeService
   /**
    * THE INJECTION POINT for the read-only side of src/main/ledger.
    *
@@ -134,6 +145,7 @@ export function registerIpcHandlers(dependencies: IpcDependencies): HandlerRegis
     'companyProfile',
     createCompanyProfileHandlers(dependencies.companyProfile),
   )
+  registry.registerGroup('regime', createRegimeHandlers(dependencies.regime))
   registry.registerGroup('reports', createReportHandlers(dependencies.reports))
 
   assertApiSurfaceComplete(registry)

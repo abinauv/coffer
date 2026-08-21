@@ -136,6 +136,30 @@ distinction in your own data if your jurisdiction has it.
 `{ code, label, validLengths, validate }`. `'HSN'`, `'SAC'`, `'NAICS'`. Set `code: null`
 and `validLengths: []` where the regime classifies nothing.
 
+### `taxRates`
+
+The rates your schedules contain, for a picker:
+
+```ts
+taxRates(): ReadonlyArray<TaxRateDefinition>   // { ratePct, label, note }
+```
+
+**Advisory. Nothing gates on it, and that is deliberate.** `computeTax` reads the rate off
+the line and never consults this list, so a rate that is not in it computes exactly as one
+that is. Rates change on a tax authority's timetable rather than on a release schedule,
+and a bundled list that has gone stale must not stand between a user and an invoice they
+are legally required to raise. There is a test in `in-gst/regime.test.ts` that computes
+17.5% — not a GST rate and never has been — precisely to hold that open.
+
+Return the whole slab, not just the percentage. A dropdown reading `0 / 0.25 / 1.5 / 3` is
+four numbers the user has to already know the meaning of; `Nil`, with _Exempt, nil-rated
+and zero-rated supplies_ under it, is the same fact said usefully.
+
+A rate is a **schedule** and a component is the **Act**: `taxComponents()` changes by
+amendment and arrives with a release, `taxRates()` changes by notification and belongs in
+the compliance pack (ARCHITECTURE §6.6). India keeps them in separate files for that
+reason, and a regime that mixes them will find the data half impossible to ship.
+
 ### `fiscalYear`
 
 A `FiscalYearRule` from `@main/domain/time`. Built with `createFiscalYearRule`, which
@@ -175,6 +199,10 @@ export const INDIA_NUMBER_FORMAT: NumberFormatRule = {
 a regime owes it is the grouping, the separators and the currency, so a screen can format
 any regime's numbers without knowing which one is loaded.
 
+The renderer gets this — and the jurisdictions, the rates, the components and the
+classification scheme — from one IPC method, `regime.describe()`. See **How the screens
+see your regime** below for what crosses and what does not.
+
 ### `amountInWords`
 
 The amount spelled out as this regime's invoices say it. India leads with the currency
@@ -197,6 +225,36 @@ else.
 Where the ordinary frequency has a per-company exception — GSTR-1 moves to quarterly
 under India's QRMP scheme — name it in the description rather than encoding a second
 definition. It is a fact about the taxpayer, not about the return.
+
+### How the screens see your regime
+
+Nothing executable crosses to the renderer. `TaxRegime` stays in main, and one IPC method
+hands the screens a plain-data description of it:
+
+```ts
+regime.describe(): Promise<Result<RegimeDescription>>
+```
+
+`RegimeDescription` (src/shared/dto.ts) carries `id`, `label`, `numberFormat`,
+`jurisdictions`, `taxRates`, `taxComponents` and the `classification` scheme. It carries
+no methods — not `computeTax`, not `validateRegistrationNumber` — so a screen can draw a
+rate picker and a place-of-supply picker and still has no way to work out a tax. That is
+CONVENTIONS §1.6 expressed as a data flow rather than as a rule people have to remember,
+and `src/main/regime/service.test.ts` asserts the absence by name.
+
+Two things are deliberately **not** in it:
+
+- **Your classification codes.** A pack with a few thousand HSN entries behind a
+  type-ahead is a search that takes a term, not a payload to hold in memory. When the item
+  master needs one it gets its own method.
+- **Anything that changes while a company is open.** The description is fetched once per
+  open company and held. The regime is read off the company file and cannot change under
+  it, so there is nothing to invalidate.
+
+Add a field to `TaxRegime` and it does **not** appear over IPC until somebody adds it to
+`describeRegime` in `src/main/regime/service.ts` and to the DTO. That is the safe
+direction to forget in: the renderer gets what the contract promises, never whatever an
+adapter happens to expose.
 
 ## 3. What a new regime looks like on disk
 

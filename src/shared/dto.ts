@@ -1016,6 +1016,107 @@ export interface SaveCompanyProfileInput {
   phone?: string | null
 }
 
+// ---- The regime, described --------------------------------------------------
+
+/*
+ * WHAT THE OPEN COMPANY'S TAX REGIME LOOKS LIKE — AS DATA, NEVER AS THE ADAPTER.
+ *
+ * `TaxRegime` is an interface with methods on it: `computeTax`, `placeOfSupply`,
+ * `validateRegistrationNumber`. None of them is here and none of them ever will be. What
+ * crosses is a description — the lists a screen needs to build a picker, and the rules
+ * it needs to lay a figure out — and a description cannot be asked a question. So
+ * CONVENTIONS §1.6 still holds after this: tax logic lives in `regimes/`, the renderer
+ * has no way to compute a tax, and there is exactly one caller of `computeTax` (see
+ * src/main/documents/service.ts).
+ *
+ * A NUMBER FORMAT CROSSING IS NOT A LICENCE TO COMPUTE MONEY. §1.7 says the renderer
+ * never computes with money, and that rule is about arithmetic — it is why every amount
+ * arrives as an exact decimal string that main has already worked out. Choosing where
+ * the separators go is presentation, the renderer already does it, and it does it today
+ * by hard-coding the lakh/crore convention. Taking the grouping from here does not let
+ * the renderer do anything new; it makes the thing it already does correct in a
+ * jurisdiction that is not India. `screens/lib/ledger-format.ts` still never parses.
+ *
+ * ONE METHOD RATHER THAN ONE PER LIST. All of it is fixed for as long as a company is
+ * open — the regime is read off the file at open and cannot change under it — so the
+ * renderer fetches this once and holds it. Five methods would be five round trips for
+ * five constants, and every list added later would be another channel.
+ *
+ * WHAT IS DELIBERATELY NOT HERE: the classification CODES. India's bundled pack carries
+ * a few thousand HSN and SAC entries, and a type-ahead over them is a search with a term
+ * rather than a list to hold in memory. When the item master needs one it gets its own
+ * method that takes what the user typed. The scheme itself is here, because a field has
+ * to know it is called 'HSN / SAC' and how many digits to expect.
+ */
+
+/** How this regime writes a number. Presentation only — see the note above. */
+export interface NumberFormat {
+  /**
+   * Digit grouping from the right: `[3, 2]` gives the Indian 12,34,567 and `[3]` gives
+   * 1,234,567. The last size repeats once the list runs out.
+   */
+  groupSizes: number[]
+  decimalSeparator: string
+  groupSeparator: string
+  /** ISO 4217, e.g. 'INR'. */
+  currencyCode: string
+  /** e.g. '₹'. What a column heading shows. */
+  currencySymbol: string
+}
+
+/** A sub-national jurisdiction, for a place-of-supply picker. */
+export interface JurisdictionOption {
+  /** The Indian state code, e.g. '33'. What `jurisdictionCode` fields carry. */
+  code: string
+  name: string
+}
+
+/**
+ * A rate the regime's schedules contain.
+ *
+ * ADVISORY. Nothing refuses a rate that is not in this list, because rates change by
+ * notification and a stale bundled list must not stand between a user and an invoice.
+ * A picker offers these and the field still accepts anything typed.
+ */
+export interface TaxRateOption {
+  ratePct: DecimalString
+  /** 'Nil', '18%'. */
+  label: string
+  /** Why the slab exists. A hint under the option, never a rule. */
+  note: string
+}
+
+/** A tax the regime can levy. The codes that come back on a line's `taxes`. */
+export interface TaxComponentOption {
+  /** 'CGST', 'SGST', 'IGST'. */
+  code: string
+  label: string
+  levy: 'output' | 'input' | 'both'
+}
+
+/** How the regime says what a thing is. India: HSN for goods, SAC for services. */
+export interface ClassificationSchemeInfo {
+  /** 'HSN'. Null where the regime classifies nothing, and then the field is hidden. */
+  code: string | null
+  /** What the field is labelled. India presents the pair as 'HSN / SAC'. */
+  label: string
+  /** Digit counts a code may have. Empty when unconstrained. */
+  validLengths: number[]
+}
+
+/** Everything a screen needs to know about the open company's regime. */
+export interface RegimeDescription {
+  /** 'in'. The same string `CompanySummary.regimeId` carries. */
+  id: string
+  /** 'India — GST'. For the "which rules am I running?" line. */
+  label: string
+  numberFormat: NumberFormat
+  jurisdictions: JurisdictionOption[]
+  taxRates: TaxRateOption[]
+  taxComponents: TaxComponentOption[]
+  classification: ClassificationSchemeInfo
+}
+
 // ---- Query inputs ---------------------------------------------------------
 
 export interface ListAccountsInput {

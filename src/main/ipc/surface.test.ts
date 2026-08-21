@@ -19,8 +19,13 @@ describe('API_SURFACE', () => {
       'parties',
       'documents',
       'companyProfile',
+      'regime',
       'reports',
     ])
+  })
+
+  it('lists the regime methods', () => {
+    expect(apiMethods('regime')).toEqual(['describe'])
   })
 
   it('lists the system methods', () => {

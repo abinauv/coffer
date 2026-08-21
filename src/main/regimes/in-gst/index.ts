@@ -20,7 +20,7 @@ export {
   HSN_LENGTHS,
   indiaClassification,
   normaliseClassificationCode,
-  rateSlabs,
+  taxRates,
   SAC_LENGTH,
   classificationKindOf,
   searchClassification,

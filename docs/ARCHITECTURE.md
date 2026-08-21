@@ -103,6 +103,8 @@ src/
 │   ├── parties/         │ one service per IPC group. THE ONLY LAYER THAT MAY
 │   ├── documents/       │ ASK A REGIME — see §6.2 and src/main/documents.
 │   ├── company-profile/─┘
+│   ├── regime/         the open company's regime, DESCRIBED for the screens.
+│   │                   Singular — regimes/ above is the adapters themselves.
 │   ├── services/       pdf, excel, backup, mailer, importers
 │   └── ipc/            handlers, registered by channel name
 ├── preload/

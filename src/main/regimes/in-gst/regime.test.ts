@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { D } from '@main/domain/money'
 import { aprilToMarch, fiscalYearLabelOf, fiscalYearOf, periodsOf } from '@main/domain/time'
-import type { NumberFormatRule, TaxRegime } from '@main/regimes/types'
+import type { NumberFormatRule, TaxParty, TaxRegime } from '@main/regimes/types'
 import { inGstRegime } from './regime'
 
 const regime: TaxRegime = inGstRegime
@@ -20,6 +20,7 @@ describe('the regime satisfies its own contract', () => {
     expect(typeof regime.jurisdictionName).toBe('function')
     expect(typeof regime.jurisdictions).toBe('function')
     expect(typeof regime.taxComponents).toBe('function')
+    expect(typeof regime.taxRates).toBe('function')
     expect(typeof regime.amountInWords).toBe('function')
     expect(regime.classification).toBeDefined()
     expect(regime.fiscalYear).toBeDefined()
@@ -40,6 +41,7 @@ describe('the regime satisfies its own contract', () => {
       'UTGST',
       'IGST',
     ])
+    expect(regime.taxRates().map((rate) => rate.ratePct)).toContain('18')
     expect(regime.amountInWords(D('1234.50'))).toBe(
       'Rupees One Thousand Two Hundred Thirty Four and Fifty Paise Only',
     )
@@ -82,6 +84,67 @@ describe('the fiscal year', () => {
       '2027-01-01',
     ])
     expect(quarters[3]?.endDate).toBe('2027-03-31')
+  })
+})
+
+describe('the rate slabs', () => {
+  it('are the schedules, with a label and a note apiece', () => {
+    const rates = regime.taxRates()
+
+    expect(rates.map((rate) => rate.ratePct)).toEqual([
+      '0',
+      '0.25',
+      '1.5',
+      '3',
+      '5',
+      '12',
+      '18',
+      '28',
+      '40',
+    ])
+    expect(rates.find((rate) => rate.ratePct === '18')?.label).toBe('18%')
+  })
+
+  /*
+   * THE ASSERTION THAT MAKES THE LIST ADVISORY RATHER THAN AUTHORITATIVE.
+   *
+   * 17.5% is not a GST rate and never has been. The regime computes it anyway, and
+   * correctly — because `computeTax` reads the rate off the line and does not consult
+   * `taxRates()` at all. That is the design, not an oversight: the slabs are a schedule
+   * that changes by notification, this build's copy of them is bundled, and a picker
+   * whose list has gone stale must not be able to stand between a user and an invoice
+   * they are legally required to raise.
+   *
+   * A version of this that validated the rate would pass every other test in the suite,
+   * and would fail for a real user on the day the Council added a slab.
+   */
+  it('computes a rate that is not one of them, because nothing gates on the list', () => {
+    const odd = '17.5'
+    expect(regime.taxRates().map((rate) => rate.ratePct)).not.toContain(odd)
+
+    const local: TaxParty = {
+      registrationNumber: '33AABCC1234D1ZI',
+      jurisdictionCode: '33',
+      countryCode: 'in',
+    }
+    const result = regime.computeTax({
+      supplier: local,
+      customer: local,
+      placeOfSupply: {
+        jurisdictionCode: '33',
+        countryCode: 'in',
+        isIntraJurisdiction: true,
+        isExport: false,
+      },
+      lines: [{ lineId: '1', taxableAmount: '1000.00', ratePct: odd, classificationCode: null }],
+      date: '2026-04-15',
+    })
+
+    expect(result.lines[0]?.components.map((component) => component.amount)).toEqual([
+      '87.50',
+      '87.50',
+    ])
+    expect(result.totalTax).toBe('175.00')
   })
 })
 

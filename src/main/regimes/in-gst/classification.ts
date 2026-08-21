@@ -22,7 +22,7 @@
  * amendment to the Act.
  */
 
-import type { ClassificationScheme, ValidationResult } from '@main/regimes/types'
+import type { ClassificationScheme, TaxRateDefinition, ValidationResult } from '@main/regimes/types'
 import type { DecimalString } from '@shared/scalars'
 import {
   BUNDLED_COMPLIANCE_PACK,
@@ -138,19 +138,34 @@ export function searchClassification(
   )
 }
 
-/** The rates a picker offers, from the pack. */
-export function rateSlabs(
+/**
+ * The rates a picker offers, from the pack — the regime's `taxRates()`.
+ *
+ * The whole slab, not just its percentage. A list of bare rate strings was what this
+ * returned before anything called it, and '0' beside '0.25' beside '1.5' in a dropdown
+ * is three numbers a user has to already know the meaning of; 'Nil', with 'Exempt,
+ * nil-rated and zero-rated supplies' behind it, is the same fact said usefully.
+ *
+ * Copied out of the pack rather than handed over, for the reason `validLengths` is: this
+ * crosses into a DTO and then over IPC, and the pack is the regime's own data.
+ */
+export function taxRates(
   pack: IndiaCompliancePack = BUNDLED_COMPLIANCE_PACK,
-): readonly DecimalString[] {
-  return pack.rateSlabs.map((slab) => slab.ratePct)
+): readonly TaxRateDefinition[] {
+  return pack.rateSlabs.map((slab) => ({
+    ratePct: slab.ratePct,
+    label: slab.label,
+    note: slab.note,
+  }))
 }
 
 /** The `ClassificationScheme` the regime exposes. */
 export const indiaClassification: ClassificationScheme = {
   code: 'HSN',
   label: 'HSN / SAC',
-  /* Copied, not shared: the contract's array is mutable and a caller must not be able
-   * to reach through it and edit the regime's own list. */
+  /* Copied, not shared. The contract now types this `readonly`, which stops the honest
+   * mistake but not a cast — and this array is the regime's own, reached through by
+   * every consumer of the interface. A copy costs nine bytes once. */
   validLengths: [...HSN_LENGTHS],
   validate: validateClassificationCode,
 }

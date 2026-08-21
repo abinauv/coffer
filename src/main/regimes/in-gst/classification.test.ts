@@ -7,7 +7,7 @@ import {
   HSN_LENGTHS,
   indiaClassification,
   normaliseClassificationCode,
-  rateSlabs,
+  taxRates,
   SAC_LENGTH,
   searchClassification,
   validateClassificationCode,
@@ -154,7 +154,7 @@ describe('the bundled seed data', () => {
   })
 
   it('states every rate as a decimal string that is one of the slabs', () => {
-    const slabs = new Set(rateSlabs())
+    const slabs = new Set(taxRates().map((rate) => rate.ratePct))
     for (const entry of BUNDLED_COMPLIANCE_PACK.classificationCodes) {
       expect(isDecimalString(entry.defaultRatePct), entry.code).toBe(true)
       expect(slabs.has(entry.defaultRatePct), `${entry.code} @ ${entry.defaultRatePct}`).toBe(true)
@@ -162,7 +162,37 @@ describe('the bundled seed data', () => {
   })
 
   it('offers the rate slabs as decimal strings', () => {
-    expect(rateSlabs()).toEqual(['0', '0.25', '1.5', '3', '5', '12', '18', '28', '40'])
+    expect(taxRates().map((rate) => rate.ratePct)).toEqual([
+      '0',
+      '0.25',
+      '1.5',
+      '3',
+      '5',
+      '12',
+      '18',
+      '28',
+      '40',
+    ])
+  })
+
+  /* The percentage alone is what a rate IS; the label and the note are what make a
+   * dropdown of nine numbers readable. A picker showing '0' rather than 'Nil' is the
+   * reason this returns the whole slab. */
+  it('carries a label and a note for every rate, so a picker can be read', () => {
+    for (const rate of taxRates()) {
+      expect(rate.label, rate.ratePct).not.toBe('')
+      expect(rate.note, rate.ratePct).not.toBe('')
+    }
+    expect(taxRates()[0]).toEqual({
+      ratePct: '0',
+      label: 'Nil',
+      note: 'Exempt, nil-rated and zero-rated supplies.',
+    })
+  })
+
+  /* Copied out of the pack, because it goes on to cross IPC as a DTO. */
+  it('does not hand back the pack own slab objects', () => {
+    expect(taxRates()[0]).not.toBe(BUNDLED_COMPLIANCE_PACK.rateSlabs[0])
   })
 
   it('pins a few entries, so a silent edit to a rate fails here', () => {
@@ -210,6 +240,10 @@ describe('a pack other than the bundled one', () => {
     const pack = {
       ...BUNDLED_COMPLIANCE_PACK,
       packVersion: '2027.01.0',
+      /* DIFFERENT SLABS, not the bundled ones spread through. A fixture that inherited
+       * `rateSlabs` made the assertion below true whether or not the argument was read —
+       * which is what it was doing until a mutation asked. */
+      rateSlabs: [{ ratePct: '9', label: '9%', note: 'The 2027 slab.' }],
       classificationCodes: [
         { code: '8471', kind: 'HSN' as const, description: 'Computers', defaultRatePct: '5' },
       ],
@@ -217,6 +251,7 @@ describe('a pack other than the bundled one', () => {
     expect(defaultRateFor('8471', pack)).toBe('5')
     expect(findClassification('7113', pack)).toBeNull()
     expect(searchClassification('comp', pack)).toHaveLength(1)
-    expect(rateSlabs(pack)).toEqual(rateSlabs())
+    expect(taxRates(pack)).toEqual([{ ratePct: '9', label: '9%', note: 'The 2027 slab.' }])
+    expect(taxRates()).not.toEqual(taxRates(pack))
   })
 })

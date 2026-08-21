@@ -90,6 +90,9 @@ export const API_SURFACE: ApiSurface = {
     get: true,
     save: true,
   },
+  regime: {
+    describe: true,
+  },
   reports: {
     balanceSheet: true,
     profitAndLoss: true,

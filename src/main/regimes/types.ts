@@ -117,6 +117,31 @@ export interface TaxComponentDefinition {
   levy: 'output' | 'input' | 'both'
 }
 
+/**
+ * A rate the regime's schedules contain, offered when picking one for a line.
+ *
+ * ADVISORY, AND NOTHING GATES ON IT. `computeTax` takes the rate off the line and does
+ * not consult this list, so a rate that is not in it is computed exactly as one that is.
+ * That is deliberate: rates change on the Council's timetable rather than on ours, and a
+ * bundled list that has gone stale must not be able to stop somebody raising an invoice.
+ * The same argument `checkPassphrase` makes — a UI aid that refuses nothing.
+ *
+ * WHY A RATE IS ON THE REGIME AT ALL, when 18% is plainly not a property of CGST. It is
+ * not: it is a property of the *schedules*, which the regime is the only layer that knows
+ * about. A component and a rate are different kinds of fact — `taxComponents()` is the
+ * structure of the Act and changes by amendment, this is the schedule under it and
+ * changes by notification — and the compliance pack keeps them apart for that reason.
+ * What this method adds is a way to ask, not a claim that the answer is binding.
+ */
+export interface TaxRateDefinition {
+  /** The full rate as a percentage, e.g. '18'. What a line's `ratePct` carries. */
+  ratePct: DecimalString
+  /** What the user sees in a picker. e.g. 'Nil', '18%'. */
+  label: string
+  /** Why the slab exists, where it is not obvious. Shown as a hint, never as a rule. */
+  note: string
+}
+
 /** Per-line result. Components sum to `totalTax`. */
 export interface TaxedLine {
   lineId: string
@@ -168,7 +193,7 @@ export interface ClassificationScheme {
   code: string | null
   label: string
   /** Valid code lengths, e.g. [4, 6, 8] for HSN. Empty when unconstrained. */
-  validLengths: number[]
+  readonly validLengths: readonly number[]
   validate(code: string): ValidationResult
 }
 
@@ -241,6 +266,15 @@ export interface TaxRegime {
    * there is a supply to ask about.
    */
   taxComponents(): ReadonlyArray<TaxComponentDefinition>
+
+  /**
+   * The rates the regime's schedules contain, for a picker. Advisory — see
+   * `TaxRateDefinition`, which explains why nothing refuses a rate that is not here.
+   *
+   * A method rather than a readonly field, like `jurisdictions()` and `taxComponents()`,
+   * because the answer comes out of a compliance pack that Phase 5 will load at runtime.
+   */
+  taxRates(): ReadonlyArray<TaxRateDefinition>
 
   readonly classification: ClassificationScheme
   readonly fiscalYear: FiscalYearRule
