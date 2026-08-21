@@ -18,7 +18,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { DocumentSummary, Result } from '@shared/dto'
-import { renderScreen, type BridgeStub } from '../../test/harness'
+import { renderScreen, screenContext, type BridgeStub } from '../../test/harness'
 import { Invoices } from './Invoices'
 
 function invoice(over: Partial<DocumentSummary> = {}): DocumentSummary {
@@ -67,7 +67,7 @@ const rowFor = async (number: string): Promise<HTMLElement> =>
 
 describe('what it asks main for', () => {
   it('asks for invoices and nothing else, because a quotation is not one', async () => {
-    const { bridge } = renderScreen(<Invoices />, { bridge: listing(ROWS) })
+    const { bridge } = renderScreen(<Invoices {...screenContext()} />, { bridge: listing(ROWS) })
 
     await waitFor(() => expect(bridge.callsTo('documents:list')).toHaveLength(1))
     expect(lastQuery(bridge)?.['kind']).toBe('sales-invoice')
@@ -76,7 +76,7 @@ describe('what it asks main for', () => {
   /* THE PAGING MECHANISM. One more row than the screen draws — the extra is how Next
    * knows there is somewhere to go, with no count query to disagree with the list. */
   it('asks for one row more than it will draw', async () => {
-    const { bridge } = renderScreen(<Invoices />, { bridge: listing(ROWS) })
+    const { bridge } = renderScreen(<Invoices {...screenContext()} />, { bridge: listing(ROWS) })
 
     await waitFor(() => expect(bridge.callsTo('documents:list')).toHaveLength(1))
     expect(lastQuery(bridge)?.['limit']).toBe(51)
@@ -90,7 +90,7 @@ describe('what it asks main for', () => {
    */
   it('sends the status filter to main rather than filtering the page it has', async () => {
     const user = userEvent.setup()
-    const { bridge } = renderScreen(<Invoices />, { bridge: listing(ROWS) })
+    const { bridge } = renderScreen(<Invoices {...screenContext()} />, { bridge: listing(ROWS) })
 
     await screen.findByText('Sunrise Components')
     await user.click(screen.getByRole('button', { name: 'Drafts' }))
@@ -101,7 +101,7 @@ describe('what it asks main for', () => {
 
   it('leaves the status out entirely when the filter is All', async () => {
     const user = userEvent.setup()
-    const { bridge } = renderScreen(<Invoices />, { bridge: listing(ROWS) })
+    const { bridge } = renderScreen(<Invoices {...screenContext()} />, { bridge: listing(ROWS) })
 
     await screen.findByText('Sunrise Components')
     await user.click(screen.getByRole('button', { name: 'Drafts' }))
@@ -117,7 +117,7 @@ describe('what it asks main for', () => {
    * every letter of a customer's name. */
   it('searches when the search is submitted, not on every keystroke', async () => {
     const user = userEvent.setup()
-    const { bridge } = renderScreen(<Invoices />, { bridge: listing(ROWS) })
+    const { bridge } = renderScreen(<Invoices {...screenContext()} />, { bridge: listing(ROWS) })
 
     await screen.findByText('Sunrise Components')
     await user.type(screen.getByPlaceholderText(/Search by number/), 'Kaveri')
@@ -132,7 +132,7 @@ describe('what it asks main for', () => {
 
 describe('what it draws', () => {
   it('shows a document number, a customer and a total', async () => {
-    renderScreen(<Invoices />, { bridge: listing(ROWS) })
+    renderScreen(<Invoices {...screenContext()} />, { bridge: listing(ROWS) })
 
     const row = await rowFor('INV/2026-27/0001')
     expect(within(row).getByText('Sunrise Components')).toBeInTheDocument()
@@ -150,7 +150,7 @@ describe('what it draws', () => {
    * A mutation deleting the fallback survived. Cell zero is the number column.
    */
   it('says Draft in the number column where an unissued document has none', async () => {
-    renderScreen(<Invoices />, { bridge: listing(ROWS) })
+    renderScreen(<Invoices {...screenContext()} />, { bridge: listing(ROWS) })
 
     const row = (await screen.findByText('Kaveri Metals')).closest('tr') as HTMLElement
     const cells = within(row).getAllByRole('cell')
@@ -160,7 +160,7 @@ describe('what it draws', () => {
   })
 
   it('formats every total the way the regime writes numbers', async () => {
-    renderScreen(<Invoices />, {
+    renderScreen(<Invoices {...screenContext()} />, {
       bridge: listing(ROWS),
       regime: {
         id: 'pt',
@@ -184,7 +184,7 @@ describe('what it draws', () => {
   })
 
   it('does not total the page, because the total of a page means nothing', async () => {
-    renderScreen(<Invoices />, { bridge: listing(ROWS) })
+    renderScreen(<Invoices {...screenContext()} />, { bridge: listing(ROWS) })
 
     await screen.findByText('Sunrise Components')
     /* 125000.00 + 4720.50 + 900.00 = 130620.50. Nothing on the page should say it. */
@@ -192,7 +192,7 @@ describe('what it draws', () => {
   })
 
   it('explains an empty register rather than showing an empty table', async () => {
-    renderScreen(<Invoices />, { bridge: listing([]) })
+    renderScreen(<Invoices {...screenContext()} />, { bridge: listing([]) })
 
     expect(await screen.findByText('No invoices yet')).toBeInTheDocument()
     expect(screen.getByText(/needs a customer and the business details/)).toBeInTheDocument()
@@ -201,7 +201,7 @@ describe('what it draws', () => {
   it('says something different when a filter is what emptied it', async () => {
     const user = userEvent.setup()
     let call = 0
-    renderScreen(<Invoices />, {
+    renderScreen(<Invoices {...screenContext()} />, {
       bridge: {
         documents: {
           list: () => {
@@ -223,7 +223,7 @@ describe('what it draws', () => {
   })
 
   it('shows what main said when the register cannot be read', async () => {
-    renderScreen(<Invoices />, {
+    renderScreen(<Invoices {...screenContext()} />, {
       bridge: {
         documents: {
           list: () =>
@@ -251,7 +251,7 @@ describe('paging', () => {
     )
 
   it('offers no paging at all when everything fits on one page', async () => {
-    renderScreen(<Invoices />, { bridge: listing(ROWS) })
+    renderScreen(<Invoices {...screenContext()} />, { bridge: listing(ROWS) })
 
     await screen.findByText('Sunrise Components')
     expect(screen.queryByRole('button', { name: 'Next' })).toBeNull()
@@ -260,7 +260,7 @@ describe('paging', () => {
   /* THE EXTRA ROW IS NOT DRAWN. It exists only to answer the question, and a register
    * that showed 51 rows on a page of 50 would drift by one every page. */
   it('draws a page and keeps the extra row back', async () => {
-    renderScreen(<Invoices />, { bridge: listing(page(51, 'A')) })
+    renderScreen(<Invoices {...screenContext()} />, { bridge: listing(page(51, 'A')) })
 
     await screen.findByText('Party 0')
     expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
@@ -270,7 +270,9 @@ describe('paging', () => {
 
   it('asks for the next page by offset, and can come back', async () => {
     const user = userEvent.setup()
-    const { bridge } = renderScreen(<Invoices />, { bridge: listing(page(51, 'A')) })
+    const { bridge } = renderScreen(<Invoices {...screenContext()} />, {
+      bridge: listing(page(51, 'A')),
+    })
 
     await screen.findByText('Party 0')
     await user.click(screen.getByRole('button', { name: 'Next' }))
@@ -289,7 +291,9 @@ describe('paging', () => {
    */
   it('returns to the first page when the filter changes', async () => {
     const user = userEvent.setup()
-    const { bridge } = renderScreen(<Invoices />, { bridge: listing(page(51, 'A')) })
+    const { bridge } = renderScreen(<Invoices {...screenContext()} />, {
+      bridge: listing(page(51, 'A')),
+    })
 
     await screen.findByText('Party 0')
     await user.click(screen.getByRole('button', { name: 'Next' }))
@@ -303,7 +307,9 @@ describe('paging', () => {
 
   it('returns to the first page when the search changes', async () => {
     const user = userEvent.setup()
-    const { bridge } = renderScreen(<Invoices />, { bridge: listing(page(51, 'A')) })
+    const { bridge } = renderScreen(<Invoices {...screenContext()} />, {
+      bridge: listing(page(51, 'A')),
+    })
 
     await screen.findByText('Party 0')
     await user.click(screen.getByRole('button', { name: 'Next' }))

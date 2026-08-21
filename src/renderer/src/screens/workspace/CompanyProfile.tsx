@@ -25,9 +25,9 @@
  * happens when it disagrees with the number is main's to say.
  */
 
-import { useCallback, useEffect, useId, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { JSX } from 'react'
-import { Button, Input } from '@renderer/components/atoms'
+import { Button, Input, Select } from '@renderer/components/atoms'
 import { callApi } from '@renderer/lib/api'
 import { registerScreens } from '@renderer/lib/screens'
 import { useRegime } from '@renderer/store/regime'
@@ -96,7 +96,6 @@ function draftOf(profile: Profile): Draft {
 export function CompanyProfile(): JSX.Element {
   const { show } = useToasts()
   const regime = useRegime()
-  const jurisdictionId = useId()
 
   const [profile, setProfile] = useState<Profile | null | 'unread'>('unread')
   const [draft, setDraft] = useState<Draft>(() => blankDraft(regime))
@@ -238,41 +237,29 @@ export function CompanyProfile(): JSX.Element {
             />
 
             {/*
-             * The same skeleton the `Input` atom builds — div.field, then the label, the
-             * control and the hint as SIBLINGS. The hint began inside the `<label>`,
-             * which is the shape ChartOfAccounts uses for a select that has no hint, and
-             * it made the whole paragraph part of the field's accessible name: a screen
-             * reader would announce three sentences where the label is three words. A
-             * test looking for the field by its label is what found it.
+             * The `Select` atom, which is this block generalised. It began as a
+             * hand-rolled `<label className="field">` with the hint INSIDE the label,
+             * which made the whole paragraph part of the field's accessible name. The
+             * same mistake was then made again in the invoice editor, so the skeleton
+             * moved into an atom where it can only be built one way.
+             *
+             * The hint is said in words rather than enforced in code: main fills this in
+             * from the registration number where the number encodes it, and refuses a
+             * pair that disagree. The renderer does not know which numbers encode what.
              */}
-            <div className="field">
-              <label className="field__label" htmlFor={jurisdictionId}>
-                State or region
-              </label>
-              <select
-                id={jurisdictionId}
-                className="field__control"
-                value={draft.jurisdictionCode}
-                aria-describedby={`${jurisdictionId}-hint`}
-                onChange={(event) => set('jurisdictionCode', event.target.value)}
-              >
-                <option value="">Not set</option>
-                {jurisdictions.map((jurisdiction) => (
-                  <option key={jurisdiction.code} value={jurisdiction.code}>
-                    {jurisdiction.name}
-                  </option>
-                ))}
-              </select>
-              {/*
-               * Said in words rather than enforced in code. Main fills this in from the
-               * registration number where the number encodes it, and refuses a pair that
-               * disagree — the renderer does not know which numbers encode what.
-               */}
-              <p id={`${jurisdictionId}-hint`} className="field__hint">
-                Filled in from the registration number when there is one. Getting this wrong changes
-                the tax on every invoice these books raise, in both directions.
-              </p>
-            </div>
+            <Select
+              label="State or region"
+              value={draft.jurisdictionCode}
+              hint="Filled in from the registration number when there is one. Getting this wrong changes the tax on every invoice these books raise, in both directions."
+              onChange={(event) => set('jurisdictionCode', event.target.value)}
+            >
+              <option value="">Not set</option>
+              {jurisdictions.map((jurisdiction) => (
+                <option key={jurisdiction.code} value={jurisdiction.code}>
+                  {jurisdiction.name}
+                </option>
+              ))}
+            </Select>
 
             <Input
               label="Country"

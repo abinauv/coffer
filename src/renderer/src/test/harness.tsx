@@ -21,6 +21,8 @@
 import { render, type RenderResult } from '@testing-library/react'
 import type { JSX, ReactNode } from 'react'
 import { ToastViewport } from '@renderer/components/toast/ToastViewport'
+import { makeRoute, type Route } from '@renderer/lib/routing'
+import type { ScreenContext } from '@renderer/lib/screens'
 import { CommandProvider } from '@renderer/store/commands'
 import { PlatformProvider } from '@renderer/store/platform'
 import { RegimeProvider } from '@renderer/store/regime'
@@ -160,6 +162,29 @@ export function installBridge(stub: BridgeStub = {}): FakeBridge {
 
 export function uninstallBridge(): void {
   delete (globalThis as { coffer?: CofferApi }).coffer
+}
+
+// ---- Screens that take a route ---------------------------------------------
+
+/*
+ * What the screen registry hands a screen that reads its route.
+ *
+ * Most screens ignore it and are rendered as `<Screen />`. One that navigates or reads a
+ * parameter takes it, and a test needs to supply both halves — the route it is on, and
+ * somewhere for `navigate` to go. The default `navigate` does nothing, which is right for
+ * a test that is not about navigation; pass a `vi.fn()` when it is.
+ */
+export function screenContext(over: Partial<ScreenContext> = {}): ScreenContext {
+  return {
+    route: makeRoute('workspace', 'overview'),
+    navigate: () => {},
+    ...over,
+  }
+}
+
+/** A route in the workspace, for `screenContext({ route: … })`. */
+export function testRoute(screenId: string, params: Record<string, string> = {}): Route {
+  return makeRoute('workspace', screenId, params)
 }
 
 // ---- Rendering -------------------------------------------------------------

@@ -26,7 +26,8 @@ import type { JSX } from 'react'
 import { Badge, Button, Input } from '@renderer/components/atoms'
 import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
-import { registerScreens } from '@renderer/lib/screens'
+import { makeRoute } from '@renderer/lib/routing'
+import { registerScreens, type ScreenContext } from '@renderer/lib/screens'
 import { useRegisterCommands } from '@renderer/store/commands'
 import { useNumberFormat } from '@renderer/store/regime'
 import type { AppError, DocumentStatusDto, DocumentSummary } from '@shared/dto'
@@ -42,8 +43,15 @@ import {
   statusTone,
 } from '../lib/invoice-view'
 
-export function Invoices(): JSX.Element {
+export function Invoices({ navigate }: ScreenContext): JSX.Element {
   const format = useNumberFormat()
+
+  /* One place that knows where the editor lives. No id is a new invoice — the editor
+   * creates nothing until it is asked to. */
+  const openInvoice = useCallback(
+    (id?: string) => navigate(makeRoute('workspace', 'invoice', id === undefined ? {} : { id })),
+    [navigate],
+  )
 
   const [rows, setRows] = useState<DocumentSummary[] | null>(null)
   const [error, setError] = useState<AppError | null>(null)
@@ -92,6 +100,13 @@ export function Invoices(): JSX.Element {
     useMemo<Command[]>(
       () => [
         {
+          id: 'documents.invoice-new',
+          title: 'New invoice',
+          section: 'Sales',
+          keywords: ['invoice', 'draft', 'create', 'sales'],
+          run: () => openInvoice(),
+        },
+        {
           id: 'documents.invoices-refresh',
           title: 'Refresh the invoice register',
           section: 'Sales',
@@ -99,7 +114,7 @@ export function Invoices(): JSX.Element {
           run: () => void load(),
         },
       ],
-      [load],
+      [load, openInvoice],
     ),
   )
 
@@ -111,6 +126,11 @@ export function Invoices(): JSX.Element {
       width="list"
       title="Invoices"
       lede="Every invoice these books have raised, and every draft not yet issued."
+      actions={
+        <Button icon="plus" variant="primary" onClick={() => openInvoice()}>
+          New invoice
+        </Button>
+      }
     >
       <div className="stack">
         {error && <FailureNotice error={error} context="ledger" />}
@@ -151,7 +171,7 @@ export function Invoices(): JSX.Element {
             <p>
               {isFiltered
                 ? 'No invoice on this page matches. Clearing the search or the status filter will show the rest.'
-                : 'An invoice needs a customer and the business details filled in. Both are in the sidebar.'}
+                : 'An invoice needs a customer and the business details filled in — both are in the sidebar. Then New invoice starts one.'}
             </p>
           </Notice>
         ) : (
@@ -174,7 +194,9 @@ export function Invoices(): JSX.Element {
                       the number goes is the honest answer — a blank cell reads as a
                       number that failed to load. */}
                   <td className="ledger-table__code">
-                    {document.number ?? <span className="ledger-table__muted">Draft</span>}
+                    <Button variant="ghost" size="sm" onClick={() => openInvoice(document.id)}>
+                      {document.number ?? 'Draft'}
+                    </Button>
                   </td>
                   <td className="ledger-table__code">{document.date}</td>
                   <td>{document.partyName}</td>
@@ -224,6 +246,6 @@ registerScreens([
     title: 'Invoices',
     area: 'workspace',
     nav: { label: 'Invoices', icon: 'ledger', group: 'sales', order: 1 },
-    render: () => <Invoices />,
+    render: (context) => <Invoices {...context} />,
   },
 ])
