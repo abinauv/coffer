@@ -29,11 +29,12 @@ import { clearAccountRole, listAccounts } from './accounts'
 import { accountBalance, trialBalance } from './balances'
 import { createDocument, deleteDocument, getDocument, updateDocument } from './documents'
 import { isRepoError, type RepoError, type RepoErrorCode } from './errors'
-import { cancelDocument, issueDocument } from './issuing'
+import { cancelDocument, issueDocument, postingContextFor } from './issuing'
 import { getEntry, listEntries } from './journal'
 import { allocateNumber, createSeries, getSeries, previewNumber } from './numbering'
+import { saveCompanyProfile } from './company-profile'
 import { createParty } from './parties'
-import { closePeriod, generateFiscalYear, listPeriods } from './periods'
+import { closePeriod, generateFiscalYear, listPeriods, periodRefForDate } from './periods'
 import { seedChart } from './seed-chart'
 import { taxAccountsFor } from './tax-accounts'
 
@@ -868,6 +869,49 @@ describe('composing inside one transaction', () => {
     /* Including the allocation the caller made before calling — which is the cost of
      * joining rather than nesting, stated in ./transaction.ts and demonstrated here. */
     expect(await nextSequence()).toBe(1)
+  })
+})
+
+// ---- What a posting rule is given ------------------------------------------
+
+/*
+ * `postingContextFor` is the only place a `PostingContext` is built for a real document,
+ * and `homeJurisdictionCode` is the field on it that nothing reads yet.
+ *
+ * That is exactly why it is asserted here rather than through an issued invoice. The
+ * sales rule does not branch on the company's jurisdiction — the document already carries
+ * the place of supply the regime decided from — so a wire-up that quietly went on passing
+ * null would produce identical invoices, identical entries and identical balances, and
+ * every other test in this file would pass. The assertion has to be on the context.
+ */
+describe('the context a posting rule is handed', () => {
+  it('carries the company jurisdiction from the profile', async () => {
+    await saveCompanyProfile(db, {
+      legalName: 'Selvaraj Traders Private Limited',
+      countryCode: 'in',
+      jurisdictionCode: '33',
+    })
+    const period = await periodRefForDate(db, '2026-04-15')
+
+    const context = await postingContextFor(db, period!)
+
+    expect(context.homeJurisdictionCode).toBe('33')
+    expect(context.period?.fiscalYearLabel).toBe(YEAR)
+    expect(context.accounts.forRole('sales')?.code).toBe('4100')
+  })
+
+  /*
+   * Books with no profile still issue. Nothing about the company is needed to raise an
+   * invoice — 0011 seeds no row, a person fills it in when they get to it, and null is
+   * what a rule sees until they do.
+   */
+  it('carries null when nobody has filled the profile in, and issues anyway', async () => {
+    const period = await periodRefForDate(db, '2026-04-15')
+
+    expect((await postingContextFor(db, period!)).homeJurisdictionCode).toBeNull()
+
+    const issued = await issueDocument(db, { id: await drafted() }, NOW)
+    expect(issued.number).toBe('INV/2026-27/0001')
   })
 })
 

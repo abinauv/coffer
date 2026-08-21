@@ -868,6 +868,65 @@ export interface ArchivePartyInput {
   archived: boolean
 }
 
+// ---- The company profile --------------------------------------------------
+
+/*
+ * Who these books belong to. One profile per company, because a company is one file.
+ *
+ * The same shape as a party where the meaning is the same — a regime sees the supplier
+ * and the customer as one type, `TaxParty`, and half of what decides whether an invoice
+ * carries CGST+SGST or IGST is whether these two jurisdictions match.
+ *
+ * There is no `id` here. There is exactly one profile, so an id crossing IPC would be a
+ * value the caller could get wrong and nothing could do anything useful with.
+ */
+
+/** The profile, as read. Null from `companyProfile.get` until somebody has entered one. */
+export interface CompanyProfile {
+  /** As it appears on the registration. What prints on a tax invoice. */
+  legalName: string
+  /** The name it trades under, when that differs. */
+  tradeName: string | null
+  /** GSTIN in India. Null for a business below the registration threshold. */
+  registrationNumber: string | null
+  /** Sub-national code — the Indian state code. */
+  jurisdictionCode: string | null
+  /** ISO 3166-1 alpha-2, lower case. */
+  countryCode: string
+  addressLine1: string | null
+  addressLine2: string | null
+  city: string | null
+  postalCode: string | null
+  email: string | null
+  phone: string | null
+  /** When the profile was first entered, not when the company file was made. */
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+/**
+ * The whole profile, as written.
+ *
+ * A REPLACE, NOT A PATCH, and deliberately unlike `UpdatePartyInput`. A field left out
+ * is a field cleared. There is one profile and one screen that owns all of it, so the
+ * form always holds every field and always sends every field; a patch would give two
+ * ways to say "no e-mail address" — absent and null — and make what ends up stored
+ * depend on which of them the caller happened to choose.
+ */
+export interface SaveCompanyProfileInput {
+  legalName: string
+  countryCode: string
+  tradeName?: string | null
+  registrationNumber?: string | null
+  jurisdictionCode?: string | null
+  addressLine1?: string | null
+  addressLine2?: string | null
+  city?: string | null
+  postalCode?: string | null
+  email?: string | null
+  phone?: string | null
+}
+
 // ---- Query inputs ---------------------------------------------------------
 
 export interface ListAccountsInput {

@@ -82,6 +82,7 @@ import type { CancelDocumentInput, DateString, Document, IssueDocumentInput } fr
 
 import type { CofferDb } from '../kysely'
 import { buildResolver } from './accounts'
+import { homeJurisdictionCode } from './company-profile'
 import { getDocument, toDomainLine } from './documents'
 import { RepoError, type RepoErrorCode } from './errors'
 import { postEntry, reverseEntry } from './journal'
@@ -151,18 +152,7 @@ export async function issueDocument(
         lines: document.lines.map(toDomainLine),
       }
 
-      const draft = buildEntry(rule.toEntry, postable, {
-        accounts: await buildResolver(trx),
-        period,
-        /*
-         * Nothing reads it yet. The company's own jurisdiction has no column to come
-         * from — there is no company settings table — and the sales invoice rule does not
-         * branch on it, because the document already carries the place of supply the
-         * regime decided from. It is on `PostingContext` for a rule that will, and a guess
-         * put here would be a fact invented in `db/` about a regime `db/` may not name.
-         */
-        homeJurisdictionCode: null,
-      })
+      const draft = buildEntry(rule.toEntry, postable, await postingContextFor(trx, period))
 
       entryId = (await postEntry(trx, draft)).entryId
     }
@@ -369,6 +359,33 @@ function reversalNarration(document: Document, given: string | undefined): strin
 
   const label = definitionOf(document.kind as DocumentKind).label.toLowerCase()
   return `Cancellation of ${label} ${document.number ?? ''}`.trim()
+}
+
+/**
+ * Everything a posting rule may consult, assembled from these books.
+ *
+ * Three reads and no decisions. It is a function of its own, and exported, because it is
+ * the only place `PostingContext` is built for a real document — a rule that needs
+ * something new gets it added here, which is the alternative CONVENTIONS §1.2 exists to
+ * offer: `domain/` takes what it needs as an argument and never imports a repository.
+ *
+ * `homeJurisdictionCode` comes from the company profile (0011), and until 0011 there was
+ * nowhere for it to come from and this passed null. No rule reads it yet. The sales
+ * invoice rule never will — the document carries the place of supply the regime already
+ * decided from, and re-deriving it at posting time would be a second answer to a settled
+ * question — but a rule that has to know whether a supply was intra-jurisdiction without
+ * being told is what the field is on the context for. Null still means what it meant: a
+ * profile nobody has filled in, or a country with no sub-national jurisdictions.
+ */
+export async function postingContextFor(
+  db: CofferDb,
+  period: AccountingPeriodRef,
+): Promise<PostingContext> {
+  return {
+    accounts: await buildResolver(db),
+    period,
+    homeJurisdictionCode: await homeJurisdictionCode(db),
+  }
 }
 
 type ToEntry = (document: PostableDocument, context: PostingContext) => EntryDraft

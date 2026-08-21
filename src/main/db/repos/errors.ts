@@ -190,11 +190,13 @@ export type RepoErrorCode =
   /**
    * This build cannot issue a document of that kind.
    *
-   * Two causes, one code, two sentences. A quotation never posts and its place in a
-   * document's life is not settled (see 0008); the other kinds post but their posting
-   * rules are not written yet. Neither is something a user can fix, and both are
-   * something a user can hit by drafting a document the screens offered them — which is
-   * why it is a code with a message rather than a thrown programmer error.
+   * One cause since 0010: the kind posts to the ledger and its posting rule is not
+   * written yet — a credit note, a purchase bill or a debit note. It used to have a
+   * second, a quotation, whose place in a document's life 0008 had left unsettled; 0010
+   * settled it and quotations issue normally now.
+   *
+   * It is a code with a message rather than a thrown programmer error because it is not
+   * something the user did wrong: the screens offered them the draft.
    */
   | 'DOCUMENT_KIND_UNSUPPORTED'
   /** An issue against a document with no lines, or with every line at zero. */
@@ -209,6 +211,11 @@ export type RepoErrorCode =
   | 'DUPLICATE_LINE_NUMBER'
   /** A line names a unit these books do not have. */
   | 'UNIT_UNKNOWN'
+  // ---- The company profile (0011) ----
+  /** The profile was saved without a legal name. It is what prints on a tax invoice. */
+  | 'COMPANY_LEGAL_NAME_REQUIRED'
+  /** The profile was saved without a country. */
+  | 'COMPANY_COUNTRY_REQUIRED'
 
 /** An error raised by a repository. Always carries a stable, machine-readable code. */
 export class RepoError extends Error {

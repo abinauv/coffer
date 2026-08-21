@@ -116,10 +116,21 @@ facts:
 | `company.display_name`  | the name at creation. Advisory; the registry is authoritative     |
 | `company.created_at`    | ISO-8601 UTC                                                      |
 
-It is deliberately not a company profile. Address, registration numbers and invoice
-defaults are business data with their own Phase 1 table and their own constraints. The
-reference project kept a single-row `settings` table that grew into all of that, and
-every new field became a migration that rewrote it.
+It is deliberately not a company profile. Address and registration numbers are business
+data, and they live in `company_profile` (migration `0011`) with their own columns and
+their own constraints. The reference project kept a single-row `settings` table that
+grew into all of that plus the invoice defaults and the e-mail configuration, and every
+new field became a migration that rewrote it.
+
+`company_profile` is single-row as well, so the distinction is worth stating: the
+reference table's problem was not its row count but that it had no subject. This one
+holds identity — the name a tax authority knows, the registration, the jurisdiction, the
+address — and nothing that is a preference. **It can legitimately be empty.** A migration
+cannot invent a company's legal name, so no row is seeded and every read answers null
+until somebody enters one; books with no profile still keep a chart, periods, parties,
+drafts and a ledger. What the profile is needed for is tax: `TaxRegime.computeTax` takes
+a supplier and a customer and decides CGST+SGST against IGST from whether their
+jurisdictions match, and this is where the supplier comes from.
 
 ### The ledger tables
 
@@ -138,6 +149,7 @@ numbers reserved so that parallel work cannot collide.
 | `0008`    | `documents`, `document_lines`, `document_line_taxes` | The trade document itself                         | landed |
 | `0009`    | `documents_frozen_once_issued`, replaced             | Narration and series, frozen after issue          | landed |
 | `0010`    | `documents`, rebuilt                                 | A quotation may be issued without posting         | landed |
+| `0011`    | `company_profile`                                    | Who these books belong to, in one row             | landed |
 
 Ten things about these tables are worth knowing before you read them, because each one
 is a decision rather than a detail:

@@ -464,6 +464,43 @@ export interface DocumentLineTaxesTable {
   amount: DecimalString
 }
 
+// ---- The company profile (0011) -------------------------------------------
+
+/**
+ * Who these books belong to — at most one row, pinned by `CHECK (id = 'company')`.
+ *
+ * Identity, not preferences: the name a tax authority knows, the registration it holds,
+ * where it is, and how to reach it. Invoice defaults and mail settings get their own
+ * tables when they exist, because the reference project put all of it in one row and
+ * every screen wrote to it (CONVENTIONS §9). Read the migration before adding a column.
+ *
+ * The table can legitimately be empty. A migration cannot invent a company's legal name,
+ * so a profile exists once somebody has entered one, and until then every read answers
+ * null.
+ */
+export interface CompanyProfileTable {
+  /** Always `'company'`. Not a surrogate key — a company is a file, not a row. */
+  id: string
+  /** As it appears on the registration. What prints on a tax invoice. */
+  legal_name: string
+  /** The name it trades under, when that differs. Null when it does not. */
+  trade_name: string | null
+  /** GSTIN in India. Null for a business below the registration threshold. */
+  registration_number: string | null
+  /** Sub-national code — the Indian state code. Half of what decides the tax. */
+  jurisdiction_code: string | null
+  /** ISO 3166-1 alpha-2, lower case. */
+  country_code: string
+  address_line1: string | null
+  address_line2: string | null
+  city: string | null
+  postal_code: string | null
+  email: string | null
+  phone: string | null
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
 export interface Database {
   app_metadata: AppMetadataTable
   accounts: AccountsTable
@@ -479,6 +516,7 @@ export interface Database {
   documents: DocumentsTable
   document_lines: DocumentLinesTable
   document_line_taxes: DocumentLineTaxesTable
+  company_profile: CompanyProfileTable
 }
 
 export type { Generated }

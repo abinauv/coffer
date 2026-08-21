@@ -196,6 +196,10 @@ It is a useful reference and a trap in equal measure.
   - freight hardcoded as never taxed, inside the tax function
   - UoM outside `Nos/Sets/Kg/Mtr` silently rewritten to `Nos`
   - tax computation called directly from screens
-  - the single-row `settings` company profile
+  - the single-row `settings` company profile — a table with no subject, shared by the
+    profile, the invoice defaults and the e-mail configuration, which every screen wrote
+    to and no constraint could describe. Coffer's `company_profile` (migration `0011`) is
+    one row as well and is not this: its subject is identity, and a preference does not
+    go in it.
 - **Do port the discipline:** the decimal handling, the golden fixtures, the typed IPC
   proxy, the migration runner, the security model. That is the part worth having.
