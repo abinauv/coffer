@@ -77,6 +77,15 @@ export const API_SURFACE: ApiSurface = {
     archive: true,
     delete: true,
   },
+  documents: {
+    list: true,
+    get: true,
+    create: true,
+    update: true,
+    delete: true,
+    issue: true,
+    cancel: true,
+  },
   companyProfile: {
     get: true,
     save: true,

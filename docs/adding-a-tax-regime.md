@@ -93,6 +93,17 @@ aggregated across lines.
 Every amount in and out is a `DecimalString`. Never a `number`, at any point, for any
 reason. Parse with the primitives in `@main/domain/money`.
 
+**Who calls it.** Exactly one place: `src/main/documents/service.ts`. A screen sends what
+the user typed — quantity, price, discount, the rate slab — and that service asks this
+method with the company profile as the supplier and the party as the customer, then hands
+the answer to the repository to store. `db/` may not name a regime and the renderer may
+not compute money, so there is one legal home for the call and the DTOs enforce it:
+`CreateDocumentInput` (what a screen sends) has no taxable amount and no components,
+and `CreateTaxedDocumentInput` (what the repository takes) requires both.
+
+The reference project called `computeGst()` straight from its screens. That is what this
+arrangement exists to prevent.
+
 ### `placeOfSupply`
 
 Where a supply is treated as taking place, which is what decides _which_ taxes apply. It

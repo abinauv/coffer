@@ -588,8 +588,25 @@ export interface Document extends DocumentSummary {
   cancelledAt: Timestamp | null
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * TWO SHAPES FOR A DOCUMENT ON THE WAY IN, AND THE DIFFERENCE IS THE TAX
+ *
+ * `CreateDocumentInput` is what a SCREEN sends: what the user typed, and no tax. It is
+ * the shape in the IPC contract, and the one the renderer knows.
+ *
+ * `CreateTaxedDocumentInput` is what the REPOSITORY takes: the same document with the
+ * regime's answer already on it, line by line. The service in src/main/documents is what
+ * turns the first into the second, and it is the only thing that may — `db/` must not
+ * name a regime (CONVENTIONS §1.6) and the renderer must not compute money (§1.7), so the
+ * conversion has exactly one legal home and this pair of names is what keeps it there.
+ *
+ * A screen wired straight to the repository would have to invent a `taxableAmount` and a
+ * set of components. The name is what stops that being a plausible-looking thing to do.
+ */
+
 /**
- * A line on the way in.
+ * A line as the repository takes it: priced AND taxed.
  *
  * `taxableAmount` and the taxes are supplied rather than computed here, because they are
  * the regime's answer as of the document's date and the caller is what has just asked the
@@ -597,7 +614,7 @@ export interface Document extends DocumentSummary {
  * than trusting it — a mismatch is a caller bug, and one that would put a figure in the
  * books the invoice does not show.
  */
-export interface DocumentLineInput {
+export interface TaxedLineInput {
   itemId?: string | null
   description: string
   quantity: DecimalString
@@ -612,7 +629,8 @@ export interface DocumentLineInput {
   taxes?: readonly DocumentLineTaxDto[]
 }
 
-export interface CreateDocumentInput {
+/** A document as the repository takes it. Every line already carries its tax. */
+export interface CreateTaxedDocumentInput {
   kind: string
   date: DateString
   partyId: string
@@ -621,15 +639,86 @@ export interface CreateDocumentInput {
   placeOfSupplyCountry: string
   roundingPolicy?: 'whole-unit' | 'none'
   narration?: string
-  lines?: readonly DocumentLineInput[]
+  lines?: readonly TaxedLineInput[]
 }
 
 /**
- * A change to a draft.
+ * A change to a draft, as the repository takes it.
  *
  * `lines`, when present, REPLACES every line. A draft's lines are edited as a set — the
  * grid the user is looking at is the whole document — and a per-line patch protocol would
  * be a second way to say the same thing, with its own ordering bugs.
+ */
+export interface UpdateTaxedDocumentInput {
+  id: string
+  date?: DateString
+  partyId?: string
+  partyReference?: string | null
+  placeOfSupplyJurisdiction?: string | null
+  placeOfSupplyCountry?: string
+  roundingPolicy?: 'whole-unit' | 'none'
+  narration?: string
+  lines?: readonly TaxedLineInput[]
+}
+
+/**
+ * A line as a SCREEN has it: priced by the user, not yet taxed.
+ *
+ * No `taxableAmount`, because `quantity x unitPrice - discount` is money and the renderer
+ * never computes money (CONVENTIONS §1.7). No `taxes`, because which components apply is
+ * the regime's answer and a screen may not ask it — the service does, once, with both
+ * sides of the supply in hand.
+ *
+ * `ratePct` IS here, and is not the same kind of thing. It is the slab the user chose for
+ * this line — 18, 5, 0 — which is an input to the tax rather than the tax. What that slab
+ * breaks into, and whether it becomes CGST+SGST or IGST, is not for a screen to know.
+ */
+export interface DocumentLineInput {
+  itemId?: string | null
+  description: string
+  quantity: DecimalString
+  unitCode?: string | null
+  unitPrice: DecimalString
+  discount?: DecimalString
+  /** The full rate for the line, e.g. '18'. Absent is nil-rated, not "work it out". */
+  ratePct?: DecimalString
+  /** HSN or SAC in India. Null where none applies. */
+  classificationCode?: string | null
+  /** Freight, packing, insurance. Taxable by default — see `TaxableLine.isCharge`. */
+  isCharge?: boolean
+  accountId?: string | null
+}
+
+/**
+ * A new document, as a screen sends it.
+ *
+ * `placeOfSupplyCountry` and `placeOfSupplyJurisdiction` are OPTIONAL here and required
+ * on the repository's shape, which is the one asymmetry worth reading twice. Absent means
+ * "whatever the regime says", and the regime is asked with the company profile as the
+ * supplier and the party as the customer. Supplying them is an override, for the invoice
+ * where the place of supply is not where the customer is registered — a hotel room, goods
+ * delivered to a third state — and it is a decision only a person can make.
+ */
+export interface CreateDocumentInput {
+  kind: string
+  date: DateString
+  partyId: string
+  partyReference?: string | null
+  /** Overrides what the regime would decide. Absent is the ordinary case. */
+  placeOfSupplyJurisdiction?: string | null
+  /** Overrides what the regime would decide. Absent is the ordinary case. */
+  placeOfSupplyCountry?: string
+  roundingPolicy?: 'whole-unit' | 'none'
+  narration?: string
+  lines?: readonly DocumentLineInput[]
+}
+
+/**
+ * A change to a draft, as a screen sends it.
+ *
+ * Absent means "leave it". `lines`, when present, replaces the whole set — and replacing
+ * them re-asks the regime, because a line that changed rate or a party that changed state
+ * changes the tax on every other line of the document.
  */
 export interface UpdateDocumentInput {
   id: string

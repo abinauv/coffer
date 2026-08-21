@@ -98,6 +98,11 @@ src/
 │   │   ├── types.ts           TaxRegime interface
 │   │   └── in-gst/            India GST implementation
 │   ├── security/       argon2, vault, DEK, recovery codes, sealed box
+│   ├── books/          the open-company seam every service below shares
+│   ├── ledger/         ─┐
+│   ├── parties/         │ one service per IPC group. THE ONLY LAYER THAT MAY
+│   ├── documents/       │ ASK A REGIME — see §6.2 and src/main/documents.
+│   ├── company-profile/─┘
 │   ├── services/       pdf, excel, backup, mailer, importers
 │   └── ipc/            handlers, registered by channel name
 ├── preload/
@@ -170,6 +175,13 @@ interface TaxRegime {
 `regimes/index.ts` — nothing outside `regimes/` names a concrete regime, and eslint
 enforces that. A second regime should require no change outside its own folder. See
 [`adding-a-tax-regime.md`](./adding-a-tax-regime.md).
+
+**Where the regime is actually asked.** One place: `src/main/documents/service.ts`. A
+screen sends what the user typed and that service asks `computeTax`, with the company
+profile as the supplier and the party as the customer, before handing the result to the
+repository. The DTO pair in `shared/dto.ts` is what keeps it there —
+`CreateDocumentInput` carries no tax and `CreateTaxedDocumentInput` requires it, so a
+screen wired to the repository would have to invent the figures.
 
 > The reference project hardcodes `computeGst()` and calls it from screens. Do not
 > reproduce that. It also hardcodes _"freight is never taxed"_, which was one client's

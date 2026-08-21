@@ -31,7 +31,7 @@ import {
   updateDocument,
 } from './documents'
 import { DOCUMENT_KINDS, postsToLedger } from '@main/domain/documents'
-import type { CreateDocumentInput, DocumentLineInput } from '@shared/dto'
+import type { CreateTaxedDocumentInput, TaxedLineInput } from '@shared/dto'
 
 const KEY = new Uint8Array(DATABASE_KEY_BYTES).fill(0x5a)
 const NOW = '2026-04-15T09:00:00.000Z'
@@ -87,7 +87,7 @@ async function codeOf(action: () => Promise<unknown>): Promise<RepoErrorCode | s
   return 'no error thrown'
 }
 
-function line(over: Partial<DocumentLineInput> = {}): DocumentLineInput {
+function line(over: Partial<TaxedLineInput> = {}): TaxedLineInput {
   return {
     description: 'Ball bearing 6203',
     quantity: '2.000',
@@ -102,7 +102,7 @@ function line(over: Partial<DocumentLineInput> = {}): DocumentLineInput {
   }
 }
 
-const draft = (over: Partial<CreateDocumentInput> = {}): CreateDocumentInput => ({
+const draft = (over: Partial<CreateTaxedDocumentInput> = {}): CreateTaxedDocumentInput => ({
   kind: 'sales-invoice',
   date: '2026-04-15',
   partyId: customer,
@@ -712,6 +712,53 @@ describe('creating a draft', () => {
     )
 
     expect(failure).toBe('LINE_TOTAL_MISMATCH')
+  })
+
+  /*
+   * A LINE ROUNDS, and the check has to allow it.
+   *
+   * `lineAmount` is one of the defined rounding points in domain/money/scale.ts — "a
+   * line's extended amount, fixed once before it contributes to any total" — so 0.333 kg
+   * at 10.01 is 3.33333 and the line is 3.33. That is what prints and what goes in the
+   * books.
+   *
+   * The check compares against the ROUNDED product for that reason. Comparing against the
+   * raw one would refuse every line whose quantity and price do not multiply out to whole
+   * paise, which is most lines sold by weight, and the message would say the amount was
+   * wrong when it was the only right answer available.
+   */
+  it('allows a line whose own arithmetic does not land on a whole paisa', async () => {
+    const document = await createDocument(
+      db,
+      draft({
+        lines: [
+          line({
+            quantity: '0.333',
+            unitPrice: '10.01',
+            taxableAmount: '3.33',
+            taxes: [],
+          }),
+        ],
+      }),
+      NOW,
+    )
+
+    expect(document.lines[0]?.taxableAmount).toBe('3.33')
+  })
+
+  /* And the check still has teeth: rounding is half a paisa, not a licence. */
+  it('still refuses an amount that is a paisa out', async () => {
+    expect(
+      await codeOf(() =>
+        createDocument(
+          db,
+          draft({
+            lines: [line({ quantity: '0.333', unitPrice: '10.01', taxableAmount: '3.34' })],
+          }),
+          NOW,
+        ),
+      ),
+    ).toBe('LINE_TOTAL_MISMATCH')
   })
 
   it('takes the discount out of the line before checking it', async () => {

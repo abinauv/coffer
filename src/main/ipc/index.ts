@@ -19,6 +19,7 @@ import {
   type CompanyProfileService,
   createCompanyProfileHandlers,
 } from './handlers/company-profile'
+import { type DocumentsService, createDocumentsHandlers } from './handlers/documents'
 import { type LedgerService, createLedgerHandlers } from './handlers/ledger'
 import { type PartiesService, createPartiesHandlers } from './handlers/parties'
 import { type ReportService, createReportHandlers } from './handlers/reports'
@@ -31,6 +32,7 @@ import { apiChannels } from './surface'
 export type { ErrorMapper } from './errors'
 export type { CompanyService } from './handlers/companies'
 export type { CompanyProfileService } from './handlers/company-profile'
+export type { DocumentsService } from './handlers/documents'
 export type { LedgerService } from './handlers/ledger'
 export type { PartiesService } from './handlers/parties'
 export type { ReportService } from './handlers/reports'
@@ -64,6 +66,13 @@ export interface IpcDependencies {
    * registration number is real.
    */
   parties: PartiesService
+  /**
+   * THE INJECTION POINT for src/main/documents.
+   *
+   * The one service that asks the regime for tax. It needs the company profile and the
+   * party to do it, which is why it is a service and not a face of `ledger`.
+   */
+  documents: DocumentsService
   /**
    * THE INJECTION POINT for src/main/company-profile.
    *
@@ -120,6 +129,7 @@ export function registerIpcHandlers(dependencies: IpcDependencies): HandlerRegis
   registry.registerGroup('companies', createCompaniesHandlers(dependencies.companies, allowlist))
   registry.registerGroup('ledger', createLedgerHandlers(dependencies.ledger))
   registry.registerGroup('parties', createPartiesHandlers(dependencies.parties))
+  registry.registerGroup('documents', createDocumentsHandlers(dependencies.documents))
   registry.registerGroup(
     'companyProfile',
     createCompanyProfileHandlers(dependencies.companyProfile),

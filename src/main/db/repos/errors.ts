@@ -227,6 +227,15 @@ export type RepoErrorCode =
   | 'COMPANY_REGISTRATION_INVALID'
   /** The company's registration number encodes a jurisdiction, and not the one given. */
   | 'COMPANY_JURISDICTION_MISMATCH'
+  /**
+   * There is no company profile, and the tax on a supply needs both sides of it.
+   *
+   * Raised by the documents service. `computeTax` takes a supplier and a customer, and
+   * with no profile there is no supplier — not even a country — so there is nothing to
+   * compute from. Inventing one would put a jurisdiction of the service's choosing on
+   * every invoice in the books, which is the failure nobody would notice.
+   */
+  | 'COMPANY_PROFILE_MISSING'
 
 /** An error raised by a repository. Always carries a stable, machine-readable code. */
 export class RepoError extends Error {

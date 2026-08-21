@@ -51,22 +51,23 @@ import {
   parseMoney,
   parseQuantity,
   parseRate,
+  roundAt,
   toMoneyString,
   toQuantityString,
   toRateString,
 } from '@main/domain/money'
 import { documentTotals, type DocumentLine } from '@main/domain/documents'
 import type {
-  CreateDocumentInput,
+  CreateTaxedDocumentInput,
   Document,
   DocumentLineDto,
-  DocumentLineInput,
+  TaxedLineInput,
   DocumentLineTaxDto,
   DocumentStatusDto,
   DocumentSummary,
   DocumentTotalsDto,
   ListDocumentsInput,
-  UpdateDocumentInput,
+  UpdateTaxedDocumentInput,
 } from '@shared/dto'
 
 import type { CofferDb } from '../kysely'
@@ -215,7 +216,7 @@ export async function getDocument(db: CofferDb, id: string): Promise<Document | 
  */
 export async function createDocument(
   db: CofferDb,
-  input: CreateDocumentInput,
+  input: CreateTaxedDocumentInput,
   now: string,
 ): Promise<Document> {
   const id = randomUUID()
@@ -266,7 +267,7 @@ export async function createDocument(
  */
 export async function updateDocument(
   db: CofferDb,
-  input: UpdateDocumentInput,
+  input: UpdateTaxedDocumentInput,
   now: string,
 ): Promise<Document> {
   const existing = await requireDocument(db, input.id)
@@ -358,7 +359,7 @@ function assertDraft(row: DocumentRow): void {
 /** A line with every figure normalised and checked. */
 interface NormalisedLine {
   lineNumber: number
-  input: DocumentLineInput
+  input: TaxedLineInput
   quantity: string
   unitPrice: string
   discount: string
@@ -375,7 +376,7 @@ interface NormalisedLine {
  * numbering would admit a document with two line 3s and no line 2 — which the unique
  * index would catch, but with an error about a constraint rather than about the invoice.
  */
-function normaliseLines(lines: readonly DocumentLineInput[]): NormalisedLine[] {
+function normaliseLines(lines: readonly TaxedLineInput[]): NormalisedLine[] {
   return lines.map((input, index) => {
     const lineNumber = index + 1
     const at = (field: string) => `Line ${String(lineNumber)}: ${field}`
@@ -400,8 +401,18 @@ function normaliseLines(lines: readonly DocumentLineInput[]): NormalisedLine[] {
      * figure the invoice does not show and nobody can check. The caller computed it
      * because the caller asked the regime; this is what stops a bug there reaching the
      * books silently.
+     *
+     * ROUNDED AT `lineAmount` BEFORE THE COMPARISON, and that is not a loosening. It is
+     * one of the defined rounding points — "a line's extended amount, fixed once before
+     * it contributes to any total" (domain/money/scale.ts) — so 0.333 kg at 10.01 is a
+     * line of 3.33 and there is no other answer a 2dp column can hold. Comparing against
+     * the raw product refused every line sold by weight whose figures do not multiply out
+     * to whole paise, with a message saying the amount was wrong when it was the only
+     * right one available. Measured against a real database, not reasoned about.
+     *
+     * The check keeps its teeth: half a paisa of rounding is allowed and a paisa is not.
      */
-    const expected = D(quantity).times(D(unitPrice)).minus(D(discount))
+    const expected = roundAt('lineAmount', D(quantity).times(D(unitPrice)).minus(D(discount)))
     if (!D(taxableAmount).equals(expected)) {
       throw new RepoError(
         'LINE_TOTAL_MISMATCH',

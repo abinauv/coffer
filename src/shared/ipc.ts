@@ -29,9 +29,16 @@ import type {
   CompanySummary,
   CreateAccountInput,
   CreateCompanyInput,
+  CreateDocumentInput,
   CreateJournalEntryInput,
   DateRangeInput,
   DayBook,
+  Document,
+  DocumentSummary,
+  CancelDocumentInput,
+  IssueDocumentInput,
+  ListDocumentsInput,
+  UpdateDocumentInput,
   JournalEntry,
   ArchivePartyInput,
   CreatePartyInput,
@@ -176,6 +183,43 @@ export interface CofferApi {
     archive(input: ArchivePartyInput): Promise<Result<Party>>
     /** Refused once anything has been posted against them. Archive instead. */
     delete(id: string): Promise<Result<void>>
+  }
+
+  /**
+   * Trade documents of the open company's books — quotations, invoices, credit notes,
+   * purchase bills, debit notes. One group, because they are one table with a `kind`.
+   *
+   * WHAT A LINE CARRIES, AND WHAT IT MUST NOT. A line is what the user typed: quantity,
+   * price, discount, the rate slab they chose. It carries no taxable amount and no tax
+   * components, because the renderer never computes money (CONVENTIONS §1.7) and which
+   * components a supply attracts is the regime's answer. The service asks, once, with the
+   * company profile as the supplier and the party as the customer — so a document cannot
+   * be created until the company profile exists (`COMPANY_PROFILE_MISSING`).
+   *
+   * `create` and `update` reach only a draft. `issue` is the one call that allocates the
+   * number and posts the entry, in one transaction; `cancel` reverses what was posted and
+   * keeps the number. `delete` is for a draft nobody meant to start, and never for an
+   * issued document — see the four rules in src/main/domain/documents/types.ts.
+   */
+  documents: {
+    list(input?: ListDocumentsInput): Promise<Result<DocumentSummary[]>>
+    get(id: string): Promise<Result<Document | null>>
+    /** Place of supply absent means "whatever the regime says". Supplying it overrides. */
+    create(input: CreateDocumentInput): Promise<Result<Document>>
+    /**
+     * A change to a draft. Absent means "leave it"; `lines` replaces the whole set.
+     *
+     * Changing the party, the date or the place of supply re-asks the regime for EVERY
+     * line, not only the ones that arrived — moving an invoice to a customer in another
+     * state turns CGST+SGST into IGST without a line being edited.
+     */
+    update(input: UpdateDocumentInput): Promise<Result<Document>>
+    /** A draft only. An issued document is cancelled, never removed. */
+    delete(id: string): Promise<Result<void>>
+    /** Allocates the number and posts the entry. One transaction, or none of it. */
+    issue(input: IssueDocumentInput): Promise<Result<Document>>
+    /** Reverses what it posted, keeps the number, keeps the lines. */
+    cancel(input: CancelDocumentInput): Promise<Result<Document>>
   }
 
   /**

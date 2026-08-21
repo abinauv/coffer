@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { aprilToMarch } from '@main/domain/time'
-import type { CreateDocumentInput, DocumentLineInput } from '@shared/dto'
+import type { CreateTaxedDocumentInput, TaxedLineInput } from '@shared/dto'
 
 import { DATABASE_KEY_BYTES, closeDatabase, openDatabase, type SqliteDatabase } from '../connection'
 import { createQueryBuilder, type CofferDb } from '../kysely'
@@ -127,7 +127,7 @@ async function codeOf(action: () => Promise<unknown>): Promise<RepoErrorCode | s
 }
 
 /** ₹1,000 of goods at 18%, split 9% CGST and 9% SGST. ₹1,180 to the customer. */
-function line(over: Partial<DocumentLineInput> = {}): DocumentLineInput {
+function line(over: Partial<TaxedLineInput> = {}): TaxedLineInput {
   return {
     description: 'Ball bearing 6203',
     quantity: '2.000',
@@ -142,7 +142,7 @@ function line(over: Partial<DocumentLineInput> = {}): DocumentLineInput {
   }
 }
 
-const draft = (over: Partial<CreateDocumentInput> = {}): CreateDocumentInput => ({
+const draft = (over: Partial<CreateTaxedDocumentInput> = {}): CreateTaxedDocumentInput => ({
   kind: 'sales-invoice',
   date: '2026-04-15',
   partyId: customer,
@@ -153,7 +153,7 @@ const draft = (over: Partial<CreateDocumentInput> = {}): CreateDocumentInput => 
 })
 
 /** A draft ready to issue, returning its id. */
-async function drafted(over: Partial<CreateDocumentInput> = {}): Promise<string> {
+async function drafted(over: Partial<CreateTaxedDocumentInput> = {}): Promise<string> {
   return (await createDocument(db, draft(over), NOW)).id
 }
 
