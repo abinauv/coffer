@@ -18,6 +18,7 @@ import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { registerScreens } from '@renderer/lib/screens'
 import { useRegisterCommands } from '@renderer/store/commands'
+import { useNumberFormat } from '@renderer/store/regime'
 import type { AppError, BalanceSheet as Sheet } from '@shared/dto'
 import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
@@ -27,6 +28,7 @@ import { formatAmount } from '../lib/ledger-format'
 import { todayISO } from '../lib/report-view'
 
 export function BalanceSheet(): JSX.Element {
+  const format = useNumberFormat()
   const [sheet, setSheet] = useState<Sheet | null>(null)
   const [error, setError] = useState<AppError | null>(null)
   const [asAtDate, setAsAtDate] = useState(() => todayISO())
@@ -100,10 +102,10 @@ export function BalanceSheet(): JSX.Element {
             {!sheet.balanced && (
               <Notice tone="danger" title="This balance sheet does not balance">
                 <p>
-                  Assets come to {formatAmount(sheet.totalAssets)} and the other side to{' '}
-                  {formatAmount(sheet.totalLiabilitiesAndEquity)}. Every entry in these books was
-                  checked three times before it was written, so this should be impossible — please
-                  report it, with a backup if you can.
+                  Assets come to {formatAmount(sheet.totalAssets, format)} and the other side to{' '}
+                  {formatAmount(sheet.totalLiabilitiesAndEquity, format)}. Every entry in these
+                  books was checked three times before it was written, so this should be impossible
+                  — please report it, with a backup if you can.
                 </p>
               </Notice>
             )}
@@ -123,12 +125,14 @@ export function BalanceSheet(): JSX.Element {
               <tfoot>
                 <tr className="ledger-table__total">
                   <td>Total assets</td>
-                  <td className="ledger-table__figure">{formatAmount(sheet.totalAssets)}</td>
+                  <td className="ledger-table__figure">
+                    {formatAmount(sheet.totalAssets, format)}
+                  </td>
                 </tr>
                 <tr className="ledger-table__total">
                   <td>Total liabilities and equity</td>
                   <td className="ledger-table__figure">
-                    {formatAmount(sheet.totalLiabilitiesAndEquity)}
+                    {formatAmount(sheet.totalLiabilitiesAndEquity, format)}
                   </td>
                 </tr>
               </tfoot>
@@ -148,6 +152,7 @@ export function BalanceSheet(): JSX.Element {
  * combined figure below is what the sheet balances on.
  */
 function EquityTable({ sheet }: { sheet: Sheet }): JSX.Element {
+  const format = useNumberFormat()
   return (
     <div className="stack stack--tight">
       <ReportSectionTable
@@ -159,7 +164,7 @@ function EquityTable({ sheet }: { sheet: Sheet }): JSX.Element {
         <tbody>
           <tr>
             <td>Profit for the period, not yet closed</td>
-            <td className="ledger-table__figure">{formatAmount(sheet.profitForPeriod)}</td>
+            <td className="ledger-table__figure">{formatAmount(sheet.profitForPeriod, format)}</td>
           </tr>
         </tbody>
       </table>

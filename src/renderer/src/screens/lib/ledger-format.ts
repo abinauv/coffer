@@ -7,34 +7,52 @@
  * precisely the conversion the whole storage layer exists to avoid, and a formatter is a
  * plausible-looking place for it to creep back in.
  *
- * GROUPING IS INDIAN, AND THAT IS A PLACEHOLDER. 12,34,567.89 rather than 1,234,567.89.
- * Number format is a property of the tax regime (`TaxRegime.numberFormat`), and the
- * regime is not yet exposed over IPC — so this hard-codes the one regime that exists and
- * will take the grouping from the contract at gate 2.0. Recorded rather than hidden: a
- * user in another jurisdiction would see the wrong separators today.
+ * THE GROUPING COMES FROM THE REGIME, and every function that writes one takes it. It
+ * used to be the Indian lakh/crore convention, hard-coded with a note admitting that a
+ * user anywhere else saw the wrong separators. `regime.describe()` answers it now, so
+ * the parameter is REQUIRED rather than defaulted: a default would be the same bug with
+ * better manners, and a call site that has not been given a format should fail to
+ * compile rather than quietly render 1,234,567 as 12,34,567.
  */
 
-import type { DecimalString } from '@shared/dto'
+import type { DecimalString, NumberFormat } from '@shared/dto'
 
 /**
- * Group a run of digits the Indian way: the last three, then twos.
+ * Group a run of digits the way the regime groups them.
  *
- * `1234567` becomes `12,34,567`. Written on the string rather than by dividing, because
- * the input can be longer than a `number` represents exactly and the point of this file
- * is that nothing converts.
+ * `groupSizes` is read from the right and the last entry repeats: `[3, 2]` gives the
+ * Indian `12,34,567` and `[3]` gives `1,234,567`. Written on the string rather than by
+ * dividing, because the input can be longer than a `number` represents exactly and the
+ * point of this file is that nothing converts.
  */
-export function groupIndian(digits: string): string {
-  if (digits.length <= 3) return digits
-  const last3 = digits.slice(-3)
-  const rest = digits.slice(0, -3)
-  const pairs: string[] = []
-  let remaining = rest
-  while (remaining.length > 2) {
-    pairs.unshift(remaining.slice(-2))
-    remaining = remaining.slice(0, -2)
+export function groupDigits(digits: string, format: NumberFormat): string {
+  const parts: string[] = []
+  let rest = digits
+
+  for (let index = 0; rest.length > 0; index += 1) {
+    const size = format.groupSizes[Math.min(index, format.groupSizes.length - 1)]
+    /*
+     * No sizes, or a nonsensical one — and MEASURED, because the obvious guess about
+     * which one is dangerous is wrong. A size of 0 is harmless: `slice(0, -0)` is `''`,
+     * not the whole string, so the loop drains and stops. A NEGATIVE size is the one
+     * that hangs — `slice(0, -(-2))` grows nothing and `rest` never empties, so the
+     * window locks up. The rule arrives from main out of a compliance pack that Phase 5
+     * loads at runtime, so `<= 0` covers both and neither is theoretical.
+     *
+     * `<=` rather than `<` on the length: provably the same answer either way, since a
+     * run exactly one group long splits into itself and an empty remainder. Kept as
+     * `<=` because "this fits in one group" is what the line means. Recorded as an
+     * equivalent mutant so the next mutation pass does not re-investigate it.
+     */
+    if (size === undefined || size <= 0 || rest.length <= size) {
+      parts.unshift(rest)
+      break
+    }
+    parts.unshift(rest.slice(-size))
+    rest = rest.slice(0, -size)
   }
-  if (remaining.length > 0) pairs.unshift(remaining)
-  return `${pairs.join(',')},${last3}`
+
+  return parts.join(format.groupSeparator)
 }
 
 /**
@@ -44,7 +62,7 @@ export function groupIndian(digits: string): string {
  * not vouched for should look wrong rather than be quietly rendered as something
  * plausible.
  */
-export function formatAmount(value: DecimalString): string {
+export function formatAmount(value: DecimalString, format: NumberFormat): string {
   if (!/^-?\d+(?:\.\d+)?$/.test(value)) return value
 
   const isNegative = value.startsWith('-')
@@ -52,7 +70,10 @@ export function formatAmount(value: DecimalString): string {
   const [whole = '0', fraction = ''] = unsigned.split('.')
   const places = fraction.padEnd(2, '0').slice(0, 2)
 
-  return `${isNegative ? '-' : ''}${groupIndian(whole)}.${places}`
+  /* The minus sign is not the regime's to choose. `figureSign` in lib/figures.ts reads
+   * it back off this string to colour the cell, and a locale-specific sign would have to
+   * be taught there too — CONVENTIONS §1.7 keeps that scan to one place. */
+  return `${isNegative ? '-' : ''}${groupDigits(whole, format)}${format.decimalSeparator}${places}`
 }
 
 /**
@@ -63,8 +84,8 @@ export function formatAmount(value: DecimalString): string {
  * matters harder to scan — the convention on paper is to leave it empty, and the
  * convention is right.
  */
-export function formatAmountOrBlank(value: DecimalString): string {
-  return isZeroAmount(value) ? '' : formatAmount(value)
+export function formatAmountOrBlank(value: DecimalString, format: NumberFormat): string {
+  return isZeroAmount(value) ? '' : formatAmount(value, format)
 }
 
 /** True for any spelling of zero: '0', '0.00', '-0.00'. */

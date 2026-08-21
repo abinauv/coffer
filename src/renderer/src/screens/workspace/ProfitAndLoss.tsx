@@ -17,6 +17,7 @@ import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { registerScreens } from '@renderer/lib/screens'
 import { useRegisterCommands } from '@renderer/store/commands'
+import { useNumberFormat } from '@renderer/store/regime'
 import type { AppError, ProfitAndLoss as Statement } from '@shared/dto'
 import { FailureNotice } from '../components/FailureNotice'
 import { RangeToolbar, ReportSectionTable } from '../components/ReportLines'
@@ -25,6 +26,7 @@ import { formatAmount } from '../lib/ledger-format'
 import { describeRange, resultLabel, resultTone } from '../lib/report-view'
 
 export function ProfitAndLoss(): JSX.Element {
+  const format = useNumberFormat()
   const [statement, setStatement] = useState<Statement | null>(null)
   const [error, setError] = useState<AppError | null>(null)
   const [fromDate, setFromDate] = useState('')
@@ -116,7 +118,9 @@ export function ProfitAndLoss(): JSX.Element {
                   className={`ledger-table__total ledger-table__total--${resultTone(statement.netProfit)}`}
                 >
                   <td>{resultLabel(statement.netProfit)}</td>
-                  <td className="ledger-table__figure">{formatAmount(statement.netProfit)}</td>
+                  <td className="ledger-table__figure">
+                    {formatAmount(statement.netProfit, format)}
+                  </td>
                 </tr>
               </tfoot>
             </table>

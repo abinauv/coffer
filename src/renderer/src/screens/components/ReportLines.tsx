@@ -8,6 +8,7 @@
 
 import type { JSX } from 'react'
 import { Button, Input } from '@renderer/components/atoms'
+import { useNumberFormat } from '@renderer/store/regime'
 import type { ReportSection } from '@shared/dto'
 import { formatAmount } from '../lib/ledger-format'
 import { isContraBalance, sectionHeading } from '../lib/report-view'
@@ -25,6 +26,7 @@ export function ReportSectionTable({
   heading,
   totalLabel,
 }: ReportSectionTableProps): JSX.Element {
+  const format = useNumberFormat()
   const title = heading ?? sectionHeading(section.type)
 
   return (
@@ -53,7 +55,7 @@ export function ReportSectionTable({
                 </span>
               </td>
               <td className="ledger-table__figure">
-                {formatAmount(line.amount)}
+                {formatAmount(line.amount, format)}
                 {/* A negative on a statement is real and is never hidden — but an asset
                     in credit is an overdraft, and the reader deserves the word. */}
                 {isContraBalance(line.amount) && (
@@ -67,7 +69,7 @@ export function ReportSectionTable({
       <tfoot>
         <tr className="ledger-table__total">
           <td>{totalLabel ?? `Total ${title.toLowerCase()}`}</td>
-          <td className="ledger-table__figure">{formatAmount(section.total)}</td>
+          <td className="ledger-table__figure">{formatAmount(section.total, format)}</td>
         </tr>
       </tfoot>
     </table>

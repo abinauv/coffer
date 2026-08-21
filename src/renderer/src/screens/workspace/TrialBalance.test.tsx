@@ -12,7 +12,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { AccountType, Result, TrialBalance as Report, TrialBalanceRow } from '@shared/dto'
-import { renderScreen, type BridgeStub } from '../../test/harness'
+import { DEFAULT_REGIME, renderScreen, type BridgeStub } from '../../test/harness'
 import { TrialBalance } from './TrialBalance'
 
 function line(
@@ -117,6 +117,38 @@ describe('TrialBalance', () => {
 
     expect(figuresOf(await rowFor('2100'))).toEqual(['', '32,000.00'])
     expect(figuresOf(await rowFor('1300'))).toEqual(['47,500.50', ''])
+  })
+
+  /*
+   * THE ONLY ASSERTION IN THE RENDERER THAT CAN TELL 2.2e-2 FROM WHAT CAME BEFORE IT.
+   *
+   * Every other figure in this suite is Indian, because the harness defaults to the
+   * Indian regime — which is right, since those tests are about the trial balance and
+   * not about grouping. But a screen that ignored the regime entirely and kept the old
+   * hard-coded lakh/crore convention would pass every one of them.
+   *
+   * So: the same report, a regime that groups in threes and swaps both separators, and
+   * the figures come out Portuguese. 1,25,000.00 becomes 125.000,00.
+   */
+  it('writes its figures the way the open company\u2019s regime writes numbers', async () => {
+    renderScreen(<TrialBalance />, {
+      bridge: bridgeReturning(report()),
+      regime: {
+        ...DEFAULT_REGIME,
+        id: 'pt',
+        label: 'Portugal \u2014 IVA',
+        numberFormat: {
+          groupSizes: [3],
+          decimalSeparator: ',',
+          groupSeparator: '.',
+          currencyCode: 'EUR',
+          currencySymbol: '\u20ac',
+        },
+      },
+    })
+
+    expect(figuresOf(await rowFor('1200'))).toEqual(['125.000,00', ''])
+    expect(figuresOf(await rowFor('1300'))).toEqual(['47.500,50', ''])
   })
 
   it('groups the accounts under their headings, balance sheet before profit and loss', async () => {

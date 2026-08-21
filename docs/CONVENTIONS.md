@@ -21,7 +21,11 @@ Breaking any of these is a review rejection, not a discussion.
 5. **Never edit a merged migration.** Fix it forward with a new one.
 6. **Tax logic lives in `regimes/`.** If you are about to write `gst` or `cgst` outside
    `src/main/regimes/in-gst/`, stop.
-7. **The renderer never computes money.** It displays what main sent.
+7. **The renderer never computes money.** It displays what main sent. It does _format_
+   it — where the separators go is presentation — and it takes the rule for that from
+   `regime.describe()` rather than choosing one. `formatAmount` requires a
+   `NumberFormat`; there is no default, because the default was the lakh/crore grouping
+   and it was silently wrong for everyone outside India.
 
 ## 2. Naming
 

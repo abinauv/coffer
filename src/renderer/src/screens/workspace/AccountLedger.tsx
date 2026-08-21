@@ -18,6 +18,7 @@ import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { registerScreens } from '@renderer/lib/screens'
 import { useRegisterCommands } from '@renderer/store/commands'
+import { useNumberFormat } from '@renderer/store/regime'
 import type { Account, AccountLedger as Ledger, AppError } from '@shared/dto'
 import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
@@ -28,6 +29,7 @@ import { formatAmount, formatAmountOrBlank } from '../lib/ledger-format'
 import { describeRange } from '../lib/report-view'
 
 export function AccountLedger(): JSX.Element {
+  const format = useNumberFormat()
   const [accounts, setAccounts] = useState<Account[] | null>(null)
   const [accountId, setAccountId] = useState('')
   const [ledger, setLedger] = useState<Ledger | null>(null)
@@ -163,8 +165,8 @@ export function AccountLedger(): JSX.Element {
             {ledger.rows.length === 0 && (
               <Notice tone="info" title="Nothing moved through this account">
                 <p>
-                  Its balance is {formatAmount(ledger.closingBalance)} and no entry in this range
-                  touched it.
+                  Its balance is {formatAmount(ledger.closingBalance, format)} and no entry in this
+                  range touched it.
                 </p>
               </Notice>
             )}
@@ -189,7 +191,9 @@ export function AccountLedger(): JSX.Element {
               <tbody>
                 <tr className="ledger-table__row--context">
                   <td colSpan={5}>Opening balance</td>
-                  <td className="ledger-table__figure">{formatAmount(ledger.openingBalance)}</td>
+                  <td className="ledger-table__figure">
+                    {formatAmount(ledger.openingBalance, format)}
+                  </td>
                 </tr>
                 {ledger.rows.map((row) => (
                   <tr key={`${row.entryId}-${row.date}-${row.balance}`}>
@@ -201,18 +205,28 @@ export function AccountLedger(): JSX.Element {
                         <span className="ledger-table__muted"> · {row.narration}</span>
                       )}
                     </td>
-                    <td className="ledger-table__figure">{formatAmountOrBlank(row.debit)}</td>
-                    <td className="ledger-table__figure">{formatAmountOrBlank(row.credit)}</td>
-                    <td className="ledger-table__figure">{formatAmount(row.balance)}</td>
+                    <td className="ledger-table__figure">
+                      {formatAmountOrBlank(row.debit, format)}
+                    </td>
+                    <td className="ledger-table__figure">
+                      {formatAmountOrBlank(row.credit, format)}
+                    </td>
+                    <td className="ledger-table__figure">{formatAmount(row.balance, format)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="ledger-table__total">
                   <td colSpan={3}>Closing balance</td>
-                  <td className="ledger-table__figure">{formatAmount(ledger.totalDebit)}</td>
-                  <td className="ledger-table__figure">{formatAmount(ledger.totalCredit)}</td>
-                  <td className="ledger-table__figure">{formatAmount(ledger.closingBalance)}</td>
+                  <td className="ledger-table__figure">
+                    {formatAmount(ledger.totalDebit, format)}
+                  </td>
+                  <td className="ledger-table__figure">
+                    {formatAmount(ledger.totalCredit, format)}
+                  </td>
+                  <td className="ledger-table__figure">
+                    {formatAmount(ledger.closingBalance, format)}
+                  </td>
                 </tr>
               </tfoot>
             </table>

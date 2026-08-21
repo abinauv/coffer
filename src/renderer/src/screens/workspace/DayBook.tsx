@@ -16,6 +16,7 @@ import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { registerScreens } from '@renderer/lib/screens'
 import { useRegisterCommands } from '@renderer/store/commands'
+import { useNumberFormat } from '@renderer/store/regime'
 import type { AppError, DayBook as Book, JournalEntry } from '@shared/dto'
 import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
@@ -25,6 +26,7 @@ import { formatAmount, formatAmountOrBlank } from '../lib/ledger-format'
 import { describeRange } from '../lib/report-view'
 
 export function DayBook(): JSX.Element {
+  const format = useNumberFormat()
   const [book, setBook] = useState<Book | null>(null)
   const [error, setError] = useState<AppError | null>(null)
   const [fromDate, setFromDate] = useState('')
@@ -109,14 +111,15 @@ export function DayBook(): JSX.Element {
           <>
             <p className="prose prose--muted">
               {describeRange(book.fromDate, book.toDate)} — {book.entryCount}{' '}
-              {book.entryCount === 1 ? 'entry' : 'entries'}, {formatAmount(book.total)} in total
+              {book.entryCount === 1 ? 'entry' : 'entries'}, {formatAmount(book.total, format)} in
+              total
             </p>
 
             {book.days.map((day) => (
               <section key={day.date} className="stack stack--tight">
                 <h2 className="day-book__date">
                   {day.date}
-                  <span className="day-book__total">{formatAmount(day.total)}</span>
+                  <span className="day-book__total">{formatAmount(day.total, format)}</span>
                 </h2>
                 {day.entries.map((entry) => (
                   <EntryTable key={entry.id} entry={entry} />
@@ -132,6 +135,7 @@ export function DayBook(): JSX.Element {
 
 /** One entry, with its lines. A reversal says so; so does an entry that was reversed. */
 function EntryTable({ entry }: { entry: JournalEntry }): JSX.Element {
+  const format = useNumberFormat()
   return (
     <table className="ledger-table ledger-table--figures day-book__entry">
       <thead>
@@ -158,8 +162,8 @@ function EntryTable({ entry }: { entry: JournalEntry }): JSX.Element {
           <tr key={line.id}>
             <td className="ledger-table__code">{line.accountCode}</td>
             <td>{line.accountName}</td>
-            <td className="ledger-table__figure">{formatAmountOrBlank(line.debit)}</td>
-            <td className="ledger-table__figure">{formatAmountOrBlank(line.credit)}</td>
+            <td className="ledger-table__figure">{formatAmountOrBlank(line.debit, format)}</td>
+            <td className="ledger-table__figure">{formatAmountOrBlank(line.credit, format)}</td>
           </tr>
         ))}
       </tbody>

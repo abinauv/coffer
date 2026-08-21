@@ -165,7 +165,8 @@ interface TaxRegime {
 
   readonly classification: ClassificationScheme // HSN/SAC, or NAICS, or none
   readonly fiscalYear: FiscalYearRule // Apr–Mar, or Jan–Dec
-  readonly numberFormat: NumberFormatRule // lakh/crore, or thousands
+  readonly numberFormat: NumberFormatRule // lakh/crore, or thousands. Reaches the
+  // screens via regime.describe().
 
   amountInWords(value: Decimal): string
 

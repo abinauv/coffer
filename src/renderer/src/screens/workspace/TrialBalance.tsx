@@ -21,6 +21,7 @@ import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { registerScreens } from '@renderer/lib/screens'
 import { useRegisterCommands } from '@renderer/store/commands'
+import { useNumberFormat } from '@renderer/store/regime'
 import type { AppError, TrialBalance as TrialBalanceReport } from '@shared/dto'
 import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
@@ -29,6 +30,7 @@ import { formatAmount, formatAmountOrBlank } from '../lib/ledger-format'
 import { describeRange, sectionsOf } from '../lib/trial-balance-view'
 
 export function TrialBalance(): JSX.Element {
+  const format = useNumberFormat()
   const [report, setReport] = useState<TrialBalanceReport | null>(null)
   const [error, setError] = useState<AppError | null>(null)
   const [fromDate, setFromDate] = useState('')
@@ -139,10 +141,10 @@ export function TrialBalance(): JSX.Element {
             {!report.balanced && (
               <Notice tone="danger" title="This trial balance does not tie">
                 <p>
-                  Total debits are {formatAmount(report.totalDebit)} and total credits are{' '}
-                  {formatAmount(report.totalCredit)}. Every entry in these books was checked three
-                  times before it was written, so this should be impossible — please report it, with
-                  a backup if you can.
+                  Total debits are {formatAmount(report.totalDebit, format)} and total credits are{' '}
+                  {formatAmount(report.totalCredit, format)}. Every entry in these books was checked
+                  three times before it was written, so this should be impossible — please report
+                  it, with a backup if you can.
                 </p>
               </Notice>
             )}
@@ -175,10 +177,10 @@ export function TrialBalance(): JSX.Element {
                       <td className="ledger-table__code">{row.code}</td>
                       <td>{row.name}</td>
                       <td className="ledger-table__figure">
-                        {formatAmountOrBlank(row.debitBalance)}
+                        {formatAmountOrBlank(row.debitBalance, format)}
                       </td>
                       <td className="ledger-table__figure">
-                        {formatAmountOrBlank(row.creditBalance)}
+                        {formatAmountOrBlank(row.creditBalance, format)}
                       </td>
                     </tr>
                   ))}
@@ -186,10 +188,10 @@ export function TrialBalance(): JSX.Element {
                     <td />
                     <td>Total {section.label.toLowerCase()}</td>
                     <td className="ledger-table__figure">
-                      {formatAmountOrBlank(section.debitTotal)}
+                      {formatAmountOrBlank(section.debitTotal, format)}
                     </td>
                     <td className="ledger-table__figure">
-                      {formatAmountOrBlank(section.creditTotal)}
+                      {formatAmountOrBlank(section.creditTotal, format)}
                     </td>
                   </tr>
                 </tbody>
@@ -199,8 +201,12 @@ export function TrialBalance(): JSX.Element {
                 <tr className="ledger-table__total">
                   <td />
                   <td>Total</td>
-                  <td className="ledger-table__figure">{formatAmount(report.totalDebit)}</td>
-                  <td className="ledger-table__figure">{formatAmount(report.totalCredit)}</td>
+                  <td className="ledger-table__figure">
+                    {formatAmount(report.totalDebit, format)}
+                  </td>
+                  <td className="ledger-table__figure">
+                    {formatAmount(report.totalCredit, format)}
+                  </td>
                 </tr>
               </tfoot>
             </table>

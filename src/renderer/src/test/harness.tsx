@@ -23,9 +23,10 @@ import type { JSX, ReactNode } from 'react'
 import { ToastViewport } from '@renderer/components/toast/ToastViewport'
 import { CommandProvider } from '@renderer/store/commands'
 import { PlatformProvider } from '@renderer/store/platform'
+import { RegimeProvider } from '@renderer/store/regime'
 import { ThemeProvider } from '@renderer/store/theme'
 import { ToastProvider } from '@renderer/store/toasts'
-import type { AppInfo, Result } from '@shared/dto'
+import type { AppInfo, RegimeDescription, Result } from '@shared/dto'
 import { createApiProxy, type CofferApi } from '@shared/ipc'
 
 // ---- The bridge ------------------------------------------------------------
@@ -62,6 +63,46 @@ export const DEFAULT_APP_INFO: AppInfo = {
 
 function ok<T>(data: T): Promise<Result<T>> {
   return Promise.resolve({ ok: true, data })
+}
+
+/*
+ * The regime a screen test runs under unless it says otherwise.
+ *
+ * India, because that is what the assertions in the existing screen tests were written
+ * against and changing them would be changing what they test. It is a TEST default and
+ * not a production one — `OpenCompanyRegime` fetches the real thing and refuses to draw
+ * the workspace until it has it, so nothing here is standing in for a fallback that
+ * exists in the app.
+ *
+ * Pass `regime` to `renderScreen` to render a screen under another one. There is at
+ * least one test that does; without it, "the format comes from the regime" would be a
+ * claim no assertion in the renderer could tell from the old hard-coded grouping.
+ */
+export const DEFAULT_REGIME: RegimeDescription = {
+  id: 'in',
+  label: 'India — GST',
+  numberFormat: {
+    groupSizes: [3, 2],
+    decimalSeparator: '.',
+    groupSeparator: ',',
+    currencyCode: 'INR',
+    currencySymbol: '₹',
+  },
+  jurisdictions: [
+    { code: '29', name: 'Karnataka' },
+    { code: '33', name: 'Tamil Nadu' },
+  ],
+  taxRates: [
+    { ratePct: '0', label: 'Nil', note: 'Exempt, nil-rated and zero-rated supplies.' },
+    { ratePct: '5', label: '5%', note: 'Essentials and most transport services.' },
+    { ratePct: '18', label: '18%', note: 'The main slab — most goods and most services.' },
+  ],
+  taxComponents: [
+    { code: 'CGST', label: 'Central GST', levy: 'both' },
+    { code: 'SGST', label: 'State GST', levy: 'both' },
+    { code: 'IGST', label: 'Integrated GST', levy: 'both' },
+  ],
+  classification: { code: 'HSN', label: 'HSN / SAC', validLengths: [4, 6, 8] },
 }
 
 function defaultStub(): BridgeStub {
@@ -124,7 +165,8 @@ export function uninstallBridge(): void {
 // ---- Rendering -------------------------------------------------------------
 
 /*
- * The four providers, in the order the app nests them, plus the toast viewport.
+ * The providers a screen expects, in the order the app nests them, plus the toast
+ * viewport.
  *
  * The viewport is here because without it `show({ … })` succeeds and puts nothing on
  * screen — a test could then assert that a save worked while the user was never told
@@ -134,15 +176,23 @@ export function uninstallBridge(): void {
  * `localStorage`, calls `matchMedia` and installs the keydown listener, and a screen
  * test is the only place any of that runs together.
  */
-function Providers({ children }: { children: ReactNode }): JSX.Element {
+function Providers({
+  regime,
+  children,
+}: {
+  regime: RegimeDescription | null
+  children: ReactNode
+}): JSX.Element {
   return (
     <ThemeProvider>
       <PlatformProvider>
         <ToastProvider>
-          <CommandProvider>
-            {children}
-            <ToastViewport />
-          </CommandProvider>
+          <RegimeProvider value={regime}>
+            <CommandProvider>
+              {children}
+              <ToastViewport />
+            </CommandProvider>
+          </RegimeProvider>
         </ToastProvider>
       </PlatformProvider>
     </ThemeProvider>
@@ -152,6 +202,13 @@ function Providers({ children }: { children: ReactNode }): JSX.Element {
 export interface RenderScreenOptions {
   /** Installed before the first render, so a mount-time call is already answered. */
   bridge?: BridgeStub
+  /**
+   * The regime the screen renders under. `DEFAULT_REGIME` — India — unless given.
+   *
+   * `null` is a company being closed, and a screen that formats money will throw. That
+   * is the contract `useNumberFormat` states, and a test may assert it.
+   */
+  regime?: RegimeDescription | null
 }
 
 export interface RenderedScreen extends RenderResult {
@@ -161,6 +218,7 @@ export interface RenderedScreen extends RenderResult {
 /** Renders a screen inside the providers it expects, with a stubbed bridge behind it. */
 export function renderScreen(ui: ReactNode, options: RenderScreenOptions = {}): RenderedScreen {
   const bridge = installBridge(options.bridge)
-  const result = render(<Providers>{ui}</Providers>)
+  const regime = options.regime === undefined ? DEFAULT_REGIME : options.regime
+  const result = render(<Providers regime={regime}>{ui}</Providers>)
   return Object.assign(result, { bridge })
 }
