@@ -12,7 +12,14 @@ import {
 
 describe('API_SURFACE', () => {
   it('lists every group in the contract', () => {
-    expect(API_GROUPS).toEqual(['system', 'companies', 'ledger', 'parties', 'reports'])
+    expect(API_GROUPS).toEqual([
+      'system',
+      'companies',
+      'ledger',
+      'parties',
+      'companyProfile',
+      'reports',
+    ])
   })
 
   it('lists the system methods', () => {

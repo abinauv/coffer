@@ -77,6 +77,10 @@ export const API_SURFACE: ApiSurface = {
     archive: true,
     delete: true,
   },
+  companyProfile: {
+    get: true,
+    save: true,
+  },
   reports: {
     balanceSheet: true,
     profitAndLoss: true,

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppInfo, CompanySummary, Result } from '../../shared/dto'
 import type { CompanyService } from './handlers/companies'
 import type { LedgerService } from './handlers/ledger'
+import type { CompanyProfileService } from './handlers/company-profile'
 import type { PartiesService } from './handlers/parties'
 import type { ReportService } from './handlers/reports'
 import type { SystemEnvironment } from './handlers/system'
@@ -42,6 +43,7 @@ let system: SystemEnvironment
 let companies: CompanyService
 let ledger: LedgerService
 let parties: PartiesService
+let companyProfile: CompanyProfileService
 let reports: ReportService
 
 function dependencies(overrides: Partial<IpcDependencies> = {}): IpcDependencies {
@@ -50,7 +52,17 @@ function dependencies(overrides: Partial<IpcDependencies> = {}): IpcDependencies
       channels.set(channel, listener)
     },
   }
-  return { transport, logger, system, companies, ledger, parties, reports, ...overrides }
+  return {
+    transport,
+    logger,
+    system,
+    companies,
+    ledger,
+    parties,
+    companyProfile,
+    reports,
+    ...overrides,
+  }
 }
 
 function invoke(channel: string, ...args: unknown[]): Promise<Result<unknown>> {
@@ -111,6 +123,11 @@ beforeEach(() => {
     archive: vi.fn(),
     delete: vi.fn(async () => undefined),
   } as unknown as PartiesService
+
+  companyProfile = {
+    get: vi.fn(async () => null),
+    save: vi.fn(),
+  } as unknown as CompanyProfileService
 
   reports = {
     balanceSheet: vi.fn(),

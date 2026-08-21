@@ -18,6 +18,7 @@ import { companies, isCompanyError } from './companies'
 import { isRepoError } from './db/repos/errors'
 import { assertApiSurfaceComplete } from './ipc'
 import { installIpcHandlers } from './ipc/electron'
+import { createCompanyProfileService } from './company-profile/service'
 import { createLedgerService } from './ledger/service'
 import { createPartiesService } from './parties/service'
 
@@ -39,6 +40,7 @@ function installHandlers(): void {
     companies,
     ledger,
     parties: createPartiesService(companies),
+    companyProfile: createCompanyProfileService(companies),
     /* One object, two contract groups: the read-only methods are on the same service,
      * so both point at it. See the note beside them in src/main/ledger/service.ts. */
     reports: ledger,

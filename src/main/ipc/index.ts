@@ -15,6 +15,10 @@
 import type { ChannelName } from '../../shared/ipc'
 import type { ErrorMapper } from './errors'
 import { type CompanyService, createCompaniesHandlers } from './handlers/companies'
+import {
+  type CompanyProfileService,
+  createCompanyProfileHandlers,
+} from './handlers/company-profile'
 import { type LedgerService, createLedgerHandlers } from './handlers/ledger'
 import { type PartiesService, createPartiesHandlers } from './handlers/parties'
 import { type ReportService, createReportHandlers } from './handlers/reports'
@@ -26,6 +30,7 @@ import { apiChannels } from './surface'
 
 export type { ErrorMapper } from './errors'
 export type { CompanyService } from './handlers/companies'
+export type { CompanyProfileService } from './handlers/company-profile'
 export type { LedgerService } from './handlers/ledger'
 export type { PartiesService } from './handlers/parties'
 export type { ReportService } from './handlers/reports'
@@ -59,6 +64,14 @@ export interface IpcDependencies {
    * registration number is real.
    */
   parties: PartiesService
+  /**
+   * THE INJECTION POINT for src/main/company-profile.
+   *
+   * Separate from `companies` on purpose. That one is the registry and the key vault;
+   * this one is business data inside the open company, and it needs the regime for the
+   * same reason `parties` does.
+   */
+  companyProfile: CompanyProfileService
   /**
    * THE INJECTION POINT for the read-only side of src/main/ledger.
    *
@@ -107,6 +120,10 @@ export function registerIpcHandlers(dependencies: IpcDependencies): HandlerRegis
   registry.registerGroup('companies', createCompaniesHandlers(dependencies.companies, allowlist))
   registry.registerGroup('ledger', createLedgerHandlers(dependencies.ledger))
   registry.registerGroup('parties', createPartiesHandlers(dependencies.parties))
+  registry.registerGroup(
+    'companyProfile',
+    createCompanyProfileHandlers(dependencies.companyProfile),
+  )
   registry.registerGroup('reports', createReportHandlers(dependencies.reports))
 
   assertApiSurfaceComplete(registry)

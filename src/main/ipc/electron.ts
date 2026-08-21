@@ -18,6 +18,7 @@ import type { AppInfo, Platform, TitleBarOverlayColors } from '../../shared/dto'
 import type { ErrorMapper } from './errors'
 import type { SystemEnvironment } from './handlers/system'
 import type { CompanyService } from './handlers/companies'
+import type { CompanyProfileService } from './handlers/company-profile'
 import type { LedgerService } from './handlers/ledger'
 import type { PartiesService } from './handlers/parties'
 import type { ReportService } from './handlers/reports'
@@ -168,6 +169,8 @@ export interface ElectronIpcOptions {
   ledger: LedgerService
   /** The parties service from src/main/parties — customers and vendors. */
   parties: PartiesService
+  /** The company profile service from src/main/company-profile — who the books are for. */
+  companyProfile: CompanyProfileService
   /** The same service, read-only half. See the `reports` group in src/shared/ipc.ts. */
   reports: ReportService
   /** Extra error types to recognise — see `IpcDependencies.errorMappers`. */
@@ -183,6 +186,7 @@ export function createElectronIpcDependencies(options: ElectronIpcOptions): IpcD
     companies: options.companies,
     ledger: options.ledger,
     parties: options.parties,
+    companyProfile: options.companyProfile,
     reports: options.reports,
     ...(options.errorMappers === undefined ? {} : { errorMappers: options.errorMappers }),
     /* The registry of companies lives here, so it is revealable from the moment the app

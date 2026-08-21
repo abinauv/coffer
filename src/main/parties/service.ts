@@ -5,15 +5,14 @@
  * thing the repository is forbidden to know: whether a registration number is a real one.
  * GSTIN validation belongs to the regime, `db/` may not import a concrete regime
  * (CONVENTIONS §1), and threading a validator down through every repository call would
- * put the seam in the wrong place. So it happens here, once, on the way in.
+ * put the seam in the wrong place. So it happens above the repository, on the way in.
  *
- * WHY THE NUMBER DECIDES THE JURISDICTION. A GSTIN's first two digits are the state code,
- * and a party's state decides the place of supply — which decides whether an invoice
- * carries CGST+SGST or IGST. A number and a state that disagree therefore change the tax
- * on every invoice raised for that party. This service refuses the pair rather than
- * picking one, because picking one silently is wrong half the time and invisible either
- * way. Where the caller supplies no jurisdiction and the number encodes one, it is
- * filled in — that is not a guess, it is what the number says.
+ * THE RULE ITSELF MOVED TO ../books/registration.ts when the company profile arrived,
+ * because a company carries a registration number for exactly the same reason a party
+ * does: `computeTax` takes a supplier and a customer and compares their jurisdictions.
+ * Two copies of one rule would be two chances to fix one of them. What stays here is the
+ * vocabulary — `PARTY_REGISTRATION_INVALID` is a sentence about a customer somebody is
+ * entering, and the company's equivalent is a sentence about the business itself.
  *
  * WHAT IS NOT HERE. No party balance. That is a sum over `journal_lines.party_id` and
  * belongs with the other reports, alongside the aged analysis it will be grouped by —
@@ -31,6 +30,7 @@ import type {
 } from '@shared/dto'
 
 import { OpenBooks, type OpenCompanyHandle } from '../books/open-books'
+import { checkRegistration, type Registration } from '../books/registration'
 import {
   archiveParty,
   createParty,
@@ -39,13 +39,13 @@ import {
   listParties,
   updateParty,
 } from '../db/repos/parties'
-import { RepoError } from '../db/repos/errors'
 
-/** What a registration number resolves to once the regime has had a look at it. */
-interface Registration {
-  registrationNumber?: string | null
-  jurisdictionCode?: string | null
-}
+/** How a party's registration failures are named. See ../books/registration.ts. */
+const PARTY_REGISTRATION = {
+  invalidCode: 'PARTY_REGISTRATION_INVALID',
+  mismatchCode: 'PARTY_JURISDICTION_MISMATCH',
+  subject: 'party',
+} as const
 
 export class PartiesService {
   private readonly books: OpenBooks
@@ -89,57 +89,14 @@ export class PartiesService {
   }
 
   /**
-   * Put the registration number to the regime, and reconcile it with the jurisdiction.
+   * Put the registration number to the regime the BOOKS were created under.
    *
-   * Returns only the fields it has an opinion about, so that spreading the result over
-   * an update cannot revive a field the caller left absent.
+   * `this.books.regime()` rather than the build's default, which is the point of the
+   * service existing at all: what counts as a valid number is a property of the file,
+   * and the periods on disk were generated from the same regime's calendar.
    */
   private checkRegistration(input: Registration): Registration {
-    const number = input.registrationNumber
-    /* Blank is not a number to check, it is the absence of one. A form with an empty
-     * GSTIN box sends `''`, and putting that to the regime would answer "not a valid
-     * registration number" to somebody who correctly said they have none. */
-    if (number === undefined || number === null || number.trim() === '') {
-      return {}
-    }
-
-    const result = this.books.regime().validateRegistrationNumber(number)
-    if (!result.isValid) {
-      throw new RepoError(
-        'PARTY_REGISTRATION_INVALID',
-        result.message ?? `${number.trim()} is not a registration number these books recognise.`,
-        { registrationNumber: number.trim() },
-      )
-    }
-
-    /*
-     * The regime's spelling, not the caller's. GSTIN validation upper-cases and strips
-     * whitespace before it looks at anything, so a pasted ` 33aabcc1234d1zi ` is
-     * accepted — and storing what arrived would put it on a tax invoice like that. A
-     * valid result always carries a normalised value; the fallback is for a regime that
-     * has not been written yet rather than for this one.
-     */
-    const canonical = result.normalisedValue ?? number.trim()
-
-    const derived = result.derivedJurisdictionCode
-    if (derived === undefined || derived === null) {
-      return { registrationNumber: canonical }
-    }
-
-    const supplied = input.jurisdictionCode
-    if (supplied !== undefined && supplied !== null && supplied.trim() !== '') {
-      if (supplied.trim() !== derived) {
-        const name = this.books.regime().jurisdictionName(derived)
-        throw new RepoError(
-          'PARTY_JURISDICTION_MISMATCH',
-          `${canonical} is registered in ${name ?? derived}, which is not the place given. ` +
-            'The registration number decides where a party is, and that decides the tax.',
-          { registrationNumber: canonical, derived, supplied: supplied.trim() },
-        )
-      }
-    }
-
-    return { registrationNumber: canonical, jurisdictionCode: derived }
+    return checkRegistration(this.books.regime(), input, PARTY_REGISTRATION)
   }
 }
 

@@ -216,6 +216,17 @@ export type RepoErrorCode =
   | 'COMPANY_LEGAL_NAME_REQUIRED'
   /** The profile was saved without a country. */
   | 'COMPANY_COUNTRY_REQUIRED'
+  /**
+   * The company's own registration number is not one this regime will accept.
+   *
+   * Raised by the company profile service for the reason `PARTY_REGISTRATION_INVALID` is,
+   * and it matters more: a customer with a wrong number changes the tax on that
+   * customer's invoices, and the company with a wrong number changes the tax on every
+   * invoice in the books.
+   */
+  | 'COMPANY_REGISTRATION_INVALID'
+  /** The company's registration number encodes a jurisdiction, and not the one given. */
+  | 'COMPANY_JURISDICTION_MISMATCH'
 
 /** An error raised by a repository. Always carries a stable, machine-readable code. */
 export class RepoError extends Error {

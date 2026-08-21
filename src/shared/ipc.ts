@@ -25,6 +25,7 @@ import type {
   BackupResult,
   ChangePassphraseInput,
   CloseFiscalYearInput,
+  CompanyProfile,
   CompanySummary,
   CreateAccountInput,
   CreateCompanyInput,
@@ -48,6 +49,7 @@ import type {
   RecoverCompanyInput,
   RestoreInput,
   Result,
+  SaveCompanyProfileInput,
   ReverseEntryInput,
   SetAccountRoleInput,
   TitleBarOverlayColors,
@@ -174,6 +176,31 @@ export interface CofferApi {
     archive(input: ArchivePartyInput): Promise<Result<Party>>
     /** Refused once anything has been posted against them. Archive instead. */
     delete(id: string): Promise<Result<void>>
+  }
+
+  /**
+   * Who the open company's books belong to.
+   *
+   * One profile, because a company is one file — so `get` takes no id and `save` takes no
+   * id, and there is nothing to list. `get` answers null until somebody has filled it in,
+   * which is a legal state: books with no profile still keep a chart, periods, parties,
+   * drafts and a ledger (migration 0011).
+   *
+   * It is not part of `companies`. That group is the registry — which files exist, where
+   * they are, how they are keyed and backed up. This is business data inside one of them.
+   */
+  companyProfile: {
+    get(): Promise<Result<CompanyProfile | null>>
+    /**
+     * The whole profile. A field left out is a field cleared, unlike `parties.update`.
+     *
+     * The registration number is checked against the regime and, where it encodes a
+     * jurisdiction, that jurisdiction is filled in. A number and a jurisdiction that
+     * disagree are refused rather than reconciled: the company's own jurisdiction decides
+     * CGST+SGST against IGST on EVERY invoice these books raise, in both directions, and
+     * nothing about the documents would look wrong afterwards.
+     */
+    save(input: SaveCompanyProfileInput): Promise<Result<CompanyProfile>>
   }
 
   /**

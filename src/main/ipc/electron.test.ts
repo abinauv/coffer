@@ -172,6 +172,7 @@ describe('createElectronIpcDependencies', () => {
       companies: {} as never,
       ledger: {} as never,
       parties: {} as never,
+      companyProfile: {} as never,
       reports: {} as never,
     })
 
@@ -187,6 +188,7 @@ describe('createElectronIpcDependencies', () => {
         companies,
         ledger: {} as never,
         parties: {} as never,
+        companyProfile: {} as never,
         reports: {} as never,
       }).companies,
     ).toBe(companies)
@@ -200,6 +202,7 @@ describe('createElectronIpcDependencies', () => {
         companies: {} as never,
         ledger: {} as never,
         parties: {} as never,
+        companyProfile: {} as never,
         reports: {} as never,
         errorMappers,
       }).errorMappers,
@@ -212,6 +215,7 @@ describe('createElectronIpcDependencies', () => {
         companies: {} as never,
         ledger: {} as never,
         parties: {} as never,
+        companyProfile: {} as never,
         reports: {} as never,
       }),
     ).not.toHaveProperty('errorMappers')
