@@ -22,6 +22,7 @@ import type { CompanyProfileService } from './handlers/company-profile'
 import type { DocumentsService } from './handlers/documents'
 import type { LedgerService } from './handlers/ledger'
 import type { PartiesService } from './handlers/parties'
+import type { ReceiptsService } from './handlers/receipts'
 import type { RegimeService } from './handlers/regime'
 import type { ReportService } from './handlers/reports'
 import { type IpcDependencies, registerIpcHandlers } from './index'
@@ -175,6 +176,8 @@ export interface ElectronIpcOptions {
   companyProfile: CompanyProfileService
   /** The documents service from src/main/documents — where the regime is asked for tax. */
   documents: DocumentsService
+  /** The receipts service from src/main/receipts — money in and out, and what it settles. */
+  receipts: ReceiptsService
   /** The regime service from src/main/regime — the tax rules, described for the screens. */
   regime: RegimeService
   /** The same service, read-only half. See the `reports` group in src/shared/ipc.ts. */
@@ -194,6 +197,7 @@ export function createElectronIpcDependencies(options: ElectronIpcOptions): IpcD
     parties: options.parties,
     companyProfile: options.companyProfile,
     documents: options.documents,
+    receipts: options.receipts,
     regime: options.regime,
     reports: options.reports,
     ...(options.errorMappers === undefined ? {} : { errorMappers: options.errorMappers }),

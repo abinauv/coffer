@@ -59,7 +59,14 @@
  */
 
 import { D, ZERO, toMoneyString, type Decimal } from '@main/domain/money'
-import { definitionOf, type DocumentKind } from '@main/domain/documents'
+import {
+  DOCUMENT_KINDS,
+  definitionOf,
+  postsToLedger,
+  type DocumentKind,
+  type TradeSide,
+} from '@main/domain/documents'
+import type { DateString } from '@shared/scalars'
 
 import type { CofferDb } from '../kysely'
 import { RepoError } from './errors'
@@ -80,34 +87,16 @@ export interface DocumentControl {
  * for a cancelled one too, and that falls out of the reversal rather than being asked
  * for.
  *
- * THE EARLY RETURN IS A PROVEN EQUIVALENT MUTANT and is kept for the query it saves.
- * Deleting it gives the same answer on every input: the `or` below would compare
- * `journal_entries.id` against null, which matches no row in SQL, so the fold runs over
- * an empty set and returns zero anyway. Recorded so the next mutation pass does not have
- * to work it out again.
+ * ONE DOCUMENT THROUGH THE BATCH, rather than a second query saying the same thing. It
+ * was written as its own query first, and a mutation pass found what that costs: the
+ * reversal arm could be deleted from the BATCH with nothing failing, because the only
+ * test that cancels a document went through this function and this function had its own
+ * copy. Two implementations of one rule means each of them can be broken alone, and the
+ * suite covers whichever one it happens to call. The cost of folding them together is one
+ * `Map` allocation per call.
  */
 export async function documentMovement(db: CofferDb, document: DocumentControl): Promise<Decimal> {
-  if (document.entryId === null) return ZERO
-
-  const lines = await db
-    .selectFrom('journal_lines')
-    .innerJoin('journal_entries', 'journal_entries.id', 'journal_lines.entry_id')
-    .select(['journal_lines.debit', 'journal_lines.credit'])
-    .where('journal_lines.party_id', '=', document.partyId)
-    .where((eb) =>
-      eb.or([
-        eb('journal_entries.id', '=', document.entryId),
-        eb('journal_entries.reverses_entry_id', '=', document.entryId),
-      ]),
-    )
-    .execute()
-
-  const raw = lines.reduce<Decimal>(
-    (total, line) => total.plus(D(line.debit)).minus(D(line.credit)),
-    ZERO,
-  )
-
-  return definitionOf(document.kind as DocumentKind).side === 'sales' ? raw : raw.negated()
+  return (await movementsFor(db, document.partyId, [document])).get(document.id) ?? ZERO
 }
 
 /**
@@ -190,4 +179,248 @@ export async function assertNotAllocated(db: CofferDb, documentId: string): Prom
       'Take the allocation off the receipt first, so that money goes somewhere you chose.',
     { documentId, allocated: toMoneyString(allocated) },
   )
+}
+
+// ---- Several documents at once ---------------------------------------------
+
+/*
+ * The batch versions, for the two screens that need them: a picker showing a customer's
+ * open invoices, and an invoice showing what has been paid against it.
+ *
+ * Written as batches rather than as a loop over the single-document functions above, and
+ * that is not premature: a picker for a customer with two hundred open invoices would
+ * otherwise be four hundred queries opened one at a time inside one IPC call, which is
+ * the shape `listDocuments` already refuses for its lines.
+ */
+
+/** A document with something still against it, as a picker lists one. */
+export interface OpenDocumentRow {
+  id: string
+  kind: string
+  /** Never null: only an issued document can be open, and those all have numbers. */
+  number: string
+  date: DateString
+  grandTotal: Decimal
+  outstanding: Decimal
+}
+
+/**
+ * What each of several documents put on its party's account.
+ *
+ * One query for the lines and one fold, keyed by the ORIGINAL entry — a reversal is
+ * folded into the entry it reverses, which is what makes a cancelled document come to
+ * zero without a status filter anywhere (see the header).
+ */
+async function movementsFor(
+  db: CofferDb,
+  partyId: string,
+  documents: readonly DocumentControl[],
+): Promise<Map<string, Decimal>> {
+  const totals = new Map<string, Decimal>()
+  const entryIds = documents
+    .map((document) => document.entryId)
+    .filter((id): id is string => id !== null)
+  if (entryIds.length === 0) return totals
+
+  const rows = await db
+    .selectFrom('journal_lines')
+    .innerJoin('journal_entries', 'journal_entries.id', 'journal_lines.entry_id')
+    .select([
+      'journal_entries.id as entry_id',
+      'journal_entries.reverses_entry_id as reverses_entry_id',
+      'journal_lines.debit as debit',
+      'journal_lines.credit as credit',
+    ])
+    .where('journal_lines.party_id', '=', partyId)
+    .where((eb) =>
+      eb.or([
+        eb('journal_entries.id', 'in', entryIds),
+        eb('journal_entries.reverses_entry_id', 'in', entryIds),
+      ]),
+    )
+    .execute()
+
+  const byEntry = new Map<string, Decimal>()
+  for (const row of rows) {
+    /*
+     * A reversal counts against what it reverses, which is what makes a cancelled
+     * document come to nothing with no status filter anywhere.
+     *
+     * There was a guard here skipping a key that is not in `entryIds`, and a mutation
+     * pass showed it was dead: the WHERE above fetches only rows whose entry is in the
+     * set or whose entry reverses one that is, so every key this loop computes is in the
+     * set by construction. Removed rather than labelled — an unreachable branch is a
+     * thing the next reader has to work out before they can ignore it.
+     */
+    const key = row.reverses_entry_id ?? row.entry_id
+    byEntry.set(key, (byEntry.get(key) ?? ZERO).plus(D(row.debit)).minus(D(row.credit)))
+  }
+
+  for (const document of documents) {
+    if (document.entryId === null) continue
+    const raw = byEntry.get(document.entryId) ?? ZERO
+    const side = definitionOf(document.kind as DocumentKind).side
+    totals.set(document.id, side === 'sales' ? raw : raw.negated())
+  }
+  return totals
+}
+
+/** What has been allocated to each of several documents, in one query. */
+async function allocatedByDocument(
+  db: CofferDb,
+  documentIds: readonly string[],
+  exceptReceiptId?: string,
+): Promise<Map<string, Decimal>> {
+  const totals = new Map<string, Decimal>()
+  if (documentIds.length === 0) return totals
+
+  let query = db
+    .selectFrom('receipt_allocations')
+    .select(['document_id', 'amount'])
+    .where('document_id', 'in', [...documentIds])
+  if (exceptReceiptId !== undefined) {
+    query = query.where('receipt_id', '!=', exceptReceiptId)
+  }
+
+  for (const row of await query.execute()) {
+    totals.set(row.document_id, (totals.get(row.document_id) ?? ZERO).plus(D(row.amount)))
+  }
+  return totals
+}
+
+export interface OpenDocumentsOptions {
+  partyId: string
+  /** Which half of the trade. A receipt settles sales; a payment settles purchases. */
+  side: TradeSide
+  /**
+   * Treat this receipt's allocations as available again.
+   *
+   * For the editor: opening a receipt that already settles INV/0007 in full must show
+   * INV/0007 with that money back on it, or the user cannot see what they allocated and
+   * cannot reduce it. Without this the list would simply not contain the invoice the
+   * screen is displaying a line for.
+   */
+  exceptReceiptId?: string
+}
+
+/**
+ * A party's documents with something still against them, oldest first.
+ *
+ * OLDEST FIRST, which is the one ordering decision here and it is not cosmetic: money
+ * received without instructions settles the oldest invoice, and a picker that listed the
+ * newest first would invite the opposite. `listDocuments` sorts newest first for the
+ * opposite reason — a register is read as "what have I raised lately".
+ *
+ * A document whose outstanding has reached zero is left out; one that has gone NEGATIVE
+ * is not, because that is a state worth seeing rather than hiding.
+ */
+export async function openDocumentsFor(
+  db: CofferDb,
+  options: OpenDocumentsOptions,
+): Promise<OpenDocumentRow[]> {
+  const kinds = DOCUMENT_KINDS.filter(
+    (definition) => definition.side === options.side && postsToLedger(definition.kind),
+  ).map((definition) => definition.kind)
+
+  /*
+   * `status = 'issued'` LOOKS REDUNDANT BESIDE THE ZERO TEST BELOW and is not quite. A
+   * draft has no entry so its movement is nothing, and a cancelled document's reversal
+   * nets it to nothing, so the arithmetic alone would drop both. What it also drops is a
+   * DRAFT CARRYING AN ENTRY — which 0008's CHECKs permit, since they only constrain the
+   * number and the stamps — and that one has a real movement and would be offered for
+   * settlement. There is a test that builds exactly that row.
+   */
+  const rows = await db
+    .selectFrom('documents')
+    .select(['id', 'kind', 'number', 'document_date', 'party_id', 'entry_id'])
+    .where('party_id', '=', options.partyId)
+    .where('status', '=', 'issued')
+    .where('kind', 'in', kinds)
+    .orderBy('document_date', 'asc')
+    .orderBy('number', 'asc')
+    .execute()
+
+  const documents = rows.map((row) => ({
+    id: row.id,
+    kind: row.kind,
+    partyId: row.party_id,
+    entryId: row.entry_id,
+  }))
+
+  const movements = await movementsFor(db, options.partyId, documents)
+  const allocated = await allocatedByDocument(
+    db,
+    rows.map((row) => row.id),
+    options.exceptReceiptId,
+  )
+
+  const open: OpenDocumentRow[] = []
+  for (const row of rows) {
+    const movement = movements.get(row.id) ?? ZERO
+    const outstanding = movement.minus(allocated.get(row.id) ?? ZERO)
+    if (outstanding.isZero()) continue
+    open.push({
+      id: row.id,
+      kind: row.kind,
+      /* Never null while `status = 'issued'` — rule 2 of the document contract. The
+       * fallback keeps the DTO honest rather than pushing an assertion into a screen. */
+      number: row.number ?? '',
+      date: row.document_date,
+      grandTotal: movement,
+      outstanding,
+    })
+  }
+  return open
+}
+
+/** One receipt's part in settling one document, as an invoice screen lists it. */
+export interface SettlementRow {
+  receiptId: string
+  number: string
+  date: DateString
+  amount: Decimal
+}
+
+export interface DocumentSettlementResult {
+  movement: Decimal
+  allocated: Decimal
+  outstanding: Decimal
+  receipts: SettlementRow[]
+}
+
+/**
+ * What has been paid against one document, and what is left.
+ *
+ * The receipts are ordered by their own date, which is when the money arrived — not by
+ * when somebody matched it, which nothing records on purpose (rule 2).
+ */
+export async function settlementFor(
+  db: CofferDb,
+  document: DocumentControl,
+): Promise<DocumentSettlementResult> {
+  const movement = await documentMovement(db, document)
+
+  const rows = await db
+    .selectFrom('receipt_allocations')
+    .innerJoin('receipts', 'receipts.id', 'receipt_allocations.receipt_id')
+    .select([
+      'receipts.id as receipt_id',
+      'receipts.number as number',
+      'receipts.receipt_date as receipt_date',
+      'receipt_allocations.amount as amount',
+    ])
+    .where('receipt_allocations.document_id', '=', document.id)
+    .orderBy('receipts.receipt_date', 'asc')
+    .orderBy('receipts.number', 'asc')
+    .execute()
+
+  const receipts = rows.map((row) => ({
+    receiptId: row.receipt_id,
+    number: row.number,
+    date: row.receipt_date,
+    amount: D(row.amount),
+  }))
+  const allocated = receipts.reduce<Decimal>((total, row) => total.plus(row.amount), ZERO)
+
+  return { movement, allocated, outstanding: movement.minus(allocated), receipts }
 }

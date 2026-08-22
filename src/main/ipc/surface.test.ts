@@ -18,6 +18,7 @@ describe('API_SURFACE', () => {
       'ledger',
       'parties',
       'documents',
+      'receipts',
       'companyProfile',
       'regime',
       'reports',

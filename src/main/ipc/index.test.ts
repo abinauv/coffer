@@ -6,6 +6,7 @@ import type { LedgerService } from './handlers/ledger'
 import type { CompanyProfileService } from './handlers/company-profile'
 import type { DocumentsService } from './handlers/documents'
 import type { PartiesService } from './handlers/parties'
+import type { ReceiptsService } from './handlers/receipts'
 import type { RegimeService } from './handlers/regime'
 import type { ReportService } from './handlers/reports'
 import type { SystemEnvironment } from './handlers/system'
@@ -47,6 +48,7 @@ let ledger: LedgerService
 let parties: PartiesService
 let companyProfile: CompanyProfileService
 let documents: DocumentsService
+let receipts: ReceiptsService
 let regime: RegimeService
 let reports: ReportService
 
@@ -65,6 +67,7 @@ function dependencies(overrides: Partial<IpcDependencies> = {}): IpcDependencies
     parties,
     documents,
     companyProfile,
+    receipts,
     regime,
     reports,
     ...overrides,
@@ -144,6 +147,16 @@ beforeEach(() => {
     issue: vi.fn(),
     cancel: vi.fn(),
   } as unknown as DocumentsService
+
+  receipts = {
+    list: vi.fn(async () => []),
+    get: vi.fn(async () => null),
+    create: vi.fn(),
+    allocate: vi.fn(),
+    cancel: vi.fn(),
+    settlement: vi.fn(),
+    open: vi.fn(async () => []),
+  } as unknown as ReceiptsService
 
   regime = {
     describe: vi.fn(),

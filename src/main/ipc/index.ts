@@ -22,6 +22,7 @@ import {
 import { type DocumentsService, createDocumentsHandlers } from './handlers/documents'
 import { type LedgerService, createLedgerHandlers } from './handlers/ledger'
 import { type PartiesService, createPartiesHandlers } from './handlers/parties'
+import { type ReceiptsService, createReceiptsHandlers } from './handlers/receipts'
 import { type RegimeService, createRegimeHandlers } from './handlers/regime'
 import { type ReportService, createReportHandlers } from './handlers/reports'
 import { type SystemEnvironment, createSystemHandlers } from './handlers/system'
@@ -36,6 +37,7 @@ export type { CompanyProfileService } from './handlers/company-profile'
 export type { DocumentsService } from './handlers/documents'
 export type { LedgerService } from './handlers/ledger'
 export type { PartiesService } from './handlers/parties'
+export type { ReceiptsService } from './handlers/receipts'
 export type { RegimeService } from './handlers/regime'
 export type { ReportService } from './handlers/reports'
 export type { SystemEnvironment } from './handlers/system'
@@ -75,6 +77,15 @@ export interface IpcDependencies {
    * party to do it, which is why it is a service and not a face of `ledger`.
    */
   documents: DocumentsService
+  /**
+   * THE INJECTION POINT for src/main/receipts.
+   *
+   * Money in and out, and which documents it settles. It is NOT a face of `documents`,
+   * for the reason the two live in different tables: a receipt has no lines, carries no
+   * tax and has no draft, so a service holding both would have one half asking a regime
+   * and the other half forbidden to.
+   */
+  receipts: ReceiptsService
   /**
    * THE INJECTION POINT for src/main/company-profile.
    *
@@ -141,6 +152,7 @@ export function registerIpcHandlers(dependencies: IpcDependencies): HandlerRegis
   registry.registerGroup('ledger', createLedgerHandlers(dependencies.ledger))
   registry.registerGroup('parties', createPartiesHandlers(dependencies.parties))
   registry.registerGroup('documents', createDocumentsHandlers(dependencies.documents))
+  registry.registerGroup('receipts', createReceiptsHandlers(dependencies.receipts))
   registry.registerGroup(
     'companyProfile',
     createCompanyProfileHandlers(dependencies.companyProfile),

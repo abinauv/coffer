@@ -86,6 +86,15 @@ export const API_SURFACE: ApiSurface = {
     issue: true,
     cancel: true,
   },
+  receipts: {
+    list: true,
+    get: true,
+    create: true,
+    allocate: true,
+    cancel: true,
+    settlement: true,
+    open: true,
+  },
   companyProfile: {
     get: true,
     save: true,

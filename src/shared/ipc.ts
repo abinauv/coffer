@@ -58,6 +58,15 @@ import type {
   Result,
   SaveCompanyProfileInput,
   RegimeDescription,
+  AllocateReceiptInput,
+  CancelReceiptInput,
+  CreateReceiptInput,
+  DocumentSettlement,
+  ListReceiptsInput,
+  OpenDocument,
+  OpenDocumentsInput,
+  Receipt,
+  ReceiptSummary,
   ReverseEntryInput,
   SetAccountRoleInput,
   TitleBarOverlayColors,
@@ -221,6 +230,38 @@ export interface CofferApi {
     issue(input: IssueDocumentInput): Promise<Result<Document>>
     /** Reverses what it posted, keeps the number, keeps the lines. */
     cancel(input: CancelDocumentInput): Promise<Result<Document>>
+  }
+
+  /**
+   * Money received from a customer, money paid to a vendor, and what it settles.
+   *
+   * THERE IS NO `issue` AND NO `delete`, and both absences are the contract rather than
+   * an oversight. A receipt records money that has ALREADY MOVED, so it posts the moment
+   * it is created — there is no draft to issue — and a number handed out is never
+   * released, so there is nothing to delete either. `cancel` reverses the entry and keeps
+   * the number, exactly as it does for an issued invoice.
+   *
+   * `allocate` IS THE ONE THING ABOUT A POSTED RECEIPT THAT MAY STILL CHANGE, and that is
+   * consistent rather than a hole in the freeze: an allocation moves no money and writes
+   * no entry. It says which invoices this money pays, and a business changes its mind
+   * about that without anything in the ledger being wrong.
+   *
+   * It replaces the WHOLE set. An empty list un-allocates everything, which is how money
+   * goes back on account.
+   */
+  receipts: {
+    list(input?: ListReceiptsInput): Promise<Result<ReceiptSummary[]>>
+    get(id: string): Promise<Result<Receipt | null>>
+    /** Numbers it, posts it and stores it, in one transaction or none of it. */
+    create(input: CreateReceiptInput): Promise<Result<Receipt>>
+    /** Replaces what it settles. An empty list puts the money back on account. */
+    allocate(input: AllocateReceiptInput): Promise<Result<Receipt>>
+    /** Reverses the entry, drops what it settled, keeps the number. */
+    cancel(input: CancelReceiptInput): Promise<Result<Receipt>>
+    /** What has been paid against one document, and what is left. */
+    settlement(documentId: string): Promise<Result<DocumentSettlement>>
+    /** A party's documents with something still against them, oldest first. */
+    open(input: OpenDocumentsInput): Promise<Result<OpenDocument[]>>
   }
 
   /**

@@ -1463,3 +1463,66 @@ export interface ListReceiptsInput {
   limit?: number
   offset?: number
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * WHAT IS OUTSTANDING, ON ITS WAY TO A SCREEN
+ *
+ * Neither figure below is a column and neither ever will be (rule 3). They are folds over
+ * the ledger and the allocation rows, computed on the way out — which is also why they
+ * cross as decimal strings already added up: the renderer never does money arithmetic
+ * (CONVENTIONS §1.7), so a screen showing "680.00 outstanding" has to be handed 680.00.
+ */
+
+/** One receipt's part in settling one document. */
+export interface SettlementReceiptDto {
+  receiptId: string
+  number: string
+  /** When the money arrived — not when somebody matched it, which nothing records. */
+  date: DateString
+  /** How much of that receipt went to this document, not the receipt's own total. */
+  amount: DecimalString
+}
+
+/** What has been paid against one document, and what is left. */
+export interface DocumentSettlement {
+  documentId: string
+  /**
+   * What the document put on the party's control account, in its own direction.
+   *
+   * Not the same as its grand total once it has been cancelled: the reversal nets it to
+   * nothing, which is how a cancelled invoice stops being owed with no code written to
+   * make it so.
+   */
+  movement: DecimalString
+  allocated: DecimalString
+  /** `movement - allocated`. Negative would mean more was matched than was ever owed. */
+  outstanding: DecimalString
+  receipts: readonly SettlementReceiptDto[]
+}
+
+/** A document with something still against it, as a picker lists one. */
+export interface OpenDocument {
+  id: string
+  kind: string
+  /** Never null: only an issued document can be open, and those all have numbers. */
+  number: string
+  date: DateString
+  /** What it put on the party's account. */
+  grandTotal: DecimalString
+  outstanding: DecimalString
+}
+
+export interface OpenDocumentsInput {
+  partyId: string
+  /** A `ReceiptKind`. A receipt settles sales documents; a payment settles purchases. */
+  kind: string
+  /**
+   * Treat this receipt's own allocations as available again.
+   *
+   * The editor needs it: opening a receipt that already settles INV/0007 in full must
+   * show INV/0007 with that money back on it, or the invoice the screen is displaying a
+   * line for is simply missing from the list it offers.
+   */
+  exceptReceiptId?: string
+}

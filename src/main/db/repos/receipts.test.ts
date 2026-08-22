@@ -40,7 +40,12 @@ import { isRepoError, type RepoError, type RepoErrorCode } from './errors'
 import { cancelDocument, issueDocument } from './issuing'
 import { getEntry, postManualEntry } from './journal'
 import { createSeries } from './numbering'
-import { allocatedFromReceipt, documentMovement, outstandingForDocument } from './outstanding'
+import {
+  allocatedFromReceipt,
+  documentMovement,
+  openDocumentsFor,
+  outstandingForDocument,
+} from './outstanding'
 import { createParty } from './parties'
 import { closePeriod, listPeriods, reopenPeriod } from './periods'
 import { taxAccountsFor } from './tax-accounts'
@@ -970,6 +975,90 @@ describe('what a document has outstanding', () => {
       .run(documentId, vendor, posted.entryId, NOW, NOW, NOW)
 
     expect((await documentMovement(db, await control(documentId))).toString()).toBe('5000')
+  })
+
+  /*
+   * A DRAFT CARRYING AN ENTRY, which is the one state the picker's `status = 'issued'`
+   * filter catches that the arithmetic does not. 0008's CHECKs constrain the number and
+   * the stamps and say nothing about `entry_id` on a draft, so the row below is legal —
+   * and it has a real movement, so without the filter it would be offered for settlement
+   * as though somebody could pay an invoice that has not been raised.
+   *
+   * Built directly because nothing in the app can produce it. That is the point: a rule
+   * whose only job is to hold a state the code above it never creates can only be tested
+   * by creating that state.
+   */
+  it('does not offer a draft that somehow carries an entry', async () => {
+    const document = await invoice()
+
+    /* Its own entry, because `documents.entry_id` is UNIQUE — a real posting that debits
+     * the customer, so the draft has a movement the picker would otherwise offer. */
+    const posted = await postManualEntry(db, {
+      date: '2026-04-15',
+      narration: 'Not a document anybody issued',
+      lines: [
+        { accountId: receivable, debit: '900.00', credit: '0.00', partyId: customer },
+        { accountId: bank, debit: '0.00', credit: '900.00' },
+      ],
+    })
+
+    connection
+      .prepare(
+        `INSERT INTO documents (id, kind, status, number, document_date, party_id,
+           place_of_supply_country, rounding_policy, narration, entry_id, created_at,
+           updated_at)
+         VALUES (?, 'sales-invoice', 'draft', NULL, '2026-04-15', ?, 'in', 'none', '',
+           ?, ?, ?)`,
+      )
+      .run(randomUUID(), customer, posted.entryId, NOW, NOW)
+
+    const open = await openDocumentsFor(db, { partyId: customer, side: 'sales' })
+    expect(open.map((row) => row.id)).toEqual([document.id])
+  })
+
+  /*
+   * The picker, on the purchase side. The single-document `documentMovement` goes through
+   * the same batch since a mutation pass showed what two implementations cost — so this
+   * and the test above it now break together rather than one covering for the other.
+   */
+  it('offers a purchase bill as a positive amount owed', async () => {
+    const payable = (
+      await db
+        .selectFrom('account_roles')
+        .select('account_id')
+        .where('role', '=', 'accounts-payable')
+        .executeTakeFirstOrThrow()
+    ).account_id
+    const expense = (
+      await db
+        .selectFrom('accounts')
+        .select('id')
+        .where('code', '=', '6700')
+        .executeTakeFirstOrThrow()
+    ).id
+
+    const posted = await postManualEntry(db, {
+      date: '2026-04-15',
+      narration: 'Freight bill',
+      lines: [
+        { accountId: expense, debit: '5000.00', credit: '0.00' },
+        { accountId: payable, debit: '0.00', credit: '5000.00', partyId: vendor },
+      ],
+    })
+
+    connection
+      .prepare(
+        `INSERT INTO documents (id, kind, status, number, document_date, party_id,
+           place_of_supply_country, rounding_policy, narration, entry_id, created_at,
+           updated_at, issued_at)
+         VALUES (?, 'purchase-bill', 'issued', 'BILL/9', '2026-04-15', ?, 'in', 'none', '',
+           ?, ?, ?, ?)`,
+      )
+      .run(randomUUID(), vendor, posted.entryId, NOW, NOW, NOW)
+
+    const open = await openDocumentsFor(db, { partyId: vendor, side: 'purchase' })
+    expect(open).toHaveLength(1)
+    expect(open[0]?.outstanding.toString()).toBe('5000')
   })
 
   it('counts what one receipt let go of', async () => {
