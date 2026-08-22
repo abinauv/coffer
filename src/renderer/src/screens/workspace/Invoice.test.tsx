@@ -88,6 +88,7 @@ function document(over: Partial<Document> = {}): Document {
     partyName: 'Sunrise Components',
     grandTotal: '1180.00',
     seriesId: null,
+    originalDocumentId: null,
     partyReference: null,
     placeOfSupplyJurisdiction: '33',
     placeOfSupplyCountry: 'in',

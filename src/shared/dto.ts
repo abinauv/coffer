@@ -580,6 +580,15 @@ export interface Document extends DocumentSummary {
   narration: string
   /** The entry it posted as. Null while draft — there is no state between (rule 3). */
   entryId: string | null
+  /**
+   * The document this one corrects, where it names one.
+   *
+   * Only a credit note or a debit note carries it, pointing at an issued charge document
+   * of the same party on the same side — 0013's trigger proves that and nothing above it
+   * repeats the rule. Nullable because one credit note against several invoices has been
+   * legal since 2019, so there is not always a single original to name.
+   */
+  originalDocumentId: string | null
   lines: readonly DocumentLineDto[]
   totals: DocumentTotalsDto
   createdAt: Timestamp
@@ -639,6 +648,8 @@ export interface CreateTaxedDocumentInput {
   placeOfSupplyCountry: string
   roundingPolicy?: 'whole-unit' | 'none'
   narration?: string
+  /** The document this one corrects. Only a credit note or a debit note may carry it. */
+  originalDocumentId?: string | null
   lines?: readonly TaxedLineInput[]
 }
 
@@ -658,6 +669,8 @@ export interface UpdateTaxedDocumentInput {
   placeOfSupplyCountry?: string
   roundingPolicy?: 'whole-unit' | 'none'
   narration?: string
+  /** The document this one corrects. Only a credit note or a debit note may carry it. */
+  originalDocumentId?: string | null
   lines?: readonly TaxedLineInput[]
 }
 
@@ -710,6 +723,8 @@ export interface CreateDocumentInput {
   placeOfSupplyCountry?: string
   roundingPolicy?: 'whole-unit' | 'none'
   narration?: string
+  /** The document this one corrects. Only a credit note or a debit note may carry it. */
+  originalDocumentId?: string | null
   lines?: readonly DocumentLineInput[]
 }
 
@@ -729,6 +744,8 @@ export interface UpdateDocumentInput {
   placeOfSupplyCountry?: string
   roundingPolicy?: 'whole-unit' | 'none'
   narration?: string
+  /** The document this one corrects. Only a credit note or a debit note may carry it. */
+  originalDocumentId?: string | null
   lines?: readonly DocumentLineInput[]
 }
 

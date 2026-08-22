@@ -154,7 +154,14 @@ export const SMALL_BUSINESS_CHART: ChartTemplate = {
     leaf('5100', 'Purchases', 'expense', '5000', 'purchases'),
     leaf('5200', 'Purchase Returns', 'expense', '5000', 'purchase-returns'),
     leaf('5300', 'Cost of Goods Sold', 'expense', '5000', 'cost-of-goods-sold'),
-    leaf('5400', 'Freight Inward', 'expense', '5000'),
+    leaf(
+      '5400',
+      'Freight Inward',
+      'expense',
+      '5000',
+      'freight-inward',
+      'Carriage a supplier charges on their own bill. It is part of what the goods cost.',
+    ),
     leaf('5500', 'Stock Adjustment', 'expense', '5000', 'stock-adjustment'),
 
     group('6000', 'Operating Expenses', 'expense'),

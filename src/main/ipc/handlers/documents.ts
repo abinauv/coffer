@@ -145,6 +145,11 @@ function parseList(value: unknown): ListDocumentsInput {
 function parseShared(input: Record<string, unknown>) {
   return {
     partyReference: nullableText(input, 'partyReference'),
+    /* An id, so `nullableText` rather than anything that trims it into meaning: an
+     * unrecognisable one is refused by the foreign key and a wrong one by 0013's trigger,
+     * both of which know things this boundary does not. What this checks is that it is a
+     * string, which is the only question a parser can answer. */
+    originalDocumentId: nullableText(input, 'originalDocumentId'),
     placeOfSupplyJurisdiction: nullableText(input, 'placeOfSupplyJurisdiction'),
     placeOfSupplyCountry: optional(input['placeOfSupplyCountry'], (v) =>
       expectNonEmptyString(v, 'placeOfSupplyCountry'),

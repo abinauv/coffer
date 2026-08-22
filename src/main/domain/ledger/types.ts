@@ -148,6 +148,7 @@ export type AccountRole =
   | 'discount-allowed'
   | 'discount-received'
   | 'freight-outward'
+  | 'freight-inward'
   | 'round-off'
   | 'opening-balance-equity'
   | 'retained-earnings'
@@ -168,6 +169,7 @@ export const ACCOUNT_ROLES: readonly AccountRole[] = [
   'discount-allowed',
   'discount-received',
   'freight-outward',
+  'freight-inward',
   'round-off',
   'opening-balance-equity',
   'retained-earnings',

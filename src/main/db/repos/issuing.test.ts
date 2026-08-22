@@ -18,6 +18,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { DOCUMENT_KINDS } from '@main/domain/documents'
+import { D } from '@main/domain/money'
 import { aprilToMarch } from '@main/domain/time'
 import type { CreateTaxedDocumentInput, TaxedLineInput } from '@shared/dto'
 
@@ -456,28 +458,6 @@ describe('issueDocument', () => {
     })
 
     expect((await issueDocument(db, { id }, NOW)).status).toBe('issued')
-  })
-
-  /*
-   * The two nulls `postingRuleFor` returns, and the two sentences they earn. A credit
-   * note posts and its rule is simply not written; a quotation does not post at all, and
-   * no amount of building would change that. One code, because from the caller's side
-   * both are "not this document, not this build".
-   */
-  /*
-   * A credit note posts, and its rule is not written. That is the only reason left for
-   * this refusal: a quotation reaches none of it (see the `quotation` group below), so
-   * `requireRule` no longer has to work out which kind of missing it is looking at.
-   */
-  it('refuses a kind whose posting rule is not built, and says so', async () => {
-    const id = await drafted({ kind: 'credit-note' })
-
-    const failure = await failureOf(() => issueDocument(db, { id }, NOW))
-
-    expect(failure.code).toBe('DOCUMENT_KIND_UNSUPPORTED')
-    expect(failure.details).toMatchObject({ kind: 'credit-note' })
-    expect(failure.message).toContain('cannot be issued yet')
-    expect(await nextSequence()).toBe(1)
   })
 
   it('refuses when no series is configured for the kind', async () => {
@@ -924,3 +904,434 @@ function freshBooks(): SqliteDatabase {
   runMigrations(handle, MIGRATIONS)
   return handle
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * THE OTHER THREE KINDS, AGAINST A REAL DATABASE
+ *
+ * posting.test.ts pins the ACCOUNTING — which account, which way round — against a chart
+ * written down in the test. These pin the other half: that a credit note, a purchase bill
+ * and a debit note actually go through issuing, with a number out of their own series, an
+ * entry that balances, and the party control account moving the way the paper says.
+ *
+ * The refusal that used to live here is gone with the rules. A credit note was a draft a
+ * user could raise and could not issue, and `DOCUMENT_KIND_UNSUPPORTED` was the sentence
+ * that said so.
+ */
+describe('the kinds beyond a sales invoice', () => {
+  let vendor: string
+
+  beforeEach(async () => {
+    vendor = (await createParty(db, { name: 'Madras Alloys', countryCode: 'in', isVendor: true }))
+      .id
+
+    for (const [kind, prefix] of [
+      ['credit-note', 'CRN'],
+      ['purchase-bill', 'BILL'],
+      ['debit-note', 'DBN'],
+    ] as const) {
+      await createSeries(db, {
+        kind,
+        label: 'Main',
+        prefix,
+        separator: '/',
+        includeFiscalYear: true,
+        width: 4,
+        resetOn: 'fiscal-year',
+      })
+    }
+  })
+
+  /**
+   * What one account moved by across every entry in the books, DEBIT MINUS CREDIT.
+   *
+   * Not `accountBalance(...).balance`, which is signed in the account's own normal
+   * direction — a credit to a liability comes back positive there, and every assertion
+   * below is about which WAY ROUND the entry faces. Reading it in its natural direction
+   * would make a payable and a receivable look identical, which is the confusion these
+   * tests exist to catch.
+   */
+  async function movementOn(code: string): Promise<string> {
+    const row = await accountBalance(db, account[code]!)
+    return D(row.debit).minus(D(row.credit)).toFixed(2)
+  }
+
+  it('issues a credit note, numbered from its own series', async () => {
+    const id = await drafted({ kind: 'credit-note' })
+    const issued = await issueDocument(db, { id }, NOW)
+
+    expect(issued.status).toBe('issued')
+    expect(issued.number).toBe('CRN/2026-27/0001')
+    expect(issued.entryId).not.toBeNull()
+  })
+
+  /*
+   * The direction, read off the books rather than off the entry draft. A sales invoice
+   * leaves the customer owing 1180; a credit note for the same figures takes it back to
+   * nothing. If the rule faced the wrong way this would come out at 2360 and still
+   * balance perfectly, which is why the assertion is on the CONTROL ACCOUNT and not on
+   * whether the entry ties.
+   */
+  it('takes a customer balance back the way an invoice put it up', async () => {
+    await issueDocument(db, { id: await drafted() }, NOW)
+    expect(await movementOn('1300')).toBe('1180.00')
+
+    await issueDocument(db, { id: await drafted({ kind: 'credit-note' }) }, NOW)
+    expect(await movementOn('1300')).toBe('0.00')
+  })
+
+  /* And the value lands in the contra account rather than back out of sales, so the year
+   * still says what was sold as well as what came back. */
+  it('sends the value of a credit note to sales returns', async () => {
+    await issueDocument(db, { id: await drafted({ kind: 'credit-note' }) }, NOW)
+
+    expect(await movementOn('4200')).toBe('1000.00')
+    expect(await movementOn('4100')).toBe('0.00')
+  })
+
+  it('issues a purchase bill against a vendor, and credits payables', async () => {
+    const id = await drafted({ kind: 'purchase-bill', partyId: vendor })
+    const issued = await issueDocument(db, { id }, NOW)
+
+    expect(issued.number).toBe('BILL/2026-27/0001')
+    /* A liability, so the movement is a credit and comes back negative. */
+    expect(await movementOn('2100')).toBe('-1180.00')
+    expect(await movementOn('5100')).toBe('1000.00')
+  })
+
+  /*
+   * INPUT TAX IS AN ASSET AND OUTPUT TAX IS A LIABILITY, and the two accounts are not the
+   * same row. A bill reaching for the output account would net a claim against a
+   * liability — the netting `tax-accounts.ts` refuses to do, undone one layer up — and
+   * the trial balance would still tie.
+   */
+  it('claims input tax on a bill without touching the output account', async () => {
+    const outputBefore = await movementOn('2210')
+
+    await issueDocument(db, { id: await drafted({ kind: 'purchase-bill', partyId: vendor }) }, NOW)
+
+    expect(await movementOn('1510')).toBe('90.00')
+    expect(await movementOn('2210')).toBe(outputBefore)
+  })
+
+  it('issues a debit note, taking a vendor balance back down', async () => {
+    await issueDocument(db, { id: await drafted({ kind: 'purchase-bill', partyId: vendor }) }, NOW)
+    expect(await movementOn('2100')).toBe('-1180.00')
+
+    const id = await drafted({ kind: 'debit-note', partyId: vendor })
+    expect((await issueDocument(db, { id }, NOW)).number).toBe('DBN/2026-27/0001')
+    expect(await movementOn('2100')).toBe('0.00')
+  })
+
+  it('leaves every entry balanced, whichever kind wrote it', async () => {
+    await issueDocument(db, { id: await drafted() }, NOW)
+    await issueDocument(db, { id: await drafted({ kind: 'credit-note' }) }, NOW)
+    await issueDocument(db, { id: await drafted({ kind: 'purchase-bill', partyId: vendor }) }, NOW)
+    await issueDocument(db, { id: await drafted({ kind: 'debit-note', partyId: vendor }) }, NOW)
+
+    const balance = await trialBalance(db)
+    expect(balance.totalDebit).toBe(balance.totalCredit)
+  })
+
+  /*
+   * FREIGHT INWARD, AGAINST THE CHART THE APP ACTUALLY SHIPS. posting.test.ts proves the
+   * rule reaches for the `freight-inward` ROLE; nothing there could notice that no account
+   * in the template carried it, because that test writes its own chart. This is the half
+   * that says a real company file can issue a bill with carriage on it — the same gap that
+   * let `SERIES_NOT_CONFIGURED` ship in 0012, found the same way.
+   */
+  it('posts a carriage line on a bill to freight inward, from the shipped chart', async () => {
+    const id = await drafted({
+      kind: 'purchase-bill',
+      partyId: vendor,
+      lines: [
+        line(),
+        line({
+          description: 'Carriage',
+          isCharge: true,
+          quantity: '1.000',
+          unitPrice: '200.00',
+          taxableAmount: '200.00',
+          taxes: [{ code: 'CGST', label: 'CGST @ 9%', ratePct: '9.000', amount: '18.00' }],
+        }),
+      ],
+    })
+    await issueDocument(db, { id }, NOW)
+
+    expect(await movementOn('5400')).toBe('200.00')
+    expect(await movementOn('6500')).toBe('0.00')
+  })
+
+  /* A quotation is still the one kind that takes a number and writes nothing. */
+  it('still posts nothing for a quotation', async () => {
+    await createSeries(db, {
+      kind: 'quotation',
+      label: 'Main',
+      prefix: 'QTN',
+      separator: '/',
+      includeFiscalYear: false,
+      width: 4,
+      resetOn: 'never',
+    })
+    const issued = await issueDocument(db, { id: await drafted({ kind: 'quotation' }) }, NOW)
+
+    expect(issued.status).toBe('issued')
+    expect(issued.entryId).toBeNull()
+  })
+})
+
+/*
+ * ---------------------------------------------------------------------------
+ * THE INVOICE A CREDIT NOTE CORRECTS
+ *
+ * 0013's column, and the rule that a link points somewhere it could have pointed. All of
+ * it is proved by one trigger, so these are one refusal seen from six sides — which is
+ * the right shape for the test as well: each of these is a state a user can actually
+ * reach from a screen, and each earns the same sentence.
+ *
+ * NOTHING IN THE LEDGER READS THE LINK. There is deliberately no test asserting that a
+ * credit note with one posts differently from a credit note without, because it does not
+ * — the entry is identical, and a test claiming otherwise would be pinning a behaviour
+ * the design says must never appear.
+ */
+describe('a correction naming the document it corrects', () => {
+  let vendor: string
+  let invoice: string
+
+  beforeEach(async () => {
+    vendor = (await createParty(db, { name: 'Madras Alloys', countryCode: 'in', isVendor: true }))
+      .id
+    for (const [kind, prefix] of [
+      ['credit-note', 'CRN'],
+      ['purchase-bill', 'BILL'],
+      ['debit-note', 'DBN'],
+    ] as const) {
+      await createSeries(db, {
+        kind,
+        label: 'Main',
+        prefix,
+        separator: '/',
+        includeFiscalYear: true,
+        width: 4,
+        resetOn: 'fiscal-year',
+      })
+    }
+    invoice = await drafted()
+    await issueDocument(db, { id: invoice }, NOW)
+  })
+
+  it('records the link, and gives it back', async () => {
+    const id = await drafted({ kind: 'credit-note', originalDocumentId: invoice })
+
+    expect((await getDocument(db, id))?.originalDocumentId).toBe(invoice)
+  })
+
+  it('lets a credit note carry no original at all', async () => {
+    const id = await drafted({ kind: 'credit-note' })
+
+    expect((await getDocument(db, id))?.originalDocumentId).toBeNull()
+    expect((await issueDocument(db, { id }, NOW)).status).toBe('issued')
+  })
+
+  it('refuses an original belonging to somebody else', async () => {
+    const other = (
+      await createParty(db, { name: 'Kerala Tools', countryCode: 'in', isCustomer: true })
+    ).id
+
+    expect(
+      await codeOf(() =>
+        createDocument(
+          db,
+          draft({ kind: 'credit-note', partyId: other, originalDocumentId: invoice }),
+          NOW,
+        ),
+      ),
+    ).toBe('DOCUMENT_CORRECTION_INVALID')
+  })
+
+  /* A draft is not a supply anybody has been charged for, so there is nothing to correct
+   * — and the draft may still change into something the note does not describe. */
+  it('refuses an original still in draft', async () => {
+    const unissued = await drafted()
+
+    expect(
+      await codeOf(() =>
+        createDocument(db, draft({ kind: 'credit-note', originalDocumentId: unissued }), NOW),
+      ),
+    ).toBe('DOCUMENT_CORRECTION_INVALID')
+  })
+
+  it('refuses an original on the other side of the trade', async () => {
+    const bill = await drafted({ kind: 'purchase-bill', partyId: vendor })
+    await issueDocument(db, { id: bill }, NOW)
+
+    expect(
+      await codeOf(() =>
+        createDocument(db, draft({ kind: 'credit-note', originalDocumentId: bill }), NOW),
+      ),
+    ).toBe('DOCUMENT_CORRECTION_INVALID')
+  })
+
+  /*
+   * A SALES INVOICE CARRYING A LINK IS REFUSED BY THE SAME EXPRESSION, with no check of
+   * its own — the CASE in 0013 gives NULL for any kind that corrects nothing, and no
+   * `kind =` matches NULL. This is the test that says so rather than a second trigger.
+   */
+  it('refuses a link on a kind that corrects nothing', async () => {
+    expect(
+      await codeOf(() =>
+        createDocument(db, draft({ kind: 'sales-invoice', originalDocumentId: invoice }), NOW),
+      ),
+    ).toBe('DOCUMENT_CORRECTION_INVALID')
+  })
+
+  it('refuses a link pointing at a document that does not exist', async () => {
+    expect(
+      await codeOf(() =>
+        createDocument(db, draft({ kind: 'credit-note', originalDocumentId: 'nope' }), NOW),
+      ),
+    ).toBe('DOCUMENT_CORRECTION_INVALID')
+  })
+
+  /* Rule 1, extended to the new column. Without it the link could be re-pointed years
+   * later and the return already filed would no longer match the books. */
+  it('freezes the link once the correction is issued', async () => {
+    const id = await drafted({ kind: 'credit-note', originalDocumentId: invoice })
+    await issueDocument(db, { id }, NOW)
+
+    expect(await codeOf(() => updateDocument(db, { id, originalDocumentId: null }, LATER))).toBe(
+      'DOCUMENT_NOT_DRAFT',
+    )
+  })
+
+  it('lets a draft correction be re-pointed, and cleared', async () => {
+    const second = await drafted()
+    await issueDocument(db, { id: second }, NOW)
+    const id = await drafted({ kind: 'credit-note', originalDocumentId: invoice })
+
+    await updateDocument(db, { id, originalDocumentId: second }, LATER)
+    expect((await getDocument(db, id))?.originalDocumentId).toBe(second)
+
+    await updateDocument(db, { id, originalDocumentId: null }, LATER)
+    expect((await getDocument(db, id))?.originalDocumentId).toBeNull()
+  })
+
+  // ---- Cancelling the thing that was corrected ------------------------------
+
+  /*
+   * The same argument 0012 makes about allocated money. A credit note against a cancelled
+   * invoice credits a customer for a supply the books say never happened, and the remedy
+   * is one step the user can take — so the refusal names the document to deal with first.
+   */
+  it('refuses to cancel an invoice a credit note corrects', async () => {
+    const note = await drafted({ kind: 'credit-note', originalDocumentId: invoice })
+    await issueDocument(db, { id: note }, NOW)
+
+    const failure = await failureOf(() => cancelDocument(db, { id: invoice }, LATER))
+
+    expect(failure.code).toBe('DOCUMENT_CORRECTED')
+    expect(failure.message).toContain('CRN/2026-27/0001')
+    /* The number alone is not the message. What a user needs is the STEP — which
+     * document to deal with first — and a refusal that named the correction without
+     * saying what to do about it would leave them stuck on a screen with no next move. */
+    expect(failure.message).toContain('Cancel the credit note first')
+    expect((await getDocument(db, invoice))?.status).toBe('issued')
+  })
+
+  /* A DRAFT correction counts too. Somebody is in the middle of writing it, and pulling
+   * the invoice away would leave them saving a correction against nothing. */
+  it('refuses while the correction is still a draft', async () => {
+    await drafted({ kind: 'credit-note', originalDocumentId: invoice })
+
+    const failure = await failureOf(() => cancelDocument(db, { id: invoice }, LATER))
+
+    expect(failure.code).toBe('DOCUMENT_CORRECTED')
+    expect(failure.message).toContain('A draft credit note')
+  })
+
+  it('allows the cancel once the correction is cancelled', async () => {
+    const note = await drafted({ kind: 'credit-note', originalDocumentId: invoice })
+    await issueDocument(db, { id: note }, NOW)
+    await cancelDocument(db, { id: note }, LATER)
+
+    expect((await cancelDocument(db, { id: invoice }, LATER)).status).toBe('cancelled')
+  })
+
+  it('allows the cancel once the correction is deleted', async () => {
+    const note = await drafted({ kind: 'credit-note', originalDocumentId: invoice })
+    await deleteDocument(db, note)
+
+    expect((await cancelDocument(db, { id: invoice }, LATER)).status).toBe('cancelled')
+  })
+
+  /* An invoice nothing corrects still cancels, which is what says the refusal above is
+   * about the link and not about credit notes existing in the file at all. */
+  it('leaves an uncorrected invoice cancellable', async () => {
+    await drafted({ kind: 'credit-note', originalDocumentId: invoice })
+    const other = await drafted()
+    await issueDocument(db, { id: other }, NOW)
+
+    expect((await cancelDocument(db, { id: other }, LATER)).status).toBe('cancelled')
+  })
+
+  /*
+   * ---- The triggers, reached the only way they can be ----------------------
+   *
+   * BOTH OF THESE RULES ARE ENFORCED TWICE and the repository always speaks first, which
+   * makes the database half UNREACHABLE THROUGH THE NORMAL PATH rather than merely
+   * untested: `updateDocument` calls `assertDraft` before any SQL runs, and
+   * `cancelDocument` calls `assertNotCorrected`. A mutation removing either trigger
+   * changed no test until these two existed, because every route the app takes is stopped
+   * one layer higher.
+   *
+   * So they go through the connection directly. That is not a contrivance — it is exactly
+   * the case the trigger is FOR: a future repository that forgets, a build that writes to
+   * the table another way, a person with a SQL client. The same reasoning 0012 records
+   * about `replaceAllocations`, arrived at the same way.
+   */
+  it('refuses a re-pointed link even when the repository is bypassed', async () => {
+    const second = await drafted()
+    await issueDocument(db, { id: second }, NOW)
+    const id = await drafted({ kind: 'credit-note', originalDocumentId: invoice })
+    await issueDocument(db, { id }, NOW)
+
+    expect(() =>
+      connection
+        .prepare(`UPDATE documents SET original_document_id = ? WHERE id = ?`)
+        .run(second, id),
+    ).toThrow(/DOCUMENT_NOT_DRAFT/)
+  })
+
+  it('refuses to cancel a corrected document even when the repository is bypassed', async () => {
+    const note = await drafted({ kind: 'credit-note', originalDocumentId: invoice })
+    await issueDocument(db, { id: note }, NOW)
+
+    expect(() =>
+      connection
+        .prepare(`UPDATE documents SET status = 'cancelled', cancelled_at = ? WHERE id = ?`)
+        .run(LATER, invoice),
+    ).toThrow(/DOCUMENT_CORRECTED/)
+  })
+
+  /*
+   * WHAT 0013'S `CASE` CLAIMS, ASKED OF THE DOMAIN. The migration enumerates the mapping
+   * in SQL because a CHECK cannot import a union, and this is what stops the two drifting:
+   * for every refund kind the domain knows, the kind it may correct is the charge kind on
+   * the same side. A sixth kind added without touching 0013 fails here.
+   */
+  it('corrects the charge kind on its own side, for every refund kind', () => {
+    const corrects: Record<string, string> = {
+      'credit-note': 'sales-invoice',
+      'debit-note': 'purchase-bill',
+    }
+
+    for (const definition of DOCUMENT_KINDS.filter((each) => each.direction === 'refund')) {
+      const charge = DOCUMENT_KINDS.find(
+        (each) => each.side === definition.side && each.direction === 'charge',
+      )
+      expect(`${definition.kind} -> ${corrects[definition.kind] ?? 'nothing'}`).toBe(
+        `${definition.kind} -> ${charge?.kind ?? 'nothing'}`,
+      )
+    }
+  })
+})

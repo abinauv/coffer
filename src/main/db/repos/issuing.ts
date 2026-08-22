@@ -48,12 +48,10 @@
  * return that ties and one that does not.
  *
  * ---------------------------------------------------------------------------
- * WHICH KINDS THIS CAN ISSUE, AND WHY THE OTHERS ARE REFUSED WITH A SENTENCE
+ * WHICH KINDS THIS CAN ISSUE
  *
- * A sales invoice. That is the only kind with a posting rule so far, and `postingRuleFor`
- * is where that fact lives. A credit note, a purchase bill and a debit note are drafts a
- * user can already create, so the refusal has to be a code with a message rather than a
- * thrown programmer error — the user did nothing wrong.
+ * All five. Four have a posting rule and a quotation needs none, and `postingRuleFor` is
+ * where that fact lives — this file has never held a list of kinds and does not start now.
  *
  * A QUOTATION IS ISSUED WITHOUT POSTING ANYTHING, and that is not a special case bolted
  * on — it is what the domain contract has said since it was written: "every kind is
@@ -63,11 +61,22 @@
  * reverse. The number is still spent, because rule 2 does not care whether the series was
  * a tax series.
  *
- * What that costs in this file is one branch, and it is worth naming why the branch is on
- * `postsToLedger` rather than on `postingRuleFor` returning null. Those two nulls mean
- * opposite things: a credit note has no rule because nobody has written it, and a
- * quotation has no rule because there is nothing to write. Branching on the second and
- * treating the first the same way would silently issue an unposted credit note.
+ * What that costs in this file is one branch, on `postsToLedger`. UNTIL THE OTHER THREE
+ * RULES WERE WRITTEN THAT BRANCH CARRIED A SECOND JOB: `postingRuleFor` answered null both
+ * for a quotation, which never posts, and for a credit note, whose rule nobody had written
+ * — opposite meanings behind one null, and branching on the wrong one would have silently
+ * issued an unposted credit note. There is one null left and the two questions have
+ * collapsed into one. The branch stays on `postsToLedger` because that is the one with a
+ * meaning a reader can check against the contract.
+ *
+ * ---------------------------------------------------------------------------
+ * A DOCUMENT SOMETHING CORRECTS CANNOT BE CANCELLED
+ *
+ * The second thing a cancel is told no for, and it is the same argument as the first. A
+ * credit note against a cancelled invoice credits a customer for a supply the books say
+ * never happened; money allocated against a cancelled invoice belongs somewhere nobody
+ * chose. Both leave a figure that is real and unattached, and in both the remedy is one
+ * step the user can take: cancel the correction, or take the allocation off the receipt.
  */
 
 import { D } from '@main/domain/money'
@@ -205,6 +214,7 @@ export async function cancelDocument(
      * this says it with the figure in it, to a user who is looking at the invoice.
      */
     await assertNotAllocated(trx, document.id)
+    await assertNotCorrected(trx, document.id)
 
     const kind = definitionOf(document.kind as DocumentKind).kind
 
@@ -290,22 +300,60 @@ function assertIssued(document: Document): void {
 }
 
 /**
- * The posting rule for a kind that posts, or the sentence explaining why there is none.
+ * Refuse to cancel a document that a live credit or debit note corrects.
  *
- * Only ever called for a kind `postsToLedger` says true of, so the only reason to be
- * missing a rule is that nobody has written it yet. `postingRuleFor` also returns null for
- * a quotation, and that null means something completely different — it means there is
- * nothing to write — which is why the branch is above rather than in here. A single
- * function answering both would have to re-derive which case it was in.
+ * 0013's trigger says the same thing and this says it with the correction's NUMBER in it,
+ * to a user who is looking at the invoice and needs to know which document to deal with
+ * first. The same division of labour as `assertNotAllocated`: the repository speaks with
+ * the figures, the trigger is what holds if anybody writes to the table another way.
+ *
+ * `status <> 'cancelled'` rather than `= 'issued'`, so a correction still in DRAFT counts.
+ * A draft credit note is a document somebody is in the middle of writing, and pulling the
+ * invoice out from under it would leave them saving a correction against nothing.
+ */
+async function assertNotCorrected(db: CofferDb, documentId: string): Promise<void> {
+  const corrections = await db
+    .selectFrom('documents')
+    .select(['number', 'kind'])
+    .where('original_document_id', '=', documentId)
+    .where('status', '<>', 'cancelled')
+    .orderBy('created_at', 'asc')
+    .execute()
+
+  const first = corrections[0]
+  if (first === undefined) return
+
+  const label = definitionOf(first.kind as DocumentKind).label.toLowerCase()
+  const named = first.number === null ? `A draft ${label}` : `${first.number}`
+  throw new RepoError(
+    'DOCUMENT_CORRECTED',
+    `${named} corrects this document. Cancel the ${label} first — otherwise it adjusts ` +
+      'a supply these books no longer say happened.',
+    { documentId, corrections: corrections.length },
+  )
+}
+
+/**
+ * The posting rule for a kind that posts.
+ *
+ * A PLAIN ERROR NOW, WHERE IT USED TO BE A SENTENCE FOR THE USER. While three of the four
+ * posting rules were unwritten, a credit note was a draft a user could raise and could not
+ * issue — nothing they had done wrong, so `DOCUMENT_KIND_UNSUPPORTED` was a code with a
+ * message and the screens showed it. All four are written; the code is gone with them.
+ *
+ * What is left cannot be reached from a company file: this is only called for a kind
+ * `postsToLedger` says true of, and a kind has a rule exactly when it has a `sourceType`,
+ * which is the same fact. So a null here means a sixth kind was added to `DOCUMENT_KINDS`
+ * in a way `postingRuleFor` could not build a rule for — a wiring mistake nobody using
+ * the app can act on, which is what a plain Error is for (CONVENTIONS §5).
  */
 function requireRule(kind: DocumentKind): { toEntry: ToEntry } {
   const rule = postingRuleFor(kind)
   if (rule !== null) return rule
 
-  throw new RepoError(
-    'DOCUMENT_KIND_UNSUPPORTED',
-    `${definitionOf(kind).pluralLabel} cannot be issued yet — how one posts is not built.`,
-    { kind },
+  throw new Error(
+    `${definitionOf(kind).label} reaches the ledger and has no posting rule. ` +
+      'A kind with a sourceType must have one; see postingRuleFor.',
   )
 }
 

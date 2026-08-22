@@ -12,39 +12,83 @@
  * cannot happen without one of those tests going red.
  *
  * ---------------------------------------------------------------------------
- * THE ENTRY A SALES INVOICE MAKES
+ * ONE ENGINE, FOUR TREATMENTS, AND WHY THERE IS NOT A FILE EACH
  *
- *   Dr  Accounts receivable        grand total     — carrying the customer's id
- *       Cr  Sales                                  the goods and services, net of discount
- *       Cr  Freight outward                        anything flagged as a charge
- *       Cr  Output CGST / SGST / IGST              one line per component
- *       Cr  Round off                              what rounding added, if anything
+ * Every posting document makes the same shape of entry:
  *
- * WHY RECEIVABLE TAKES THE GRAND TOTAL. It is what the customer owes, which is what the
- * document says at the bottom. Any other figure makes the receivables ledger disagree
- * with the paper the customer is holding, and the difference is a rounding line nobody
- * can find. The party's id rides on this line and no other, which is what makes an aged
- * report a grouping of the same rows the balance sheet totals.
+ *   the party's control account takes the grand total, on one side
+ *   the value, the tax and the rounding take it back, on the other
  *
- * WHY REVENUE TAKES THE TAXABLE VALUE. Turnover is what was charged for the supply, not
+ * What differs between the four is only WHICH accounts and WHICH WAY ROUND, and both of
+ * those are already written down in `DOCUMENT_KINDS` as `side` and `direction`. So this
+ * file reads them out of the table rather than branching on the kind, and the four rules
+ * below are four rows rather than four functions:
+ *
+ *   KIND            SIDE      DIR      CONTROL             VALUE             TAX
+ *   sales invoice   sales     charge   Dr receivable       Cr sales          Cr output
+ *   credit note     sales     refund   Cr receivable       Dr sales returns  Dr output
+ *   purchase bill   purchase  charge   Cr payable          Dr purchases      Dr input
+ *   debit note      purchase  refund   Dr payable          Cr purch returns  Cr input
+ *
+ * Read down the CONTROL column and the rule is not "sales means debit": it is that the
+ * control account is DEBITED when the document moves the balance in the party's favour
+ * to us — a sale we have made, or a purchase we are sending back. `controlIsDebit` says
+ * that in one line, out of the two fields, and the table above is its test.
+ *
+ * WHAT THIS BUYS. A sixth kind gets a correct posting rule by adding a row to
+ * `DOCUMENT_KINDS`, and a sixth kind on a side or in a direction this engine has never
+ * seen FAILS TO COMPILE, because the role lookups below are total records over the two
+ * unions. That was the point of one table for five kinds, and this is where it is paid.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY CONTROL TAKES THE GRAND TOTAL
+ *
+ * It is what the party owes or is owed, which is what the document says at the bottom.
+ * Any other figure makes the receivables ledger disagree with the paper the customer is
+ * holding, and the difference is a rounding line nobody can find. The party's id rides
+ * on this line and no other, which is what makes an aged report a grouping of the same
+ * rows the balance sheet totals.
+ *
+ * WHY VALUE TAKES THE TAXABLE AMOUNT. Turnover is what was charged for the supply, not
  * what was collected — the tax is the government's money passing through, and a business
  * that reported it as income would overstate turnover by the rate of GST. `taxableAmount`
  * is already net of discount, because a trade discount given on the invoice reduces the
  * value of the supply itself (see `DocumentLine.discount`).
  *
  * ---------------------------------------------------------------------------
- * WHY A CHARGE IS NOT SALES
+ * A RETURN IS A CONTRA ACCOUNT, NOT A NEGATIVE SALE
  *
- * Freight, packing and insurance recovered from the customer are taxable at the same rate
- * as the supply they sit on, and they are not turnover. `isCharge` says which lines those
- * are, and their value posts to `freight-outward` rather than to `sales`.
+ * A credit note debits `sales-returns` rather than debiting `sales`. Both report the same
+ * profit and the second one is a worse answer: turnover for the year would come out net
+ * of returns with no way to see how large they were, and "how much did we sell and how
+ * much came back" is a question a business asks about its own quality. The shipped chart
+ * has `Sales Returns` as income and `Purchase Returns` as expense for exactly this — each
+ * sits beside the account it reduces and nets against it in the accounts.
  *
- * `freight-outward` is an EXPENSE account in the shipped chart, so crediting it nets the
- * recovery against the freight actually paid. That is the treatment this codebase takes
- * and it is a deliberate choice rather than an accident of which roles happen to exist:
- * the alternative is a separate income account, which reports the same profit and puts a
- * figure in turnover that no invoice line called a sale. A business that wants it shown
- * separately names an account on the line, which is what `DocumentLine.accountId` is for.
+ * TAX ON A RETURN GOES BACK THE WAY IT CAME. A credit note DEBITS the output tax account,
+ * reducing a liability that was raised too high; a debit note CREDITS the input tax
+ * account, giving back credit that was claimed too much. Neither one reaches for a
+ * separate reversal account, because there is no such thing — a return adjusts the very
+ * liability the invoice created, and GSTR-1 reports it against the original invoice for
+ * that reason.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY A CHARGE IS NOT VALUE, AND WHY THE TWO SIDES TREAT ONE DIFFERENTLY
+ *
+ * Freight, packing and insurance are taxable at the same rate as the supply they sit on,
+ * and they are not turnover. `isCharge` says which lines those are.
+ *
+ * On the SALES side they post to `freight-outward`, which is an EXPENSE account in the
+ * shipped chart, so crediting it nets what was recovered from the customer against the
+ * freight actually paid. The alternative is a separate income account, which reports the
+ * same profit and puts a figure in turnover that no invoice line called a sale.
+ *
+ * On the PURCHASE side they post to `freight-inward`, which is under Cost of Sales. That
+ * is not the same treatment wearing a mirror: carriage a supplier charges on their own
+ * bill is part of what the goods cost (AS-2 puts freight inwards in the cost of purchase),
+ * where outward freight is a selling cost being recovered. The two roles differ because
+ * the two facts differ, and a business that wants either shown elsewhere names an account
+ * on the line, which is what `DocumentLine.accountId` is for.
  *
  * ---------------------------------------------------------------------------
  * WHY TAX GROUPS BY COMPONENT AND THE PRINTED SUMMARY DOES NOT
@@ -68,6 +112,11 @@
  * period is open. Those are the repository's, inside the one transaction that issues a
  * document (rule 3) — a rule that could refuse a posting for a reason the document knows
  * nothing about would be a second place where "can this be issued?" is answered.
+ *
+ * It does not read `originalDocumentId`. A credit note that names the invoice it corrects
+ * and one that does not post identically, because the link is a fact for a return and for
+ * a reader, not an instruction to the ledger. Nothing here would be different if it were
+ * null, which is why nothing here looks.
  */
 
 import { ZERO, type Decimal } from '@main/domain/money'
@@ -79,16 +128,22 @@ import type {
   EntryLineDraft,
   PostingContext,
   PostingRule,
+  SourceDocumentType,
 } from '@main/domain/ledger'
 import { PostingError } from '@main/domain/ledger'
 
 import { documentTotals } from './totals'
 import {
+  DOCUMENT_KINDS,
   definitionOf,
   levyOf,
+  type DocumentDirection,
   type DocumentKind,
+  type DocumentKindDefinition,
   type DocumentLine,
+  type TaxLevy,
   type TradeDocument,
+  type TradeSide,
 } from './types'
 
 /**
@@ -100,6 +155,66 @@ import {
  */
 export interface PostableDocument extends TradeDocument {
   number: string
+}
+
+/**
+ * A kind that reaches the ledger, with the null narrowed away.
+ *
+ * `sourceType: null` is what "never posts" means (see the note on it in ./types.ts), so
+ * a definition with a rule is exactly a definition without that null. Narrowing it once,
+ * here, is what lets `source` below be assigned rather than asserted — the alternative is
+ * a `!` on every use, which tells the next reader nothing about why it is safe.
+ */
+interface PostingKindDefinition extends DocumentKindDefinition {
+  sourceType: SourceDocumentType
+}
+
+function posts(definition: DocumentKindDefinition): definition is PostingKindDefinition {
+  return definition.sourceType !== null
+}
+
+// ---- Which accounts, and which way round ------------------------------------
+
+/*
+ * Three total records over `TradeSide` and `DocumentDirection`. Total on purpose: a kind
+ * added on a side these do not cover is a compile error here rather than a `ROLE_UNMAPPED`
+ * at the moment a user tries to issue one.
+ */
+
+/** Whose balance the document moves. The only line that carries the party's id. */
+const CONTROL_ROLES: Readonly<Record<TradeSide, AccountRole>> = {
+  sales: 'accounts-receivable',
+  purchase: 'accounts-payable',
+}
+
+/** Where the value of an ordinary line lands. A return goes to its own contra account. */
+const VALUE_ROLES: Readonly<Record<TradeSide, Readonly<Record<DocumentDirection, AccountRole>>>> = {
+  sales: { charge: 'sales', refund: 'sales-returns' },
+  purchase: { charge: 'purchases', refund: 'purchase-returns' },
+}
+
+/**
+ * Where a line flagged `isCharge` lands. Not a mirror of the other — see the header.
+ *
+ * Keyed by side alone rather than by side and direction, because a charge on a credit
+ * note is the same freight the invoice charged, coming back. It reverses out of the same
+ * account it went into, which the direction already takes care of.
+ */
+const CHARGE_ROLES: Readonly<Record<TradeSide, AccountRole>> = {
+  sales: 'freight-outward',
+  purchase: 'freight-inward',
+}
+
+/**
+ * Whether the party's control account is debited.
+ *
+ * TRUE when the document moves the balance our way: a sale we have made (they owe us
+ * more), or a purchase we are sending back (we owe them less). FALSE for the other two.
+ * Written out of the two fields rather than listed per kind, so the four rows of the
+ * table in the header are one expression and cannot disagree with each other.
+ */
+function controlIsDebit(definition: DocumentKindDefinition): boolean {
+  return (definition.side === 'sales') === (definition.direction === 'charge')
 }
 
 /**
@@ -134,32 +249,71 @@ class Buckets {
   }
 }
 
-export const salesInvoiceRule: PostingRule<PostableDocument> = {
-  source: 'sales-invoice',
-  label: 'Sales invoice',
-  toEntry: (document, context) => toEntry(document, context),
+// ---- The rules --------------------------------------------------------------
+
+/**
+ * Every posting rule, built from the kind table at module load.
+ *
+ * A Map rather than a `Record<DocumentKind, …>` with a `null` for the quotation: a null
+ * value would be a second way of saying what `sourceType: null` already says, and the two
+ * could drift. Absence here means exactly "no `sourceType`", because that is the filter.
+ */
+const RULES: ReadonlyMap<DocumentKind, PostingRule<PostableDocument>> = new Map(
+  DOCUMENT_KINDS.filter(posts).map((definition) => [definition.kind, ruleFor(definition)]),
+)
+
+function ruleFor(definition: PostingKindDefinition): PostingRule<PostableDocument> {
+  return {
+    source: definition.sourceType,
+    label: definition.label,
+    toEntry: (document, context) => toEntry(document, definition, context),
+  }
+}
+
+/** The sales invoice rule, by name, for the callers that only ever want that one. */
+export const salesInvoiceRule = requireRule('sales-invoice')
+/** The credit note rule — a sales return, and the only way to correct an issued invoice. */
+export const creditNoteRule = requireRule('credit-note')
+/** The purchase bill rule — what a supplier's invoice does to these books. */
+export const purchaseBillRule = requireRule('purchase-bill')
+/** The debit note rule — goods going back to a supplier, or their bill overstated. */
+export const debitNoteRule = requireRule('debit-note')
+
+function requireRule(kind: DocumentKind): PostingRule<PostableDocument> {
+  const rule = RULES.get(kind)
+  if (rule === undefined) {
+    /* Unreachable: every kind named above has a `sourceType`, and this runs at module
+     * load, so a mistake here is a crash at boot rather than a wrong entry at issue. */
+    throw new Error(`${kind} has no posting rule.`)
+  }
+  return rule
 }
 
 /**
- * The rule that turns a document of this kind into an entry, or null when there is none.
+ * The rule that turns a document of this kind into an entry, or null when it never posts.
  *
- * TWO DIFFERENT NULLS, AND THE CALLER HAS TO TELL THEM APART. A quotation has no rule
- * because it never posts — `sourceType` is null and always will be, and issuing one is
- * not blocked on anybody writing code. A credit note has no rule because the rule is not
- * written yet. Both come back null here; `postsToLedger` is what separates them, and the
- * repository says different sentences to the user for each.
+ * ONE NULL NOW, WHERE THERE WERE TWO. Until the other three rules were written this
+ * answered null both for a quotation, which never posts and never will, and for a credit
+ * note, which had no rule because nobody had written one — and the repository had to tell
+ * those apart with `postsToLedger` to avoid silently issuing an unposted credit note.
+ * There is no second null left: a kind either has a `sourceType` and therefore a rule, or
+ * it has neither. `postsToLedger` and a non-null answer here are now the same question,
+ * and `issuing.ts` still asks the first because that is the one with a meaning.
  *
  * A lookup rather than a `switch` in the repository, because "which rule posts this kind"
  * is a fact about the domain. A `switch` in `db/` would be a second table of document
  * kinds, kept in step by whoever remembers.
  */
 export function postingRuleFor(kind: DocumentKind): PostingRule<PostableDocument> | null {
-  return kind === 'sales-invoice' ? salesInvoiceRule : null
+  return RULES.get(kind) ?? null
 }
 
-function toEntry(document: PostableDocument, context: PostingContext): EntryDraft {
-  const definition = definitionOf(document.kind)
-  if (definition.sourceType !== 'sales-invoice') {
+function toEntry(
+  document: PostableDocument,
+  definition: PostingKindDefinition,
+  context: PostingContext,
+): EntryDraft {
+  if (document.kind !== definition.kind) {
     /*
      * A plain Error, not a `PostingError`. Every `LedgerErrorCode` is a sentence for a
      * user about their books, and none of them says "the wrong rule was called" — which
@@ -167,118 +321,138 @@ function toEntry(document: PostableDocument, context: PostingContext): EntryDraf
      * same line `definitionOf` draws for an unknown kind.
      */
     throw new Error(
-      `The sales invoice posting rule was given a ${definition.label.toLowerCase()}. ` +
+      `The ${definition.label.toLowerCase()} posting rule was given a ` +
+        `${definitionOf(document.kind).label.toLowerCase()}. ` +
         'Each document kind has its own rule; see postingRuleFor.',
     )
   }
 
   const totals = documentTotals(document)
   const { accounts } = context
-  const revenue = new Buckets()
+  const values = new Buckets()
   const tax = new Buckets()
 
   for (const line of document.lines) {
-    revenue.add(revenueAccountFor(line, accounts), line.taxableAmount)
+    values.add(valueAccountFor(line, definition, accounts), line.taxableAmount)
   }
 
   /*
    * Grouped by component code, not by code and rate. The account is a property of the
    * component — output CGST is one liability however many rates fed it.
    */
-  const levy = levyOf(document.kind)
+  const levy = levyOf(definition.kind)
   for (const line of document.lines) {
     for (const component of line.taxes) {
       tax.add(taxAccountFor(component.code, levy, accounts), component.amount)
     }
   }
 
+  /* Everything that is not the control account sits opposite it, whichever way it faces. */
+  const controlDebit = controlIsDebit(definition)
   const lines: EntryLineDraft[] = []
 
   /*
    * Skipped when the grand total is nothing, the same way a bucket that comes to nothing
    * is skipped. Invariant 5 refuses a line that is neither a debit nor a credit, so a
-   * zero receivable line is not a harmless no-op — it is an `AMBIGUOUS_LINE` refusal
+   * zero control line is not a harmless no-op — it is an `AMBIGUOUS_LINE` refusal
    * arriving at a user who was told their invoice would not post, with no line on it to
    * point at. The same bug the year-end close had, and found the same way.
    *
-   * An invoice can reach zero with real lines on it — a rebate line cancelling the goods
-   * line it corrects — and when it does, the customer owes nothing and a receivable
-   * movement of nothing is the correct posting. Whatever is left balances among itself,
-   * because the total it was measured against is zero.
+   * A document can reach zero with real lines on it — a rebate line cancelling the goods
+   * line it corrects — and when it does, the party owes nothing and a control movement of
+   * nothing is the correct posting. Whatever is left balances among itself, because the
+   * total it was measured against is zero.
    */
   if (!totals.grandTotal.isZero()) {
-    lines.push({
-      accountId: required(accounts.forRole('accounts-receivable'), 'accounts-receivable').id,
-      debit: totals.grandTotal,
-      credit: ZERO,
-      /* The whole reason a control line carries one — see 0005. */
-      partyId: document.partyId,
-    })
+    lines.push(
+      place(accountFor(definition, accounts), totals.grandTotal, controlDebit, document.partyId),
+    )
   }
 
-  for (const bucket of [...revenue.entries(), ...tax.entries()]) {
-    lines.push(credit(bucket))
+  for (const bucket of [...values.entries(), ...tax.entries()]) {
+    lines.push(place(bucket.account, bucket.amount, !controlDebit))
   }
 
   /*
-   * Rounding, if the document rounds. `roundOff` is already signed to post: positive
-   * means the customer pays more than the lines add up to, so the difference is a credit.
-   * It is taken from the document's own frozen policy rather than from a setting read
-   * today, so reprinting an invoice years later cannot restate it (rule 4).
+   * Rounding, if the document rounds. `roundOff` is already signed to post: adding it to
+   * the net total gives the grand total, so it belongs on the same side as the value it
+   * is adjusting and opposite the control line that carries the rounded figure. It is
+   * taken from the document's own frozen policy rather than from a setting read today, so
+   * reprinting years later cannot restate it (rule 4).
    */
   if (!totals.roundOff.isZero()) {
     const account = required(accounts.forRole('round-off'), 'round-off')
-    lines.push({
-      accountId: account.id,
-      debit: totals.roundOff.isNegative() ? totals.roundOff.negated() : ZERO,
-      credit: totals.roundOff.isPositive() ? totals.roundOff : ZERO,
-    })
+    lines.push(place(account, totals.roundOff, !controlDebit))
   }
 
   return {
     date: document.date,
-    narration: narrationFor(document),
-    source: { type: 'sales-invoice', id: document.id, number: document.number },
+    narration: narrationFor(document, definition),
+    source: { type: definition.sourceType, id: document.id, number: document.number },
     lines,
   }
 }
 
-function credit(bucket: Bucket): EntryLineDraft {
-  /*
-   * A negative bucket becomes a debit rather than a negative credit. It is a real case
-   * and not a defensive flourish: an invoice may carry a line whose value is negative —
-   * a rebate shown as a line rather than as a discount — and invariant 5 refuses a line
-   * that is a credit of minus something.
-   */
+/**
+ * One line, on the side asked for, with a negative amount folded into the other side.
+ *
+ * The fold is a real case and not a defensive flourish. A document may carry a line whose
+ * value is negative — a rebate shown as a line rather than as a discount — and a whole
+ * document can come out negative the same way; invariant 5 refuses a line that is a credit
+ * of minus something. Doing it here rather than at each call site is what makes the four
+ * treatments one engine: the caller says which side it means, and never how to write it.
+ */
+function place(
+  account: AccountRef,
+  amount: Decimal,
+  isDebit: boolean,
+  partyId?: string,
+): EntryLineDraft {
+  const debits = isDebit !== amount.isNegative()
+  const magnitude = amount.isNegative() ? amount.negated() : amount
   return {
-    accountId: bucket.account.id,
-    debit: bucket.amount.isNegative() ? bucket.amount.negated() : ZERO,
-    credit: bucket.amount.isNegative() ? ZERO : bucket.amount,
+    accountId: account.id,
+    debit: debits ? magnitude : ZERO,
+    credit: debits ? ZERO : magnitude,
+    ...(partyId === undefined ? {} : { partyId }),
   }
+}
+
+/** The party control account this kind moves. */
+function accountFor(definition: PostingKindDefinition, accounts: AccountResolver): AccountRef {
+  const role = CONTROL_ROLES[definition.side]
+  return required(accounts.forRole(role), role)
 }
 
 /**
  * Where one line's value posts.
  *
  * An explicit account on the line wins, because it is a decision somebody made about
- * this line. Otherwise a charge goes to `freight-outward` and everything else to `sales`
- * — see the header on why a charge is not turnover.
+ * this line. Otherwise a charge goes to the side's freight account and everything else to
+ * the side and direction's value account — see the header on why a charge is not turnover
+ * and why the two sides do not treat one identically.
  */
-function revenueAccountFor(line: DocumentLine, accounts: AccountResolver): AccountRef {
+function valueAccountFor(
+  line: DocumentLine,
+  definition: PostingKindDefinition,
+  accounts: AccountResolver,
+): AccountRef {
   if (line.accountId !== null) {
     const named = accounts.byId(line.accountId)
     if (named === null) {
       throw new PostingError(
         'ACCOUNT_NOT_FOUND',
-        'A line on this invoice posts to an account that no longer exists. ' +
-          'Point it at another one, or clear it to use the default.',
+        `A line on this ${definition.label.toLowerCase()} posts to an account that no ` +
+          'longer exists. Point it at another one, or clear it to use the default.',
         { accountId: line.accountId, lineNumber: line.lineNumber },
       )
     }
     return named
   }
 
-  const role: AccountRole = line.isCharge ? 'freight-outward' : 'sales'
+  const role = line.isCharge
+    ? CHARGE_ROLES[definition.side]
+    : VALUE_ROLES[definition.side][definition.direction]
   return required(accounts.forRole(role), role)
 }
 
@@ -291,11 +465,12 @@ function revenueAccountFor(line: DocumentLine, accounts: AccountResolver): Accou
  */
 function taxAccountFor(
   componentCode: string,
-  levy: 'output' | 'input' | null,
+  levy: TaxLevy | null,
   accounts: AccountResolver,
 ): AccountRef {
   if (levy === null) {
-    /* Unreachable for a sales invoice, whose definition always carries a levy. Thrown
+    /* Unreachable for any kind with a rule, since a rule exists exactly when a
+     * `sourceType` does and `levyOf` answers null only for the kinds without one. Thrown
      * rather than defaulted, because a tax posted on the wrong side of the balance sheet
      * is a figure that looks entirely plausible in every report. */
     throw new PostingError('ROLE_UNMAPPED', 'This document kind levies no tax.', { componentCode })
@@ -305,8 +480,11 @@ function taxAccountFor(
   if (account === null) {
     throw new PostingError(
       'ROLE_UNMAPPED',
-      `These books have no account for ${componentCode} collected on sales. ` +
-        'Add one under Duties and Taxes before issuing this invoice.',
+      levy === 'output'
+        ? `These books have no account for ${componentCode} collected on sales. ` +
+            'Add one under Duties and Taxes before issuing this.'
+        : `These books have no account for ${componentCode} paid on purchases. ` +
+            'Add one under Taxes Recoverable before issuing this.',
       { componentCode, levy },
     )
   }
@@ -328,10 +506,10 @@ function required(account: AccountRef | null, role: AccountRole): AccountRef {
  * What the day book says this entry is.
  *
  * The document's own narration when it has one, because that is what the person who
- * raised it wanted said. Otherwise the number, which is the thing anybody looking at a
- * ledger line actually wants to find the paper by.
+ * raised it wanted said. Otherwise the kind and the number, which is the thing anybody
+ * looking at a ledger line actually wants to find the paper by.
  */
-function narrationFor(document: PostableDocument): string {
+function narrationFor(document: PostableDocument, definition: PostingKindDefinition): string {
   const own = document.narration.trim()
-  return own === '' ? `Sales invoice ${document.number}` : own
+  return own === '' ? `${definition.label} ${document.number}` : own
 }

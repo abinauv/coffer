@@ -156,7 +156,16 @@ Snapshot the files to disk, not only to memory: an interrupted run does not exec
 **Defence in depth makes tests blind.** Where a rule lives in both a migration and a
 repository, a test that goes through the repository passes whichever layer answers first
 — and the database constraint can be deleted with nothing failing. This has now been
-found in five separate batches. Test the constraint by writing straight to the table.
+found in six separate batches. Test the constraint by writing straight to the table.
+
+**Two filters on one query mask each other when no fixture makes them disagree.** Not the
+same failure as two implementations of one rule: here each filter is written once and is
+correct, and the suite still cannot tell whether either exists. `openDocumentsFor` narrows
+by party and by side, and every fixture had a customer and a vendor who were different
+people — so deleting the side test changed no result, because the party test had already
+excluded the other side's rows. The case that separates them is the ordinary one nobody
+had written down: a firm you both buy from and sell to. Ask of each condition in a
+compound `WHERE` what row it alone excludes, and build that row (0013-1).
 
 **And it makes one of the two layers unreachable, which is worse.** The same overlap read
 from the other side: if the repository's check runs _after_ the write that trips the

@@ -1,17 +1,29 @@
 /*
- * The sales invoice posting rule.
+ * The posting rules — all four of them.
  *
- * These are the tests that catch a change in accounting treatment. The rule is pure, so
+ * These are the tests that catch a change in accounting treatment. The rules are pure, so
  * every one of them is a document written down beside the entry it must produce — no
  * database, no clock, and nothing to arrange except the chart.
  *
  * The properties worth stating, because they are what the assertions below are for:
  *
  *   - the entry balances, always, for every shape of document;
- *   - receivables moves by exactly what the invoice says at the bottom;
- *   - revenue moves by the taxable value and never by the tax;
+ *   - the party's control account moves by exactly what the document says at the bottom;
+ *   - value moves by the taxable amount and never by the tax;
  *   - the sum of the tax lines equals the sum of the printed tax summary, even though
  *     the two are grouped differently.
+ *
+ * THE FIRST TWO THIRDS OF THIS FILE ARE ALL SALES INVOICE, and that is not an oversight.
+ * They were written when it was the only rule, they pin the properties above in more
+ * shapes than the other three are exercised in — every rounding policy, an empty
+ * document, a rebate line, an account named on a line — and they all still pass, unedited,
+ * against the engine that replaced the function they were written for. That is the useful
+ * thing about them now: they are the evidence the refactor changed no behaviour.
+ *
+ * `the four treatments` is where the other three live, and it works differently on
+ * purpose. It asserts the TABLE in the header of ./posting.ts, one column at a time
+ * across all four kinds, because what can be wrong about a treatment built out of `side`
+ * and `direction` is not a shape of document — it is a sign or an account, in one cell.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -20,7 +32,14 @@ import { D, ZERO, sum, type Decimal } from '@main/domain/money'
 import type { AccountRef, AccountResolver, PostingContext } from '@main/domain/ledger'
 import { isPostingError } from '@main/domain/ledger'
 
-import { postingRuleFor, salesInvoiceRule, type PostableDocument } from './posting'
+import {
+  creditNoteRule,
+  debitNoteRule,
+  postingRuleFor,
+  purchaseBillRule,
+  salesInvoiceRule,
+  type PostableDocument,
+} from './posting'
 import { documentTotals } from './totals'
 import { DOCUMENT_KINDS, postsToLedger, type DocumentLine, type DocumentLineTax } from './types'
 
@@ -35,6 +54,18 @@ const ACCOUNTS: Record<string, AccountRef> = {
   sgst: { id: 'a-sgst', code: '2211', name: 'Output SGST', type: 'liability' },
   igst: { id: 'a-igst', code: '2212', name: 'Output IGST', type: 'liability' },
   exports: { id: 'a-exports', code: '4200', name: 'Export Sales', type: 'income' },
+
+  /* The other side of the trade, and the two contra accounts a return posts to. Named
+   * here rather than in a second chart so that a test can assert a credit note and an
+   * invoice touch DIFFERENT accounts — which is the whole claim being made. */
+  payable: { id: 'a-pay', code: '2100', name: 'Accounts Payable', type: 'liability' },
+  purchases: { id: 'a-purch', code: '5100', name: 'Purchases', type: 'expense' },
+  salesReturns: { id: 'a-sret', code: '4210', name: 'Sales Returns', type: 'income' },
+  purchaseReturns: { id: 'a-pret', code: '5200', name: 'Purchase Returns', type: 'expense' },
+  freightIn: { id: 'a-fin', code: '5400', name: 'Freight Inward', type: 'expense' },
+  cgstIn: { id: 'a-cgst-in', code: '1510', name: 'Input CGST', type: 'asset' },
+  sgstIn: { id: 'a-sgst-in', code: '1511', name: 'Input SGST', type: 'asset' },
+  igstIn: { id: 'a-igst-in', code: '1512', name: 'Input IGST', type: 'asset' },
 }
 
 interface ChartOptions {
@@ -50,11 +81,18 @@ function resolver({ without = [], withoutTax = [] }: ChartOptions = {}): Account
     sales: ACCOUNTS['sales'],
     'freight-outward': ACCOUNTS['freight'],
     'round-off': ACCOUNTS['roundOff'],
+    'accounts-payable': ACCOUNTS['payable'],
+    purchases: ACCOUNTS['purchases'],
+    'sales-returns': ACCOUNTS['salesReturns'],
+    'purchase-returns': ACCOUNTS['purchaseReturns'],
+    'freight-inward': ACCOUNTS['freightIn'],
   }
-  const taxes: Record<string, AccountRef | undefined> = {
-    CGST: ACCOUNTS['cgst'],
-    SGST: ACCOUNTS['sgst'],
-    IGST: ACCOUNTS['igst'],
+  /* Two accounts per component on opposite sides of the balance sheet, exactly as
+   * `tax-accounts.ts` seeds them. A resolver that answered the same account for both
+   * directions would let a rule post input tax to a liability and no test would see it. */
+  const taxes: Record<string, Record<string, AccountRef | undefined>> = {
+    output: { CGST: ACCOUNTS['cgst'], SGST: ACCOUNTS['sgst'], IGST: ACCOUNTS['igst'] },
+    input: { CGST: ACCOUNTS['cgstIn'], SGST: ACCOUNTS['sgstIn'], IGST: ACCOUNTS['igstIn'] },
   }
   const byId = new Map(Object.values(ACCOUNTS).map((account) => [account.id, account]))
 
@@ -62,10 +100,8 @@ function resolver({ without = [], withoutTax = [] }: ChartOptions = {}): Account
     byId: (id) => byId.get(id) ?? null,
     byCode: (code) => Object.values(ACCOUNTS).find((account) => account.code === code) ?? null,
     forRole: (role) => (without.includes(role) ? null : (roles[role] ?? null)),
-    forTaxComponent: (code, direction) => {
-      if (direction !== 'output') return null
-      return withoutTax.includes(code) ? null : (taxes[code] ?? null)
-    },
+    forTaxComponent: (code, direction) =>
+      withoutTax.includes(code) ? null : (taxes[direction]?.[code] ?? null),
   }
 }
 
@@ -456,25 +492,34 @@ describe('an invoice that comes to nothing', () => {
 })
 
 /*
- * WHICH KINDS HAVE A RULE. Two different nulls come back from here and the caller has to
- * tell them apart — a quotation has no rule because it never posts, a credit note has no
- * rule because nobody has written it yet. `postsToLedger` is the fact that separates
- * them, and the repository says different sentences for each.
+ * WHICH KINDS HAVE A RULE. One null, where there used to be two: a kind either has a
+ * `sourceType` and therefore a rule, or it has neither. The quotation is the only kind
+ * without one, and it is without one permanently rather than until somebody writes it.
  */
 describe('postingRuleFor', () => {
   it('gives the sales rule for a sales invoice', () => {
     expect(postingRuleFor('sales-invoice')).toBe(salesInvoiceRule)
   })
 
-  it('gives nothing for a kind whose rule is not written yet', () => {
-    expect(postingRuleFor('credit-note')).toBeNull()
-    expect(postingRuleFor('purchase-bill')).toBeNull()
-    expect(postingRuleFor('debit-note')).toBeNull()
+  /* The claim that "a kind that posts has a rule" made mechanically rather than by
+   * listing four kinds — a sixth that posts and is not registered fails here. */
+  it('gives a rule for every kind that reaches the ledger', () => {
+    for (const definition of DOCUMENT_KINDS.filter((each) => postsToLedger(each.kind))) {
+      expect(postingRuleFor(definition.kind)).not.toBeNull()
+    }
   })
 
   it('gives nothing for a quotation, which never posts at all', () => {
     expect(postingRuleFor('quotation')).toBeNull()
     expect(postsToLedger('quotation')).toBe(false)
+  })
+
+  /* Absence here means exactly "no sourceType", which is the property that let the
+   * repository stop telling two nulls apart. */
+  it('has a rule for exactly the kinds that have a source type', () => {
+    for (const definition of DOCUMENT_KINDS) {
+      expect(postingRuleFor(definition.kind) === null).toBe(definition.sourceType === null)
+    }
   })
 
   /* A rule that exists posts what its kind says it posts. The day a second rule is
@@ -704,5 +749,360 @@ describe('purity', () => {
     post(document)
 
     expect(JSON.stringify(document)).toBe(before)
+  })
+})
+
+/*
+ * ---------------------------------------------------------------------------
+ * THE OTHER THREE TREATMENTS
+ *
+ * The table in the header of ./posting.ts, as assertions. Every one of these is a
+ * document written down beside the entry it must produce, and between them they pin all
+ * four rows — which is what makes `controlIsDebit` and the three role records safe to
+ * read as data rather than as four hand-written functions.
+ *
+ * The base document is the same 1000.00 of goods carrying 90.00 CGST and 90.00 SGST
+ * throughout, so a figure appearing in the wrong place is visible by eye: 1180.00 is
+ * always the control account, 1000.00 is always the value, 90.00 is always one tax.
+ */
+
+const KIND_RULES = {
+  'sales-invoice': salesInvoiceRule,
+  'credit-note': creditNoteRule,
+  'purchase-bill': purchaseBillRule,
+  'debit-note': debitNoteRule,
+} as const
+
+type PostingKind = keyof typeof KIND_RULES
+
+const POSTING_KINDS = Object.keys(KIND_RULES) as PostingKind[]
+
+function documentOf(kind: PostingKind, over: Partial<PostableDocument> = {}): PostableDocument {
+  return invoice({ kind, number: `${kind}/0001`, ...over })
+}
+
+const postAs = (kind: PostingKind, document: PostableDocument, options?: ChartOptions) =>
+  KIND_RULES[kind].toEntry(document, context(options))
+
+/** What one account moved by under one kind, signed debit-minus-credit. */
+function movedBy(kind: PostingKind, account: AccountRef, over: Partial<PostableDocument> = {}) {
+  const entry = postAs(kind, documentOf(kind, over))
+  return sum(
+    entry.lines
+      .filter((entryLine) => entryLine.accountId === account.id)
+      .map((entryLine) => entryLine.debit.minus(entryLine.credit)),
+  ).toString()
+}
+
+const account = (name: string): AccountRef => {
+  const found = ACCOUNTS[name]
+  if (found === undefined) throw new Error(`No fixture account '${name}'`)
+  return found
+}
+
+describe('the four treatments', () => {
+  /*
+   * THE HEADER TABLE, COLUMN BY COLUMN. Signed figures rather than "is a debit", because
+   * the sign and the magnitude are the two things that can each be wrong on their own:
+   * a rule with the sides swapped still balances, and a rule taking the net total instead
+   * of the grand total still faces the right way.
+   */
+  it('moves the party control account by the grand total, the correct way round', () => {
+    expect(movedBy('sales-invoice', account('receivable'))).toBe('1180')
+    expect(movedBy('credit-note', account('receivable'))).toBe('-1180')
+    expect(movedBy('purchase-bill', account('payable'))).toBe('-1180')
+    expect(movedBy('debit-note', account('payable'))).toBe('1180')
+  })
+
+  it('moves the value account by the taxable amount, the correct way round', () => {
+    expect(movedBy('sales-invoice', account('sales'))).toBe('-1000')
+    expect(movedBy('credit-note', account('salesReturns'))).toBe('1000')
+    expect(movedBy('purchase-bill', account('purchases'))).toBe('1000')
+    expect(movedBy('debit-note', account('purchaseReturns'))).toBe('-1000')
+  })
+
+  it('moves the tax account by the tax, the correct way round', () => {
+    expect(movedBy('sales-invoice', account('cgst'))).toBe('-90')
+    expect(movedBy('credit-note', account('cgst'))).toBe('90')
+    expect(movedBy('purchase-bill', account('cgstIn'))).toBe('90')
+    expect(movedBy('debit-note', account('cgstIn'))).toBe('-90')
+  })
+
+  /*
+   * A RETURN IS A CONTRA ACCOUNT, NOT A NEGATIVE SALE. If a credit note debited `sales`
+   * the profit would come out identical and turnover would be silently net of returns.
+   * This is the assertion that says the two accounts are different on purpose.
+   */
+  it('keeps a return out of the account it is reducing', () => {
+    expect(movedBy('credit-note', account('sales'))).toBe('0')
+    expect(movedBy('debit-note', account('purchases'))).toBe('0')
+  })
+
+  /*
+   * Input tax and output tax are opposite sides of the balance sheet, and a purchase that
+   * reached for the output account would net a claim against a liability — the exact
+   * thing `tax-accounts.ts` refuses to do, undone one layer up.
+   */
+  it('never posts a purchase to an output tax account, or a sale to an input one', () => {
+    expect(movedBy('purchase-bill', account('cgst'))).toBe('0')
+    expect(movedBy('debit-note', account('cgst'))).toBe('0')
+    expect(movedBy('sales-invoice', account('cgstIn'))).toBe('0')
+    expect(movedBy('credit-note', account('cgstIn'))).toBe('0')
+  })
+
+  it('balances for every kind that posts', () => {
+    for (const kind of POSTING_KINDS) {
+      const entry = postAs(kind, documentOf(kind))
+      const debits = sum(entry.lines.map((entryLine) => entryLine.debit))
+      const credits = sum(entry.lines.map((entryLine) => entryLine.credit))
+      expect(`${kind} ${debits.toString()}/${credits.toString()}`).toBe(`${kind} 1180/1180`)
+    }
+  })
+
+  /* The control line is the one that carries the party, on every kind — it is what makes
+   * an aged report a grouping of the same rows the balance sheet totals. */
+  it('carries the party on the control line and on no other', () => {
+    for (const kind of POSTING_KINDS) {
+      const withParty = postAs(kind, documentOf(kind)).lines.filter(
+        (entryLine) => entryLine.partyId !== undefined,
+      )
+      expect(withParty).toHaveLength(1)
+      expect(withParty[0]?.partyId).toBe('party-1')
+      expect(withParty[0]?.debit.plus(withParty[0].credit).toString()).toBe('1180')
+    }
+  })
+
+  it('records each entry as its own source document, with its own number', () => {
+    for (const kind of POSTING_KINDS) {
+      expect(postAs(kind, documentOf(kind)).source).toEqual({
+        type: kind,
+        id: 'd-1',
+        number: `${kind}/0001`,
+      })
+    }
+  })
+
+  /* The day book says what it is. A ledger full of lines reading "Sales invoice" against
+   * a purchase would be wrong in the one place a person actually reads. */
+  it('narrates with the label of the kind that posted it', () => {
+    expect(postAs('credit-note', documentOf('credit-note')).narration).toBe(
+      'Credit note credit-note/0001',
+    )
+    expect(postAs('purchase-bill', documentOf('purchase-bill')).narration).toBe(
+      'Purchase bill purchase-bill/0001',
+    )
+    expect(postAs('debit-note', documentOf('debit-note')).narration).toBe(
+      'Debit note debit-note/0001',
+    )
+  })
+
+  it('still prefers the narration the user wrote', () => {
+    const document = documentOf('purchase-bill', { narration: 'Bearings for the March order' })
+    expect(postAs('purchase-bill', document).narration).toBe('Bearings for the March order')
+  })
+})
+
+describe('charges, on each side of the trade', () => {
+  const withFreight = (kind: PostingKind) =>
+    documentOf(kind, {
+      lines: [
+        line({ lineNumber: 1 }),
+        line({
+          lineNumber: 2,
+          description: 'Carriage',
+          isCharge: true,
+          taxableAmount: D('100.00'),
+          taxes: [tax('CGST', '9', '9.00'), tax('SGST', '9', '9.00')],
+        }),
+      ],
+    })
+
+  const accountsTouched = (kind: PostingKind) =>
+    postAs(kind, withFreight(kind)).lines.map((entryLine) => entryLine.accountId)
+
+  /*
+   * NOT A MIRROR, AND THAT IS THE POINT. Outward freight is a selling cost being
+   * recovered; inward freight is part of what the goods cost. The two roles differ
+   * because the two facts differ — see the header of ./posting.ts.
+   */
+  it('sends a sales charge to freight outward and a purchase charge to freight inward', () => {
+    expect(accountsTouched('sales-invoice')).toContain(account('freight').id)
+    expect(accountsTouched('sales-invoice')).not.toContain(account('freightIn').id)
+    expect(accountsTouched('purchase-bill')).toContain(account('freightIn').id)
+    expect(accountsTouched('purchase-bill')).not.toContain(account('freight').id)
+  })
+
+  /* A charge on a credit note is the same freight the invoice charged, coming back out
+   * of the same account. Keyed by side alone for exactly this reason. */
+  it('reverses a charge out of the account it went into', () => {
+    const note = postAs('credit-note', withFreight('credit-note'))
+    const freight = note.lines.find((entryLine) => entryLine.accountId === account('freight').id)
+
+    expect(freight?.debit.toString()).toBe('100')
+    expect(freight?.credit.toString()).toBe('0')
+  })
+
+  it('refuses a purchase charge when nothing is mapped to freight inward', () => {
+    expect(
+      codeOf(() =>
+        postAs('purchase-bill', withFreight('purchase-bill'), { without: ['freight-inward'] }),
+      ),
+    ).toBe('ROLE_UNMAPPED')
+  })
+
+  it('refuses a purchase bill when nothing is mapped to payables', () => {
+    expect(
+      codeOf(() =>
+        postAs('purchase-bill', documentOf('purchase-bill'), { without: ['accounts-payable'] }),
+      ),
+    ).toBe('ROLE_UNMAPPED')
+  })
+
+  /* The sentence names the side the tax was on. "Collected on sales" against a supplier
+   * bill sends the reader to the wrong half of their chart. */
+  it('names the input side when a purchase has no tax account', () => {
+    let message = ''
+    try {
+      postAs('purchase-bill', documentOf('purchase-bill'), { withoutTax: ['CGST'] })
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error)
+    }
+    expect(message).toContain('CGST paid on purchases')
+    expect(message).toContain('Taxes Recoverable')
+  })
+})
+
+describe('rounding, on a document that faces the other way', () => {
+  /*
+   * `roundOff` is signed so that adding it to the net total gives the grand total, which
+   * means it belongs opposite the control line whichever way that faces. On a purchase
+   * bill the control line is a CREDIT, so a positive round-off is a DEBIT — the mirror of
+   * the sales case, and the one a rule written by copying the sales rule gets wrong.
+   */
+  const rounded = (kind: PostingKind, taxable: string, gst: string) =>
+    documentOf(kind, {
+      roundingPolicy: 'whole-unit',
+      lines: [line({ lineNumber: 1, taxableAmount: D(taxable), taxes: [tax('CGST', '9', gst)] })],
+    })
+
+  const roundOffLine = (kind: PostingKind, taxable: string, gst: string) =>
+    postAs(kind, rounded(kind, taxable, gst)).lines.find(
+      (entryLine) => entryLine.accountId === account('roundOff').id,
+    )
+
+  /*
+   * BOTH DIRECTIONS, because a positive round-off and a negative one are separate
+   * arms of the same fold and either can be wrong alone. 1090.44 rounds DOWN, so the
+   * sale gives up 0.44 and debits it; 1090.66 rounds UP, so the sale gains 0.34 and
+   * credits it. The bill mirrors each.
+   */
+  it('mirrors a rounding loss across the two sides of the trade', () => {
+    const sale = roundOffLine('sales-invoice', '1000.40', '90.04')
+    const bill = roundOffLine('purchase-bill', '1000.40', '90.04')
+
+    expect(sale?.debit.toString()).toBe('0.44')
+    expect(sale?.credit.toString()).toBe('0')
+    expect(bill?.credit.toString()).toBe('0.44')
+    expect(bill?.debit.toString()).toBe('0')
+  })
+
+  it('mirrors a rounding gain across the two sides of the trade', () => {
+    const sale = roundOffLine('sales-invoice', '1000.60', '90.06')
+    const bill = roundOffLine('purchase-bill', '1000.60', '90.06')
+
+    expect(sale?.credit.toString()).toBe('0.34')
+    expect(sale?.debit.toString()).toBe('0')
+    expect(bill?.debit.toString()).toBe('0.34')
+    expect(bill?.credit.toString()).toBe('0')
+  })
+
+  it('still balances once rounded, on both sides and in both directions', () => {
+    for (const kind of ['sales-invoice', 'purchase-bill'] as const) {
+      for (const [taxable, gst] of [
+        ['1000.40', '90.04'],
+        ['1000.60', '90.06'],
+      ]) {
+        const entry = postAs(kind, rounded(kind, taxable!, gst!))
+        expect(sum(entry.lines.map((entryLine) => entryLine.debit)).toString()).toBe(
+          sum(entry.lines.map((entryLine) => entryLine.credit)).toString(),
+        )
+      }
+    }
+  })
+})
+
+describe('a document whose total comes out negative', () => {
+  /*
+   * A rebate line larger than the goods line it corrects. The control account has to move
+   * the OTHER way, as a credit of the magnitude — never as a debit of minus something,
+   * which invariant 5 calls ambiguous and refuses. Folded in one place, `place`, so it
+   * cannot be right for the buckets and wrong for the control line.
+   */
+  const upsideDown = () =>
+    documentOf('sales-invoice', {
+      lines: [
+        line({ lineNumber: 1, taxableAmount: D('100.00'), taxes: [tax('CGST', '9', '9.00')] }),
+        line({
+          lineNumber: 2,
+          description: 'Rebate',
+          taxableAmount: D('-300.00'),
+          taxes: [tax('CGST', '9', '-27.00')],
+        }),
+      ],
+    })
+
+  it('credits the control account rather than debiting a negative figure', () => {
+    const control = postAs('sales-invoice', upsideDown()).lines.find(
+      (entryLine) => entryLine.accountId === account('receivable').id,
+    )
+
+    expect(control?.debit.toString()).toBe('0')
+    expect(control?.credit.toString()).toBe('218')
+  })
+
+  it('leaves no line that is neither a debit nor a credit', () => {
+    for (const entryLine of postAs('sales-invoice', upsideDown()).lines) {
+      expect(entryLine.debit.isZero() && entryLine.credit.isZero()).toBe(false)
+    }
+  })
+})
+
+describe('a rule given the wrong kind', () => {
+  /*
+   * A plain Error, not a `PostingError`. No `LedgerErrorCode` says "the wrong rule was
+   * called" — it is a wiring mistake nobody can act on and no UI should offer to fix.
+   * It matters more with four rules than it did with one: they all take the same shape of
+   * document, and a purchase posted by the sales rule would balance perfectly.
+   */
+  it('refuses, and says which rule got what', () => {
+    expect(
+      codeOf(() => salesInvoiceRule.toEntry(documentOf('purchase-bill'), context())),
+    ).toContain('not a PostingError')
+  })
+
+  it('names the rule and the document it was handed', () => {
+    let message = ''
+    try {
+      salesInvoiceRule.toEntry(documentOf('purchase-bill'), context())
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error)
+    }
+
+    expect(message).toContain('sales invoice posting rule was given a purchase bill')
+  })
+
+  /* Each of the four refuses each of the other three, rather than one example standing
+   * in for twelve. A factory that closed over the wrong definition would post happily. */
+  it('refuses every kind but its own, on all four rules', () => {
+    for (const ruleKind of POSTING_KINDS) {
+      for (const documentKind of POSTING_KINDS) {
+        const run = () => KIND_RULES[ruleKind].toEntry(documentOf(documentKind), context())
+        if (ruleKind === documentKind) {
+          expect(run).not.toThrow()
+        } else {
+          expect(run).toThrow(/posting rule was given a/)
+        }
+      }
+    }
   })
 })

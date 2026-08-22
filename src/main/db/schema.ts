@@ -395,6 +395,17 @@ export interface DocumentsTable {
    * represent, because the CHECK below does not permit one.
    */
   entry_id: string | null
+  /**
+   * The document this one corrects, where it names one (0013).
+   *
+   * Only a credit note or a debit note may carry it, and only pointing at an issued
+   * charge document of the same party on the same side — a trigger proves all of that.
+   * Nothing in the ledger reads it: a credit note that names its invoice and one that
+   * does not post identically. It is here for GSTR-1 table 9B and for the person reading
+   * the paper, and it is NULLABLE because one credit note against several invoices has
+   * been legal since 2019 and has no single original to name.
+   */
+  original_document_id: string | null
   created_at: Timestamp
   updated_at: Timestamp
   /** When it was issued, and when it was cancelled. Null until each happens. */

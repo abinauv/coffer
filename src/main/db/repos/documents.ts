@@ -195,6 +195,7 @@ export async function getDocument(db: CofferDb, id: string): Promise<Document | 
     roundingPolicy,
     narration: row.narration,
     entryId: row.entry_id,
+    originalDocumentId: row.original_document_id,
     lines,
     totals,
     grandTotal: totals.grandTotal,
@@ -243,6 +244,11 @@ export async function createDocument(
           rounding_policy: input.roundingPolicy ?? 'none',
           narration: (input.narration ?? '').trim(),
           entry_id: null,
+          /* Whether it points anywhere it could have pointed is 0013's trigger, which
+           * answers with the same code however the row got here. Nothing is checked
+           * again in TypeScript: a second copy of "same party, issued, opposite
+           * direction" is a rule that goes stale the day the first one changes. */
+          original_document_id: input.originalDocumentId ?? null,
           created_at: now,
           updated_at: now,
           issued_at: null,
@@ -295,6 +301,12 @@ export async function updateDocument(
       }
       if (input.roundingPolicy !== undefined) update['rounding_policy'] = input.roundingPolicy
       if (input.narration !== undefined) update['narration'] = input.narration.trim()
+      /* `null` clears it, which is the one way a link is ever taken off — and only while
+       * the document is still a draft, because `assertDraft` above has already run and
+       * 0013's freeze trigger holds after that. */
+      if (input.originalDocumentId !== undefined) {
+        update['original_document_id'] = input.originalDocumentId
+      }
 
       await trx.updateTable('documents').set(update).where('id', '=', input.id).execute()
 

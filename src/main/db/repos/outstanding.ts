@@ -318,8 +318,24 @@ export async function openDocumentsFor(
   db: CofferDb,
   options: OpenDocumentsOptions,
 ): Promise<OpenDocumentRow[]> {
+  /*
+   * CHARGES ONLY, AND THE `direction` TEST IS NOT COSMETIC. A receipt reduces what a
+   * customer owes; a credit note ALSO reduces what a customer owes. Both are sales-side
+   * documents that post, so until this filter existed the picker would have offered a
+   * credit note as something an incoming receipt could settle — which is money arriving
+   * to pay off a refund, and reads to the ledger as a customer paying us for a return we
+   * gave them. It could not have been noticed before 0013, because nothing else posted.
+   *
+   * What settles a refund is a refund: paying a credit note is money going OUT, which is
+   * a payment, and matching one against an invoice instead is offsetting — neither of
+   * which this picker is. Both are owed work, and both are the next unit rather than a
+   * widening of this filter.
+   */
   const kinds = DOCUMENT_KINDS.filter(
-    (definition) => definition.side === options.side && postsToLedger(definition.kind),
+    (definition) =>
+      definition.side === options.side &&
+      definition.direction === 'charge' &&
+      postsToLedger(definition.kind),
   ).map((definition) => definition.kind)
 
   /*

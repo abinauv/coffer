@@ -1061,6 +1061,171 @@ describe('what a document has outstanding', () => {
     expect(open[0]?.outstanding.toString()).toBe('5000')
   })
 
+  /*
+   * A CREDIT NOTE IS NOT SOMETHING A RECEIPT SETTLES, and it looks like one to every
+   * filter that came before this. It is a sales-side document, it posts, it is issued,
+   * and it has a real movement on the customer's control account — so the only thing
+   * telling it apart from an invoice is its DIRECTION. Without that test the picker
+   * offers a refund as something incoming money can pay off, which reads to the ledger
+   * as a customer paying us for a return we gave them.
+   *
+   * NOTHING COULD HAVE CAUGHT THIS BEFORE 0013, because a credit note could not be
+   * issued: `sales-invoice` was the only kind with a posting rule, so the side filter and
+   * the direction filter agreed on every row that existed.
+   */
+  it('does not offer a credit note as something a receipt settles', async () => {
+    const receivable = (
+      await db
+        .selectFrom('account_roles')
+        .select('account_id')
+        .where('role', '=', 'accounts-receivable')
+        .executeTakeFirstOrThrow()
+    ).account_id
+    const returns = (
+      await db
+        .selectFrom('accounts')
+        .select('id')
+        .where('code', '=', '4200')
+        .executeTakeFirstOrThrow()
+    ).id
+
+    const posted = await postManualEntry(db, {
+      date: '2026-04-15',
+      narration: 'Goods returned',
+      lines: [
+        { accountId: returns, debit: '400.00', credit: '0.00' },
+        { accountId: receivable, debit: '0.00', credit: '400.00', partyId: customer },
+      ],
+    })
+
+    connection
+      .prepare(
+        `INSERT INTO documents (id, kind, status, number, document_date, party_id,
+           place_of_supply_country, rounding_policy, narration, entry_id, created_at,
+           updated_at, issued_at)
+         VALUES (?, 'credit-note', 'issued', 'CRN/9', '2026-04-15', ?, 'in', 'none', '',
+           ?, ?, ?, ?)`,
+      )
+      .run(randomUUID(), customer, posted.entryId, NOW, NOW, NOW)
+
+    expect(await openDocumentsFor(db, { partyId: customer, side: 'sales' })).toEqual([])
+  })
+
+  /* And the same on the other side: a debit note reduces what we owe a vendor, so it is
+   * not something a payment settles either. One rule, both sides. */
+  it('does not offer a debit note as something a payment settles', async () => {
+    const payable = (
+      await db
+        .selectFrom('account_roles')
+        .select('account_id')
+        .where('role', '=', 'accounts-payable')
+        .executeTakeFirstOrThrow()
+    ).account_id
+    const returns = (
+      await db
+        .selectFrom('accounts')
+        .select('id')
+        .where('code', '=', '5200')
+        .executeTakeFirstOrThrow()
+    ).id
+
+    const posted = await postManualEntry(db, {
+      date: '2026-04-15',
+      narration: 'Goods sent back',
+      lines: [
+        { accountId: payable, debit: '400.00', credit: '0.00', partyId: vendor },
+        { accountId: returns, debit: '0.00', credit: '400.00' },
+      ],
+    })
+
+    connection
+      .prepare(
+        `INSERT INTO documents (id, kind, status, number, document_date, party_id,
+           place_of_supply_country, rounding_policy, narration, entry_id, created_at,
+           updated_at, issued_at)
+         VALUES (?, 'debit-note', 'issued', 'DBN/9', '2026-04-15', ?, 'in', 'none', '',
+           ?, ?, ?, ?)`,
+      )
+      .run(randomUUID(), vendor, posted.entryId, NOW, NOW, NOW)
+
+    expect(await openDocumentsFor(db, { partyId: vendor, side: 'purchase' })).toEqual([])
+  })
+
+  /*
+   * THE SIDE FILTER AND THE PARTY FILTER WERE MASKING EACH OTHER. Every other test in
+   * this file has a customer and a vendor who are different people, so dropping
+   * `side = options.side` entirely changed nothing: the party filter had already excluded
+   * the other side's documents. A mutation removing it survived the whole suite.
+   *
+   * One firm you both buy from and sell to is ordinary — job work, a distributor who
+   * supplies you as well — and for them the two filters stop agreeing. Without the side
+   * test, recording a customer receipt would offer their purchase bills as things it
+   * could settle, and paying one would credit the wrong control account.
+   */
+  it('keeps the two sides apart for a party who is both customer and vendor', async () => {
+    const both = (
+      await createParty(db, {
+        name: 'Coromandel Forge',
+        countryCode: 'in',
+        isCustomer: true,
+        isVendor: true,
+      })
+    ).id
+    const receivable = (
+      await db
+        .selectFrom('account_roles')
+        .select('account_id')
+        .where('role', '=', 'accounts-receivable')
+        .executeTakeFirstOrThrow()
+    ).account_id
+    const payable = (
+      await db
+        .selectFrom('account_roles')
+        .select('account_id')
+        .where('role', '=', 'accounts-payable')
+        .executeTakeFirstOrThrow()
+    ).account_id
+    const expense = (
+      await db
+        .selectFrom('accounts')
+        .select('id')
+        .where('code', '=', '6700')
+        .executeTakeFirstOrThrow()
+    ).id
+
+    const sale = await postManualEntry(db, {
+      date: '2026-04-15',
+      narration: 'Sold to them',
+      lines: [
+        { accountId: receivable, debit: '700.00', credit: '0.00', partyId: both },
+        { accountId: expense, debit: '0.00', credit: '700.00' },
+      ],
+    })
+    const bill = await postManualEntry(db, {
+      date: '2026-04-15',
+      narration: 'Bought from them',
+      lines: [
+        { accountId: expense, debit: '300.00', credit: '0.00' },
+        { accountId: payable, debit: '0.00', credit: '300.00', partyId: both },
+      ],
+    })
+
+    const insert = connection.prepare(
+      `INSERT INTO documents (id, kind, status, number, document_date, party_id,
+         place_of_supply_country, rounding_policy, narration, entry_id, created_at,
+         updated_at, issued_at)
+       VALUES (?, ?, 'issued', ?, '2026-04-15', ?, 'in', 'none', '', ?, ?, ?, ?)`,
+    )
+    insert.run(randomUUID(), 'sales-invoice', 'INV/77', both, sale.entryId, NOW, NOW, NOW)
+    insert.run(randomUUID(), 'purchase-bill', 'BILL/77', both, bill.entryId, NOW, NOW, NOW)
+
+    const sales = await openDocumentsFor(db, { partyId: both, side: 'sales' })
+    const purchases = await openDocumentsFor(db, { partyId: both, side: 'purchase' })
+
+    expect(sales.map((row) => row.number)).toEqual(['INV/77'])
+    expect(purchases.map((row) => row.number)).toEqual(['BILL/77'])
+  })
+
   it('counts what one receipt let go of', async () => {
     const document = await invoice()
     const receipt = await createReceipt(

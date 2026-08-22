@@ -188,17 +188,21 @@ export type RepoErrorCode =
   /** A cancel against a document that has already been cancelled. */
   | 'DOCUMENT_ALREADY_CANCELLED'
   /**
-   * This build cannot issue a document of that kind.
+   * A correction names an original it could not have corrected.
    *
-   * One cause since 0010: the kind posts to the ledger and its posting rule is not
-   * written yet — a credit note, a purchase bill or a debit note. It used to have a
-   * second, a quotation, whose place in a document's life 0008 had left unsettled; 0010
-   * settled it and quotations issue normally now.
-   *
-   * It is a code with a message rather than a thrown programmer error because it is not
-   * something the user did wrong: the screens offered them the draft.
+   * The wrong party, a draft or cancelled original, a document facing the same way, or a
+   * kind that corrects nothing at all — one code for all of them, because 0013 proves
+   * them with one `EXISTS` and a sentence naming the specific failure would be a second
+   * place the rule is written down.
    */
-  | 'DOCUMENT_KIND_UNSUPPORTED'
+  | 'DOCUMENT_CORRECTION_INVALID'
+  /**
+   * A cancel against a document that a live credit or debit note corrects.
+   *
+   * The same shape as `DOCUMENT_ALLOCATED`: cancelling it would leave the correction
+   * adjusting a supply the books say never happened. Cancel the correction first.
+   */
+  | 'DOCUMENT_CORRECTED'
   /** An issue against a document with no lines, or with every line at zero. */
   | 'DOCUMENT_EMPTY'
   /** A quantity, price or discount that is not a decimal string. */
@@ -327,6 +331,11 @@ const TRIGGER_CODES: readonly RepoErrorCode[] = [
   'SERIES_IN_USE',
   /* 0008's four triggers, which freeze a document and its lines once it has issued. */
   'DOCUMENT_NOT_DRAFT',
+  /* 0013's three, which guard the link a credit note carries to the invoice it corrects
+   * — that it points somewhere it could have pointed, and that the thing it points at
+   * does not get cancelled out from under it. */
+  'DOCUMENT_CORRECTION_INVALID',
+  'DOCUMENT_CORRECTED',
   /*
    * 0012's six, which guard the one thing an allocation can silently corrupt: a party's
    * statement. `DOCUMENT_NOT_ISSUED` joins the list here rather than with the document
