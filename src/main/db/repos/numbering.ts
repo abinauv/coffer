@@ -72,10 +72,9 @@ import { sql } from 'kysely'
 
 import {
   counterScopeOf,
-  definitionOf,
   formatDocumentNumber,
-  postsToLedger,
-  type DocumentKind,
+  numberedKindDefinition,
+  type NumberedKind,
   type NumberingSeries,
 } from '@main/domain/documents'
 import type {
@@ -179,7 +178,7 @@ export async function getSeries(db: CofferDb, id: string): Promise<NumberingSeri
  */
 export async function defaultSeriesFor(
   db: CofferDb,
-  kind: DocumentKind,
+  kind: NumberedKind,
 ): Promise<NumberingSeriesRecord | null> {
   const row = await selectSeries(db)
     .where('kind', '=', kind)
@@ -187,6 +186,75 @@ export async function defaultSeriesFor(
     .where('is_archived', '=', 0)
     .executeTakeFirst()
   return row === undefined ? null : toRecord(row)
+}
+
+// ---- Opening state ---------------------------------------------------------
+
+/**
+ * One series per numbered kind, for a company that has just been created.
+ *
+ * WHY THIS EXISTS AT ALL is worth writing down, because it was missing and nobody could
+ * see it. Nothing created a series: `setUpBooks` seeded a chart and two fiscal years, and
+ * there is no numbering IPC group and no settings screen — so `defaultSeriesFor` answered
+ * null for every kind and ISSUING ANY DOCUMENT FROM THE APP FAILED with
+ * `SERIES_NOT_CONFIGURED`. It was found by building a company file the way the app builds
+ * one and asking, rather than by any test: every test that issues something creates its
+ * own series first, which is the right thing for it to do and is exactly why none of them
+ * could notice.
+ *
+ * The shapes are chosen to look like what a small Indian business already uses, because
+ * the first thing anybody moving off another system asks is whether their numbers can
+ * keep looking the way they look. Every field is editable — that is what 0007 holding the
+ * shape as data is for — and these are only the starting point.
+ *
+ * `resetOn` is NOT in this table. It comes from the kind's own `resetsYearly`, so the
+ * quotation's running series and the invoice's yearly one are the same fact the domain
+ * already holds rather than a second copy of it that a reader has to check.
+ */
+const DEFAULT_SERIES: readonly { kind: NumberedKind; prefix: string }[] = [
+  { kind: 'sales-invoice', prefix: 'INV' },
+  { kind: 'quotation', prefix: 'QTN' },
+  { kind: 'credit-note', prefix: 'CRN' },
+  { kind: 'purchase-bill', prefix: 'BILL' },
+  { kind: 'debit-note', prefix: 'DBN' },
+  { kind: 'receipt', prefix: 'RCT' },
+  { kind: 'payment', prefix: 'PAY' },
+]
+
+/**
+ * Give a new company one series per kind. Called from `setUpBooks`, inside its
+ * transaction.
+ *
+ * Skips a kind that already has one, so that running it against books somebody has
+ * already configured adds nothing and takes nothing away. That is not defensive padding:
+ * it is what makes this callable from a repair path later without a second implementation
+ * that has to decide the same thing.
+ *
+ * `createSeries` rather than a direct insert, so the label, the width and the
+ * one-default-per-kind rule are the ones the rest of the app is held to — a seeding path
+ * with its own inserts is a second way to make a series, and it is the one that would
+ * still be writing `width: 4` after somebody changed the bound.
+ */
+export async function seedDefaultSeries(db: CofferDb): Promise<number> {
+  let created = 0
+  for (const series of DEFAULT_SERIES) {
+    const existing = await db
+      .selectFrom('numbering_series')
+      .select('id')
+      .where('kind', '=', series.kind)
+      .executeTakeFirst()
+    if (existing !== undefined) continue
+
+    await createSeries(db, {
+      kind: series.kind,
+      label: 'Main',
+      prefix: series.prefix,
+      separator: '/',
+      includeFiscalYear: numberedKindDefinition(series.kind).resetsYearly,
+    })
+    created += 1
+  }
+  return created
 }
 
 // ---- Writing ---------------------------------------------------------------
@@ -467,14 +535,17 @@ async function requireSeries(db: CofferDb, id: string): Promise<NumberingSeriesR
 /**
  * The kind, checked against the five the domain knows.
  *
- * `definitionOf` throws rather than returning a null, which is the right shape here: a
- * kind reaches this file from a picker over `DOCUMENT_KINDS`, so anything else is a
- * programmer error and not something a user can act on (CONVENTIONS §5). The cast is the
- * question; the call is the answer. Also a CHECK in 0007, which is the floor under
+ * `numberedKindDefinition` throws rather than returning a null, which is the right shape
+ * here: a kind reaches this file from a picker over `NUMBERED_KINDS`, so anything else is
+ * a programmer error and not something a user can act on (CONVENTIONS §5). The cast is
+ * the question; the call is the answer. Also a CHECK in 0012, which is the floor under
  * anything that reaches the table another way.
+ *
+ * WIDER THAN `DocumentKind` SINCE 0012. A receipt voucher is numbered for the reason an
+ * invoice is, and it draws from the same counters — see the note on `NumberedKind`.
  */
-function requireKind(kind: string): DocumentKind {
-  return definitionOf(kind as DocumentKind).kind
+function requireKind(kind: string): NumberedKind {
+  return numberedKindDefinition(kind as NumberedKind).kind
 }
 
 function requireLabel(value: string): string {
@@ -515,7 +586,7 @@ function requireWidth(value: number): number {
  */
 async function assertLabelFree(
   db: CofferDb,
-  kind: DocumentKind,
+  kind: NumberedKind,
   label: string,
   exceptId: string | null,
 ): Promise<void> {
@@ -532,7 +603,7 @@ async function assertLabelFree(
   if (clash !== undefined) {
     throw new RepoError(
       'SERIES_LABEL_TAKEN',
-      `${definitionOf(kind).label} already has a series called ${clash.label}.`,
+      `${numberedKindDefinition(kind).label} already has a series called ${clash.label}.`,
       { kind, label, existingLabel: clash.label },
     )
   }
@@ -569,7 +640,7 @@ function assertFiscalYear(series: NumberingSeries, fiscalYearLabel: string | nul
 /** Whether a live series of this kind already holds the default. */
 async function hasLiveDefault(
   db: CofferDb,
-  kind: DocumentKind,
+  kind: NumberedKind,
   exceptId: string | null,
 ): Promise<boolean> {
   let query = db
@@ -592,7 +663,7 @@ async function hasLiveDefault(
  */
 async function clearDefault(
   db: CofferDb,
-  kind: DocumentKind,
+  kind: NumberedKind,
   exceptId: string | null,
   now: string,
 ): Promise<void> {
@@ -652,14 +723,16 @@ function shapeChangesIn(
 /**
  * What a kind's counter does when the year turns, when nobody has said.
  *
- * A kind that reaches the ledger is a supply, and rule 46(b) wants its series
- * consecutive within a financial year. A quotation reaches no ledger and nothing has
- * been supplied, so a running series is the sensible default and the one every business
- * that quotes already uses. Read off `postsToLedger` rather than off a list of kinds, so
- * that a kind added later gets the right answer by declaring itself.
+ * A kind that reaches the ledger is a supply or the money settling one, and rule 46(b)
+ * and rule 50 both want the series consecutive within a financial year. A quotation
+ * reaches no ledger and nothing has been supplied, so a running series is the sensible
+ * default and the one every business that quotes already uses.
+ *
+ * Read off the kind's own row rather than off a list here, so that a kind added later
+ * gets the right answer by declaring itself.
  */
-function defaultResetFor(kind: DocumentKind): NumberingReset {
-  return postsToLedger(kind) ? 'fiscal-year' : 'never'
+function defaultResetFor(kind: NumberedKind): NumberingReset {
+  return numberedKindDefinition(kind).resetsYearly ? 'fiscal-year' : 'never'
 }
 
 // ---- Conversion ------------------------------------------------------------

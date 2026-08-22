@@ -1317,3 +1317,149 @@ export interface AccountLedgerInput {
   fromDate?: DateString
   toDate?: DateString
 }
+
+// ---- Receipts and allocations (0012) ---------------------------------------
+
+/*
+ * Money received from a customer, money paid to a vendor, and which documents it
+ * settles. Read the three rules at the top of src/main/domain/receipts/types.ts; two of
+ * them are visible in the shapes below and worth pointing at.
+ *
+ * THERE IS NO `draft`. `ReceiptStatusDto` has two members, because a receipt records
+ * money that has already moved and there is no stage in its life before it has posted.
+ * A mistake is corrected by cancelling, exactly as an issued invoice is.
+ *
+ * `allocated` AND `unallocated` ARE DERIVED AND CROSS ANYWAY. They are sums over the
+ * allocation rows, computed on the way out and stored nowhere — the same treatment
+ * `DocumentTotalsDto` gets, and for the same reason (§1.7): a screen may not do money
+ * arithmetic, so the figures it displays have to arrive already added up.
+ */
+
+/** Two states, not three. See rule 1. */
+export type ReceiptStatusDto = 'posted' | 'cancelled'
+
+/**
+ * How much of one receipt settles one document.
+ *
+ * The document's number and date ride along because every screen that shows an
+ * allocation shows them, and a list of ten allocations would otherwise be ten lookups.
+ * Denormalised on the way out only — nothing stores them.
+ */
+export interface ReceiptAllocationDto {
+  id: string
+  documentId: string
+  documentKind: string
+  /** Never null: only an issued document may be allocated to, and those have numbers. */
+  documentNumber: string
+  documentDate: DateString
+  amount: DecimalString
+}
+
+/** A receipt as a register lists it. */
+export interface ReceiptSummary {
+  id: string
+  /** A `ReceiptKind` — 'receipt' or 'payment'. */
+  kind: string
+  status: ReceiptStatusDto
+  /** Never null. A receipt has no state in which it lacks one (rule 1). */
+  number: string
+  date: DateString
+  partyId: string
+  /** Denormalised for display, as `DocumentSummary.partyName` is. */
+  partyName: string
+  amount: DecimalString
+  /** Summed from the allocations. Never stored. */
+  allocated: DecimalString
+  /** `amount - allocated`. Money on account, which is an ordinary thing to have. */
+  unallocated: DecimalString
+}
+
+export interface Receipt extends ReceiptSummary {
+  seriesId: string
+  /** The bank or cash account the money moved through. */
+  accountId: string
+  /** Denormalised for display. */
+  accountName: string
+  /** A cheque number, a UTR — whatever identifies this money on a statement. */
+  reference: string
+  narration: string
+  /** The entry it posted as. Never null, which is rule 1 as a type. */
+  entryId: string
+  allocations: readonly ReceiptAllocationDto[]
+  createdAt: Timestamp
+  updatedAt: Timestamp
+  cancelledAt: Timestamp | null
+}
+
+/**
+ * One line of "these are the documents this money pays".
+ *
+ * A document and an amount, and nothing else: an allocation is a matching record, so it
+ * has no date of its own and no narration. Giving it either would invite somebody to
+ * report on it as though the money moved when the matching was done.
+ */
+export interface AllocationInput {
+  documentId: string
+  amount: DecimalString
+}
+
+/**
+ * A receipt as it is recorded. Posting is not a separate step (rule 1).
+ *
+ * `allocations` is optional and an empty list is an ordinary answer — a payment arriving
+ * before anybody has decided what it settles is money on account, not an unfinished job.
+ */
+export interface CreateReceiptInput {
+  /** A `ReceiptKind`. */
+  kind: string
+  date: DateString
+  partyId: string
+  /** Money, 2dp, strictly positive. The direction is `kind`, never the sign. */
+  amount: DecimalString
+  accountId: string
+  reference?: string
+  narration?: string
+  /** The default series for the kind when absent, exactly as issuing does. */
+  seriesId?: string
+  allocations?: readonly AllocationInput[]
+}
+
+/**
+ * Replace what a receipt settles.
+ *
+ * THE WHOLE SET, not a patch, and an empty list is how everything is un-allocated. A
+ * matching record is a statement about which invoices this money pays, and a partial
+ * update of that statement is not a thing anybody means: a screen holds the whole list
+ * in front of the user, and sending back half of it would leave rows they had removed.
+ * Compare `updateDocument`, which is a patch because a document has fields.
+ */
+export interface AllocateReceiptInput {
+  id: string
+  allocations: readonly AllocationInput[]
+}
+
+export interface CancelReceiptInput {
+  id: string
+  /**
+   * The date the reversal posts as of. The receipt's own date when absent.
+   *
+   * The same rule cancelling a document follows: a receipt cancelled before anything is
+   * filed should leave the month it was recorded in as if it had not been, and once that
+   * period is closed it cannot — which `PERIOD_CLOSED` says rather than the reversal
+   * silently landing in a later month.
+   */
+  date?: DateString
+  narration?: string
+}
+
+export interface ListReceiptsInput {
+  kind?: string
+  status?: ReceiptStatusDto
+  partyId?: string
+  fromDate?: DateString
+  toDate?: DateString
+  /** Matches the number, the party name, the reference or the narration, ignoring case. */
+  search?: string
+  limit?: number
+  offset?: number
+}

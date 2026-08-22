@@ -1,8 +1,8 @@
 /*
  * Setting up a new company's books.
  *
- * The chart of accounts and the first fiscal periods, in ONE transaction. Both or
- * neither, and this is the whole reason the file exists.
+ * The chart of accounts, the first fiscal periods and a numbering series per kind, in ONE
+ * transaction. All of it or none of it, and this is the whole reason the file exists.
  *
  * A company with accounts and no periods looks finished and is not: every posting fails
  * with `NO_PERIOD`, and the user is left with a chart of accounts they cannot use and no
@@ -15,6 +15,14 @@
  * anything into the year starting the following month, which is the single most likely
  * thing a user does in their first session in March. Twenty-four rows costs nothing.
  * Beyond that, `ensureFiscalYear` extends the books on demand.
+ *
+ * THE NUMBERING SERIES JOINED IN 0012, AND IT WAS A BUG THAT THEY HAD NOT. Nothing
+ * created one anywhere, so `defaultSeriesFor` answered null for every kind and issuing
+ * any document from the app failed with `SERIES_NOT_CONFIGURED` — a company with a chart
+ * and periods that looks finished and is not, which is the exact failure the paragraph
+ * above describes, sitting in this file the whole time. Found by building a company file
+ * the way the app builds one and asking it what series it had; every test passed
+ * throughout, because a test that issues something creates its own series first.
  *
  * The fiscal-year rule arrives from the tax regime, as everywhere else. Nothing here
  * knows that India runs April to March.
@@ -30,6 +38,7 @@ import {
 } from '@main/domain/time'
 
 import type { CofferDb } from '../kysely'
+import { seedDefaultSeries } from './numbering'
 import { generateFiscalYearWithin } from './periods'
 import { seedChartWithin } from './seed-chart'
 import type { ChartTemplate, TemplateAccount } from './chart-template'
@@ -63,6 +72,8 @@ export interface SetUpBooksResult {
   /** The fiscal years generated, by the calendar year each starts in. */
   fiscalYears: number[]
   periodsCreated: number
+  /** One per numbered kind, unless the books already had one. */
+  seriesCreated: number
 }
 
 /**
@@ -98,11 +109,14 @@ export async function setUpBooks(
       periodsCreated += periods.length
     }
 
+    const seriesCreated = await seedDefaultSeries(trx)
+
     return {
       accountsCreated: chart.accountsCreated,
       rolesMapped: chart.rolesMapped,
       fiscalYears,
       periodsCreated,
+      seriesCreated,
     }
   })
 }

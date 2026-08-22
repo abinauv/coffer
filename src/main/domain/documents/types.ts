@@ -444,6 +444,83 @@ export interface TradeDocument {
 export type NumberingReset = 'fiscal-year' | 'never'
 
 /**
+ * Everything a numbering series can number.
+ *
+ * Wider than `DocumentKind` since 0012, and the widening is the honest shape rather than
+ * a convenience. Rule 50 wants a receipt voucher numbered consecutively for the same
+ * reason rule 46(b) wants an invoice numbered, and the counter machinery underneath is
+ * the one thing in this codebase that can hand the same number to two records. A second
+ * copy of it kept privately for receipts would be that failure written twice.
+ *
+ * THE TWO EXTRA MEMBERS ARE STRING LITERALS DECLARED HERE rather than imported from
+ * `domain/receipts`, and that is deliberate rather than lazy: a receipt carries a number
+ * and a number comes from a series, so an import the other way round would be a cycle.
+ * Nothing in this module branches on them — `numberedKindDefinition` reads the five
+ * document kinds off `DOCUMENT_KINDS` and holds only what the other two add, so a
+ * document kind's label is still stored in exactly one place.
+ */
+export type NumberedKind = DocumentKind | 'receipt' | 'payment'
+
+/**
+ * What a numbering series needs to know about the thing it numbers.
+ *
+ * Three fields, and none of them is `side`, `direction` or `sourceType`: numbering does
+ * not care what a voucher does to the ledger. `resetsYearly` is a DEFAULT and not a rule
+ * — a series carries its own `resetOn`, and this only decides what a new one starts as.
+ */
+export interface NumberedKindDefinition {
+  kind: NumberedKind
+  /** What the user sees, singular. */
+  label: string
+  /** What the user sees for many of them. */
+  pluralLabel: string
+  /** Whether a new series for this kind restarts its count each fiscal year. */
+  resetsYearly: boolean
+}
+
+/*
+ * The two that are not trade documents.
+ *
+ * Both always reach the ledger — there is no receipt that records no money — so both
+ * reset yearly, and the branch a document kind needs has no case to answer here.
+ */
+const VOUCHER_KINDS: readonly NumberedKindDefinition[] = [
+  { kind: 'receipt', label: 'Receipt', pluralLabel: 'Receipts', resetsYearly: true },
+  { kind: 'payment', label: 'Payment', pluralLabel: 'Payments', resetsYearly: true },
+] as const
+
+/** Everything a series may be created for, documents first. */
+export const NUMBERED_KINDS: readonly NumberedKindDefinition[] = [
+  ...DOCUMENT_KINDS.map((definition) => ({
+    kind: definition.kind,
+    label: definition.label,
+    pluralLabel: definition.pluralLabel,
+    /* A quotation reaches no ledger and nothing has been supplied, so its numbers run
+     * on. Read off the same fact the posting rules read rather than off a second list. */
+    resetsYearly: postsToLedger(definition.kind),
+  })),
+  ...VOUCHER_KINDS,
+]
+
+const BY_NUMBERED_KIND: ReadonlyMap<string, NumberedKindDefinition> = new Map(
+  NUMBERED_KINDS.map((definition) => [definition.kind, definition]),
+)
+
+/**
+ * The definition for anything a series can number.
+ *
+ * Throws for the reason `definitionOf` throws and with the same sentence: a kind that is
+ * none of these came off a company file a newer build wrote.
+ */
+export function numberedKindDefinition(kind: NumberedKind): NumberedKindDefinition {
+  const definition = BY_NUMBERED_KIND.get(kind)
+  if (definition === undefined) {
+    throw new Error(`Unknown numbered kind '${kind}'. This file may need a newer Coffer.`)
+  }
+  return definition
+}
+
+/**
  * How one kind of document is numbered.
  *
  * Everything about the shape of a number is data, because the shape is a business's own
@@ -451,7 +528,7 @@ export type NumberingReset = 'fiscal-year' | 'never'
  */
 export interface NumberingSeries {
   id: string
-  kind: DocumentKind
+  kind: NumberedKind
   /** What the user calls this series when there is more than one. */
   label: string
   /** Text before the sequence, e.g. 'INV'. May be empty. */

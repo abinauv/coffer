@@ -236,6 +236,45 @@ export type RepoErrorCode =
    * every invoice in the books, which is the failure nobody would notice.
    */
   | 'COMPANY_PROFILE_MISSING'
+  // ---- Receipts and allocations (0012) ----
+  /** No receipt with that id. */
+  | 'RECEIPT_NOT_FOUND'
+  /** A cancel against a receipt that has already been cancelled. */
+  | 'RECEIPT_CANCELLED'
+  /** A receipt for nothing, or for less than nothing. The direction is the kind. */
+  | 'RECEIPT_AMOUNT_INVALID'
+  /**
+   * The account the money moved through will not take a posting.
+   *
+   * A group, an archived account, or the control account the other line of the same
+   * entry already uses — which would post a receipt against itself and settle nothing.
+   */
+  | 'RECEIPT_ACCOUNT_INVALID'
+  /**
+   * The receipt and the document it was allocated to belong to different parties.
+   *
+   * The worst failure in 0012 and the reason it is a trigger as well as a check: it takes
+   * one party's outstanding down because another paid, and nothing anywhere shows it —
+   * the control account still totals and the trial balance still ties.
+   */
+  | 'ALLOCATION_PARTY_MISMATCH'
+  /** The allocations against one receipt add up to more than it holds. */
+  | 'ALLOCATION_EXCEEDS_RECEIPT'
+  /** More was allocated to a document than that document put on the control account. */
+  | 'ALLOCATION_EXCEEDS_DOCUMENT'
+  /** A payment cannot settle a sales invoice, nor a receipt a purchase bill. */
+  | 'ALLOCATION_SIDE_MISMATCH'
+  /** An allocation is written and deleted, never edited. See 0012. */
+  | 'ALLOCATION_IMMUTABLE'
+  /**
+   * A cancel against a document that has money allocated to it.
+   *
+   * Refused rather than detached. The money still exists and still belongs to the party,
+   * and silently un-matching it would create on-account money nobody decided to create.
+   * Cancelling a RECEIPT is not the same and deletes its allocations — see 0012 for why
+   * the two are not symmetrical.
+   */
+  | 'DOCUMENT_ALLOCATED'
 
 /** An error raised by a repository. Always carries a stable, machine-readable code. */
 export class RepoError extends Error {
@@ -288,6 +327,19 @@ const TRIGGER_CODES: readonly RepoErrorCode[] = [
   'SERIES_IN_USE',
   /* 0008's four triggers, which freeze a document and its lines once it has issued. */
   'DOCUMENT_NOT_DRAFT',
+  /*
+   * 0012's six, which guard the one thing an allocation can silently corrupt: a party's
+   * statement. `DOCUMENT_NOT_ISSUED` joins the list here rather than with the document
+   * codes above, because until 0012 nothing raised it from a trigger — it was a
+   * repository refusal only, and a code that no trigger raises has no business in a list
+   * of the ones that do.
+   */
+  'ALLOCATION_PARTY_MISMATCH',
+  'ALLOCATION_EXCEEDS_RECEIPT',
+  'ALLOCATION_IMMUTABLE',
+  'RECEIPT_CANCELLED',
+  'DOCUMENT_ALLOCATED',
+  'DOCUMENT_NOT_ISSUED',
 ]
 
 export function repoErrorFrom(error: unknown, fallback: RepoErrorCode): RepoError {

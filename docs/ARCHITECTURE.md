@@ -92,6 +92,7 @@ src/
 │   │   ├── money/             decimal helpers, rounding policy
 │   │   ├── ledger/            posting engine, balance invariants
 │   │   ├── documents/         document → journal entry rules
+│   │   ├── receipts/          money in and out, and what it settles
 │   │   ├── inventory/         valuation strategies
 │   │   └── time/              fiscal years, periods
 │   ├── regimes/        the internationalisation seam — see §6

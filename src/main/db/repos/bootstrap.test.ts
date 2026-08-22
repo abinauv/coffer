@@ -25,6 +25,8 @@ import { postManualEntry } from './journal'
 import { trialBalance } from './balances'
 import { SMALL_BUSINESS_CHART } from './chart-template'
 import { isRepoError, type RepoError, type RepoErrorCode } from './errors'
+import { createSeries, defaultSeriesFor, previewNumber } from './numbering'
+import { NUMBERED_KINDS } from '@main/domain/documents'
 
 const KEY = new Uint8Array(DATABASE_KEY_BYTES).fill(0x11)
 
@@ -172,6 +174,45 @@ describe('setUpBooks', () => {
    * alone passed against a `seedChart` that had stopped checking. Only the guard names
    * the template.
    */
+  /*
+   * THE BUG THIS CLOSED. Nothing ever created a numbering series: `setUpBooks` seeded a
+   * chart and periods and stopped, there is no numbering IPC group and no settings
+   * screen, so `defaultSeriesFor` answered null for every kind and issuing ANY document
+   * from the app failed with `SERIES_NOT_CONFIGURED`. Found by building a company file
+   * the way the app builds one and asking it — every test passed throughout, because a
+   * test that issues something creates its own series first.
+   */
+  it('leaves a company that can number a document, which is not the same as posting one', async () => {
+    await setUpBooks(db, { rule: aprilToMarch })
+
+    for (const definition of NUMBERED_KINDS) {
+      const series = await defaultSeriesFor(db, definition.kind)
+      expect(series, `no default series for ${definition.kind}`).not.toBeNull()
+      expect(series?.isDefault).toBe(true)
+    }
+  })
+
+  it('gives the invoice series the shape a small Indian business already uses', async () => {
+    await setUpBooks(db, { rule: aprilToMarch })
+
+    const invoiceSeries = (await defaultSeriesFor(db, 'sales-invoice'))!
+    expect((await previewNumber(db, invoiceSeries.id, '2026-27')).preview).toBe('INV/2026-27/0001')
+
+    /* A quotation runs on instead, because nothing has been supplied when one is sent. */
+    const quotationSeries = (await defaultSeriesFor(db, 'quotation'))!
+    expect((await previewNumber(db, quotationSeries.id, '2026-27')).preview).toBe('QTN/0001')
+  })
+
+  it('leaves a series somebody has already configured alone', async () => {
+    await createSeries(db, { kind: 'sales-invoice', label: 'Export', prefix: 'EXP' })
+    const result = await setUpBooks(db, { rule: aprilToMarch })
+
+    /* Six, not seven: the kind that already had one is skipped rather than given a
+     * second series beside it, which would have been a decision taken back. */
+    expect(result.seriesCreated).toBe(NUMBERED_KINDS.length - 1)
+    expect((await defaultSeriesFor(db, 'sales-invoice'))?.label).toBe('Export')
+  })
+
   it('refuses a company that already has a chart', async () => {
     await setUp()
 

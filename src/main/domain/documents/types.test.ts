@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DOCUMENT_KINDS,
   DOCUMENT_STATUSES,
+  NUMBERED_KINDS,
   definitionOf,
   hasNumber,
   isDeletable,
@@ -9,9 +10,11 @@ import {
   isLive,
   kindsOnSide,
   levyOf,
+  numberedKindDefinition,
   postsToLedger,
   type DocumentKind,
   type DocumentStatus,
+  type NumberedKind,
 } from './types'
 
 describe('the kinds table', () => {
@@ -170,5 +173,49 @@ describe('the statuses', () => {
      * newer one, and the safe reading is that it does not belong in a return. */
     expect(isLive('superseded' as DocumentStatus)).toBe(false)
     expect(isEditable('superseded' as DocumentStatus)).toBe(false)
+  })
+})
+
+/*
+ * Numbering serves more than documents since 0012. A receipt voucher is numbered for the
+ * reason an invoice is — rule 50 against rule 46(b) — and both draw from the same
+ * counters, which are the one thing in this codebase that can hand a number to two
+ * records twice.
+ */
+describe('the numbered kinds', () => {
+  it('are every document kind and the two vouchers, documents first', () => {
+    expect(NUMBERED_KINDS.map((definition) => definition.kind)).toEqual([
+      ...DOCUMENT_KINDS.map((definition) => definition.kind),
+      'receipt',
+      'payment',
+    ])
+  })
+
+  /* A document kind's label lives in `DOCUMENT_KINDS` and nowhere else. If this table
+   * ever held its own copy, the two would drift and a picker would disagree with a
+   * settings screen about what an invoice is called. */
+  it('take a document kind words from the document kinds table', () => {
+    for (const definition of DOCUMENT_KINDS) {
+      expect(numberedKindDefinition(definition.kind)).toMatchObject({
+        label: definition.label,
+        pluralLabel: definition.pluralLabel,
+      })
+    }
+  })
+
+  /* Read off `postsToLedger` rather than off a list, so a kind added later answers by
+   * declaring itself. A quotation supplies nothing, so its numbers run on. */
+  it('reset yearly for everything that reaches the ledger, and not for what does not', () => {
+    for (const definition of DOCUMENT_KINDS) {
+      expect(numberedKindDefinition(definition.kind).resetsYearly).toBe(
+        postsToLedger(definition.kind),
+      )
+    }
+    expect(numberedKindDefinition('receipt').resetsYearly).toBe(true)
+    expect(numberedKindDefinition('payment').resetsYearly).toBe(true)
+  })
+
+  it('refuse a kind this build does not know', () => {
+    expect(() => numberedKindDefinition('delivery-note' as NumberedKind)).toThrow(/newer Coffer/)
   })
 })

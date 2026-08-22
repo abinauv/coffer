@@ -36,7 +36,14 @@
  *   0009  documents_frozen_once_issued, replaced     — narration and series, frozen too  LANDED
  *   0010  documents, rebuilt                         — a quotation may be issued  LANDED
  *   0011  company_profile                            — who these books are for  LANDED
- *   0012  receipts, allocations                      — what has been paid against one
+ *   0012  receipts, receipt_allocations,
+ *         numbering_series rebuilt                   — what has been paid against one  LANDED
+ *
+ * 0012 HAS LANDED, and it rebuilds `numbering_series` as well as adding two tables. A
+ * receipt voucher is numbered for the reason an invoice is (rule 50 against rule 46(b)),
+ * and 0007's `kind` CHECK named the five document kinds only. The alternative was a
+ * second counter table kept privately for receipts, which is the one failure 0007 exists
+ * to prevent, written twice. Read 0012's header before adding a sixth numbered kind.
  *
  * RECEIPTS HAVE MOVED THREE TIMES, from 0009 to 0010 to 0011 to 0012. Twice for a
  * correction to the documents table that had to land before anything was built on top of
@@ -117,6 +124,7 @@ import { m0008 } from './0008_documents'
 import { m0009 } from './0009_document_freeze'
 import { m0010 } from './0010_quotation_issuable'
 import { m0011 } from './0011_company_profile'
+import { m0012 } from './0012_receipts'
 
 export const MIGRATIONS: readonly Migration[] = [
   m0001,
@@ -130,4 +138,5 @@ export const MIGRATIONS: readonly Migration[] = [
   m0009,
   m0010,
   m0011,
+  m0012,
 ]

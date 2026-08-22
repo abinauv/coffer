@@ -30,6 +30,12 @@
  * ---------------------------------------------------------------------------
  * CANCELLING IS A REVERSAL, NEVER AN UNDO
  *
+ * It is also refused outright while money has been allocated against the document — see
+ * `assertNotAllocated` and 0012. That is the one thing a cancel can be told no for, and
+ * the reason is that outstanding is a ledger fact: reversing the entry takes the
+ * movement to nothing, and allocations still pointing at it would take an invoice's
+ * outstanding below zero with money that has to belong somewhere else.
+ *
  * The entry stays. A second entry mirrors it (invariant 3), the document keeps its number
  * (rule 2) and its status becomes `cancelled`. What the document has outstanding goes to
  * zero without any code being written to make it, because outstanding was never a column
@@ -87,6 +93,7 @@ import { getDocument, toDomainLine } from './documents'
 import { RepoError, type RepoErrorCode } from './errors'
 import { postEntry, reverseEntry } from './journal'
 import { allocateNumber, defaultSeriesFor } from './numbering'
+import { assertNotAllocated } from './outstanding'
 import { periodRefForDate } from './periods'
 import { inTransaction } from './transaction'
 
@@ -190,6 +197,14 @@ export async function cancelDocument(
   return inTransaction(db, async (trx) => {
     const document = await requireDocument(trx, input.id)
     assertIssued(document)
+
+    /*
+     * Money allocated against it stops the cancel, and 0012's header argues the case:
+     * the money still exists and still belongs to the party, so detaching it here would
+     * create on-account money nobody decided to create. A trigger says the same thing;
+     * this says it with the figure in it, to a user who is looking at the invoice.
+     */
+    await assertNotAllocated(trx, document.id)
 
     const kind = definitionOf(document.kind as DocumentKind).kind
 

@@ -142,8 +142,10 @@ to its absence:
 
 - A **CONTROL** that changes nothing. If the control is reported as killed, one test was
   already failing and no other number in the report can be believed. Stop there.
-- A **CANARY** that must be killed, anchored on something a test pins by value. It is the
-  only proof that a kill was still possible at all.
+- A **CANARY** that must be killed, anchored on something a test pins **by value**. It is
+  the only proof that a kill was still possible at all — and "by value" is the whole of
+  it: a canary sitting on a message no assertion reads survives, which reports a broken
+  harness as a broken suite. 0012's first one did exactly that.
 - An **anchor check**. When the text being replaced does not appear exactly once, say so
   instead of skipping — a reformatted file silently drops mutations otherwise. Run the
   harness _after_ `npm run format`.
@@ -154,7 +156,17 @@ Snapshot the files to disk, not only to memory: an interrupted run does not exec
 **Defence in depth makes tests blind.** Where a rule lives in both a migration and a
 repository, a test that goes through the repository passes whichever layer answers first
 — and the database constraint can be deleted with nothing failing. This has now been
-found in three separate batches. Test the constraint by writing straight to the table.
+found in five separate batches. Test the constraint by writing straight to the table.
+
+**And it makes one of the two layers unreachable, which is worse.** The same overlap read
+from the other side: if the repository's check runs _after_ the write that trips the
+trigger, the repository check can never answer, and no assertion on the error code can
+tell — both layers report the same code by design. 0012 was written that way and a
+mutation deleting the check changed nothing. The fix is not a cleverer test: it is to
+decide the rule **before** touching the database, so the repository speaks first and says
+the sentence with the figures in it, and the trigger is the floor underneath. Where the
+two must both be reachable, assert on `details` or on the message — only one layer
+populates either.
 
 ## 7. Commits
 

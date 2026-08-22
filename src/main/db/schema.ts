@@ -501,6 +501,62 @@ export interface CompanyProfileTable {
   updated_at: Timestamp
 }
 
+// ---- Receipts and allocations (0012) --------------------------------------
+
+/**
+ * Money received from a customer, or paid to a vendor.
+ *
+ * `number` and `entry_id` are BOTH NOT NULL, where a document's are both nullable, and
+ * that difference is the whole of rule 1 in src/main/domain/receipts/types.ts: a receipt
+ * has no draft stage, because it records money that has already moved. The state 0008
+ * needs a CHECK to forbid is one this table cannot represent.
+ */
+export interface ReceiptsTable {
+  id: string
+  /** A `ReceiptKind` — 'receipt' or 'payment'. Constrained by a CHECK. */
+  kind: string
+  /** 'posted' | 'cancelled'. Two states, not three: there is no draft. */
+  status: string
+  /** Allocated when the row is written, and never released. Rule 1. */
+  number: string
+  series_id: string
+  /** The date the money moved, which is also the date it posts as of. */
+  receipt_date: DateString
+  party_id: string
+  /** Money, 2dp, and strictly positive. The direction is `kind`, never the sign. */
+  amount: DecimalString
+  /** The bank or cash account the money moved through. Chosen, never derived. */
+  account_id: string
+  /** Whatever identifies this money on a statement — a cheque number, a UTR. */
+  reference: string
+  narration: string
+  /** The entry it posted as. Required, because a receipt exists only as one. */
+  entry_id: string
+  created_at: Timestamp
+  updated_at: Timestamp
+  cancelled_at: Timestamp | null
+}
+
+/**
+ * How much of one receipt settles one document.
+ *
+ * A MATCHING RECORD AND NOT A POSTING (rule 2). Both the invoice's debit and the
+ * receipt's credit already carry the party's id, so the control account is right the
+ * instant the receipt posts — whether or not anybody has said which invoice it pays.
+ * Which is why these rows may be rewritten while a posted entry may not.
+ *
+ * No date and no narration on purpose: it is not an event that happened, it is a
+ * statement about two events that already did.
+ */
+export interface ReceiptAllocationsTable {
+  id: string
+  receipt_id: string
+  document_id: string
+  /** Money, 2dp, strictly positive. An allocation of nothing is not a statement. */
+  amount: DecimalString
+  created_at: Timestamp
+}
+
 export interface Database {
   app_metadata: AppMetadataTable
   accounts: AccountsTable
@@ -517,6 +573,8 @@ export interface Database {
   document_lines: DocumentLinesTable
   document_line_taxes: DocumentLineTaxesTable
   company_profile: CompanyProfileTable
+  receipts: ReceiptsTable
+  receipt_allocations: ReceiptAllocationsTable
 }
 
 export type { Generated }

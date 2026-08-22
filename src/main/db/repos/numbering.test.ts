@@ -481,8 +481,34 @@ describe('creating a series', () => {
     /* A programmer error rather than something a user can act on, so it throws rather
      * than carrying a code (CONVENTIONS §5). */
     await expect(createSeries(db, { kind: 'delivery-note', label: 'X' })).rejects.toThrow(
-      /Unknown document kind/,
+      /Unknown numbered kind/,
     )
+  })
+
+  /*
+   * A SERIES NUMBERS MORE THAN DOCUMENTS SINCE 0012. Rule 50 wants a receipt voucher
+   * consecutive for exactly the reason rule 46(b) wants an invoice consecutive, and the
+   * counters underneath are the one thing in this codebase that can hand the same number
+   * to two records — so receipts draw from them rather than from a second copy.
+   */
+  it('numbers a receipt and a payment as readily as a document', async () => {
+    for (const kind of ['receipt', 'payment'] as const) {
+      const series = await createSeries(db, { kind, label: 'Main', prefix: 'X' })
+      expect(series.kind).toBe(kind)
+      expect(series.isDefault).toBe(true)
+    }
+  })
+
+  /* `resetsYearly` on the kind's own row, not a list here. A receipt always reaches the
+   * ledger, so it resets each year; a quotation never does, so it runs on. */
+  it('starts a receipt series on a yearly reset and a quotation series on none', async () => {
+    expect((await createSeries(db, { kind: 'receipt', label: 'R' })).resetOn).toBe('fiscal-year')
+    expect((await createSeries(db, { kind: 'quotation', label: 'Q' })).resetOn).toBe('never')
+  })
+
+  it('keeps a receipt label free of a document label, because kinds are separate', async () => {
+    await createSeries(db, { kind: 'receipt', label: 'Main' })
+    await expect(createSeries(db, { kind: 'sales-invoice', label: 'Main' })).resolves.toBeDefined()
   })
 
   it('refuses a width nothing could be read at', async () => {
