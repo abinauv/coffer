@@ -15,6 +15,11 @@
  *
  * And the four verbs reach the states they are allowed to. A button offered on a document
  * that would refuse it is worse than a button that is not offered.
+ *
+ * WHAT IS OUTSTANDING IS ASKED FOR SEPARATELY, and the tests at the foot of this file say
+ * why that is the right shape: it is a fact about the ledger rather than a field on the
+ * document, so a draft is never asked about at all, and a cancelled invoice comes back at
+ * nothing without the screen knowing anything about reversals.
  */
 
 import { screen, waitFor, within } from '@testing-library/react'
@@ -23,6 +28,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type {
   Document,
   DocumentLineDto,
+  DocumentSettlement,
   DocumentStatusDto,
   PartySummary,
   Result,
@@ -109,11 +115,32 @@ function document(over: Partial<Document> = {}): Document {
   }
 }
 
+/** What has been receipted against it. Nothing, unless a test says otherwise. */
+function settlement(over: Partial<DocumentSettlement> = {}): DocumentSettlement {
+  return {
+    documentId: 'doc-1',
+    movement: '1180.00',
+    allocated: '0.00',
+    outstanding: '1180.00',
+    receipts: [],
+    ...over,
+  }
+}
+
 /** A bridge that serves one document and echoes a chosen answer back from every write. */
-function bridgeFor(stored: Document | null, answer: Document = document()): BridgeStub {
+function bridgeFor(
+  stored: Document | null,
+  answer: Document = document(),
+  settled: DocumentSettlement = settlement(),
+): BridgeStub {
   return {
     parties: {
       list: () => Promise.resolve<Result<PartySummary[]>>({ ok: true, data: CUSTOMERS }),
+    },
+    receipts: {
+      /* Asked for any document that has posted. A draft never reaches it, which is what
+       * the first test in `what has been received` asserts. */
+      settlement: () => Promise.resolve<Result<DocumentSettlement>>({ ok: true, data: settled }),
     },
     documents: {
       get: () => Promise.resolve<Result<Document | null>>({ ok: true, data: stored }),
@@ -468,5 +495,123 @@ describe('reading it', () => {
     const badge = screen.getByText('Draft')
     expect(within(badge.closest('div') as HTMLElement).getByText('Draft')).toBeInTheDocument()
     expect(screen.getByText(/Nothing is in the books until it is issued/)).toBeInTheDocument()
+  })
+})
+
+describe('what has been received against it', () => {
+  const issued = () => document({ status: 'issued', number: 'INV/2026-27/0001' })
+
+  /* A draft has posted nothing, so there is no movement for anything to be against.
+   * Asking would be asking about a document the ledger has never seen. */
+  it('is not asked about at all while the invoice is a draft', async () => {
+    const { bridge } = renderScreen(<Invoice {...editing()} />, { bridge: bridgeFor(document()) })
+
+    await waitFor(() => expect(bridge.callsTo('documents:get')).toHaveLength(1))
+    expect(bridge.callsTo('receipts:settlement')).toHaveLength(0)
+  })
+
+  it('shows what is outstanding once it has been issued', async () => {
+    renderScreen(<Invoice {...editing()} />, {
+      bridge: bridgeFor(
+        issued(),
+        issued(),
+        settlement({ allocated: '500.00', outstanding: '680.00' }),
+      ),
+    })
+
+    const row = (await screen.findByText('Outstanding')).closest('tr') as HTMLElement
+    expect(within(row).getByText('680.00')).toBeInTheDocument()
+  })
+
+  it('names the receipts that settled part of it', async () => {
+    renderScreen(<Invoice {...editing()} />, {
+      bridge: bridgeFor(
+        issued(),
+        issued(),
+        settlement({
+          allocated: '500.00',
+          outstanding: '680.00',
+          receipts: [
+            {
+              receiptId: 'rct-1',
+              number: 'RCT/2026-27/0001',
+              date: '2026-04-20',
+              amount: '500.00',
+            },
+          ],
+        }),
+      ),
+    })
+
+    const row = (await screen.findByText('RCT/2026-27/0001')).closest('tr') as HTMLElement
+    expect(within(row).getByText('2026-04-20')).toBeInTheDocument()
+    expect(within(row).getByText('500.00')).toBeInTheDocument()
+  })
+
+  /*
+   * IT CARRIES THE CUSTOMER AND THE INVOICE, AND NO AMOUNT. What arrived is a fact about
+   * a bank statement; pre-filling what the invoice says would have somebody confirming a
+   * figure they had not read, and a part payment is the ordinary case.
+   */
+  it('records a receipt against it, carrying the customer and the invoice', async () => {
+    const user = userEvent.setup()
+    const navigate = vi.fn()
+    renderScreen(
+      <Invoice {...screenContext({ route: testRoute('invoice', { id: 'doc-1' }), navigate })} />,
+      { bridge: bridgeFor(issued(), issued(), settlement()) },
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Record a receipt' }))
+
+    expect(navigate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        screenId: 'receipt',
+        params: { partyId: 'party-1', documentId: 'doc-1' },
+      }),
+    )
+  })
+
+  it('offers no receipt button once nothing is outstanding', async () => {
+    renderScreen(<Invoice {...editing()} />, {
+      bridge: bridgeFor(
+        issued(),
+        issued(),
+        settlement({ allocated: '1180.00', outstanding: '0.00' }),
+      ),
+    })
+
+    await screen.findByText('Outstanding')
+    expect(screen.queryByRole('button', { name: 'Record a receipt' })).not.toBeInTheDocument()
+  })
+
+  /*
+   * A cancel refused because money is allocated against it. Main's sentence names the
+   * figure and says what to do; the screen shows it rather than inventing one of its own,
+   * because the money is on a receipt the user has to go and find.
+   */
+  it("shows main's refusal when the invoice has money against it", async () => {
+    const user = userEvent.setup()
+    const base = bridgeFor(issued(), issued(), settlement({ allocated: '500.00' }))
+    renderScreen(<Invoice {...editing()} />, {
+      bridge: {
+        ...base,
+        documents: {
+          ...base.documents,
+          cancel: () =>
+            Promise.resolve<Result<Document>>({
+              ok: false,
+              error: {
+                code: 'DOCUMENT_ALLOCATED',
+                message:
+                  '500.00 has been receipted against this document. Take the allocation off the receipt first, so that money goes somewhere you chose.',
+              },
+            }),
+        },
+      },
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel this invoice' }))
+
+    expect(await screen.findByText(/Take the allocation off the receipt first/)).toBeInTheDocument()
   })
 })

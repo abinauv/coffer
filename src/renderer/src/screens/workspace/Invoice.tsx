@@ -19,6 +19,12 @@
  * it was displaying would pin a Tamil Nadu place of supply onto an invoice just moved to
  * a Karnataka customer, and CGST+SGST would stay where IGST belongs. Sending nothing is
  * how the screen says "you decide". See `placeTouched` below.
+ *
+ * WHAT IS OUTSTANDING IS SHOWN, AND IT IS NOT A FIELD ON THE DOCUMENT. It is the movement
+ * the invoice made on the customer's account less what has been receipted against it, and
+ * it is asked for separately because that is what it is — a fact about the ledger, not a
+ * column somebody would have to keep in step. A cancelled invoice comes back at nothing
+ * with no code written to make it so.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -33,6 +39,7 @@ import type {
   AppError,
   Document,
   DocumentLineInput,
+  DocumentSettlement,
   PartySummary,
   RegimeDescription,
 } from '@shared/dto'
@@ -80,6 +87,10 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
   /* Unsaved edits. What makes the totals panel say what it is showing. */
   const [isDirty, setDirty] = useState(false)
 
+  /* What has been receipted against it. Null until asked, and only asked for a document
+   * that has posted — a draft has made no movement, so there is nothing to be against. */
+  const [settlement, setSettlement] = useState<DocumentSettlement | null>(null)
+
   const load = useCallback(async () => {
     const customers = await callApi((api) => api.parties.list({ role: 'customer' }))
     if (customers.ok) setParties(customers.data)
@@ -119,6 +130,31 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
   useEffect(() => {
     void load()
   }, [load])
+
+  /*
+   * Read after the document, and again after anything that could move it. The guard
+   * against a stale answer is the usual one: an invoice cancelled while this was in
+   * flight would otherwise paint an outstanding figure over a document that owes nothing.
+   */
+  const documentStatus = document?.status ?? null
+  const settledId = document !== null && documentStatus !== 'draft' ? document.id : null
+
+  useEffect(() => {
+    let current = true
+    if (settledId === null) {
+      setSettlement(null)
+      return
+    }
+
+    void callApi((api) => api.receipts.settlement(settledId)).then((result) => {
+      if (!current) return
+      if (result.ok) setSettlement(result.data)
+    })
+
+    return () => {
+      current = false
+    }
+  }, [settledId, documentStatus])
 
   const touch = useCallback((change: () => void) => {
     setDirty(true)
@@ -375,8 +411,97 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
         />
 
         {document !== null && <Totals document={document} isStale={isDirty} format={format} />}
+
+        {settlement !== null && (
+          <Settlement
+            settlement={settlement}
+            format={format}
+            onRecordReceipt={() =>
+              navigate(
+                makeRoute('workspace', 'receipt', {
+                  partyId: document?.partyId ?? '',
+                  documentId: settlement.documentId,
+                }),
+              )
+            }
+          />
+        )}
       </div>
     </ScreenFrame>
+  )
+}
+
+// ---- What has been paid against it ------------------------------------------
+
+/**
+ * What is outstanding, and the receipts that settled the rest.
+ *
+ * NOT A FIGURE ON THE DOCUMENT. It is the movement this invoice made on the customer's
+ * account less what has been receipted against it — read from main, never derived here.
+ * A cancelled invoice comes back at nothing because its entry was reversed, which is why
+ * this panel needs no special case for one.
+ *
+ * `Record a receipt` carries the customer and this invoice into the receipt editor, and
+ * carries no AMOUNT: what arrived is a fact about a bank statement, and a screen that
+ * guessed it would have somebody confirming a figure they had not read.
+ */
+function Settlement({
+  settlement,
+  format,
+  onRecordReceipt,
+}: {
+  settlement: DocumentSettlement
+  format: Parameters<typeof formatAmount>[1]
+  onRecordReceipt: () => void
+}): JSX.Element {
+  const isSettled = settlement.outstanding === '0.00'
+
+  return (
+    <div className="stack stack--tight">
+      <table className="ledger-table ledger-table--figures">
+        <tbody>
+          <tr>
+            <td>Received against this invoice</td>
+            <td className="ledger-table__figure">{formatAmount(settlement.allocated, format)}</td>
+          </tr>
+          <tr>
+            <td>Outstanding</td>
+            <td className="ledger-table__figure">{formatAmount(settlement.outstanding, format)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      {settlement.receipts.length > 0 && (
+        <table className="ledger-table ledger-table--figures">
+          <thead>
+            <tr>
+              <th scope="col">Receipt</th>
+              <th scope="col">Date</th>
+              <th scope="col" className="ledger-table__figure">
+                Against this invoice
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {settlement.receipts.map((receipt) => (
+              <tr key={receipt.receiptId} className="ledger-table__row">
+                <td className="ledger-table__code">{receipt.number}</td>
+                <td className="ledger-table__code">{receipt.date}</td>
+                <td className="ledger-table__figure">{formatAmount(receipt.amount, format)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {!isSettled && (
+        <div className="toolbar">
+          <Button icon="plus" variant="ghost" size="sm" onClick={onRecordReceipt}>
+            Record a receipt
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }
 
