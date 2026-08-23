@@ -1070,5 +1070,11 @@ describe('the register', () => {
     expect(await listDocuments(db, { limit: 4 })).toHaveLength(4)
     expect(await listDocuments(db, { limit: 10_000 })).toHaveLength(MAX_DOCUMENT_PAGE)
     expect(await listDocuments(db)).toHaveLength(MAX_DOCUMENT_PAGE)
-  })
+  } /*
+   * Its own timeout, because 501 inserts is real work and the default is 5s. It failed
+   * once in a full-suite run under load and passed alone immediately after, which is
+   * the shape `checkIntegrity > reports damage` already has — A SLOW TEST AND A HANGING
+   * TEST LOOK IDENTICAL, and the answer is to raise the limit rather than to shrink the
+   * work: fewer rows than the ceiling is precisely the bug this test was written for.
+   */, 20_000)
 })

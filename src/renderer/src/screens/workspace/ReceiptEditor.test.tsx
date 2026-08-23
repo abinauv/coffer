@@ -30,8 +30,9 @@ import type {
   Receipt as ReceiptDto,
   Result,
 } from '@shared/dto'
+import { RECEIPT_KINDS } from '@shared/receipts'
 import { renderScreen, screenContext, testRoute, type BridgeStub } from '../../test/harness'
-import { Receipt } from './Receipt'
+import { receiptEditorScreens, ReceiptEditor } from './ReceiptEditor'
 
 const CUSTOMERS: PartySummary[] = [
   { id: 'party-1', name: 'Sunrise Components', isCustomer: true } as PartySummary,
@@ -151,7 +152,7 @@ describe('recording one', () => {
    */
   it('will not record until it knows the customer, the date, the amount and the account', async () => {
     const user = userEvent.setup()
-    renderScreen(<Receipt {...creating()} />, { bridge: bridgeFor(null) })
+    renderScreen(<ReceiptEditor {...creating()} kind="receipt" />, { bridge: bridgeFor(null) })
 
     const button = await screen.findByRole('button', { name: 'Record receipt' })
     expect(button).toBeDisabled()
@@ -177,7 +178,9 @@ describe('recording one', () => {
    */
   it('sends what it settles along with the money', async () => {
     const user = userEvent.setup()
-    const { bridge } = renderScreen(<Receipt {...creating()} />, { bridge: bridgeFor(null) })
+    const { bridge } = renderScreen(<ReceiptEditor {...creating()} kind="receipt" />, {
+      bridge: bridgeFor(null),
+    })
 
     await screen.findByRole('button', { name: 'Record receipt' })
     await fillHeader(user)
@@ -192,7 +195,9 @@ describe('recording one', () => {
 
   it('sends what was typed, as a receipt', async () => {
     const user = userEvent.setup()
-    const { bridge } = renderScreen(<Receipt {...creating()} />, { bridge: bridgeFor(null) })
+    const { bridge } = renderScreen(<ReceiptEditor {...creating()} kind="receipt" />, {
+      bridge: bridgeFor(null),
+    })
 
     await screen.findByRole('button', { name: 'Record receipt' })
     await fillHeader(user)
@@ -212,7 +217,7 @@ describe('recording one', () => {
   /* Recording IS posting. There is no draft, so there is no second button and no state
    * between the two — the toast says the money is in the books. */
   it('offers no way to save a draft, because there is no draft', async () => {
-    renderScreen(<Receipt {...creating()} />, { bridge: bridgeFor(null) })
+    renderScreen(<ReceiptEditor {...creating()} kind="receipt" />, { bridge: bridgeFor(null) })
 
     await screen.findByRole('button', { name: 'Record receipt' })
     expect(screen.queryByRole('button', { name: /draft/i })).not.toBeInTheDocument()
@@ -222,9 +227,15 @@ describe('recording one', () => {
   it('moves to the receipt it made', async () => {
     const user = userEvent.setup()
     const navigate = vi.fn()
-    renderScreen(<Receipt {...screenContext({ route: testRoute('receipt'), navigate })} />, {
-      bridge: bridgeFor(null),
-    })
+    renderScreen(
+      <ReceiptEditor
+        {...screenContext({ route: testRoute('receipt'), navigate })}
+        kind="receipt"
+      />,
+      {
+        bridge: bridgeFor(null),
+      },
+    )
 
     await screen.findByRole('button', { name: 'Record receipt' })
     await fillHeader(user)
@@ -239,7 +250,7 @@ describe('recording one', () => {
 
   it('shows what main refused, in main own words', async () => {
     const user = userEvent.setup()
-    renderScreen(<Receipt {...creating()} />, {
+    renderScreen(<ReceiptEditor {...creating()} kind="receipt" />, {
       bridge: {
         ...bridgeFor(null),
         receipts: {
@@ -272,7 +283,7 @@ describe('a receipt that exists', () => {
    * it freezes the moment it is recorded — the same rule an issued invoice follows.
    */
   it('freezes the money and says why', async () => {
-    renderScreen(<Receipt {...editing()} />, { bridge: bridgeFor(receipt()) })
+    renderScreen(<ReceiptEditor {...editing()} kind="receipt" />, { bridge: bridgeFor(receipt()) })
 
     await waitFor(() => expect(screen.getByLabelText('Amount')).toHaveValue('1180.00'))
     expect(screen.getByLabelText('Amount')).toBeDisabled()
@@ -286,7 +297,9 @@ describe('a receipt that exists', () => {
    * about a posted receipt that may still change. */
   it('still lets what it settles be changed', async () => {
     const user = userEvent.setup()
-    const { bridge } = renderScreen(<Receipt {...editing()} />, { bridge: bridgeFor(receipt()) })
+    const { bridge } = renderScreen(<ReceiptEditor {...editing()} kind="receipt" />, {
+      bridge: bridgeFor(receipt()),
+    })
 
     const box = await screen.findByLabelText('Settle against INV/2026-27/0001')
     expect(box).toBeEnabled()
@@ -302,7 +315,7 @@ describe('a receipt that exists', () => {
   })
 
   it('offers nothing at all once it is cancelled', async () => {
-    renderScreen(<Receipt {...editing()} />, {
+    renderScreen(<ReceiptEditor {...editing()} kind="receipt" />, {
       bridge: bridgeFor(receipt({ status: 'cancelled', cancelledAt: '2026-04-21T09:00:00.000Z' })),
     })
 
@@ -313,7 +326,7 @@ describe('a receipt that exists', () => {
 
   it('cancels, and says the invoices are owed again', async () => {
     const user = userEvent.setup()
-    const { bridge } = renderScreen(<Receipt {...editing()} />, {
+    const { bridge } = renderScreen(<ReceiptEditor {...editing()} kind="receipt" />, {
       bridge: bridgeFor(receipt(), [openDocument()], receipt({ status: 'cancelled' })),
     })
 
@@ -328,7 +341,7 @@ describe('a receipt that exists', () => {
   /* There is no delete anywhere, and this is the assertion that says so: a number handed
    * out is never released, so cancelling is the only way out. */
   it('offers no way to delete one', async () => {
-    renderScreen(<Receipt {...editing()} />, { bridge: bridgeFor(receipt()) })
+    renderScreen(<ReceiptEditor {...editing()} kind="receipt" />, { bridge: bridgeFor(receipt()) })
 
     await screen.findByText('Posted')
     expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument()
@@ -337,7 +350,7 @@ describe('a receipt that exists', () => {
 
 describe('what it settles', () => {
   it('lists the customer open invoices with what is left on each', async () => {
-    renderScreen(<Receipt {...editing()} />, {
+    renderScreen(<ReceiptEditor {...editing()} kind="receipt" />, {
       bridge: bridgeFor(receipt(), [
         openDocument(),
         openDocument({ id: 'doc-2', number: 'INV/2026-27/0002', outstanding: '400.00' }),
@@ -356,7 +369,7 @@ describe('what it settles', () => {
    */
   it('settles one in full with exactly the figure main sent', async () => {
     const user = userEvent.setup()
-    renderScreen(<Receipt {...editing()} />, {
+    renderScreen(<ReceiptEditor {...editing()} kind="receipt" />, {
       bridge: bridgeFor(receipt(), [openDocument({ outstanding: '680.00' })]),
     })
 
@@ -370,7 +383,9 @@ describe('what it settles', () => {
    * allocated because there is no row to reduce.
    */
   it('asks for the open invoices with this receipt own allocations put back', async () => {
-    const { bridge } = renderScreen(<Receipt {...editing()} />, { bridge: bridgeFor(receipt()) })
+    const { bridge } = renderScreen(<ReceiptEditor {...editing()} kind="receipt" />, {
+      bridge: bridgeFor(receipt()),
+    })
 
     await waitFor(() => expect(bridge.callsTo('receipts:open').length).toBeGreaterThan(0))
     expect(sentTo(bridge, 'receipts:open')).toMatchObject({
@@ -384,7 +399,9 @@ describe('what it settles', () => {
    * and sending an id for one would be sending a lie. */
   it('sends no exception when there is no receipt yet', async () => {
     const user = userEvent.setup()
-    const { bridge } = renderScreen(<Receipt {...creating()} />, { bridge: bridgeFor(null) })
+    const { bridge } = renderScreen(<ReceiptEditor {...creating()} kind="receipt" />, {
+      bridge: bridgeFor(null),
+    })
 
     await screen.findByRole('button', { name: 'Record receipt' })
     await user.selectOptions(screen.getByLabelText('Customer'), 'party-1')
@@ -394,7 +411,7 @@ describe('what it settles', () => {
   })
 
   it('seeds a line from what the receipt already settles', async () => {
-    renderScreen(<Receipt {...editing()} />, {
+    renderScreen(<ReceiptEditor {...editing()} kind="receipt" />, {
       bridge: bridgeFor(
         receipt({
           allocated: '400.00',
@@ -425,7 +442,7 @@ describe('what it settles', () => {
    */
   it('leaves out a line nobody filled in', async () => {
     const user = userEvent.setup()
-    const { bridge } = renderScreen(<Receipt {...editing()} />, {
+    const { bridge } = renderScreen(<ReceiptEditor {...editing()} kind="receipt" />, {
       bridge: bridgeFor(receipt(), [
         openDocument(),
         openDocument({ id: 'doc-2', number: 'INV/2026-27/0002' }),
@@ -444,25 +461,29 @@ describe('what it settles', () => {
   /* Money on account is an ordinary thing to hold, so the screen says so rather than
    * treating it as a problem to solve before recording. */
   it('says a customer with nothing outstanding can still be receipted', async () => {
-    renderScreen(<Receipt {...editing()} />, { bridge: bridgeFor(receipt(), []) })
+    renderScreen(<ReceiptEditor {...editing()} kind="receipt" />, {
+      bridge: bridgeFor(receipt(), []),
+    })
 
     expect(await screen.findByText('Nothing of theirs is outstanding')).toBeInTheDocument()
     expect(screen.getByText(/sits on account/)).toBeInTheDocument()
   })
 
   it('asks for nothing until a customer is chosen', async () => {
-    const { bridge } = renderScreen(<Receipt {...creating()} />, { bridge: bridgeFor(null) })
+    const { bridge } = renderScreen(<ReceiptEditor {...creating()} kind="receipt" />, {
+      bridge: bridgeFor(null),
+    })
 
     await screen.findByRole('button', { name: 'Record receipt' })
     expect(bridge.callsTo('receipts:open')).toHaveLength(0)
-    expect(screen.getByText('Choose a customer to see what they owe')).toBeInTheDocument()
+    expect(screen.getByText('Choose a customer to see what is owed')).toBeInTheDocument()
   })
 })
 
 describe('arriving from an invoice', () => {
   it('fills in the customer it was sent', async () => {
     const { bridge } = renderScreen(
-      <Receipt {...creating({ partyId: 'party-2', documentId: 'doc-1' })} />,
+      <ReceiptEditor kind="receipt" {...creating({ partyId: 'party-2', documentId: 'doc-1' })} />,
       { bridge: bridgeFor(null) },
     )
 
@@ -477,9 +498,12 @@ describe('arriving from an invoice', () => {
    * a part payment is the ordinary case rather than the exception.
    */
   it('fills in no amount, because what arrived is not what was invoiced', async () => {
-    renderScreen(<Receipt {...creating({ partyId: 'party-1', documentId: 'doc-1' })} />, {
-      bridge: bridgeFor(null),
-    })
+    renderScreen(
+      <ReceiptEditor kind="receipt" {...creating({ partyId: 'party-1', documentId: 'doc-1' })} />,
+      {
+        bridge: bridgeFor(null),
+      },
+    )
 
     await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
     expect(screen.getByLabelText('Amount')).toHaveValue('')
@@ -489,7 +513,7 @@ describe('arriving from an invoice', () => {
 
 describe('the figures', () => {
   it('shows what main said was received, settled and on account', async () => {
-    renderScreen(<Receipt {...editing()} />, {
+    renderScreen(<ReceiptEditor {...editing()} kind="receipt" />, {
       bridge: bridgeFor(receipt({ allocated: '400.00', unallocated: '780.00' })),
     })
 
@@ -504,7 +528,7 @@ describe('the figures', () => {
    */
   it('marks the figures as stale rather than redrawing them', async () => {
     const user = userEvent.setup()
-    renderScreen(<Receipt {...editing()} />, { bridge: bridgeFor(receipt()) })
+    renderScreen(<ReceiptEditor {...editing()} kind="receipt" />, { bridge: bridgeFor(receipt()) })
 
     await user.type(await screen.findByLabelText('Settle against INV/2026-27/0001'), '500.00')
 
@@ -515,7 +539,7 @@ describe('the figures', () => {
   })
 
   it('will not save what it settles until something has changed', async () => {
-    renderScreen(<Receipt {...editing()} />, { bridge: bridgeFor(receipt()) })
+    renderScreen(<ReceiptEditor {...editing()} kind="receipt" />, { bridge: bridgeFor(receipt()) })
 
     expect(await screen.findByRole('button', { name: 'Save what it settles' })).toBeDisabled()
   })
@@ -528,7 +552,7 @@ describe('the account the money landed in', () => {
    * role — so a renderer that filtered would invent a rule main does not have.
    */
   it('offers the postable accounts and leaves out the groups and the archived', async () => {
-    renderScreen(<Receipt {...creating()} />, { bridge: bridgeFor(null) })
+    renderScreen(<ReceiptEditor {...creating()} kind="receipt" />, { bridge: bridgeFor(null) })
 
     const picker = await screen.findByLabelText('Account the money landed in')
     const options = within(picker)
@@ -539,5 +563,223 @@ describe('the account the money landed in', () => {
     expect(options).toContain('1100 — Cash in Hand')
     expect(options).not.toContain('1200 — Bank Accounts')
     expect(options).not.toContain('1299 — Closed Bank')
+  })
+})
+
+// ---- What differs by kind ---------------------------------------------------
+
+describe('the payment editor', () => {
+  const payment = (over: Partial<ReceiptDto> = {}): ReceiptDto =>
+    receipt({ kind: 'payment', number: 'PAY/2026-27/0001', ...over })
+
+  const bill = (over: Partial<OpenDocument> = {}): OpenDocument =>
+    openDocument({ kind: 'purchase-bill', number: 'BILL/2026-27/0001', ...over })
+
+  const paying = (id = 'rct-1') => screenContext({ route: testRoute('payment', { id }) })
+  const newPayment = (params: Record<string, string> = {}) =>
+    screenContext({ route: testRoute('payment', params) })
+
+  /*
+   * IT ASKS FOR VENDORS. One party record can be both — a firm you buy from and sell to
+   * is ordinary — so this narrows the picker rather than describing what a party IS. A
+   * payment editor listing customers would offer somebody the wrong half of their book.
+   */
+  it('asks main for vendors, not customers', async () => {
+    const { bridge } = renderScreen(<ReceiptEditor {...paying()} kind="payment" />, {
+      bridge: bridgeFor(payment(), [bill()], payment()),
+    })
+
+    await waitFor(() => expect(bridge.callsTo('parties:list')).toHaveLength(1))
+    expect(sentTo(bridge, 'parties:list')?.['role']).toBe('vendor')
+  })
+
+  it('labels the party as a vendor', async () => {
+    renderScreen(<ReceiptEditor {...paying()} kind="payment" />, {
+      bridge: bridgeFor(payment(), [bill()], payment()),
+    })
+
+    expect(await screen.findByLabelText('Vendor')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Customer')).toBeNull()
+  })
+
+  /*
+   * THE PICKER ASKS FOR ITS OWN KIND. `openDocumentsFor` narrows by the voucher's side —
+   * the filter 0013-1 fixed — so a stale kind here would ask for the sales side and offer
+   * a vendor's payment the customer invoices of a firm that is both.
+   */
+  it('asks for what a payment can settle, not what a receipt can', async () => {
+    const { bridge } = renderScreen(<ReceiptEditor {...paying()} kind="payment" />, {
+      bridge: bridgeFor(payment(), [bill()], payment()),
+    })
+
+    await waitFor(() => expect(bridge.callsTo('receipts:open')).toHaveLength(1))
+    expect(sentTo(bridge, 'receipts:open')?.['kind']).toBe('payment')
+  })
+
+  /*
+   * AND THE HEADING NAMES THE BILL. Read off the document table through `settlesLabel`,
+   * so a screen cannot call a bill an invoice — which would be the first place a user
+   * learned the wrong word for their own paperwork.
+   */
+  it('heads the allocation table with the bill it settles', async () => {
+    renderScreen(<ReceiptEditor {...paying()} kind="payment" />, {
+      bridge: bridgeFor(payment(), [bill()], payment()),
+    })
+
+    expect(await screen.findByRole('columnheader', { name: 'Purchase bill' })).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'Sales invoice' })).toBeNull()
+  })
+
+  it('says money the other way is a receipt', async () => {
+    renderScreen(<ReceiptEditor {...newPayment()} kind="payment" />, {
+      bridge: bridgeFor(null, [bill()], payment()),
+    })
+
+    await screen.findByRole('button', { name: 'Record payment' })
+    expect(screen.getByLabelText(/Amount/)).toHaveAccessibleDescription(/is a receipt/)
+  })
+
+  it('asks which account the money came out of', async () => {
+    renderScreen(<ReceiptEditor {...newPayment()} kind="payment" />, {
+      bridge: bridgeFor(null, [bill()], payment()),
+    })
+
+    expect(await screen.findByLabelText(/came out of/)).toBeInTheDocument()
+  })
+
+  it('records a payment, not a receipt', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<ReceiptEditor {...newPayment()} kind="payment" />, {
+      bridge: bridgeFor(null, [bill()], payment()),
+    })
+
+    await screen.findByRole('button', { name: 'Record payment' })
+    await user.selectOptions(screen.getByLabelText('Vendor'), 'party-1')
+    await user.type(screen.getByLabelText('Date'), '2026-04-20')
+    await user.type(screen.getByLabelText('Amount'), '1180.00')
+    await user.selectOptions(screen.getByLabelText(/came out of/), 'acc-bank')
+    await user.click(screen.getByRole('button', { name: 'Record payment' }))
+
+    await waitFor(() => expect(bridge.callsTo('receipts:create')).toHaveLength(1))
+    expect(sentTo(bridge, 'receipts:create')?.['kind']).toBe('payment')
+  })
+
+  /*
+   * AND SO IS THE ROUTE IT LANDS ON AFTER RECORDING. A literal `'receipt'` there survived
+   * the mutation pass, because the only test of "records and moves to it" was on the
+   * receipt kind — where the literal and the derivation give the same answer. Recording a
+   * payment would have left the user looking at a blank receipt editor.
+   */
+  it('moves to the payment it just recorded, not to a receipt', async () => {
+    const user = userEvent.setup()
+    const navigate = vi.fn()
+
+    renderScreen(
+      <ReceiptEditor
+        {...screenContext({ route: testRoute('payment'), navigate })}
+        kind="payment"
+      />,
+      { bridge: bridgeFor(null, [bill()], payment()) },
+    )
+
+    await screen.findByRole('button', { name: 'Record payment' })
+    await user.selectOptions(screen.getByLabelText('Vendor'), 'party-1')
+    await user.type(screen.getByLabelText('Date'), '2026-04-20')
+    await user.type(screen.getByLabelText('Amount'), '1180.00')
+    await user.selectOptions(screen.getByLabelText(/came out of/), 'acc-bank')
+    await user.click(screen.getByRole('button', { name: 'Record payment' }))
+
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith(
+        expect.objectContaining({ screenId: 'payment', params: { id: 'rct-1' } }),
+      ),
+    )
+  })
+
+  /* Back and the after-record route are both built from the kind. A fixed one would put
+   * somebody who just recorded a payment in front of the receipts register. */
+  it('returns to the payments register, not the receipts one', async () => {
+    const user = userEvent.setup()
+    const navigate = vi.fn()
+
+    renderScreen(
+      <ReceiptEditor
+        {...screenContext({ route: testRoute('payment', { id: 'rct-1' }), navigate })}
+        kind="payment"
+      />,
+      { bridge: bridgeFor(payment(), [bill()], payment()) },
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Back to the register' }))
+    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ screenId: 'payment-register' }))
+  })
+
+  it('cancels a payment by its own name', async () => {
+    renderScreen(<ReceiptEditor {...paying()} kind="payment" />, {
+      bridge: bridgeFor(payment(), [bill()], payment()),
+    })
+
+    expect(await screen.findByRole('button', { name: 'Cancel this payment' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cancel this receipt' })).toBeNull()
+  })
+})
+
+describe('a voucher of the other kind', () => {
+  /*
+   * THE HAZARD ONE EDITOR FOR TWO KINDS CREATES, and the same one the document editor
+   * carries. The kind comes from the route and so does the id, independently — a stale
+   * link loads a receipt into the payment editor, where the party picker lists vendors,
+   * the allocation table heads itself Purchase bill, and the figures are a customer's.
+   * Nothing would look wrong.
+   */
+  it('is refused, and none of it is drawn', async () => {
+    renderScreen(
+      <ReceiptEditor
+        {...screenContext({ route: testRoute('payment', { id: 'rct-1' }) })}
+        kind="payment"
+      />,
+      { bridge: bridgeFor(receipt({ kind: 'receipt' })) },
+    )
+
+    expect(await screen.findByText(/not a payment/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Vendor')).toHaveValue('')
+    expect(screen.getByLabelText('Amount')).toHaveValue('')
+  })
+
+  it('draws the one it was asked for', async () => {
+    renderScreen(
+      <ReceiptEditor
+        {...screenContext({ route: testRoute('payment', { id: 'rct-1' }) })}
+        kind="payment"
+      />,
+      { bridge: bridgeFor(receipt({ kind: 'payment' })) },
+    )
+
+    await waitFor(() => expect(screen.getByLabelText('Vendor')).toHaveValue('party-1'))
+    expect(screen.queryByText(/not a payment/)).toBeNull()
+  })
+})
+
+describe('the registrations', () => {
+  it('registers an editor for every kind the shared table knows', () => {
+    expect(receiptEditorScreens.map((definition) => definition.id)).toEqual(
+      RECEIPT_KINDS.map((definition) => definition.kind),
+    )
+  })
+
+  /*
+   * THE ROUTE AN INVOICE HAS SENT TO SINCE 0012. "Record a receipt" navigates to
+   * `workspace/receipt`, and this is the registration that answers it. Renaming the id
+   * would break that silently — the router simply finds no screen.
+   */
+  it('keeps the receipt editor at the id the document editor navigates to', () => {
+    expect(receiptEditorScreens.map((definition) => definition.id)).toContain('receipt')
+    expect(receiptEditorScreens.map((definition) => definition.id)).toContain('payment')
+  })
+
+  it('puts neither of them in the sidebar', () => {
+    for (const definition of receiptEditorScreens) {
+      expect(definition.nav).toBeUndefined()
+    }
   })
 })

@@ -117,7 +117,7 @@ src/
 └── shared/             types + the IPC contract. Imported by all three.
 ```
 
-**One vocabulary lives in `shared/` rather than in `domain/`, and it is worth knowing
+**Two vocabularies live in `shared/` rather than in `domain/`, and it is worth knowing
 why.** `shared/documents.ts` holds the kinds of trade document — what each is called, its
 side of the trade, its direction, and whether issuing it reaches the ledger. That table
 was in `domain/` until the screens needed it, and the renderer cannot import `@main/*`.
@@ -126,6 +126,12 @@ renderer, and a second copy is the shape this codebase keeps deleting. What stay
 `domain/` is what the LEDGER does with a kind: `SourceDocumentType` has `manual` and
 `year-end-close` in it, which no user raises, and that union does not belong in a module
 the renderer imports. The two halves are joined at compile time — see the file's header.
+
+`shared/receipts.ts` is the same split one layer over: a receipt and a payment differ in
+whose money it is, which way it moved and which documents they settle, and the screens
+need all three. What stayed in `domain/receipts` is the control account each one moves and
+what an entry records it as — an `AccountRole` and a `SourceDocumentType`, neither of
+which a screen can use.
 
 **This is the target layout, not an inventory.** As of the end of Phase 0, `main/app/`,
 `db/repos/`, `domain/ledger/`, `domain/documents/`, `domain/inventory/` and `services/`

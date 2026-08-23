@@ -50,6 +50,7 @@ import { registerScreens, type ScreenContext, type ScreenDefinition } from '@ren
 import { useNumberFormat, useRegime } from '@renderer/store/regime'
 import { useToasts } from '@renderer/store/toasts'
 import { correctsKind, definitionOf, DOCUMENT_KINDS, type DocumentKind } from '@shared/documents'
+import { receiptDefinitionOf, settlingKind, type ReceiptKind } from '@shared/receipts'
 import type {
   AppError,
   Document,
@@ -101,6 +102,14 @@ export function DocumentEditor({
   const definition = definitionOf(kind)
   const label = definition.label.toLowerCase()
   const corrects = correctsKind(kind)
+  /*
+   * The voucher that settles this side, which is also its editor's route id. Derived
+   * rather than named, because 0013-2 shipped this as `'receipt'` with the purchase side
+   * gated off — the payment editor did not exist, and a button reaching an unregistered
+   * screen would have landed a user on a blank page. It exists as of 0013-3, and one
+   * lookup replaces both the literal and the gate.
+   */
+  const settlesWith = settlingKind(definition.side)
 
   const [document, setDocument] = useState<Document | null>(null)
   const [parties, setParties] = useState<PartySummary[]>([])
@@ -570,20 +579,15 @@ export function DocumentEditor({
           <Settlement
             settlement={settlement}
             label={label}
+            settlesWith={settlesWith}
             format={format}
-            onRecordReceipt={
-              /* No payment editor until 0013-3. A button that navigated to a screen
-               * nothing has registered would land the user on a blank page, which is
-               * worse than an outstanding figure with nothing beside it. */
-              definition.side === 'sales'
-                ? () =>
-                    navigate(
-                      makeRoute('workspace', 'receipt', {
-                        partyId: document?.partyId ?? '',
-                        documentId: settlement.documentId,
-                      }),
-                    )
-                : null
+            onRecordMoney={() =>
+              navigate(
+                makeRoute('workspace', settlesWith, {
+                  partyId: document?.partyId ?? '',
+                  documentId: settlement.documentId,
+                }),
+              )
             }
           />
         )}
@@ -661,29 +665,32 @@ function Corrects({
  * A cancelled document comes back at nothing because its entry was reversed, which is why
  * this panel needs no special case for one.
  *
- * `Record a receipt` carries the party and this document into the receipt editor, and
- * carries no AMOUNT: what arrived is a fact about a bank statement, and a screen that
- * guessed it would have somebody confirming a figure they had not read.
+ * The button carries the party and this document into the voucher editor, and carries no
+ * AMOUNT: what moved is a fact about a bank statement, and a screen that guessed it would
+ * have somebody confirming a figure they had not read.
  */
 function Settlement({
   settlement,
   label,
+  settlesWith,
   format,
-  onRecordReceipt,
+  onRecordMoney,
 }: {
   settlement: DocumentSettlement
   label: string
+  settlesWith: ReceiptKind
   format: Parameters<typeof formatAmount>[1]
-  onRecordReceipt: (() => void) | null
+  onRecordMoney: () => void
 }): JSX.Element {
   const isSettled = settlement.outstanding === '0.00'
+  const voucher = receiptDefinitionOf(settlesWith).label.toLowerCase()
 
   return (
     <div className="stack stack--tight">
       <table className="ledger-table ledger-table--figures">
         <tbody>
           <tr>
-            <td>Received against this {label}</td>
+            <td>Settled against this {label}</td>
             <td className="ledger-table__figure">{formatAmount(settlement.allocated, format)}</td>
           </tr>
           <tr>
@@ -697,7 +704,7 @@ function Settlement({
         <table className="ledger-table ledger-table--figures">
           <thead>
             <tr>
-              <th scope="col">Receipt</th>
+              <th scope="col">{receiptDefinitionOf(settlesWith).label}</th>
               <th scope="col">Date</th>
               <th scope="col" className="ledger-table__figure">
                 Against this {label}
@@ -716,10 +723,10 @@ function Settlement({
         </table>
       )}
 
-      {!isSettled && onRecordReceipt !== null && (
+      {!isSettled && (
         <div className="toolbar">
-          <Button icon="plus" variant="ghost" size="sm" onClick={onRecordReceipt}>
-            Record a receipt
+          <Button icon="plus" variant="ghost" size="sm" onClick={onRecordMoney}>
+            Record a {voucher}
           </Button>
         </div>
       )}

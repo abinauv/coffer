@@ -113,6 +113,9 @@ export type {
 } from '@shared/documents'
 
 export {
+  chargeKindIn,
+  chargeKindOn,
+  correctionMap,
   correctsKind,
   definitionOf,
   DOCUMENT_KINDS,

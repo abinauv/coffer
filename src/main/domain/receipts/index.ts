@@ -18,12 +18,15 @@ export {
   isCancellable,
   isLiveReceipt,
   receiptDefinitionOf,
+  receiptTreatmentOf,
   settlesSide,
+  settlingKind,
   type MoneyDirection,
   type PostableReceipt,
   type ReceiptAllocation,
   type ReceiptKind,
   type ReceiptKindDefinition,
+  type ReceiptTreatment,
   type ReceiptStatus,
 } from './types'
 

@@ -11,6 +11,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  chargeKindOn,
   correctionMap,
   correctsKind,
   definitionOf,
@@ -135,6 +136,21 @@ describe('correctsKind', () => {
   })
 })
 
+describe('chargeKindOn', () => {
+  /* What a receipt settles and what a credit note corrects are the same fact asked from
+   * two ends — 0013-3 is where the second caller arrived. */
+  it('names the one posting charge kind on each side', () => {
+    expect(chargeKindOn('sales')).toBe('sales-invoice')
+    expect(chargeKindOn('purchase')).toBe('purchase-bill')
+  })
+
+  it('agrees with what a refund on that side corrects', () => {
+    for (const kind of KINDS.filter((each) => definitionOf(each).direction === 'refund')) {
+      expect(correctsKind(kind)).toBe(chargeKindOn(definitionOf(kind).side))
+    }
+  })
+})
+
 describe('correctionMap, given a table the real one cannot be', () => {
   /*
    * WHY THIS TAKES AN ARGUMENT AT ALL. The guard it exercises cannot fire on the shipped
@@ -170,7 +186,7 @@ describe('correctionMap, given a table the real one cannot be', () => {
         kind({ kind: 'quotation' }),
         kind({ kind: 'credit-note', direction: 'refund' }),
       ]),
-    ).toThrow(/may correct 2 kinds on the sales side/)
+    ).toThrow(/credit-note names 2 kinds on the sales side/)
   })
 
   /* And a side with none: a refund that corrects nothing that exists is a link the
@@ -181,7 +197,7 @@ describe('correctionMap, given a table the real one cannot be', () => {
         kind({ postsToLedger: false }),
         kind({ kind: 'credit-note', direction: 'refund' }),
       ]),
-    ).toThrow(/may correct 0 kinds on the sales side/)
+    ).toThrow(/credit-note names 0 kinds on the sales side/)
   })
 
   /* A table with no refunds in it maps nothing, rather than being a case somebody has to

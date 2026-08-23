@@ -62,6 +62,7 @@ import { definitionOf, type DocumentKind } from '@main/domain/documents'
 import { isPostingError, type AccountingPeriodRef, type EntryDraft } from '@main/domain/ledger'
 import {
   receiptDefinitionOf,
+  receiptTreatmentOf,
   receiptPostingRuleFor,
   type PostableReceipt,
   type ReceiptKind,
@@ -733,7 +734,7 @@ async function assertMoneyAccount(
   const control = await db
     .selectFrom('account_roles')
     .select('account_id')
-    .where('role', '=', receiptDefinitionOf(kind).controlRole)
+    .where('role', '=', receiptTreatmentOf(kind).controlRole)
     .executeTakeFirst()
 
   if (control?.account_id === accountId) {

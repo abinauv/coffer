@@ -756,18 +756,77 @@ describe('a purchase bill', () => {
   })
 
   /*
-   * NO RECEIPT BUTTON ON THE PURCHASE SIDE, until 0013-3 builds the payment editor. A
-   * button that navigated to a screen nothing has registered would land the user on a
-   * blank page, which is worse than an outstanding figure with nothing beside it.
+   * IT OFFERS A PAYMENT, NOT A RECEIPT — and asserting the absence of the receipt button
+   * would not have said so. 0013-2 shipped exactly that assertion, correctly, because no
+   * payment editor existed yet; 0013-3 built one and renamed the button, after which the
+   * old test passed while testing nothing. THE ABSENCE OF THE OLD NAME IS NOT THE
+   * PRESENCE OF THE NEW ONE. Both are asserted.
    */
-  it('shows what is outstanding and offers no receipt to settle it with', async () => {
+  it('offers a payment to settle it with, and not a receipt', async () => {
     const issuedBill = bill({ status: 'issued', number: 'BILL/2026-27/0001', entryId: 'entry-1' })
     renderScreen(<DocumentEditor {...purchase()} kind="purchase-bill" />, {
       bridge: bridgeFor(issuedBill, issuedBill, settlement()),
     })
 
     expect(await screen.findByText('Outstanding')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Record a payment' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Record a receipt' })).toBeNull()
+  })
+
+  /*
+   * AND IT GOES TO THE PAYMENT EDITOR, carrying the vendor and this bill. The route id is
+   * derived from the voucher that settles the purchase side, so a literal `'receipt'`
+   * here would open the receipt editor with a vendor's id in the party field — which
+   * would then list customers and find none of them matching.
+   */
+  it('carries the vendor and the bill into the payment editor', async () => {
+    const user = userEvent.setup()
+    const navigate = vi.fn()
+    const issuedBill = bill({ status: 'issued', number: 'BILL/2026-27/0001', entryId: 'entry-1' })
+
+    renderScreen(
+      <DocumentEditor
+        {...screenContext({ route: testRoute('purchase-bill', { id: 'doc-1' }), navigate })}
+        kind="purchase-bill"
+      />,
+      { bridge: bridgeFor(issuedBill, issuedBill, settlement()) },
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Record a payment' }))
+
+    expect(navigate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        screenId: 'payment',
+        params: { partyId: 'party-1', documentId: 'doc-1' },
+      }),
+    )
+  })
+
+  /* The panel names the voucher in its heading too, so a column of payments is not
+   * labelled Receipt on a bill. */
+  it('heads the settlement rows with the payment, not the receipt', async () => {
+    const issuedBill = bill({ status: 'issued', number: 'BILL/2026-27/0001', entryId: 'entry-1' })
+    renderScreen(<DocumentEditor {...purchase()} kind="purchase-bill" />, {
+      bridge: bridgeFor(
+        issuedBill,
+        issuedBill,
+        settlement({
+          allocated: '500.00',
+          outstanding: '680.00',
+          receipts: [
+            {
+              receiptId: 'pay-1',
+              number: 'PAY/2026-27/0001',
+              date: '2026-04-25',
+              amount: '500.00',
+            },
+          ],
+        }),
+      ),
+    })
+
+    expect(await screen.findByRole('columnheader', { name: 'Payment' })).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'Receipt' })).toBeNull()
   })
 })
 

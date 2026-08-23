@@ -188,29 +188,66 @@ export function kindsOnSide(side: TradeSide): readonly DocumentKindDefinition[] 
 }
 
 /**
- * The kind of document this one may correct, or null when it corrects nothing.
+ * THE ONE KIND ON A SIDE THAT PUTS THE PARTY IN DEBT, and the phrase is load-bearing in
+ * three places, which is why it is a function rather than three filters.
  *
- * THE RULE IS "THE CHARGE KIND ON THE SAME SIDE THAT POSTS", and the last three words are
- * load-bearing. A quotation is also `sales` and also `charge`, so without them the rule
- * has two answers on the sales side. Excluding it is not a patch to make the answer come
- * out right: there is nothing to correct, because a quotation makes no supply, raises no
- * tax and moves no balance.
+ * A credit note corrects it. A receipt settles it. The picker on the receipt screen lists
+ * it. All three mean "the charge kind on that side that posts", and none of them means
+ * anything else — so a fourth caller gets the same answer rather than a fourth filter
+ * that agrees by inspection.
  *
- * BUILT BY COUNTING THE MATCHES RATHER THAN BY TAKING THE FIRST, which is the part worth
- * reading. Migration 0013's test asserted this mapping in the ambiguous form — derived
- * inline with a `.find` — and it passed only because `sales-invoice` is listed above
- * `quotation`. A `.find` cannot tell "one answer" from "the first of two", so the rule it
- * implements is table order, and no assertion downstream can see the difference. This
- * collects every match and refuses more than one.
+ * THE LAST THREE WORDS ARE THE PART WORTH READING. A quotation is also `sales` and also
+ * `charge`, so without `postsToLedger` the rule has two answers on the sales side.
+ * Excluding it is not a patch to make the answer come out right: a quotation makes no
+ * supply, raises no tax and moves no balance, so there is nothing to correct and nothing
+ * to settle.
+ *
+ * FOUND BY COUNTING THE MATCHES RATHER THAN BY TAKING THE FIRST. Migration 0013's test
+ * asserted this mapping in the ambiguous form — derived inline with a `.find` — and it
+ * passed only because `sales-invoice` is listed above `quotation`. A `.find` cannot tell
+ * "one answer" from "the first of two", so the rule it implements is table order, and no
+ * assertion downstream can see the difference.
  *
  * The refusal is at module load, so an ambiguity added to the table is a crash at boot
  * rather than a wrong picker at click time — the same argument `requireRule` makes in the
  * posting engine. It cannot fire on a shipped build: the table is a constant.
  *
  * WHICH IS ALSO WHY IT TAKES THE TABLE AS AN ARGUMENT. A guard against a state the real
- * table cannot reach is a guard no test can exercise and no mutation can kill — the
+ * table cannot reach is a guard no test can exercise and no mutation can kill — 0013-2's
  * mutation pass found exactly that, and the answer was not to accept an untestable line
  * but to let a test hand it the table it is guarding against.
+ */
+export function chargeKindIn(
+  kinds: readonly DocumentKindDefinition[],
+  side: TradeSide,
+  /** Named in the refusal, so a crash at boot says which row could not be resolved. */
+  asking: string,
+): DocumentKind {
+  const charges = kinds.filter(
+    (each) => each.side === side && each.direction === 'charge' && each.postsToLedger,
+  )
+  const [charge, ...rest] = charges
+  if (charge === undefined || rest.length > 0) {
+    throw new Error(
+      `${asking} names ${String(charges.length)} kinds on the ${side} side. Exactly one ` +
+        'posting charge kind per side, or there is nothing to correct and nothing to settle.',
+    )
+  }
+  return charge.kind
+}
+
+/**
+ * What a receipt on this side settles, and what its picker lists.
+ *
+ * The same fact `correctsKind` is built from, asked from the money's end rather than the
+ * correction's — see `chargeKindIn`.
+ */
+export function chargeKindOn(side: TradeSide): DocumentKind {
+  return chargeKindIn(DOCUMENT_KINDS, side, `the ${side} side`)
+}
+
+/**
+ * Which kind each refund kind may correct.
  *
  * This is the same mapping migration 0013 enumerates in SQL, where a CHECK cannot import
  * a union. A test in the documents suite asserts the two agree.
@@ -221,21 +258,10 @@ export function correctionMap(
   return new Map(
     kinds
       .filter((definition) => definition.direction === 'refund')
-      .map((definition) => {
-        const charges = kinds.filter(
-          (each) =>
-            each.side === definition.side && each.direction === 'charge' && each.postsToLedger,
-        )
-        const [charge, ...rest] = charges
-        if (charge === undefined || rest.length > 0) {
-          throw new Error(
-            `${definition.kind} may correct ${String(charges.length)} kinds on the ` +
-              `${definition.side} side. Exactly one posting charge kind per side, or a ` +
-              'correction has no subject.',
-          )
-        }
-        return [definition.kind, charge.kind]
-      }),
+      .map((definition) => [
+        definition.kind,
+        chargeKindIn(kinds, definition.side, definition.kind),
+      ]),
   )
 }
 

@@ -11,19 +11,34 @@ import { describe, expect, it } from 'vitest'
 
 import type { OpenDocument } from '@shared/dto'
 
+import { RECEIPT_KINDS, type ReceiptKind } from '@shared/receipts'
+
 import {
-  PAGE_SIZE,
-  RECEIPT_KIND,
+  accountHint,
+  accountLabel,
+  amountHint,
   canAllocate,
   canCancel,
   draftAllocations,
+  editorScreenId,
+  emptyRegisterSentence,
+  newSentence,
+  PAGE_SIZE,
+  partyLabel,
+  partyRoleFor,
+  registerLede,
+  registerNav,
+  registerScreenId,
   settleInFull,
+  settlesLabel,
   stateSentence,
   statusFilters,
   statusLabel,
   statusTone,
   toAllocationInputs,
 } from './receipt-view'
+
+const KINDS: readonly ReceiptKind[] = RECEIPT_KINDS.map((definition) => definition.kind)
 
 const open = (over: Partial<OpenDocument> = {}): OpenDocument => ({
   id: 'doc-1',
@@ -36,14 +51,133 @@ const open = (over: Partial<OpenDocument> = {}): OpenDocument => ({
 })
 
 describe('what the register lists', () => {
-  /* One direction, on purpose. A register mixing money out into a list of money in would
-   * invite reading a total that means nothing. */
-  it('lists receipts and not payments', () => {
-    expect(RECEIPT_KIND).toBe('receipt')
-  })
-
   it('draws a page small enough to sit under the toolbar', () => {
     expect(PAGE_SIZE).toBe(50)
+  })
+})
+
+describe('where each kind lives', () => {
+  /*
+   * Four ids, all different. `createScreenRegistry` keys by `area/id` and the second
+   * registration silently replaces the first, so a duplicate would give one kind two
+   * sidebar entries opening the same screen — and nothing would throw.
+   */
+  it('gives every kind a register and an editor, and no two the same', () => {
+    const ids = [...KINDS.map(registerScreenId), ...KINDS.map(editorScreenId)]
+
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ids).toHaveLength(4)
+  })
+
+  /*
+   * THE ONE ID THAT IS NOT FREE TO CHANGE. An invoice's "Record a receipt" has navigated
+   * to `workspace/receipt` since 0012, and the document editor still builds that route
+   * from the kind rather than from a literal. Renaming this breaks it silently — the
+   * router simply finds no screen.
+   */
+  it('keeps the receipt editor at the route an invoice already sends to', () => {
+    expect(editorScreenId('receipt')).toBe('receipt')
+    expect(editorScreenId('payment')).toBe('payment')
+  })
+
+  it('files each register under the group its side names', () => {
+    expect(registerNav('receipt').group).toBe('sales')
+    expect(registerNav('payment').group).toBe('purchases')
+  })
+
+  /* Last in its group, after the documents: a voucher is what happens TO a document. The
+   * document registers hold 1..3 on each side. */
+  it('sits below every document register in its group', () => {
+    for (const kind of KINDS) {
+      expect(registerNav(kind).order).toBeGreaterThan(2)
+    }
+  })
+
+  it('labels the sidebar entry with the plural from the shared table', () => {
+    expect(registerNav('payment').label).toBe('Payments')
+    expect(registerNav('receipt').label).toBe('Receipts')
+  })
+})
+
+describe('what each kind is called', () => {
+  it('asks for customers on the sales side and vendors on the purchase side', () => {
+    expect(partyRoleFor('sales')).toBe('customer')
+    expect(partyRoleFor('purchase')).toBe('vendor')
+    expect(partyLabel('purchase')).toBe('Vendor')
+  })
+
+  /*
+   * READ OFF THE DOCUMENT TABLE, NOT WRITTEN OUT HERE. `settlesLabel` goes through
+   * `chargeKindOn`, the same function `correctsKind` is built from — so a sixth document
+   * kind cannot leave this screen calling a bill an invoice, and the allocation heading
+   * cannot drift from what the picker actually lists.
+   */
+  it('names what each side settles from the document table', () => {
+    expect(settlesLabel('sales')).toBe('Sales invoice')
+    expect(settlesLabel('purchase')).toBe('Purchase bill')
+  })
+
+  it('says money arrived for a receipt and was paid for a payment', () => {
+    expect(amountHint('receipt')).toContain('What arrived')
+    expect(amountHint('payment')).toContain('What you paid')
+  })
+
+  /*
+   * THE SENTENCE THAT STOPS A NEGATIVE. Both kinds warn that money the other way is the
+   * other kind — and each has to name the OTHER one, or the warning tells a user to
+   * record the thing they were already recording.
+   */
+  it('points each kind at the other for money going the wrong way', () => {
+    expect(amountHint('receipt')).toContain('is a payment')
+    expect(amountHint('payment')).toContain('is a receipt')
+  })
+
+  it('says which way the money crossed the account', () => {
+    expect(accountLabel('receipt')).toContain('landed in')
+    expect(accountLabel('payment')).toContain('came out of')
+    expect(accountHint('receipt')).not.toBe(accountHint('payment'))
+  })
+
+  it('says a receipt was taken and a payment was made', () => {
+    expect(registerLede('receipt')).toContain('taken')
+    expect(registerLede('payment')).toContain('made')
+  })
+
+  it('writes a different lede and a different empty state for each kind', () => {
+    expect(new Set(KINDS.map(registerLede)).size).toBe(KINDS.length)
+    expect(new Set(KINDS.map(emptyRegisterSentence)).size).toBe(KINDS.length)
+  })
+
+  /*
+   * MONEY ON ACCOUNT IS NOT AN UNFINISHED JOB, and the empty register is where a user
+   * learns it. It also has to name the right document: telling somebody a payment does
+   * not need an invoice is true and useless.
+   */
+  it('says a voucher needs no document, naming the one it would settle', () => {
+    expect(emptyRegisterSentence('payment')).toContain('purchase bill')
+    expect(emptyRegisterSentence('payment')).toContain('vendor')
+    expect(emptyRegisterSentence('receipt')).toContain('sales invoice')
+  })
+
+  /*
+   * THE HALF THAT TELLS THEM WHAT TO DO, and `toContain('on account')` did not reach it —
+   * a mutation truncating the sentence to "sits on account." survived, because the phrase
+   * being asserted was the part that stayed. Money nobody has matched is ordinary, and
+   * what a user needs is that it waits for them rather than that it exists.
+   */
+  it('says unmatched money waits to be told what it pays', () => {
+    for (const kind of KINDS) {
+      expect(emptyRegisterSentence(kind)).toContain('until you say what it pays')
+    }
+  })
+
+  /* There is no draft on either side — rule 1. A new voucher says so before it exists. */
+  it('says recording it posts it, whichever way the money went', () => {
+    for (const kind of KINDS) {
+      expect(newSentence(kind)).toContain('there is no draft')
+    }
+    expect(newSentence('receipt')).toContain('already arrived')
+    expect(newSentence('payment')).toContain('already left')
   })
 })
 

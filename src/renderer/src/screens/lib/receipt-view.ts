@@ -1,5 +1,11 @@
 /*
- * The receipt register's vocabulary, and the shapes the editor holds.
+ * The money registers' vocabulary, and the shapes their editor holds.
+ *
+ * ONE REGISTER AND ONE EDITOR FOR BOTH DIRECTIONS (0013-3), the same shape the document
+ * screens took in 0013-2. A receipt and a payment differ in whose money it is, which way
+ * it moved, and which documents it settles — and in nothing else a screen can see. The
+ * words come from `@shared/receipts`, which is where the kind table moved so that the
+ * label on a button and the control account a posting rule moves are read off one row.
  *
  * Split out of the two screens for the reason every `screens/lib` module is: what can be
  * tested as a function should be, so a component test is left asserting what is on the
@@ -20,24 +26,138 @@
  */
 
 import type { BadgeTone } from '@renderer/components/atoms'
+import type { ScreenNav } from '@renderer/lib/screens'
+import { chargeKindOn, definitionOf, type TradeSide } from '@shared/documents'
 import type { AllocationInput, OpenDocument, ReceiptStatusDto } from '@shared/dto'
+import { receiptDefinitionOf, type ReceiptKind } from '@shared/receipts'
+
+// ---- Where each kind's screens live -----------------------------------------
+
+/*
+ * ONE KIND PER SCREEN, STILL. `receipts` is one table for both directions, and a register
+ * mixing money out into a list of money in would invite reading a total that means
+ * nothing. What changed in 0013-3 is that the second screen now exists: a payment had
+ * nothing to settle until a purchase bill could be issued, which 0013-1 made possible.
+ *
+ * The ids are derived rather than listed, exactly as the document screens' are — and the
+ * editor's id IS the kind, which is why the invoice screen's long-standing route to
+ * `workspace/receipt` still resolves.
+ */
+
+/** The register that lists every voucher of this kind. */
+export function registerScreenId(kind: ReceiptKind): string {
+  return `${kind}-register`
+}
+
+/** The editor for one voucher of this kind. */
+export function editorScreenId(kind: ReceiptKind): string {
+  return kind
+}
 
 /**
- * The kind these screens record.
+ * Where a kind's register sits in the sidebar.
  *
- * `receipts` is one table for both directions and a payment posts perfectly well today,
- * but a register that mixed money out into a list of money in would invite reading a
- * total that means nothing. Payments get their own screen when purchase bills get their
- * posting rule; until then there is nothing for one to settle.
+ * Last in its group, after the documents, because a voucher is what happens TO a document
+ * rather than a document. `document-view.ts` holds the orders above these.
  */
-export const RECEIPT_KIND = 'receipt'
+const NAV_ORDER: Readonly<Record<ReceiptKind, number>> = {
+  receipt: 4,
+  payment: 3,
+}
+
+export function registerNav(kind: ReceiptKind): ScreenNav {
+  const definition = receiptDefinitionOf(kind)
+  return {
+    label: definition.pluralLabel,
+    icon: 'ledger',
+    group: definition.side === 'sales' ? 'sales' : 'purchases',
+    order: NAV_ORDER[kind],
+  }
+}
+
+// ---- What each kind is called -----------------------------------------------
+
+/**
+ * The role to ask `parties.list` for.
+ *
+ * One party record can be both, so this narrows a picker rather than describing what the
+ * party IS — see the note on `partyRoleFor` in document-view.ts.
+ */
+export function partyRoleFor(side: TradeSide): 'customer' | 'vendor' {
+  return side === 'sales' ? 'customer' : 'vendor'
+}
+
+/** What the party field is labelled. The user's word, not the schema's. */
+export function partyLabel(side: TradeSide): string {
+  return side === 'sales' ? 'Customer' : 'Vendor'
+}
+
+/**
+ * What the documents this settles are called.
+ *
+ * READ OFF THE DOCUMENT TABLE, not written out here. `chargeKindOn` is the same function
+ * `correctsKind` is built from: the one kind on a side that puts the party in debt. The
+ * allocation table's heading and the picker's empty state both use it, so a sixth
+ * document kind cannot leave this screen calling a bill an invoice.
+ */
+export function settlesLabel(side: TradeSide): string {
+  return definitionOf(chargeKindOn(side)).label
+}
+
+/** The lede under a register's heading. */
+export function registerLede(kind: ReceiptKind): string {
+  const definition = receiptDefinitionOf(kind)
+  const verb = definition.direction === 'in' ? 'taken' : 'made'
+  return `Every ${definition.label.toLowerCase()} these books have ${verb}, and how much of each is still on account.`
+}
+
+/** What the amount field asks for, which is the sentence most worth getting right. */
+export function amountHint(kind: ReceiptKind): string {
+  const definition = receiptDefinitionOf(kind)
+  const other = definition.direction === 'in' ? 'payment' : 'receipt'
+  const arrived = definition.direction === 'in' ? 'What arrived' : 'What you paid'
+  return `${arrived}. Money going the other way is a ${other}, not a negative ${definition.label.toLowerCase()}.`
+}
+
+/** What the money account is called, which differs by which way the money went. */
+export function accountLabel(kind: ReceiptKind): string {
+  return receiptDefinitionOf(kind).direction === 'in'
+    ? 'Account the money landed in'
+    : 'Account the money came out of'
+}
+
+export function accountHint(kind: ReceiptKind): string {
+  return receiptDefinitionOf(kind).direction === 'in'
+    ? 'The bank or cash account it went into.'
+    : 'The bank or cash account it came out of.'
+}
+
+/**
+ * What an empty register says, when nothing has been filtered out.
+ *
+ * MONEY ON ACCOUNT IS NOT AN UNFINISHED JOB, and this sentence is where a user learns it.
+ * A voucher does not need a document: it sits on account until somebody says what it
+ * pays, which is an ordinary thing for a business to hold.
+ */
+export function emptyRegisterSentence(kind: ReceiptKind): string {
+  const definition = receiptDefinitionOf(kind)
+  const label = definition.label.toLowerCase()
+  const party = partyLabel(definition.side).toLowerCase()
+  const document = settlesLabel(definition.side).toLowerCase()
+  const landed = definition.direction === 'in' ? 'land in' : 'come out of'
+  return (
+    `A ${label} needs a ${party} and an account for the money to ${landed}. New ${label} ` +
+    `starts one — it does not need a ${document}, and money nobody has matched yet sits on ` +
+    'account until you say what it pays.'
+  )
+}
 
 /**
  * Rows drawn per page.
  *
  * `listReceipts` caps a page at `MAX_RECEIPT_PAGE` (500) whatever it is asked for, so a
  * register that did not page would show the first page of a busy year and look complete.
- * The same 50 the invoice register uses, for the same reason: it fits without scrolling
+ * The same 50 the document registers use, for the same reason: it fits without scrolling
  * past the toolbar.
  */
 export const PAGE_SIZE = 50
@@ -54,9 +174,9 @@ export function statusLabel(status: string): string {
 /**
  * The badge a status wears.
  *
- * Two states rather than the invoice register's three, and the accent has nowhere to go:
+ * Two states rather than a document register's three, and the accent has nowhere to go:
  * there is no draft, so no row has anything left to do. Posted is the settled normal and
- * cancelled recedes, exactly as `statusTone` in invoice-view.ts argues — a cancelled
+ * cancelled recedes, exactly as `statusTone` in document-view.ts argues — a cancelled
  * receipt is how a bounced cheque is recorded properly, not a warning.
  */
 export function statusTone(status: string): BadgeTone {
@@ -102,12 +222,19 @@ export function canCancel(status: ReceiptStatusDto): boolean {
   return status === 'posted'
 }
 
-/** What the status line says the receipt is, in a sentence rather than a word. */
+/** What the status line says the voucher is, in a sentence rather than a word. */
 export function stateSentence(status: ReceiptStatusDto, number: string): string {
   if (status === 'cancelled') {
     return `Cancelled. ${number} is kept, and what it posted has been reversed.`
   }
   return `Posted as ${number}. The money is in the books; what it settles can still change.`
+}
+
+/** What a new one says before it exists. Both kinds post the moment they are recorded. */
+export function newSentence(kind: ReceiptKind): string {
+  return receiptDefinitionOf(kind).direction === 'in'
+    ? 'Money that has already arrived. Recording it posts it — there is no draft.'
+    : 'Money that has already left. Recording it posts it — there is no draft.'
 }
 
 // ---- Allocations, as the form holds them ------------------------------------

@@ -19,6 +19,7 @@ import {
   isCancellable,
   isLiveReceipt,
   receiptDefinitionOf,
+  receiptTreatmentOf,
   settlesSide,
   type ReceiptAllocation,
   type ReceiptKind,
@@ -37,15 +38,13 @@ describe('the two kinds', () => {
   })
 
   it('move opposite control accounts in opposite directions', () => {
-    expect(receiptDefinitionOf('receipt')).toMatchObject({
-      side: 'sales',
-      direction: 'in',
+    expect(receiptDefinitionOf('receipt')).toMatchObject({ side: 'sales', direction: 'in' })
+    expect(receiptTreatmentOf('receipt')).toMatchObject({
       controlRole: 'accounts-receivable',
       sourceType: 'receipt',
     })
-    expect(receiptDefinitionOf('payment')).toMatchObject({
-      side: 'purchase',
-      direction: 'out',
+    expect(receiptDefinitionOf('payment')).toMatchObject({ side: 'purchase', direction: 'out' })
+    expect(receiptTreatmentOf('payment')).toMatchObject({
       controlRole: 'accounts-payable',
       sourceType: 'payment',
     })
@@ -57,9 +56,28 @@ describe('the two kinds', () => {
    * quotation reaches no ledger; nothing here has an equivalent, and this is the
    * assertion that would notice if one were added without the callers being told.
    */
-  it('all reach the ledger, so none has a null source type', () => {
+  it('all reach the ledger, so every one has a source type', () => {
     for (const definition of RECEIPT_KINDS) {
-      expect(definition.sourceType).not.toBeNull()
+      expect(receiptTreatmentOf(definition.kind).sourceType).not.toBeNull()
+    }
+  })
+
+  /*
+   * The two facts 0013-3 split apart. The words live in `@shared/receipts` where a screen
+   * can read them; what the LEDGER does with a kind stays in the domain. TypeScript
+   * already refuses a kind with no treatment — the record is total over `ReceiptKind` —
+   * so this asserts the pair is coherent, which is the half a type cannot state.
+   */
+  it('moves the control account its side implies', () => {
+    expect(receiptTreatmentOf('receipt').controlRole).toBe('accounts-receivable')
+    expect(receiptTreatmentOf('payment').controlRole).toBe('accounts-payable')
+  })
+
+  /* A voucher is recorded in the ledger under its own name, so drilling from an entry
+   * back to the voucher needs no mapping table. */
+  it('records a voucher under its own name', () => {
+    for (const definition of RECEIPT_KINDS) {
+      expect(receiptTreatmentOf(definition.kind).sourceType).toBe(definition.kind)
     }
   })
 
@@ -70,6 +88,18 @@ describe('the two kinds', () => {
 
   it('refuses a kind this build does not know', () => {
     expect(() => receiptDefinitionOf('advance' as ReceiptKind)).toThrow(/newer Coffer/)
+  })
+
+  /*
+   * AND SO DOES THE TREATMENT, which is the half a mutation found nothing asserting. The
+   * record is `Record<ReceiptKind, …>`, so an unknown string reaching it does not fail —
+   * it answers `undefined`, and the caller then reads `.controlRole` off nothing and dies
+   * with a TypeError naming neither the kind nor the file. The lookup goes through
+   * `receiptDefinitionOf` first so a newer build's company file gets the sentence written
+   * for it instead.
+   */
+  it('refuses to treat a kind this build does not know', () => {
+    expect(() => receiptTreatmentOf('advance' as ReceiptKind)).toThrow(/newer Coffer/)
   })
 })
 

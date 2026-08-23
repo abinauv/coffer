@@ -78,47 +78,32 @@
 
 import { ZERO, type Decimal } from '@main/domain/money'
 import type { AccountRole, SourceDocumentType } from '@main/domain/ledger'
-import type { TradeSide } from '@main/domain/documents'
+import { receiptDefinitionOf, type ReceiptKind } from '@shared/receipts'
 import type { DateString } from '@shared/scalars'
 
 // ---- Kinds -----------------------------------------------------------------
 
-/**
- * Money in, or money out.
+/*
+ * THE TABLE ITSELF LIVES IN `@shared/receipts`, and it moved there in 0013-3 — one batch
+ * after the document kinds moved, for the same reason and with the same split.
  *
- * Closed on purpose, like `DocumentKind`: an unrecognised kind in a company file means
- * the file was written by a newer build. The same two strings appear in `NumberedKind`
- * over in `domain/documents`, which is where a numbering series has to see them — the
- * note there says why they are declared rather than imported.
+ * The screens need to know what a payment is called, whose side it is on and which way
+ * the money went; the renderer cannot import `@main/*`. What stays here is what the
+ * LEDGER does with a kind, which is an `AccountRole` and a `SourceDocumentType` — the
+ * ledger's own vocabulary, and nothing a screen can use.
  */
-export type ReceiptKind = 'receipt' | 'payment'
 
-/**
- * Which way the money went.
- *
- * The posting rule reads THIS and never the kind, so a kind added later gets its debits
- * and credits the right way round by declaring itself rather than by being remembered in
- * a condition — the same reason `DocumentDirection` exists next door. A refund to a
- * customer is the case that makes it worth having: money out, on the sales side, which
- * no `kind === 'receipt'` test can be made to answer correctly.
- */
-export type MoneyDirection = 'in' | 'out'
+export type { MoneyDirection, ReceiptKind, ReceiptKindDefinition } from '@shared/receipts'
 
-export interface ReceiptKindDefinition {
-  kind: ReceiptKind
-  /** What the user sees, singular. */
-  label: string
-  /** What the user sees for many of them. */
-  pluralLabel: string
-  /** Which half of the trade it belongs to, and therefore which documents it settles. */
-  side: TradeSide
-  /** Whether the business received the money or parted with it. */
-  direction: MoneyDirection
+export { RECEIPT_KINDS, receiptDefinitionOf, settlesSide, settlingKind } from '@shared/receipts'
+
+/** What the ledger does with a voucher of one kind. */
+export interface ReceiptTreatment {
   /**
    * The control account this kind moves.
    *
    * A role and never a code, the same as every posting rule: a rule asks for where
-   * receivables go, never for `1100`. It is on the table rather than derived from `side`
+   * receivables go, never for `1100`. It is stated rather than derived from `side`
    * because the derivation would be two facts agreeing, which is the shape gate 2.0's
    * `levy` field turned out to be — except here they would agree by coincidence rather
    * than by meaning, since nothing says a sales-side voucher must move receivables.
@@ -128,50 +113,26 @@ export interface ReceiptKindDefinition {
   sourceType: SourceDocumentType
 }
 
-/** The table. Adding a kind means a row, a posting rule, and nothing else. */
-export const RECEIPT_KINDS: readonly ReceiptKindDefinition[] = [
-  {
-    kind: 'receipt',
-    label: 'Receipt',
-    pluralLabel: 'Receipts',
-    side: 'sales',
-    direction: 'in',
-    controlRole: 'accounts-receivable',
-    sourceType: 'receipt',
-  },
-  {
-    kind: 'payment',
-    label: 'Payment',
-    pluralLabel: 'Payments',
-    side: 'purchase',
-    direction: 'out',
-    controlRole: 'accounts-payable',
-    sourceType: 'payment',
-  },
-] as const
-
-const BY_KIND: ReadonlyMap<ReceiptKind, ReceiptKindDefinition> = new Map(
-  RECEIPT_KINDS.map((definition) => [definition.kind, definition]),
-)
-
 /**
- * The definition for a kind.
+ * How the ledger treats each kind.
  *
- * Throws rather than returning null, for the reason `definitionOf` in `domain/documents`
- * throws: every caller holds a `ReceiptKind`, so a miss here is a company file a newer
- * build wrote and not something a null-check on every call site would help with.
+ * TOTAL OVER `ReceiptKind`, which is what makes it safe: every voucher posts, so a kind
+ * added to the shared table does not compile until it says which control account it moves
+ * and what an entry records it as. The document side needs an `Extract`ed subset for the
+ * same guarantee because a quotation posts nothing; here there is no such case, and
+ * `@shared/receipts` says why it carries no `postsToLedger`.
  */
-export function receiptDefinitionOf(kind: ReceiptKind): ReceiptKindDefinition {
-  const definition = BY_KIND.get(kind)
-  if (definition === undefined) {
-    throw new Error(`Unknown receipt kind '${kind}'. This file may need a newer Coffer.`)
-  }
-  return definition
+const TREATMENTS: Readonly<Record<ReceiptKind, ReceiptTreatment>> = {
+  receipt: { controlRole: 'accounts-receivable', sourceType: 'receipt' },
+  payment: { controlRole: 'accounts-payable', sourceType: 'payment' },
 }
 
-/** Which document kinds a voucher of this kind can be allocated against. */
-export function settlesSide(kind: ReceiptKind): TradeSide {
-  return receiptDefinitionOf(kind).side
+/** What the ledger does with a voucher of this kind. */
+export function receiptTreatmentOf(kind: ReceiptKind): ReceiptTreatment {
+  /* `receiptDefinitionOf` first, so an unknown kind is refused with the sentence about a
+   * newer build rather than reaching an index that would answer undefined. */
+  receiptDefinitionOf(kind)
+  return TREATMENTS[kind]
 }
 
 // ---- Status ----------------------------------------------------------------

@@ -1,5 +1,11 @@
 /*
- * One receipt: recording it, saying what it settles, and cancelling it.
+ * One voucher: recording it, saying what it settles, and cancelling it. Both directions,
+ * one component.
+ *
+ * WAS `Receipt.tsx`, WITH THE KIND FIXED. A payment posted perfectly well from 0012 and
+ * had nothing to settle until a purchase bill could be issued, which 0013-1 made
+ * possible. A payment differs from a receipt in whose money it is, which way it moved,
+ * and which documents its picker lists — and in nothing else on this screen.
  *
  * TWO SCREENS IN ONE COMPONENT, AND THE SPLIT IS RULE 1. A receipt records money that has
  * already moved, so it posts the moment it is recorded — there is no draft. Before it
@@ -23,10 +29,11 @@
  * into the box rather than working one out. Exact by construction, and it is the action a
  * user takes nine times in ten.
  *
- * OPENED FROM AN INVOICE, IT ARRIVES PRE-FILLED. `partyId` and `documentId` in the route
- * are what "Record a receipt" on an invoice sends. The amount is deliberately NOT
- * pre-filled from the invoice: what arrived is a fact about a bank statement, and a
- * screen that guessed it would have somebody confirming a figure they had not read.
+ * OPENED FROM A DOCUMENT, IT ARRIVES PRE-FILLED. `partyId` and `documentId` in the route
+ * are what "Record a receipt" on an invoice — or "Record a payment" on a bill — sends.
+ * The amount is deliberately NOT pre-filled from the document: what moved is a fact about
+ * a bank statement, and a screen that guessed it would have somebody confirming a figure
+ * they had not read.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -34,9 +41,10 @@ import type { JSX } from 'react'
 import { Badge, Button, Input, Select } from '@renderer/components/atoms'
 import { callApi } from '@renderer/lib/api'
 import { makeRoute } from '@renderer/lib/routing'
-import { registerScreens, type ScreenContext } from '@renderer/lib/screens'
+import { registerScreens, type ScreenContext, type ScreenDefinition } from '@renderer/lib/screens'
 import { useNumberFormat } from '@renderer/store/regime'
 import { useToasts } from '@renderer/store/toasts'
+import type { TradeSide } from '@shared/documents'
 import type {
   Account,
   AppError,
@@ -44,26 +52,45 @@ import type {
   PartySummary,
   Receipt as ReceiptDto,
 } from '@shared/dto'
+import { RECEIPT_KINDS, receiptDefinitionOf, type ReceiptKind } from '@shared/receipts'
 import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
 import { ScreenFrame } from '../components/ScreenFrame'
 import { formatAmount } from '../lib/ledger-format'
 import {
-  RECEIPT_KIND,
+  accountHint,
+  accountLabel,
+  amountHint,
   canAllocate,
   canCancel,
   draftAllocations,
+  newSentence,
+  partyLabel,
+  partyRoleFor,
+  registerScreenId,
   settleInFull,
+  settlesLabel,
   stateSentence,
   statusLabel,
   statusTone,
   toAllocationInputs,
 } from '../lib/receipt-view'
 
-export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
+export function ReceiptEditor({
+  kind,
+  route,
+  navigate,
+}: ScreenContext & { kind: ReceiptKind }): JSX.Element {
   const receiptId = route.params['id'] ?? null
   const { show } = useToasts()
   const format = useNumberFormat()
+
+  const definition = receiptDefinitionOf(kind)
+  const label = definition.label.toLowerCase()
+  const party = partyLabel(definition.side)
+  /* What this settles, plural and lower case, for the sentences that name it. Read off
+   * the DOCUMENT table so a payment says "purchase bills" — see `settlesLabel`. */
+  const settled = `${settlesLabel(definition.side).toLowerCase()}s`
 
   const [receipt, setReceipt] = useState<ReceiptDto | null>(null)
   const [parties, setParties] = useState<PartySummary[]>([])
@@ -99,11 +126,11 @@ export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
   }, [])
 
   const load = useCallback(async () => {
-    const [customers, chart] = await Promise.all([
-      callApi((api) => api.parties.list({ role: 'customer' })),
+    const [people, chart] = await Promise.all([
+      callApi((api) => api.parties.list({ role: partyRoleFor(definition.side) })),
       callApi((api) => api.ledger.listAccounts()),
     ])
-    if (customers.ok) setParties(customers.data)
+    if (people.ok) setParties(people.data)
     if (chart.ok) setAccounts(chart.data.filter((row) => !row.isGroup && !row.isArchived))
 
     if (receiptId === null) {
@@ -118,11 +145,28 @@ export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
       return
     }
     if (result.data === null) {
-      setError({ code: 'RECEIPT_NOT_FOUND', message: 'That receipt is no longer in these books.' })
+      setError({
+        code: 'RECEIPT_NOT_FOUND',
+        message: `That ${label} is no longer in these books.`,
+      })
+      return
+    }
+    /*
+     * THE HAZARD ONE EDITOR FOR TWO KINDS CREATES, and the same one the document editor
+     * carries: the kind comes from the route and so does the id, independently. A stale
+     * link can load a receipt into the payment editor, where the party picker would list
+     * vendors, the allocation table would head itself Purchase bill, and the figures
+     * would be a customer's. Nothing would look wrong.
+     */
+    if (result.data.kind !== kind) {
+      setError({
+        code: 'RECEIPT_KIND_MISMATCH',
+        message: `That voucher is not a ${label}. Open it from its own register.`,
+      })
       return
     }
     adopt(result.data)
-  }, [adopt, receiptId])
+  }, [adopt, definition.side, kind, label, receiptId])
 
   useEffect(() => {
     void load()
@@ -147,7 +191,7 @@ export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
       const result = await callApi((api) =>
         api.receipts.open({
           partyId,
-          kind: RECEIPT_KIND,
+          kind,
           ...(receipt === null ? {} : { exceptReceiptId: receipt.id }),
         }),
       )
@@ -166,7 +210,7 @@ export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
     return () => {
       current = false
     }
-  }, [partyId, receipt, route.params])
+  }, [kind, partyId, receipt, route.params])
 
   const touch = useCallback((change: () => void) => {
     setDirty(true)
@@ -191,7 +235,7 @@ export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
 
     const result = await callApi((api) =>
       api.receipts.create({
-        kind: RECEIPT_KIND,
+        kind,
         date,
         partyId,
         amount: amount.trim(),
@@ -208,7 +252,7 @@ export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
     }
 
     adopt(result.data)
-    navigate(makeRoute('workspace', 'receipt', { id: result.data.id }))
+    navigate(makeRoute('workspace', kind, { id: result.data.id }))
     show({
       tone: 'success',
       title: 'Recorded',
@@ -221,6 +265,7 @@ export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
     amount,
     canRecord,
     date,
+    kind,
     narration,
     navigate,
     partyId,
@@ -244,9 +289,9 @@ export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
     show({
       tone: 'success',
       title: 'Saved',
-      body: 'Nothing moved in the ledger — this only says which invoices the money pays.',
+      body: `Nothing moved in the ledger — this only says which ${settled} the money pays.`,
     })
-  }, [adopt, allocations, receipt, show])
+  }, [adopt, allocations, receipt, settled, show])
 
   const cancel = useCallback(async () => {
     if (receipt === null) return
@@ -262,14 +307,14 @@ export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
     show({
       tone: 'success',
       title: 'Cancelled',
-      body: 'The entry is reversed and the invoices it settled are owed again. The number is kept.',
+      body: `The entry is reversed and the ${settled} it settled are owed again. The number is kept.`,
     })
-  }, [adopt, receipt, show])
+  }, [adopt, receipt, settled, show])
 
   if (isReading) {
     return (
-      <ScreenFrame isInset width="list" title="Receipt">
-        <p className="prose prose--muted">Reading the receipt…</p>
+      <ScreenFrame isInset width="list" title={definition.label}>
+        <p className="prose prose--muted">Reading the {label}…</p>
       </ScreenFrame>
     )
   }
@@ -278,20 +323,19 @@ export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
     <ScreenFrame
       isInset
       width="list"
-      title={receipt?.number ?? 'New receipt'}
-      lede={
-        receipt === null
-          ? 'Money that has already arrived. Recording it posts it — there is no draft.'
-          : stateSentence(status, receipt.number)
-      }
+      title={receipt?.number ?? `New ${label}`}
+      lede={receipt === null ? newSentence(kind) : stateSentence(status, receipt.number)}
       actions={
         <>
-          <Button variant="ghost" onClick={() => navigate(makeRoute('workspace', 'receipts'))}>
+          <Button
+            variant="ghost"
+            onClick={() => navigate(makeRoute('workspace', registerScreenId(kind)))}
+          >
             Back to the register
           </Button>
           {isNew && (
             <Button variant="primary" disabled={!canRecord || isBusy} onClick={() => void record()}>
-              Record receipt
+              Record {label}
             </Button>
           )}
         </>
@@ -314,7 +358,7 @@ export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
             )}
             {canCancel(status) && (
               <Button variant="ghost" disabled={isBusy} onClick={() => void cancel()}>
-                Cancel this receipt
+                Cancel this {label}
               </Button>
             )}
           </div>
@@ -327,8 +371,8 @@ export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
         {receipt !== null && (
           <Notice tone="info" title="The money is recorded and cannot be edited">
             <p>
-              A receipt is a statement about money that has already moved, so it is frozen the
-              moment it is recorded — the same rule an issued invoice follows. Correct one by
+              A {label} is a statement about money that has already moved, so it is frozen the
+              moment it is recorded — the same rule an issued document follows. Correct one by
               cancelling it, which reverses the entry and keeps the number. What it settles is not
               part of that and can still be changed.
             </p>
@@ -337,15 +381,15 @@ export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
 
         <div className="stack">
           <Select
-            label="Customer"
+            label={party}
             value={partyId}
             disabled={!isNew}
             hint={
-              isNew ? 'Whose money this is. It decides which invoices it can settle.' : undefined
+              isNew ? `Whose money this is. It decides which ${settled} it can settle.` : undefined
             }
             onChange={(event) => setPartyId(event.target.value)}
           >
-            <option value="">Choose a customer</option>
+            <option value="">Choose a {party.toLowerCase()}</option>
             {parties.map((party) => (
               <option key={party.id} value={party.id}>
                 {party.name}
@@ -367,11 +411,7 @@ export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
             value={amount}
             disabled={!isNew}
             placeholder="0.00"
-            hint={
-              isNew
-                ? 'What arrived. Money going the other way is a payment, not a negative receipt.'
-                : undefined
-            }
+            hint={isNew ? amountHint(kind) : undefined}
             onChange={(event) => setAmount(event.target.value)}
           />
 
@@ -383,10 +423,10 @@ export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
            * archived account, and the control account this settles against.
            */}
           <Select
-            label="Account the money landed in"
+            label={accountLabel(kind)}
             value={accountId}
             disabled={!isNew}
-            hint={isNew ? 'The bank or cash account it went into.' : undefined}
+            hint={isNew ? accountHint(kind) : undefined}
             onChange={(event) => setAccountId(event.target.value)}
           >
             <option value="">Choose an account</option>
@@ -420,6 +460,7 @@ export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
 
         <Allocations
           open={open}
+          side={definition.side}
           values={allocations}
           format={format}
           isEditable={isNew || canAllocate(status)}
@@ -427,7 +468,9 @@ export function Receipt({ route, navigate }: ScreenContext): JSX.Element {
           onChange={setAllocation}
         />
 
-        {receipt !== null && <Settled receipt={receipt} isStale={isDirty} format={format} />}
+        {receipt !== null && (
+          <Settled receipt={receipt} settles={settled} isStale={isDirty} format={format} />
+        )}
       </div>
     </ScreenFrame>
   )
@@ -450,6 +493,7 @@ function preselected(
 
 function Allocations({
   open,
+  side,
   values,
   format,
   isEditable,
@@ -457,16 +501,25 @@ function Allocations({
   onChange,
 }: {
   open: readonly OpenDocument[]
+  side: TradeSide
   values: Readonly<Record<string, string>>
   format: Parameters<typeof formatAmount>[1]
   isEditable: boolean
   hasParty: boolean
   onChange: (documentId: string, value: string) => void
 }): JSX.Element {
+  /* Read off the document table rather than written out here — see `settlesLabel`. A
+   * payment settles bills, and calling one an invoice on this screen would be the first
+   * place a user learned the wrong word for their own paperwork. */
+  const settles = settlesLabel(side)
+  const party = partyLabel(side).toLowerCase()
+
   if (!hasParty) {
     return (
-      <Notice tone="info" title="Choose a customer to see what they owe">
-        <p>Their open invoices appear here, oldest first, with what is left on each.</p>
+      <Notice tone="info" title={`Choose a ${party} to see what is owed`}>
+        <p>
+          Their open {settles.toLowerCase()}s appear here, oldest first, with what is left on each.
+        </p>
       </Notice>
     )
   }
@@ -475,8 +528,8 @@ function Allocations({
     return (
       <Notice tone="info" title="Nothing of theirs is outstanding">
         <p>
-          Record the money anyway — it sits on account until an invoice it can settle exists. That
-          is an ordinary thing for a business to hold, not an unfinished job.
+          Record the money anyway — it sits on account until a {settles.toLowerCase()} it can settle
+          exists. That is an ordinary thing for a business to hold, not an unfinished job.
         </p>
       </Notice>
     )
@@ -486,7 +539,7 @@ function Allocations({
     <table className="ledger-table ledger-table--figures">
       <thead>
         <tr>
-          <th scope="col">Invoice</th>
+          <th scope="col">{settles}</th>
           <th scope="col">Date</th>
           <th scope="col" className="ledger-table__figure">
             Total
@@ -542,10 +595,12 @@ function Allocations({
 
 function Settled({
   receipt,
+  settles,
   isStale,
   format,
 }: {
   receipt: ReceiptDto
+  settles: string
   isStale: boolean
   format: Parameters<typeof formatAmount>[1]
 }): JSX.Element {
@@ -558,7 +613,7 @@ function Settled({
        */}
       {isStale && (
         <Notice tone="info" title="These figures are from the last saved version">
-          <p>Save to see what the receipt now has left on account.</p>
+          <p>Save to see what it now has left on account.</p>
         </Notice>
       )}
 
@@ -569,7 +624,7 @@ function Settled({
             <td className="ledger-table__figure">{formatAmount(receipt.amount, format)}</td>
           </tr>
           <tr>
-            <td>Settled against invoices</td>
+            <td>Settled against {settles}</td>
             <td className="ledger-table__figure">{formatAmount(receipt.allocated, format)}</td>
           </tr>
           <tr>
@@ -582,13 +637,19 @@ function Settled({
   )
 }
 
-registerScreens([
-  {
-    id: 'receipt',
-    title: 'Receipt',
-    area: 'workspace',
-    /* No `nav`. Reached from the register, from a row, or from an invoice — there is no
-     * such thing as "the" receipt to land on. */
-    render: (context) => <Receipt {...context} />,
-  },
-])
+/*
+ * One editor per kind. No `nav` on either: an editor is reached from its register, from a
+ * row, or from the document it settles — there is no such thing as "the" payment to land
+ * on. The id IS the kind, which is why the invoice screen's route to `workspace/receipt`
+ * has resolved since 0012 and still does.
+ */
+export const receiptEditorScreens: readonly ScreenDefinition[] = RECEIPT_KINDS.map(
+  (definition) => ({
+    id: definition.kind,
+    title: definition.label,
+    area: 'workspace' as const,
+    render: (context: ScreenContext) => <ReceiptEditor {...context} kind={definition.kind} />,
+  }),
+)
+
+registerScreens(receiptEditorScreens)

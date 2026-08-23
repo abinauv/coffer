@@ -191,6 +191,15 @@ implements "whichever is listed first", so the rule becomes table order and no a
 downstream can see the difference. 0013's first correction mapping was written that way
 and passed only because `sales-invoice` is listed above `quotation` (0013-2).
 
+**The absence of the old name is not the presence of the new one.** A test asserting that
+a button is NOT offered keeps passing after that button is renamed — it is now asserting
+the absence of a string nothing renders, which is true of every screen in the product.
+0013-2 asserted that a purchase bill offered no `Record a receipt`, correctly, because no
+payment editor existed; 0013-3 built one and called the button `Record a payment`, and the
+test went on passing while testing nothing. **When a batch supplies the thing an earlier
+one asserted was missing, grep the suite for assertions about its absence.** Assert the
+new name's presence beside the old name's absence (0013-3).
+
 **A mutation that breaks module load prints no test summary at all**, which a naive
 harness reports as no result — and "no result" reads exactly like "nothing caught it". It
 is the loudest possible kill: every test in every importing file fails to collect. The

@@ -76,7 +76,12 @@ import type {
 } from '@main/domain/ledger'
 import { PostingError } from '@main/domain/ledger'
 
-import { receiptDefinitionOf, type PostableReceipt, type ReceiptKind } from './types'
+import {
+  receiptDefinitionOf,
+  receiptTreatmentOf,
+  type PostableReceipt,
+  type ReceiptKind,
+} from './types'
 
 /**
  * The rule for one kind, built from its own row in `RECEIPT_KINDS`.
@@ -88,7 +93,7 @@ import { receiptDefinitionOf, type PostableReceipt, type ReceiptKind } from './t
 function ruleFor(kind: ReceiptKind): PostingRule<PostableReceipt> {
   const definition = receiptDefinitionOf(kind)
   return {
-    source: definition.sourceType,
+    source: receiptTreatmentOf(kind).sourceType,
     label: definition.label,
     toEntry: (receipt, context) => {
       if (receipt.kind !== kind) {
@@ -126,9 +131,10 @@ export function receiptPostingRuleFor(kind: ReceiptKind): PostingRule<PostableRe
 
 function toEntry(receipt: PostableReceipt, context: PostingContext): EntryDraft {
   const definition = receiptDefinitionOf(receipt.kind)
+  const { controlRole, sourceType } = receiptTreatmentOf(receipt.kind)
   const { accounts } = context
 
-  const control = requiredRole(accounts.forRole(definition.controlRole), definition.controlRole)
+  const control = requiredRole(accounts.forRole(controlRole), controlRole)
   const money = requiredAccount(receipt.accountId, accounts)
 
   const isIn = definition.direction === 'in'
@@ -150,7 +156,7 @@ function toEntry(receipt: PostableReceipt, context: PostingContext): EntryDraft 
   return {
     date: receipt.date,
     narration: narrationFor(receipt),
-    source: { type: definition.sourceType, id: receipt.id, number: receipt.number },
+    source: { type: sourceType, id: receipt.id, number: receipt.number },
     /* The debit first, which is the order a journal is written in and read in. */
     lines: isIn ? [moneyLine, controlLine] : [controlLine, moneyLine],
   }

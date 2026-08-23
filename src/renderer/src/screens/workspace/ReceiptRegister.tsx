@@ -1,14 +1,17 @@
 /*
- * The receipts register.
+ * The money registers — one component, registered once per kind.
  *
- * Every payment these books have taken from a customer. The screen a bookkeeper opens on
- * the morning a statement arrives, so what it owes them is the answer to "did we record
- * that one" — a reference, a party, a date, and how much of it is still on account.
+ * Every voucher of one kind these books hold. The screen a bookkeeper opens on the
+ * morning a statement arrives, so what it owes them is the answer to "did we record that
+ * one" — a reference, a party, a date, and how much of it is still on account.
  *
- * RECEIPTS ONLY, NOT PAYMENTS. `receipts` is one table for both directions and a payment
- * posts perfectly well today, but a register mixing money out into a list of money in
- * would invite reading a total that means nothing. Payments get their own screen when a
- * purchase bill gets its posting rule; until then there is nothing for one to settle.
+ * ONE KIND PER SCREEN, STILL ON PURPOSE. `receipts` is one table for both directions, and
+ * a register mixing money out into a list of money in would invite reading a total that
+ * means nothing.
+ *
+ * WHAT CHANGED IN 0013-3 IS THE COUNT, NOT THE RULE. This was `Receipts.tsx`, and its
+ * header said payments would get their own screen when a purchase bill got its posting
+ * rule — because until then there was nothing for one to settle. 0013-1 gave it one.
  *
  * WHAT IS ON ACCOUNT IS A COLUMN, AND IT IS THE POINT OF THE SCREEN. A receipt nobody has
  * matched is not an error and not an unfinished task — it is money the customer has paid
@@ -26,29 +29,40 @@ import { Badge, Button, Input } from '@renderer/components/atoms'
 import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { makeRoute } from '@renderer/lib/routing'
-import { registerScreens, type ScreenContext } from '@renderer/lib/screens'
+import { registerScreens, type ScreenContext, type ScreenDefinition } from '@renderer/lib/screens'
 import { useRegisterCommands } from '@renderer/store/commands'
 import { useNumberFormat } from '@renderer/store/regime'
 import type { AppError, ReceiptStatusDto, ReceiptSummary } from '@shared/dto'
+import { RECEIPT_KINDS, receiptDefinitionOf, type ReceiptKind } from '@shared/receipts'
 import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
 import { ScreenFrame } from '../components/ScreenFrame'
 import { formatAmount, formatAmountOrBlank } from '../lib/ledger-format'
 import {
+  editorScreenId,
+  emptyRegisterSentence,
   PAGE_SIZE,
-  RECEIPT_KIND,
+  partyLabel,
+  registerLede,
+  registerNav,
+  registerScreenId,
   statusFilters,
   statusLabel,
   statusTone,
 } from '../lib/receipt-view'
 
-export function Receipts({ navigate }: ScreenContext): JSX.Element {
+export function ReceiptRegister({
+  kind,
+  navigate,
+}: ScreenContext & { kind: ReceiptKind }): JSX.Element {
   const format = useNumberFormat()
+  const definition = receiptDefinitionOf(kind)
 
-  /* One place that knows where the editor lives. No id is a new receipt. */
+  /* One place that knows where the editor lives. No id is a new voucher. */
   const openReceipt = useCallback(
-    (id?: string) => navigate(makeRoute('workspace', 'receipt', id === undefined ? {} : { id })),
-    [navigate],
+    (id?: string) =>
+      navigate(makeRoute('workspace', editorScreenId(kind), id === undefined ? {} : { id })),
+    [kind, navigate],
   )
 
   const [rows, setRows] = useState<ReceiptSummary[] | null>(null)
@@ -64,7 +78,7 @@ export function Receipts({ navigate }: ScreenContext): JSX.Element {
   const load = useCallback(async () => {
     const result = await callApi((api) =>
       api.receipts.list({
-        kind: RECEIPT_KIND,
+        kind,
         ...(status === '' ? {} : { status }),
         ...(applied.trim() === '' ? {} : { search: applied.trim() }),
         /* One more than is drawn. The extra row is the whole paging mechanism. */
@@ -79,7 +93,7 @@ export function Receipts({ navigate }: ScreenContext): JSX.Element {
     setError(null)
     setMore(result.data.length > PAGE_SIZE)
     setRows(result.data.slice(0, PAGE_SIZE))
-  }, [applied, page, status])
+  }, [applied, kind, page, status])
 
   useEffect(() => {
     void load()
@@ -97,21 +111,21 @@ export function Receipts({ navigate }: ScreenContext): JSX.Element {
     useMemo<Command[]>(
       () => [
         {
-          id: 'receipts.new',
-          title: 'Record a receipt',
-          section: 'Sales',
-          keywords: ['receipt', 'payment', 'money', 'paid', 'cheque'],
+          id: `receipts.${kind}.new`,
+          title: `Record a ${definition.label.toLowerCase()}`,
+          section: definition.side === 'sales' ? 'Sales' : 'Purchases',
+          keywords: [definition.label.toLowerCase(), 'money', 'paid', 'cheque', 'bank'],
           run: () => openReceipt(),
         },
         {
-          id: 'receipts.refresh',
-          title: 'Refresh the receipts register',
-          section: 'Sales',
-          keywords: ['receipt', 'reload'],
+          id: `receipts.${kind}.refresh`,
+          title: `Refresh the ${definition.pluralLabel.toLowerCase()} register`,
+          section: definition.side === 'sales' ? 'Sales' : 'Purchases',
+          keywords: [definition.label.toLowerCase(), 'reload'],
           run: () => void load(),
         },
       ],
-      [load, openReceipt],
+      [definition, kind, load, openReceipt],
     ),
   )
 
@@ -121,11 +135,11 @@ export function Receipts({ navigate }: ScreenContext): JSX.Element {
     <ScreenFrame
       isInset
       width="list"
-      title="Receipts"
-      lede="Every payment these books have taken, and how much of each is still on account."
+      title={definition.pluralLabel}
+      lede={registerLede(kind)}
       actions={
         <Button icon="plus" variant="primary" onClick={() => openReceipt()}>
-          Record a receipt
+          Record a {definition.label.toLowerCase()}
         </Button>
       }
     >
@@ -143,7 +157,7 @@ export function Receipts({ navigate }: ScreenContext): JSX.Element {
               label="Search"
               isLabelHidden
               icon="search"
-              placeholder="Search by number, customer, reference or narration"
+              placeholder={`Search by number, ${partyLabel(definition.side).toLowerCase()}, reference or narration`}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -164,11 +178,16 @@ export function Receipts({ navigate }: ScreenContext): JSX.Element {
         {rows === null ? (
           <p className="prose prose--muted">Reading the register…</p>
         ) : rows.length === 0 ? (
-          <Notice tone="info" title={isFiltered ? 'Nothing matches that' : 'No receipts yet'}>
+          <Notice
+            tone="info"
+            title={
+              isFiltered ? 'Nothing matches that' : `No ${definition.pluralLabel.toLowerCase()} yet`
+            }
+          >
             <p>
               {isFiltered
-                ? 'No receipt on this page matches. Clearing the search or the status filter will show the rest.'
-                : 'A receipt needs a customer and an account for the money to land in. Record a receipt starts one — it does not need an invoice, and money nobody has matched yet sits on account until you say what it pays.'}
+                ? 'Nothing on this page matches. Clearing the search or the status filter will show the rest.'
+                : emptyRegisterSentence(kind)}
             </p>
           </Notice>
         ) : (
@@ -177,7 +196,7 @@ export function Receipts({ navigate }: ScreenContext): JSX.Element {
               <tr>
                 <th scope="col">Number</th>
                 <th scope="col">Date</th>
-                <th scope="col">Customer</th>
+                <th scope="col">{partyLabel(definition.side)}</th>
                 <th scope="col">Status</th>
                 <th scope="col" className="ledger-table__figure">
                   Amount
@@ -241,14 +260,19 @@ export function Receipts({ navigate }: ScreenContext): JSX.Element {
   )
 }
 
-registerScreens([
-  {
-    id: 'receipts',
-    title: 'Receipts',
-    area: 'workspace',
-    /* After the three sales documents (0013-2), because a receipt is what happens TO a
-     * document rather than a document. `document-view.ts` holds their orders. */
-    nav: { label: 'Receipts', icon: 'ledger', group: 'sales', order: 4 },
-    render: (context) => <Receipts {...context} />,
-  },
-])
+/*
+ * Two registrations from the kind table, the same shape the document registers take. A
+ * third kind — a customer refund, which is money out on the sales side — gets a register
+ * and a sidebar entry with no edit here.
+ */
+export const receiptRegisterScreens: readonly ScreenDefinition[] = RECEIPT_KINDS.map(
+  (definition) => ({
+    id: registerScreenId(definition.kind),
+    title: definition.pluralLabel,
+    area: 'workspace' as const,
+    nav: registerNav(definition.kind),
+    render: (context: ScreenContext) => <ReceiptRegister {...context} kind={definition.kind} />,
+  }),
+)
+
+registerScreens(receiptRegisterScreens)

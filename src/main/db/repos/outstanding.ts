@@ -60,9 +60,8 @@
 
 import { D, ZERO, toMoneyString, type Decimal } from '@main/domain/money'
 import {
-  DOCUMENT_KINDS,
+  chargeKindOn,
   definitionOf,
-  postsToLedger,
   type DocumentKind,
   type TradeSide,
 } from '@main/domain/documents'
@@ -330,13 +329,15 @@ export async function openDocumentsFor(
    * a payment, and matching one against an invoice instead is offsetting — neither of
    * which this picker is. Both are owed work, and both are the next unit rather than a
    * widening of this filter.
+   *
+   * ONE KIND, NOT A LIST, AS OF 0013-3. This filter was written out here and it is the
+   * same sentence `correctsKind` is built from and the same one the receipt screen heads
+   * its allocation table with — three copies of "the one charge kind on this side that
+   * posts", agreeing by inspection. `chargeKindOn` is that sentence said once, and it
+   * REFUSES an ambiguous table rather than returning the first match, so the `= ?` below
+   * is safe in a way `in (…)` never said out loud.
    */
-  const kinds = DOCUMENT_KINDS.filter(
-    (definition) =>
-      definition.side === options.side &&
-      definition.direction === 'charge' &&
-      postsToLedger(definition.kind),
-  ).map((definition) => definition.kind)
+  const kind = chargeKindOn(options.side)
 
   /*
    * `status = 'issued'` LOOKS REDUNDANT BESIDE THE ZERO TEST BELOW and is not quite. A
@@ -351,7 +352,7 @@ export async function openDocumentsFor(
     .select(['id', 'kind', 'number', 'document_date', 'party_id', 'entry_id'])
     .where('party_id', '=', options.partyId)
     .where('status', '=', 'issued')
-    .where('kind', 'in', kinds)
+    .where('kind', '=', kind)
     .orderBy('document_date', 'asc')
     .orderBy('number', 'asc')
     .execute()
