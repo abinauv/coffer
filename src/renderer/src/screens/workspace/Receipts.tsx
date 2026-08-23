@@ -246,7 +246,9 @@ registerScreens([
     id: 'receipts',
     title: 'Receipts',
     area: 'workspace',
-    nav: { label: 'Receipts', icon: 'ledger', group: 'sales', order: 2 },
+    /* After the three sales documents (0013-2), because a receipt is what happens TO a
+     * document rather than a document. `document-view.ts` holds their orders. */
+    nav: { label: 'Receipts', icon: 'ledger', group: 'sales', order: 4 },
     render: (context) => <Receipts {...context} />,
   },
 ])

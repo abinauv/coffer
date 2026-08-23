@@ -1,14 +1,20 @@
 /*
- * The invoice register.
+ * The document registers — one component, registered once per kind.
  *
- * Every sales invoice these books have raised, drafts included. The screen a user lives
+ * Every document of one kind these books hold, drafts included. The screen a user lives
  * in, so what it owes them is an honest answer to "where is that one" — which is filter,
  * search, and a status they can read at a glance.
  *
- * INVOICE-ONLY, ON PURPOSE. `documents` is one table for five kinds and a quotation is
- * issuable today, but a register that mixed a quotation into a list of invoices would
- * invite reading it as a sales figure. `kind` is fixed here rather than offered as a
- * filter; the other kinds get their own screens when they get their own posting rules.
+ * ONE KIND PER SCREEN, STILL ON PURPOSE. `documents` is one table for five kinds and this
+ * does not mix them: a register showing quotations beside invoices invites reading the
+ * page as a sales figure, and one showing purchases beside sales invites reading it as
+ * anything at all. `kind` is fixed per registration rather than offered as a filter.
+ *
+ * WHAT CHANGED IN 0013-2 IS THE COUNT, NOT THE RULE. This was `Invoices.tsx`, and its
+ * header said the other kinds would get their own screens when they got their own posting
+ * rules. They have them as of 0013-1, so they get their screens — from the same component,
+ * because a register differs by kind in its title, its party column and its empty state,
+ * and in nothing else. Five copies would be five places to fix the next paging bug.
  *
  * IT PAGES, AND SAYS SO. `listDocuments` caps at MAX_DOCUMENT_PAGE (500) whatever it is
  * asked for, so a register with no paging would show the first page of a busy year and
@@ -27,30 +33,41 @@ import { Badge, Button, Input } from '@renderer/components/atoms'
 import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { makeRoute } from '@renderer/lib/routing'
-import { registerScreens, type ScreenContext } from '@renderer/lib/screens'
+import { registerScreens, type ScreenContext, type ScreenDefinition } from '@renderer/lib/screens'
 import { useRegisterCommands } from '@renderer/store/commands'
 import { useNumberFormat } from '@renderer/store/regime'
+import { definitionOf, DOCUMENT_KINDS, type DocumentKind } from '@shared/documents'
 import type { AppError, DocumentStatusDto, DocumentSummary } from '@shared/dto'
 import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
 import { ScreenFrame } from '../components/ScreenFrame'
 import { formatAmount } from '../lib/ledger-format'
 import {
-  INVOICE_KIND,
+  editorScreenId,
+  emptyRegisterSentence,
   PAGE_SIZE,
+  partyLabel,
+  registerLede,
+  registerNav,
+  registerScreenId,
   statusFilters,
   statusLabel,
   statusTone,
-} from '../lib/invoice-view'
+} from '../lib/document-view'
 
-export function Invoices({ navigate }: ScreenContext): JSX.Element {
+export function DocumentRegister({
+  kind,
+  navigate,
+}: ScreenContext & { kind: DocumentKind }): JSX.Element {
   const format = useNumberFormat()
+  const definition = definitionOf(kind)
 
-  /* One place that knows where the editor lives. No id is a new invoice — the editor
+  /* One place that knows where the editor lives. No id is a new document — the editor
    * creates nothing until it is asked to. */
-  const openInvoice = useCallback(
-    (id?: string) => navigate(makeRoute('workspace', 'invoice', id === undefined ? {} : { id })),
-    [navigate],
+  const openDocument = useCallback(
+    (id?: string) =>
+      navigate(makeRoute('workspace', editorScreenId(kind), id === undefined ? {} : { id })),
+    [kind, navigate],
   )
 
   const [rows, setRows] = useState<DocumentSummary[] | null>(null)
@@ -67,7 +84,7 @@ export function Invoices({ navigate }: ScreenContext): JSX.Element {
   const load = useCallback(async () => {
     const result = await callApi((api) =>
       api.documents.list({
-        kind: INVOICE_KIND,
+        kind,
         ...(status === '' ? {} : { status }),
         ...(applied.trim() === '' ? {} : { search: applied.trim() }),
         /* One more than is drawn. The extra row is the whole paging mechanism. */
@@ -82,7 +99,7 @@ export function Invoices({ navigate }: ScreenContext): JSX.Element {
     setError(null)
     setMore(result.data.length > PAGE_SIZE)
     setRows(result.data.slice(0, PAGE_SIZE))
-  }, [applied, page, status])
+  }, [applied, kind, page, status])
 
   useEffect(() => {
     void load()
@@ -96,25 +113,31 @@ export function Invoices({ navigate }: ScreenContext): JSX.Element {
     change()
   }, [])
 
+  /*
+   * TWO COMMANDS PER KIND, AND THE IDS CARRY THE KIND. Every register mounts its own, so
+   * ids built from a fixed string would collide the moment two of these screens have
+   * been visited — and the palette would offer one "New invoice" that raised a debit
+   * note. The section is the sidebar group, so a purchase command files under Purchases.
+   */
   useRegisterCommands(
     useMemo<Command[]>(
       () => [
         {
-          id: 'documents.invoice-new',
-          title: 'New invoice',
-          section: 'Sales',
-          keywords: ['invoice', 'draft', 'create', 'sales'],
-          run: () => openInvoice(),
+          id: `documents.${kind}.new`,
+          title: `New ${definition.label.toLowerCase()}`,
+          section: definition.side === 'sales' ? 'Sales' : 'Purchases',
+          keywords: [...definition.label.toLowerCase().split(' '), 'draft', 'create'],
+          run: () => openDocument(),
         },
         {
-          id: 'documents.invoices-refresh',
-          title: 'Refresh the invoice register',
-          section: 'Sales',
-          keywords: ['invoice', 'documents', 'reload'],
+          id: `documents.${kind}.refresh`,
+          title: `Refresh the ${definition.label.toLowerCase()} register`,
+          section: definition.side === 'sales' ? 'Sales' : 'Purchases',
+          keywords: [...definition.label.toLowerCase().split(' '), 'documents', 'reload'],
           run: () => void load(),
         },
       ],
-      [load, openInvoice],
+      [definition, kind, load, openDocument],
     ),
   )
 
@@ -124,11 +147,11 @@ export function Invoices({ navigate }: ScreenContext): JSX.Element {
     <ScreenFrame
       isInset
       width="list"
-      title="Invoices"
-      lede="Every invoice these books have raised, and every draft not yet issued."
+      title={definition.pluralLabel}
+      lede={registerLede(kind)}
       actions={
-        <Button icon="plus" variant="primary" onClick={() => openInvoice()}>
-          New invoice
+        <Button icon="plus" variant="primary" onClick={() => openDocument()}>
+          New {definition.label.toLowerCase()}
         </Button>
       }
     >
@@ -167,11 +190,16 @@ export function Invoices({ navigate }: ScreenContext): JSX.Element {
         {rows === null ? (
           <p className="prose prose--muted">Reading the register…</p>
         ) : rows.length === 0 ? (
-          <Notice tone="info" title={isFiltered ? 'Nothing matches that' : 'No invoices yet'}>
+          <Notice
+            tone="info"
+            title={
+              isFiltered ? 'Nothing matches that' : `No ${definition.pluralLabel.toLowerCase()} yet`
+            }
+          >
             <p>
               {isFiltered
-                ? 'No invoice on this page matches. Clearing the search or the status filter will show the rest.'
-                : 'An invoice needs a customer and the business details filled in — both are in the sidebar. Then New invoice starts one.'}
+                ? 'Nothing on this page matches. Clearing the search or the status filter will show the rest.'
+                : emptyRegisterSentence(kind)}
             </p>
           </Notice>
         ) : (
@@ -180,7 +208,7 @@ export function Invoices({ navigate }: ScreenContext): JSX.Element {
               <tr>
                 <th scope="col">Number</th>
                 <th scope="col">Date</th>
-                <th scope="col">Customer</th>
+                <th scope="col">{partyLabel(definition.side)}</th>
                 <th scope="col">Status</th>
                 <th scope="col" className="ledger-table__figure">
                   Total
@@ -194,7 +222,7 @@ export function Invoices({ navigate }: ScreenContext): JSX.Element {
                       the number goes is the honest answer — a blank cell reads as a
                       number that failed to load. */}
                   <td className="ledger-table__code">
-                    <Button variant="ghost" size="sm" onClick={() => openInvoice(document.id)}>
+                    <Button variant="ghost" size="sm" onClick={() => openDocument(document.id)}>
                       {document.number ?? 'Draft'}
                     </Button>
                   </td>
@@ -240,12 +268,20 @@ export function Invoices({ navigate }: ScreenContext): JSX.Element {
   )
 }
 
-registerScreens([
-  {
-    id: 'invoices',
-    title: 'Invoices',
-    area: 'workspace',
-    nav: { label: 'Invoices', icon: 'ledger', group: 'sales', order: 1 },
-    render: (context) => <Invoices {...context} />,
-  },
-])
+/*
+ * FIVE REGISTRATIONS FROM THE KIND TABLE, not five hand-written entries. A sixth kind
+ * added to `@shared/documents` gets a register and a sidebar entry with no edit here —
+ * which is the same property `DOCUMENT_KINDS` gives the posting engine, arriving in the
+ * renderer for the first time.
+ */
+export const documentRegisterScreens: readonly ScreenDefinition[] = DOCUMENT_KINDS.map(
+  (definition) => ({
+    id: registerScreenId(definition.kind),
+    title: definition.pluralLabel,
+    area: 'workspace' as const,
+    nav: registerNav(definition.kind),
+    render: (context: ScreenContext) => <DocumentRegister {...context} kind={definition.kind} />,
+  }),
+)
+
+registerScreens(documentRegisterScreens)

@@ -1,5 +1,9 @@
 /*
- * The invoice editor's shapes and rules — everything about it that is not React.
+ * The document editor's shapes and rules — everything about it that is not React.
+ *
+ * WAS `invoice-editor.ts`. One editor now serves all five kinds (0013-2), so the pieces
+ * that used to say "invoice" say what the kind is called instead — read off the shared
+ * table, never written out here.
  *
  * NOTHING HERE COMPUTES MONEY, and the editor is the screen where that costs something
  * visible. A user typing a quantity expects a line total to follow, and this cannot
@@ -13,7 +17,8 @@
  * says it is stale is honest. A fresh-looking figure the renderer worked out is not.
  */
 
-import type { DocumentLineDto, DocumentLineInput, DocumentStatusDto } from '@shared/dto'
+import { definitionOf, type DocumentKind } from '@shared/documents'
+import type { Document, DocumentLineDto, DocumentLineInput, DocumentStatusDto } from '@shared/dto'
 
 /** A line as the form holds it: strings, because that is what an input carries. */
 export interface LineDraft {
@@ -99,6 +104,28 @@ export function readyLines(lines: readonly LineDraft[]): readonly LineDraft[] {
   return lines.filter(isLineReady)
 }
 
+/**
+ * Whether nothing has been typed into the lines yet.
+ *
+ * What guards the line copy in a correction: picking the invoice a credit note corrects
+ * fills the lines in, and it must never do that over work. STRICTER THAN `isLineReady`,
+ * deliberately — a row with a description and no price is not ready to send and is
+ * plainly something somebody was in the middle of typing.
+ *
+ * `quantity` is not looked at, because `blankLine` starts it at 1 and a user who has
+ * touched only the quantity has typed nothing that would be lost.
+ */
+export function isBlankDraft(lines: readonly LineDraft[]): boolean {
+  return lines.every(
+    (line) =>
+      line.description.trim() === '' &&
+      line.unitPrice.trim() === '' &&
+      line.discount.trim() === '' &&
+      line.ratePct.trim() === '' &&
+      line.classificationCode.trim() === '',
+  )
+}
+
 // ---- What may be done to a document in each state ---------------------------
 
 /*
@@ -141,13 +168,57 @@ export function canDelete(status: DocumentStatusDto): boolean {
   return status === 'draft'
 }
 
-/** What the status line says the document is, in a sentence rather than a word. */
-export function stateSentence(status: DocumentStatusDto, number: string | null): string {
+/**
+ * What the status line says the document is, in a sentence rather than a word.
+ *
+ * THE QUOTATION GETS DIFFERENT WORDS AND THAT IS THE POINT OF THE PARAMETER. "Nothing is
+ * in the books until it is issued" is false of a quotation in the direction that matters:
+ * issuing one still puts nothing there. Saying it anyway would teach a user that issuing
+ * is what posts, and the first credit note they raise would surprise them.
+ *
+ * Every other sentence is shared, because every other kind behaves identically — which is
+ * the whole argument for one editor.
+ */
+export function stateSentence(
+  kind: DocumentKind,
+  status: DocumentStatusDto,
+  number: string | null,
+): string {
+  const definition = definitionOf(kind)
+  const posts = definition.postsToLedger
+  const named = number ?? `a numbered ${definition.label.toLowerCase()}`
+
   if (status === 'issued') {
-    return `Issued as ${number ?? 'a numbered invoice'}. It is in the books and cannot be edited.`
+    return posts
+      ? `Issued as ${named}. It is in the books and cannot be edited.`
+      : `Issued as ${named}. It has been sent and cannot be edited, and it puts nothing in the books.`
   }
   if (status === 'cancelled') {
-    return `Cancelled. ${number ?? 'The number'} is kept and what it posted has been reversed.`
+    return posts
+      ? `Cancelled. ${number ?? 'The number'} is kept and what it posted has been reversed.`
+      : `Cancelled. ${number ?? 'The number'} is kept, so the series has no hole.`
   }
-  return 'A draft. Nothing is in the books until it is issued.'
+  return posts
+    ? 'A draft. Nothing is in the books until it is issued.'
+    : 'A draft. Issuing it allocates its number and nothing else — a quotation never reaches the books.'
+}
+
+// ---- Correcting a document --------------------------------------------------
+
+/**
+ * The lines of a document a correction is being raised against.
+ *
+ * COPIED AS TYPED, NOT AS COMPUTED. What crosses is the description, the quantity, the
+ * price, the discount and the rate — the five things a person entered. Nothing derived
+ * comes with them: not the taxable amount, not the tax, not a total. Those are the
+ * regime's answer and the service asks for them again on save, against the CORRECTION's
+ * own date, which is right rather than merely convenient — a return raised after a rate
+ * change is taxed at the rate in force when the goods went back.
+ *
+ * So this is a starting point for a full return, which is the common case, and the user
+ * edits it down for a partial one. The editor only offers it into an empty draft, so it
+ * can never overwrite lines somebody typed.
+ */
+export function linesFrom(document: Document): LineDraft[] {
+  return document.lines.length === 0 ? [blankLine()] : document.lines.map(lineDraftOf)
 }

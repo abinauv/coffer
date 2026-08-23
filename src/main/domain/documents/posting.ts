@@ -128,19 +128,19 @@ import type {
   EntryLineDraft,
   PostingContext,
   PostingRule,
-  SourceDocumentType,
 } from '@main/domain/ledger'
 import { PostingError } from '@main/domain/ledger'
 
 import { documentTotals } from './totals'
 import {
-  DOCUMENT_KINDS,
+  POSTING_KINDS,
   definitionOf,
   levyOf,
   type DocumentDirection,
   type DocumentKind,
   type DocumentKindDefinition,
   type DocumentLine,
+  type PostingKindDefinition,
   type TaxLevy,
   type TradeDocument,
   type TradeSide,
@@ -155,22 +155,6 @@ import {
  */
 export interface PostableDocument extends TradeDocument {
   number: string
-}
-
-/**
- * A kind that reaches the ledger, with the null narrowed away.
- *
- * `sourceType: null` is what "never posts" means (see the note on it in ./types.ts), so
- * a definition with a rule is exactly a definition without that null. Narrowing it once,
- * here, is what lets `source` below be assigned rather than asserted — the alternative is
- * a `!` on every use, which tells the next reader nothing about why it is safe.
- */
-interface PostingKindDefinition extends DocumentKindDefinition {
-  sourceType: SourceDocumentType
-}
-
-function posts(definition: DocumentKindDefinition): definition is PostingKindDefinition {
-  return definition.sourceType !== null
 }
 
 // ---- Which accounts, and which way round ------------------------------------
@@ -255,11 +239,13 @@ class Buckets {
  * Every posting rule, built from the kind table at module load.
  *
  * A Map rather than a `Record<DocumentKind, …>` with a `null` for the quotation: a null
- * value would be a second way of saying what `sourceType: null` already says, and the two
- * could drift. Absence here means exactly "no `sourceType`", because that is the filter.
+ * value would be a second way of saying what the table already says, and the two could
+ * drift. Absence here means exactly "does not post", because `POSTING_KINDS` is the
+ * filter — and a definition in it carries a non-null `sourceType` AS A MATTER OF TYPE, so
+ * `ruleFor` assigns it rather than asserting it. See `POSTING_KINDS` in ./types.ts.
  */
 const RULES: ReadonlyMap<DocumentKind, PostingRule<PostableDocument>> = new Map(
-  DOCUMENT_KINDS.filter(posts).map((definition) => [definition.kind, ruleFor(definition)]),
+  POSTING_KINDS.map((definition) => [definition.kind, ruleFor(definition)]),
 )
 
 function ruleFor(definition: PostingKindDefinition): PostingRule<PostableDocument> {

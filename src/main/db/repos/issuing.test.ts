@@ -18,7 +18,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { DOCUMENT_KINDS } from '@main/domain/documents'
+import { correctsKind, DOCUMENT_KINDS } from '@main/domain/documents'
 import { D } from '@main/domain/money'
 import { aprilToMarch } from '@main/domain/time'
 import type { CreateTaxedDocumentInput, TaxedLineInput } from '@shared/dto'
@@ -1315,22 +1315,26 @@ describe('a correction naming the document it corrects', () => {
 
   /*
    * WHAT 0013'S `CASE` CLAIMS, ASKED OF THE DOMAIN. The migration enumerates the mapping
-   * in SQL because a CHECK cannot import a union, and this is what stops the two drifting:
-   * for every refund kind the domain knows, the kind it may correct is the charge kind on
-   * the same side. A sixth kind added without touching 0013 fails here.
+   * in SQL because a CHECK cannot import a union, and this is what stops the two drifting.
+   * A sixth kind added without touching 0013 fails here.
+   *
+   * ASKED OF EVERY KIND, NOT ONLY THE REFUND ONES, and that is a correction. The first
+   * version of this test filtered to refunds and derived the answer inline as "the charge
+   * kind on the same side" — which has TWO answers on the sales side, because a quotation
+   * is also sales and also a charge. It passed because `sales-invoice` happens to be
+   * listed above `quotation` and `.find` takes the first. `correctsKind` states the rule
+   * without the ambiguity (0013-2), and running the loop over all five kinds is what pins
+   * the other half: that a kind correcting nothing is refused a link at all.
    */
-  it('corrects the charge kind on its own side, for every refund kind', () => {
+  it('agrees with the domain about what each kind may correct', () => {
     const corrects: Record<string, string> = {
       'credit-note': 'sales-invoice',
       'debit-note': 'purchase-bill',
     }
 
-    for (const definition of DOCUMENT_KINDS.filter((each) => each.direction === 'refund')) {
-      const charge = DOCUMENT_KINDS.find(
-        (each) => each.side === definition.side && each.direction === 'charge',
-      )
+    for (const definition of DOCUMENT_KINDS) {
       expect(`${definition.kind} -> ${corrects[definition.kind] ?? 'nothing'}`).toBe(
-        `${definition.kind} -> ${charge?.kind ?? 'nothing'}`,
+        `${definition.kind} -> ${correctsKind(definition.kind) ?? 'nothing'}`,
       )
     }
   })

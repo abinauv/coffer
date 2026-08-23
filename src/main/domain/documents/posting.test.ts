@@ -41,7 +41,13 @@ import {
   type PostableDocument,
 } from './posting'
 import { documentTotals } from './totals'
-import { DOCUMENT_KINDS, postsToLedger, type DocumentLine, type DocumentLineTax } from './types'
+import {
+  DOCUMENT_KINDS,
+  postsToLedger,
+  sourceTypeOf,
+  type DocumentLine,
+  type DocumentLineTax,
+} from './types'
 
 // ---- The chart these tests post into ---------------------------------------
 
@@ -514,11 +520,11 @@ describe('postingRuleFor', () => {
     expect(postsToLedger('quotation')).toBe(false)
   })
 
-  /* Absence here means exactly "no sourceType", which is the property that let the
+  /* Absence here means exactly "does not post", which is the property that let the
    * repository stop telling two nulls apart. */
-  it('has a rule for exactly the kinds that have a source type', () => {
+  it('has a rule for exactly the kinds that post', () => {
     for (const definition of DOCUMENT_KINDS) {
-      expect(postingRuleFor(definition.kind) === null).toBe(definition.sourceType === null)
+      expect(postingRuleFor(definition.kind) === null).toBe(!postsToLedger(definition.kind))
     }
   })
 
@@ -529,7 +535,7 @@ describe('postingRuleFor', () => {
     for (const definition of DOCUMENT_KINDS) {
       const rule = postingRuleFor(definition.kind)
       if (rule !== null) {
-        expect(rule.source).toBe(definition.sourceType)
+        expect(rule.source).toBe(sourceTypeOf(definition.kind))
       }
     }
   })

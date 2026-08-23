@@ -177,6 +177,25 @@ the sentence with the figures in it, and the trigger is the floor underneath. Wh
 two must both be reachable, assert on `details` or on the message — only one layer
 populates either.
 
+**A guard against a state the real data cannot reach is a guard nothing can kill.** The
+correction mapping in `shared/documents.ts` refuses a side with two charge kinds, which
+the shipped table cannot have — so the mutation that deleted the refusal survived the
+whole suite, correctly. The answer is not to label it equivalent and move on: it is to let
+a test hand the function the table it is guarding against. `correctionMap` takes the kinds
+as an argument for exactly that reason, and the test builds the ambiguous table in four
+lines (0013-2).
+
+**`.find` cannot tell "one answer" from "the first of two".** Where a rule says "the one
+X that matches", `filter` and a count say it and `find` does not — `find` silently
+implements "whichever is listed first", so the rule becomes table order and no assertion
+downstream can see the difference. 0013's first correction mapping was written that way
+and passed only because `sales-invoice` is listed above `quotation` (0013-2).
+
+**A mutation that breaks module load prints no test summary at all**, which a naive
+harness reports as no result — and "no result" reads exactly like "nothing caught it". It
+is the loudest possible kill: every test in every importing file fails to collect. The
+harness now reads `Test Files N failed` as a kill in its own right and says so (0013-2).
+
 ## 7. Commits
 
 Conventional commits, with a DCO sign-off:

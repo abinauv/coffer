@@ -1,5 +1,12 @@
 /*
- * One invoice: drafting it, issuing it, cancelling it.
+ * One document: drafting it, issuing it, cancelling it. All five kinds, one component.
+ *
+ * WAS `Invoice.tsx`. A credit note, a purchase bill and a debit note reached the ledger in
+ * 0013-1 and had no screen; a quotation had been issuable since 0010 and had none either.
+ * They differ from an invoice in what the party is called, what their own reference means,
+ * whether issuing posts anything, and — for the two corrections — whether they name a
+ * document they correct. Everything else on this screen is identical for all five, which
+ * is what one table for five kinds was for.
  *
  * THE FIGURES ON THIS SCREEN ARE ALWAYS MAIN'S. A user typing a quantity expects a line
  * total to follow and this screen will not produce one — `quantity x unitPrice` is money
@@ -9,7 +16,7 @@
  * says it is stale is honest, and a fresh-looking figure the renderer invented is not.
  *
  * That is not a workaround. Every screen in this product shows figures main computed, and
- * an invoice is the one document where being wrong by a paisa is a filing that does not
+ * a tax document is the one place where being wrong by a paisa is a filing that does not
  * reconcile.
  *
  * THE PLACE OF SUPPLY IS OMITTED UNLESS THE USER TOUCHES IT, and this is the subtlest
@@ -21,10 +28,17 @@
  * how the screen says "you decide". See `placeTouched` below.
  *
  * WHAT IS OUTSTANDING IS SHOWN, AND IT IS NOT A FIELD ON THE DOCUMENT. It is the movement
- * the invoice made on the customer's account less what has been receipted against it, and
+ * the document made on the party's account less what has been receipted against it, and
  * it is asked for separately because that is what it is — a fact about the ledger, not a
- * column somebody would have to keep in step. A cancelled invoice comes back at nothing
+ * column somebody would have to keep in step. A cancelled document comes back at nothing
  * with no code written to make it so.
+ *
+ * ONLY A CHARGE THAT POSTS SHOWS THAT PANEL, which is new here and deliberate. A credit
+ * note's movement is negative, so its "outstanding" is money owed BACK — a real figure
+ * with no screen to act on it yet, since offsetting a credit note against an invoice and
+ * refunding one are both unbuilt. Showing a negative outstanding beside a Record-a-receipt
+ * button would offer a user an operation that does not exist. The same filter 0013-1 put
+ * on the receipt picker, arriving on the screen the picker feeds.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -32,14 +46,16 @@ import type { JSX } from 'react'
 import { Badge, Button, Input, Select } from '@renderer/components/atoms'
 import { callApi } from '@renderer/lib/api'
 import { makeRoute } from '@renderer/lib/routing'
-import { registerScreens, type ScreenContext } from '@renderer/lib/screens'
+import { registerScreens, type ScreenContext, type ScreenDefinition } from '@renderer/lib/screens'
 import { useNumberFormat, useRegime } from '@renderer/store/regime'
 import { useToasts } from '@renderer/store/toasts'
+import { correctsKind, definitionOf, DOCUMENT_KINDS, type DocumentKind } from '@shared/documents'
 import type {
   AppError,
   Document,
   DocumentLineInput,
   DocumentSettlement,
+  DocumentSummary,
   PartySummary,
   RegimeDescription,
 } from '@shared/dto'
@@ -47,25 +63,44 @@ import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
 import { ScreenFrame } from '../components/ScreenFrame'
 import { formatAmount } from '../lib/ledger-format'
-import { INVOICE_KIND, statusLabel, statusTone } from '../lib/invoice-view'
+import {
+  editorScreenId,
+  partyLabel,
+  partyReferenceHint,
+  partyReferenceLabel,
+  partyRoleFor,
+  registerScreenId,
+  statusLabel,
+  statusTone,
+} from '../lib/document-view'
 import {
   blankLine,
   canCancel,
   canDelete,
   canEdit,
   canIssue,
+  isBlankDraft,
   lineDraftOf,
+  linesFrom,
   readyLines,
   stateSentence,
   toLineInput,
   type LineDraft,
-} from '../lib/invoice-editor'
+} from '../lib/document-editor'
 
-export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
+export function DocumentEditor({
+  kind,
+  route,
+  navigate,
+}: ScreenContext & { kind: DocumentKind }): JSX.Element {
   const documentId = route.params['id'] ?? null
   const { show } = useToasts()
   const regime = useRegime()
   const format = useNumberFormat()
+
+  const definition = definitionOf(kind)
+  const label = definition.label.toLowerCase()
+  const corrects = correctsKind(kind)
 
   const [document, setDocument] = useState<Document | null>(null)
   const [parties, setParties] = useState<PartySummary[]>([])
@@ -78,6 +113,12 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
   const [partyReference, setPartyReference] = useState('')
   const [narration, setNarration] = useState('')
   const [lines, setLines] = useState<LineDraft[]>([blankLine()])
+
+  /* The document this one corrects, where the kind may name one. '' is "none", which is
+   * legal: one credit note against several invoices has been allowed since 2019, so the
+   * column is nullable and this picker has an empty option that means it. */
+  const [originalId, setOriginalId] = useState('')
+  const [originals, setOriginals] = useState<DocumentSummary[]>([])
 
   /* See the header. Only an explicit choice is sent, so that a party change re-asks the
    * regime instead of having the displayed place pinned back on. */
@@ -92,8 +133,8 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
   const [settlement, setSettlement] = useState<DocumentSettlement | null>(null)
 
   const load = useCallback(async () => {
-    const customers = await callApi((api) => api.parties.list({ role: 'customer' }))
-    if (customers.ok) setParties(customers.data)
+    const people = await callApi((api) => api.parties.list({ role: partyRoleFor(definition.side) }))
+    if (people.ok) setParties(people.data)
 
     if (documentId === null) {
       setReading(false)
@@ -107,11 +148,33 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
       return
     }
     if (result.data === null) {
-      setError({ code: 'DOCUMENT_NOT_FOUND', message: 'That invoice is no longer in these books.' })
+      setError({
+        code: 'DOCUMENT_NOT_FOUND',
+        message: `That ${label} is no longer in these books.`,
+      })
+      return
+    }
+    /*
+     * THE ONE HAZARD ONE EDITOR FOR FIVE KINDS CREATES. The kind comes from the route and
+     * the id comes from the route, independently — so a link built by hand, or a Back
+     * that reaches this screen with a stale id, can load an invoice into the credit note
+     * editor. Everything would look ordinary: the heading would say Credit note, the
+     * corrections picker would appear, and the save would be refused by 0013's trigger
+     * naming a document the user had just been shown.
+     *
+     * `Document.kind` is a `string` at the boundary on purpose, so this compares strings.
+     * A company file written by a newer build lands here too, which is the right place
+     * for it: a kind this build cannot draw is a kind it should not draw.
+     */
+    if (result.data.kind !== kind) {
+      setError({
+        code: 'DOCUMENT_KIND_MISMATCH',
+        message: `That document is not a ${label}. Open it from its own register.`,
+      })
       return
     }
     adopt(result.data)
-  }, [documentId])
+  }, [definition.side, documentId, kind, label])
 
   /** Take main's answer as the truth, and clear the unsaved-edits mark. */
   function adopt(next: Document): void {
@@ -121,6 +184,7 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
     setPartyReference(next.partyReference ?? '')
     setNarration(next.narration)
     setLines(next.lines.length === 0 ? [blankLine()] : next.lines.map(lineDraftOf))
+    setOriginalId(next.originalDocumentId ?? '')
     setPlace(next.placeOfSupplyJurisdiction ?? '')
     setPlaceTouched(false)
     setDirty(false)
@@ -132,12 +196,44 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
   }, [load])
 
   /*
+   * WHAT THIS DOCUMENT MAY CORRECT, for the party it is against.
+   *
+   * Re-read when the party changes, because the answer is entirely about them: 0013's
+   * trigger refuses a link to another party's invoice, so a picker that kept the old
+   * party's list would offer choices the database will reject.
+   *
+   * Only issued documents, which is also why a link that is already stored is always in
+   * the list: 0013 refuses to cancel a document something corrects, so the original of a
+   * saved correction cannot have left `issued` while the correction exists.
+   */
+  useEffect(() => {
+    let current = true
+    if (corrects === null || partyId === '') {
+      setOriginals([])
+      return
+    }
+
+    void callApi((api) => api.documents.list({ kind: corrects, status: 'issued', partyId })).then(
+      (result) => {
+        if (!current) return
+        if (result.ok) setOriginals(result.data)
+      },
+    )
+
+    return () => {
+      current = false
+    }
+  }, [corrects, partyId])
+
+  /*
    * Read after the document, and again after anything that could move it. The guard
-   * against a stale answer is the usual one: an invoice cancelled while this was in
-   * flight would otherwise paint an outstanding figure over a document that owes nothing.
+   * against a stale answer is the usual one: a document cancelled while this was in
+   * flight would otherwise paint an outstanding figure over one that owes nothing.
    */
   const documentStatus = document?.status ?? null
-  const settledId = document !== null && documentStatus !== 'draft' ? document.id : null
+  const isSettleable = definition.postsToLedger && definition.direction === 'charge'
+  const settledId =
+    document !== null && isSettleable && documentStatus !== 'draft' ? document.id : null
 
   useEffect(() => {
     let current = true
@@ -171,6 +267,30 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
     [touch],
   )
 
+  /*
+   * Choosing the document this one corrects, and copying its lines into an empty draft.
+   *
+   * A full return is the common case and retyping an invoice to record one is the kind of
+   * work software exists to remove. What is copied is what a person typed — description,
+   * quantity, price, discount, rate — and nothing derived: the tax is asked of the regime
+   * again on save, against this document's own date. See `linesFrom`.
+   *
+   * ONLY INTO AN EMPTY DRAFT. Changing the picker after typing lines leaves them alone,
+   * because the alternative is a screen that silently discards work when somebody
+   * corrects a mis-click.
+   */
+  const chooseOriginal = useCallback(
+    async (next: string) => {
+      touch(() => setOriginalId(next))
+      if (next === '' || !isBlankDraft(lines)) return
+
+      const result = await callApi((api) => api.documents.get(next))
+      if (!result.ok || result.data === null) return
+      setLines(linesFrom(result.data))
+    },
+    [lines, touch],
+  )
+
   const status = document?.status ?? 'draft'
   const isEditable = document === null || canEdit(status)
   const sendable = readyLines(lines)
@@ -185,6 +305,7 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
       narration: string
       lines: DocumentLineInput[]
       placeOfSupplyJurisdiction?: string
+      originalDocumentId?: string | null
     } => ({
       date,
       partyId,
@@ -193,8 +314,12 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
       lines: sendable.map(toLineInput),
       /* Omitted unless chosen — see the header. */
       ...(placeTouched && place !== '' ? { placeOfSupplyJurisdiction: place } : {}),
+      /* Sent as null rather than omitted when cleared, because absent means "leave it" on
+       * an update and this picker's empty option means "it names none". Omitted entirely
+       * for a kind that corrects nothing, which 0013's trigger refuses a link on. */
+      ...(corrects === null ? {} : { originalDocumentId: originalId === '' ? null : originalId }),
     }),
-    [date, narration, partyId, partyReference, place, placeTouched, sendable],
+    [corrects, date, narration, originalId, partyId, partyReference, place, placeTouched, sendable],
   )
 
   const save = useCallback(async () => {
@@ -204,7 +329,7 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
 
     const result = await callApi((api) =>
       document === null
-        ? api.documents.create({ kind: INVOICE_KIND, ...payload() })
+        ? api.documents.create({ kind, ...payload() })
         : api.documents.update({ id: document.id, ...payload() }),
     )
     setBusy(false)
@@ -219,16 +344,18 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
     if (wasNew) {
       /* The route now names the draft that exists, so Back and the title bar agree with
        * what is on screen. `ScreenContext.navigate` pushes and takes no mode, so Back
-       * from here reaches the empty editor — which is a new-invoice screen that creates
+       * from here reaches the empty editor — which is a new-document screen that creates
        * nothing until asked, not a second draft. */
-      navigate(makeRoute('workspace', 'invoice', { id: result.data.id }))
+      navigate(makeRoute('workspace', editorScreenId(kind), { id: result.data.id }))
     }
     show({
       tone: 'success',
       title: wasNew ? 'Draft created' : 'Saved',
-      body: 'Nothing is in the books until it is issued.',
+      body: definition.postsToLedger
+        ? 'Nothing is in the books until it is issued.'
+        : 'Issuing it will number it and send it. It reaches the books either way — a quotation posts nothing.',
     })
-  }, [canSave, document, navigate, payload, show])
+  }, [canSave, definition.postsToLedger, document, kind, navigate, payload, show])
 
   const issue = useCallback(async () => {
     if (document === null) return
@@ -244,9 +371,11 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
     show({
       tone: 'success',
       title: 'Issued',
-      body: `${result.data.number ?? 'The invoice'} is in the books. To undo it, cancel it — the number is kept.`,
+      body: definition.postsToLedger
+        ? `${result.data.number ?? `The ${label}`} is in the books. To undo it, cancel it — the number is kept.`
+        : `${result.data.number ?? `The ${label}`} is numbered and sent. It puts nothing in the books.`,
     })
-  }, [document, show])
+  }, [definition.postsToLedger, document, label, show])
 
   const cancel = useCallback(async () => {
     if (document === null) return
@@ -262,9 +391,11 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
     show({
       tone: 'success',
       title: 'Cancelled',
-      body: 'What it posted has been reversed. The number is kept, so the series has no hole.',
+      body: definition.postsToLedger
+        ? 'What it posted has been reversed. The number is kept, so the series has no hole.'
+        : 'The number is kept, so the series has no hole. There was nothing posted to reverse.',
     })
-  }, [document, show])
+  }, [definition.postsToLedger, document, show])
 
   const remove = useCallback(async () => {
     if (document === null) return
@@ -281,13 +412,13 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
       title: 'Deleted',
       body: 'The draft is gone. Nothing was in the books.',
     })
-    navigate(makeRoute('workspace', 'invoices'))
-  }, [document, navigate, show])
+    navigate(makeRoute('workspace', registerScreenId(kind)))
+  }, [document, kind, navigate, show])
 
   if (isReading) {
     return (
-      <ScreenFrame isInset width="list" title="Invoice">
-        <p className="prose prose--muted">Reading the invoice…</p>
+      <ScreenFrame isInset width="list" title={definition.label}>
+        <p className="prose prose--muted">Reading the {label}…</p>
       </ScreenFrame>
     )
   }
@@ -296,11 +427,14 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
     <ScreenFrame
       isInset
       width="list"
-      title={document?.number ?? 'New invoice'}
-      lede={stateSentence(status, document?.number ?? null)}
+      title={document?.number ?? `New ${label}`}
+      lede={stateSentence(kind, status, document?.number ?? null)}
       actions={
         <>
-          <Button variant="ghost" onClick={() => navigate(makeRoute('workspace', 'invoices'))}>
+          <Button
+            variant="ghost"
+            onClick={() => navigate(makeRoute('workspace', registerScreenId(kind)))}
+          >
             Back to the register
           </Button>
           {isEditable && (
@@ -324,7 +458,7 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
             )}
             {canCancel(status) && (
               <Button variant="ghost" disabled={isBusy} onClick={() => void cancel()}>
-                Cancel this invoice
+                Cancel this {label}
               </Button>
             )}
             {canDelete(status) && (
@@ -335,28 +469,43 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
           </div>
         )}
 
-        {/* Issuing an invoice with unsaved edits would number and post the SAVED version,
-            which is not what is on screen. Saying so is better than saving silently. */}
+        {/* Issuing with unsaved edits would number and post the SAVED version, which is
+            not what is on screen. Saying so is better than saving silently. */}
         {isDirty && document !== null && canIssue(status) && (
           <Notice tone="info" title="There are unsaved changes">
-            <p>Save them first — issuing would number and post the invoice as it was last saved.</p>
+            <p>
+              Save them first — issuing would number and{' '}
+              {definition.postsToLedger ? 'post' : 'send'} the {label} as it was last saved.
+            </p>
           </Notice>
         )}
 
         <div className="stack">
           <Select
-            label="Customer"
+            label={partyLabel(definition.side)}
             value={partyId}
             disabled={!isEditable}
             onChange={(event) => touch(() => setPartyId(event.target.value))}
           >
-            <option value="">Choose a customer</option>
+            <option value="">Choose a {partyLabel(definition.side).toLowerCase()}</option>
             {parties.map((party) => (
               <option key={party.id} value={party.id}>
                 {party.name}
               </option>
             ))}
           </Select>
+
+          {corrects !== null && (
+            <Corrects
+              kind={kind}
+              corrects={corrects}
+              value={originalId}
+              options={originals}
+              isEditable={isEditable}
+              hasParty={partyId !== ''}
+              onChange={(next) => void chooseOriginal(next)}
+            />
+          )}
 
           <Input
             label="Date"
@@ -367,15 +516,16 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
           />
 
           <Input
-            label="Their reference"
+            label={partyReferenceLabel(definition.side)}
             value={partyReference}
             disabled={!isEditable}
-            hint="A purchase order number, or whatever they asked you to quote."
+            hint={partyReferenceHint(definition.side)}
             onChange={(event) => touch(() => setPartyReference(event.target.value))}
           />
 
           <PlaceOfSupply
             regime={regime}
+            label={label}
             value={place}
             isEditable={isEditable}
             isTouched={placeTouched}
@@ -389,7 +539,11 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
             label="Narration"
             value={narration}
             disabled={!isEditable}
-            hint="What the day book will say about the entry this posts."
+            hint={
+              definition.postsToLedger
+                ? 'What the day book will say about the entry this posts.'
+                : 'A note for whoever reads it. This posts nothing, so it reaches no day book.'
+            }
             onChange={(event) => touch(() => setNarration(event.target.value))}
           />
         </div>
@@ -415,14 +569,21 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
         {settlement !== null && (
           <Settlement
             settlement={settlement}
+            label={label}
             format={format}
-            onRecordReceipt={() =>
-              navigate(
-                makeRoute('workspace', 'receipt', {
-                  partyId: document?.partyId ?? '',
-                  documentId: settlement.documentId,
-                }),
-              )
+            onRecordReceipt={
+              /* No payment editor until 0013-3. A button that navigated to a screen
+               * nothing has registered would land the user on a blank page, which is
+               * worse than an outstanding figure with nothing beside it. */
+              definition.side === 'sales'
+                ? () =>
+                    navigate(
+                      makeRoute('workspace', 'receipt', {
+                        partyId: document?.partyId ?? '',
+                        documentId: settlement.documentId,
+                      }),
+                    )
+                : null
             }
           />
         )}
@@ -431,28 +592,89 @@ export function Invoice({ route, navigate }: ScreenContext): JSX.Element {
   )
 }
 
+// ---- The document this one corrects -----------------------------------------
+
+/**
+ * The picker for the document a credit or debit note corrects.
+ *
+ * OPTIONAL, AND THE EMPTY OPTION SAYS WHY. Since the 2019 amendment to section 34 one
+ * credit note may cover several invoices — the post-sale discount a distributor settles
+ * at quarter end is exactly that — so a required field would refuse a document the law
+ * permits. GSTR-1 table 9B wants the original where there is one, which is why the field
+ * exists at all and why it is asked for rather than derived: two invoices to the same
+ * customer in the same month for the same amount are ordinary, and nothing in the figures
+ * says which one a credit note undid.
+ *
+ * IT NEEDS THE PARTY FIRST, and says so rather than showing an empty list. 0013's trigger
+ * refuses a link to another party's document, so until a party is chosen there is nothing
+ * this could honestly offer.
+ */
+function Corrects({
+  kind,
+  corrects,
+  value,
+  options,
+  isEditable,
+  hasParty,
+  onChange,
+}: {
+  kind: DocumentKind
+  corrects: DocumentKind
+  value: string
+  options: readonly DocumentSummary[]
+  isEditable: boolean
+  hasParty: boolean
+  onChange: (next: string) => void
+}): JSX.Element {
+  const correctedLabel = definitionOf(corrects).label.toLowerCase()
+  const ownLabel = definitionOf(kind).label.toLowerCase()
+
+  return (
+    <Select
+      label={`The ${correctedLabel} this corrects`}
+      value={value}
+      disabled={!isEditable || !hasParty}
+      hint={
+        hasParty
+          ? `Optional. Filling it in puts the original on the return, and choosing one into an empty ${ownLabel} copies its lines across for you to edit.`
+          : `Choose a ${partyLabel(definitionOf(kind).side).toLowerCase()} first — a ${ownLabel} may only correct their own ${correctedLabel}s.`
+      }
+      onChange={(event) => onChange(event.target.value)}
+    >
+      <option value="">None — this covers more than one, or none</option>
+      {options.map((original) => (
+        <option key={original.id} value={original.id}>
+          {original.number} · {original.date}
+        </option>
+      ))}
+    </Select>
+  )
+}
+
 // ---- What has been paid against it ------------------------------------------
 
 /**
  * What is outstanding, and the receipts that settled the rest.
  *
- * NOT A FIGURE ON THE DOCUMENT. It is the movement this invoice made on the customer's
+ * NOT A FIGURE ON THE DOCUMENT. It is the movement this document made on the party's
  * account less what has been receipted against it — read from main, never derived here.
- * A cancelled invoice comes back at nothing because its entry was reversed, which is why
+ * A cancelled document comes back at nothing because its entry was reversed, which is why
  * this panel needs no special case for one.
  *
- * `Record a receipt` carries the customer and this invoice into the receipt editor, and
+ * `Record a receipt` carries the party and this document into the receipt editor, and
  * carries no AMOUNT: what arrived is a fact about a bank statement, and a screen that
  * guessed it would have somebody confirming a figure they had not read.
  */
 function Settlement({
   settlement,
+  label,
   format,
   onRecordReceipt,
 }: {
   settlement: DocumentSettlement
+  label: string
   format: Parameters<typeof formatAmount>[1]
-  onRecordReceipt: () => void
+  onRecordReceipt: (() => void) | null
 }): JSX.Element {
   const isSettled = settlement.outstanding === '0.00'
 
@@ -461,7 +683,7 @@ function Settlement({
       <table className="ledger-table ledger-table--figures">
         <tbody>
           <tr>
-            <td>Received against this invoice</td>
+            <td>Received against this {label}</td>
             <td className="ledger-table__figure">{formatAmount(settlement.allocated, format)}</td>
           </tr>
           <tr>
@@ -478,7 +700,7 @@ function Settlement({
               <th scope="col">Receipt</th>
               <th scope="col">Date</th>
               <th scope="col" className="ledger-table__figure">
-                Against this invoice
+                Against this {label}
               </th>
             </tr>
           </thead>
@@ -494,7 +716,7 @@ function Settlement({
         </table>
       )}
 
-      {!isSettled && (
+      {!isSettled && onRecordReceipt !== null && (
         <div className="toolbar">
           <Button icon="plus" variant="ghost" size="sm" onClick={onRecordReceipt}>
             Record a receipt
@@ -509,12 +731,14 @@ function Settlement({
 
 function PlaceOfSupply({
   regime,
+  label,
   value,
   isEditable,
   isTouched,
   onChange,
 }: {
   regime: RegimeDescription | null
+  label: string
   value: string
   isEditable: boolean
   isTouched: boolean
@@ -527,8 +751,8 @@ function PlaceOfSupply({
       disabled={!isEditable}
       hint={
         isTouched
-          ? 'Overridden for this invoice. Choose "Wherever the regime decides" to let it decide again.'
-          : 'Left alone, this follows the customer and your own registration. Change it only for a supply that happens somewhere else — a hotel room, goods delivered to a third state.'
+          ? `Overridden for this ${label}. Choose "Wherever the regime decides" to let it decide again.`
+          : 'Left alone, this follows the party and your own registration. Change it only for a supply that happens somewhere else — a hotel room, goods delivered to a third state.'
       }
       onChange={(event) => onChange(event.target.value)}
     >
@@ -628,13 +852,13 @@ function Lines({
                  * A LIST AND A BOX, NOT A CLOSED PICKER. The slabs come from the regime
                  * and are advisory: rates change by notification and this build's copy of
                  * them is bundled, so a list gone stale must not stand between a user and
-                 * an invoice they are required to raise. The datalist offers; the field
+                 * a document they are required to raise. The datalist offers; the field
                  * accepts anything.
                  */}
                 <Input
                   label={`Tax rate, line ${String(index + 1)}`}
                   isLabelHidden
-                  list="invoice-tax-rates"
+                  list="document-tax-rates"
                   value={line.ratePct}
                   disabled={!isEditable}
                   placeholder="18"
@@ -653,7 +877,7 @@ function Lines({
         </tbody>
       </table>
 
-      <datalist id="invoice-tax-rates">
+      <datalist id="document-tax-rates">
         {rates.map((rate) => (
           <option key={rate.ratePct} value={rate.ratePct}>
             {rate.label} — {rate.note}
@@ -689,14 +913,14 @@ function Totals({
     <div className="stack stack--tight">
       {/*
        * SAID, NOT HIDDEN. These are the figures main computed for the version of this
-       * invoice that is stored. The renderer cannot recompute them and will not pretend
+       * document that is stored. The renderer cannot recompute them and will not pretend
        * to, so when there are unsaved edits it says which version they belong to.
        */}
       {isStale && (
         <Notice tone="info" title="These figures are from the last saved version">
           <p>
             Tax is worked out in the main process, against the regime these books use. Save to see
-            what the invoice now comes to.
+            what it now comes to.
           </p>
         </Notice>
       )}
@@ -727,13 +951,18 @@ function Totals({
   )
 }
 
-registerScreens([
-  {
-    id: 'invoice',
-    title: 'Invoice',
-    area: 'workspace',
-    /* No `nav`. It is reached from the register or from a row, never from the sidebar —
-     * there is no such thing as "the" invoice to land on. */
-    render: (context) => <Invoice {...context} />,
-  },
-])
+/*
+ * One editor per kind, from the same table the registers use. No `nav` on any of them:
+ * an editor is reached from its register or from a row, never from the sidebar — there
+ * is no such thing as "the" credit note to land on.
+ */
+export const documentEditorScreens: readonly ScreenDefinition[] = DOCUMENT_KINDS.map(
+  (definition) => ({
+    id: editorScreenId(definition.kind),
+    title: definition.label,
+    area: 'workspace' as const,
+    render: (context: ScreenContext) => <DocumentEditor {...context} kind={definition.kind} />,
+  }),
+)
+
+registerScreens(documentEditorScreens)

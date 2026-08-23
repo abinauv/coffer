@@ -75,31 +75,50 @@
 
 import type { Decimal } from '@main/domain/money'
 import type { SourceDocumentType } from '@main/domain/ledger'
+import {
+  definitionOf,
+  DOCUMENT_KINDS,
+  postsToLedger,
+  type DocumentKind,
+  type DocumentKindDefinition,
+  type PostingKind,
+} from '@shared/documents'
 import type { DateString } from '@shared/scalars'
 
 // ---- Kinds ----------------------------------------------------------------
 
-/**
- * Every kind of trade document Coffer knows.
+/*
+ * THE TABLE ITSELF LIVES IN `@shared/documents`, and it moved there in 0013-2.
  *
- * Closed on purpose, like `SourceDocumentType`: an unrecognised kind in a company file
- * means the file was written by a newer build, and the right response is to say so rather
- * than to render a document whose posting treatment this build does not know.
- */
-export type DocumentKind =
-  'quotation' | 'sales-invoice' | 'credit-note' | 'purchase-bill' | 'debit-note'
-
-/** Which half of the trade a document belongs to. Decides which party role applies. */
-export type TradeSide = 'sales' | 'purchase'
-
-/**
- * Whether a document adds to what the party owes or takes away from it.
+ * It was here while the posting rule was the only thing reading it. The screens then
+ * needed the same facts — what to call a credit note, whether a party is a customer or a
+ * vendor, which kind a refund may correct — and the renderer cannot import `@main/*`. A
+ * second copy in the renderer is the shape this codebase has deleted four times, so the
+ * table went down to the one module both sides can reach. `shared/` depends on nothing.
  *
- * An invoice charges; a credit note refunds. The posting rule reads this instead of
- * branching on the kind, so a kind added later gets its debits and credits the right way
- * round by declaring itself rather than by being remembered in a `switch`.
+ * WHAT STAYED HERE IS WHAT THE LEDGER DOES WITH A KIND. `SourceDocumentType` has
+ * `manual`, `opening-balance` and `year-end-close` in it, none of which is a document a
+ * user raises, and putting that union in a module the renderer imports would be a worse
+ * trade than the duplication it avoids. So shared says whether a kind reaches the books
+ * and this file says what the ledger calls it — joined at compile time by `PostingKind`,
+ * not by a test. See `SOURCE_TYPES` below and the header of `@shared/documents`.
  */
-export type DocumentDirection = 'charge' | 'refund'
+
+export type {
+  DocumentDirection,
+  DocumentKind,
+  DocumentKindDefinition,
+  PostingKind,
+  TradeSide,
+} from '@shared/documents'
+
+export {
+  correctsKind,
+  definitionOf,
+  DOCUMENT_KINDS,
+  kindsOnSide,
+  postsToLedger,
+} from '@shared/documents'
 
 /**
  * Which side of the tax a document gives rise to.
@@ -107,125 +126,86 @@ export type DocumentDirection = 'charge' | 'refund'
  * The same word the chart of accounts uses (`db/repos/tax-accounts.ts`): output tax is
  * owed to the authority and is a liability, input tax is reclaimable and is an asset.
  *
- * NOT A FIELD ON THE TABLE BELOW, and it was one until a mutation showed why it should
- * not be. A sales document levies output tax and a purchase document gives input credit
- * — that is what the two words mean — and a document that never posts levies nothing.
- * Both facts are already in the table, so storing the levy as well is a second place for
- * it to be wrong, and no test could tell the two apart while they happened to agree.
- * See `levyOf`.
+ * NOT A FIELD ON THE TABLE, and it was one until a mutation showed why it should not be.
+ * A sales document levies output tax and a purchase document gives input credit — that is
+ * what the two words mean — and a document that never posts levies nothing. Both facts
+ * are already in the table, so storing the levy as well is a second place for it to be
+ * wrong, and no test could tell the two apart while they happened to agree. See `levyOf`.
  */
 export type TaxLevy = 'output' | 'input'
 
-export interface DocumentKindDefinition {
-  kind: DocumentKind
-  /** What the user sees, singular. */
-  label: string
-  /** What the user sees for many of them. English is irregular enough to need this. */
-  pluralLabel: string
-  side: TradeSide
-  direction: DocumentDirection
-  /**
-   * What the ledger records this document as, or null when the document never posts.
-   *
-   * A quotation is the only null, and it is the reason this field exists rather than
-   * `postsToLedger: boolean`. `SourceDocumentType` has no `quotation` member — nothing
-   * that never reaches the ledger can be a source document — so a kind that posts is
-   * exactly a kind that has one of these, and the two facts cannot drift apart.
-   */
-  sourceType: SourceDocumentType | null
+/**
+ * What the ledger records each posting kind as.
+ *
+ * KEYED BY `PostingKind`, WHICH IS THE POINT. That type is `Extract`ed from the rows of
+ * the shared table whose `postsToLedger` is literally `true`, so this record is total over
+ * exactly the kinds that post: a kind flipped to `true` there does not compile until it
+ * appears here, and a kind flipped to `false` makes its entry an excess property. The two
+ * facts cannot disagree and still build, which is what the single `sourceType` field
+ * bought before the table moved.
+ *
+ * The values repeat the kind names today and are not the same thing. A source type says
+ * what an ENTRY came from and the union covers `manual`, `year-end-close` and other things
+ * no user raises; that they coincide for these four is a fact about this ledger, not an
+ * identity to be derived.
+ */
+const SOURCE_TYPES: Readonly<Record<PostingKind, SourceDocumentType>> = {
+  'sales-invoice': 'sales-invoice',
+  'credit-note': 'credit-note',
+  'purchase-bill': 'purchase-bill',
+  'debit-note': 'debit-note',
 }
 
 /**
- * The table. Adding a kind means adding a row and a posting rule, and nothing else.
+ * True of exactly the kinds `SOURCE_TYPES` is keyed by.
  *
- * Order is the order a menu lists them: what a business does most often, first.
+ * An unchecked predicate, and sound by construction rather than by inspection:
+ * `PostingKind` is DEFINED as the kinds whose `postsToLedger` is `true`, and
+ * `postsToLedger()` reads that same field off that same table. There is no third value
+ * for the two to disagree about.
  */
-export const DOCUMENT_KINDS: readonly DocumentKindDefinition[] = [
-  {
-    kind: 'sales-invoice',
-    label: 'Sales invoice',
-    pluralLabel: 'Sales invoices',
-    side: 'sales',
-    direction: 'charge',
-    sourceType: 'sales-invoice',
-  },
-  {
-    kind: 'quotation',
-    label: 'Quotation',
-    pluralLabel: 'Quotations',
-    side: 'sales',
-    direction: 'charge',
-    sourceType: null,
-  },
-  {
-    kind: 'credit-note',
-    label: 'Credit note',
-    pluralLabel: 'Credit notes',
-    side: 'sales',
-    direction: 'refund',
-    sourceType: 'credit-note',
-  },
-  {
-    kind: 'purchase-bill',
-    label: 'Purchase bill',
-    pluralLabel: 'Purchase bills',
-    side: 'purchase',
-    direction: 'charge',
-    sourceType: 'purchase-bill',
-  },
-  {
-    kind: 'debit-note',
-    label: 'Debit note',
-    pluralLabel: 'Debit notes',
-    side: 'purchase',
-    direction: 'refund',
-    sourceType: 'debit-note',
-  },
-] as const
+function isPostingKind(kind: DocumentKind): kind is PostingKind {
+  return postsToLedger(kind)
+}
 
-const BY_KIND: ReadonlyMap<DocumentKind, DocumentKindDefinition> = new Map(
-  DOCUMENT_KINDS.map((definition) => [definition.kind, definition]),
+/** What the ledger records this kind as, or null when issuing it posts nothing. */
+export function sourceTypeOf(kind: DocumentKind): SourceDocumentType | null {
+  return isPostingKind(kind) ? SOURCE_TYPES[kind] : null
+}
+
+/** A kind that posts, carrying the source type the ledger records it as. */
+export interface PostingKindDefinition extends DocumentKindDefinition {
+  kind: PostingKind
+  sourceType: SourceDocumentType
+}
+
+/**
+ * Every kind that posts, in table order.
+ *
+ * The posting engine builds its rules from this rather than filtering the whole table and
+ * asserting the result: a definition in here has a non-null `sourceType` as a matter of
+ * type, so the three places the entry needs one do not each carry a null check for a case
+ * the filter has already removed.
+ */
+export const POSTING_KINDS: readonly PostingKindDefinition[] = DOCUMENT_KINDS.flatMap(
+  (definition) =>
+    isPostingKind(definition.kind)
+      ? [{ ...definition, kind: definition.kind, sourceType: SOURCE_TYPES[definition.kind] }]
+      : [],
 )
-
-/**
- * The definition for a kind.
- *
- * Throws rather than returning null. Every caller has a `DocumentKind`, which the type
- * system already narrowed to one of five strings — a null here would be unreachable, and
- * a null-check on every call site would be noise that hides the one case that is real:
- * a kind read from a company file written by a newer build.
- */
-export function definitionOf(kind: DocumentKind): DocumentKindDefinition {
-  const definition = BY_KIND.get(kind)
-  if (definition === undefined) {
-    throw new Error(`Unknown document kind '${kind}'. This file may need a newer Coffer.`)
-  }
-  return definition
-}
-
-/** Whether issuing this kind writes a journal entry. False only for a quotation. */
-export function postsToLedger(kind: DocumentKind): boolean {
-  return definitionOf(kind).sourceType !== null
-}
 
 /**
  * Which side of the tax this kind gives rise to, or null when it raises none.
  *
- * Derived from two facts the table already holds rather than stored beside them — see
- * the note on `TaxLevy`. A quotation shows tax so the customer can see the price, and
- * that tax lands nowhere, because nothing has been supplied.
+ * Derived from two facts the table already holds rather than stored beside them — see the
+ * note on `TaxLevy`. A quotation shows tax so the customer can see the price, and that
+ * tax lands nowhere, because nothing has been supplied.
  */
 export function levyOf(kind: DocumentKind): TaxLevy | null {
-  const definition = definitionOf(kind)
-  if (definition.sourceType === null) {
+  if (!postsToLedger(kind)) {
     return null
   }
-  return definition.side === 'sales' ? 'output' : 'input'
-}
-
-/** Every kind on one side of the trade, for a menu or a list filter. */
-export function kindsOnSide(side: TradeSide): DocumentKindDefinition[] {
-  return DOCUMENT_KINDS.filter((definition) => definition.side === side)
+  return definitionOf(kind).side === 'sales' ? 'output' : 'input'
 }
 
 // ---- Status ----------------------------------------------------------------

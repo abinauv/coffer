@@ -11,7 +11,9 @@ import {
   kindsOnSide,
   levyOf,
   numberedKindDefinition,
+  POSTING_KINDS,
   postsToLedger,
+  sourceTypeOf,
   type DocumentKind,
   type DocumentStatus,
   type NumberedKind,
@@ -57,9 +59,16 @@ describe('which kinds reach the ledger', () => {
     expect(postsToLedger('quotation')).toBe(false)
   })
 
-  it('derives "posts" from the source type rather than carrying a second flag', () => {
+  /*
+   * The two facts 0013-2 split apart. `postsToLedger` is stored, in `@shared/documents`
+   * where a screen can read it; the ledger's name for a kind is derived here. TypeScript
+   * already refuses a table where one is present without the other — `SOURCE_TYPES` is
+   * keyed by `PostingKind`, which is `Extract`ed from the shared table's literal `true`s
+   * — so this asserts they agree at RUNTIME, which is the half a type cannot state.
+   */
+  it('has a source type for exactly the kinds that post', () => {
     for (const definition of DOCUMENT_KINDS) {
-      expect(postsToLedger(definition.kind)).toBe(definition.sourceType !== null)
+      expect(sourceTypeOf(definition.kind) !== null).toBe(postsToLedger(definition.kind))
     }
   })
 
@@ -67,10 +76,21 @@ describe('which kinds reach the ledger', () => {
     /* What makes drill-through work in both directions: an entry's `source_type` is the
      * document's kind, so finding the document from the entry needs no mapping table. */
     for (const definition of DOCUMENT_KINDS) {
-      if (definition.sourceType !== null) {
-        expect(definition.sourceType).toBe(definition.kind)
+      const sourceType = sourceTypeOf(definition.kind)
+      if (sourceType !== null) {
+        expect(sourceType).toBe(definition.kind)
       }
     }
+  })
+
+  /* `POSTING_KINDS` is what the posting engine builds its rules from, so a kind missing
+   * from it is a kind that cannot be issued however the table reads. */
+  it('lists exactly the posting kinds, in table order', () => {
+    expect(POSTING_KINDS.map((definition) => definition.kind)).toEqual(
+      DOCUMENT_KINDS.filter((definition) => postsToLedger(definition.kind)).map(
+        (definition) => definition.kind,
+      ),
+    )
   })
 })
 
