@@ -188,6 +188,34 @@ export function kindsOnSide(side: TradeSide): readonly DocumentKindDefinition[] 
 }
 
 /**
+ * Raising one of these puts somebody in debt, so it is the kind that falls due.
+ *
+ * The predicate `chargeKindIn` filters by, minus the side — written once because 0014
+ * needed the same three words with the side left off, and two spellings of one rule is
+ * how `correctsKind` came to depend on table order.
+ *
+ * A quotation is `charge` and does not qualify: it offers a price and creates no
+ * obligation, so there is nothing for terms to run from. A credit note is `refund` and
+ * does not qualify either — it CANCELS an obligation, and 0015's work is saying which one
+ * rather than giving it a due date of its own.
+ */
+function isChargeOnTerms(definition: DocumentKindDefinition): boolean {
+  return definition.direction === 'charge' && definition.postsToLedger
+}
+
+/**
+ * Whether this kind carries a due date.
+ *
+ * The renderer asks so it knows whether to draw the column, and issuing asks so it knows
+ * whether to stamp one — one question with one answer rather than a `kind === ` test on
+ * each side of the boundary. Migration 0014 enumerates the same two kinds in SQL, where a
+ * trigger cannot import a union, and a test asserts the two lists agree.
+ */
+export function chargesOnTerms(kind: DocumentKind): boolean {
+  return isChargeOnTerms(definitionOf(kind))
+}
+
+/**
  * THE ONE KIND ON A SIDE THAT PUTS THE PARTY IN DEBT, and the phrase is load-bearing in
  * three places, which is why it is a function rather than three filters.
  *
@@ -223,9 +251,7 @@ export function chargeKindIn(
   /** Named in the refusal, so a crash at boot says which row could not be resolved. */
   asking: string,
 ): DocumentKind {
-  const charges = kinds.filter(
-    (each) => each.side === side && each.direction === 'charge' && each.postsToLedger,
-  )
+  const charges = kinds.filter((each) => each.side === side && isChargeOnTerms(each))
   const [charge, ...rest] = charges
   if (charge === undefined || rest.length > 0) {
     throw new Error(

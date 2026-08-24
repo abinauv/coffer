@@ -30,7 +30,7 @@ import {
   listDocuments,
   updateDocument,
 } from './documents'
-import { DOCUMENT_KINDS, postsToLedger } from '@main/domain/documents'
+import { chargesOnTerms, DOCUMENT_KINDS, postsToLedger } from '@main/domain/documents'
 import type { CreateTaxedDocumentInput, TaxedLineInput } from '@shared/dto'
 
 const KEY = new Uint8Array(DATABASE_KEY_BYTES).fill(0x5a)
@@ -114,7 +114,7 @@ const draft = (over: Partial<CreateTaxedDocumentInput> = {}): CreateTaxedDocumen
 
 /** A document written straight to the table, bypassing the repository entirely. */
 function writeDocument(id: string, over: Record<string, string | null> = {}): void {
-  const values = {
+  const values: Record<string, string | null> = {
     id,
     kind: 'sales-invoice',
     status: 'draft',
@@ -131,6 +131,31 @@ function writeDocument(id: string, over: Record<string, string | null> = {}): vo
     cancelled_at: null,
     ...over,
   }
+
+  /*
+   * 0014's rule is a biconditional, so a row that has left draft on a kind that charges
+   * on terms MUST carry a due date and every other row must not. Defaulted from the row's
+   * own figures rather than spelled out at each of the twenty call sites below, so that a
+   * test about the status CHECK stays a test about the status CHECK.
+   *
+   * `in` rather than a truthiness test, so a caller may still pass `due_date: null`
+   * explicitly and watch the trigger refuse it. There is a test that does exactly that.
+   *
+   * ASKED OF THE TABLE RATHER THAN ASSUMED, because several tests below roll migrations
+   * off and write to the older schema they leave behind. A helper that names a column
+   * unconditionally would make those fail with "no such column" — which is a true
+   * statement about a table this function is supposed to be writing to as it finds it.
+   */
+  const hasDueDate = connection
+    .prepare<[], { name: string }>(`SELECT name FROM pragma_table_info('documents')`)
+    .all()
+    .some((column) => column.name === 'due_date')
+  if (hasDueDate && !('due_date' in over)) {
+    const onTerms = values['kind'] === 'sales-invoice' || values['kind'] === 'purchase-bill'
+    values['due_date'] =
+      onTerms && values['status'] !== 'draft' ? (values['document_date'] ?? null) : null
+  }
+
   const columns = Object.keys(values)
   connection
     .prepare(
@@ -499,7 +524,7 @@ describe('migration 0008', () => {
     const lineId = document.lines[0]!.id
     connection
       .prepare(
-        `UPDATE documents SET status = 'cancelled', number = 'INV/1', issued_at = ?, cancelled_at = ? WHERE id = ?`,
+        `UPDATE documents SET status = 'cancelled', number = 'INV/1', due_date = document_date, issued_at = ?, cancelled_at = ? WHERE id = ?`,
       )
       .run(NOW, NOW, document.id)
 
@@ -609,6 +634,156 @@ describe('migration 0008', () => {
 
     expect(lines?.n).toBe(0)
     expect(taxes?.n).toBe(0)
+  })
+})
+
+// ---- Migration 0014 --------------------------------------------------------
+
+/*
+ * The due date, put to the database rather than to the repository.
+ *
+ * Everything here writes straight to the table, because that is the only way to reach the
+ * states `issueDocument` cannot produce — and those are exactly the states the triggers
+ * exist for. What issuing DOES produce is asserted in issuing.test.ts.
+ *
+ * CANCELLED RATHER THAN ISSUED throughout. 0010's CHECK requires an `entry_id` on anything
+ * ISSUED that posts, so an issued invoice written by hand would need a journal entry built
+ * beside it and the tests would be about the ledger. A cancelled document has left draft
+ * and needs no entry, which is all 0014's rule asks about — and it doubles as a test of
+ * the `<> 'draft'` the rule is written with rather than `= 'issued'`.
+ */
+describe('migration 0014', () => {
+  /** A document that has left draft, which is what 0014's rule is about. */
+  const gone = (over: Record<string, string | null> = {}): Record<string, string | null> => ({
+    status: 'cancelled',
+    number: 'INV/1',
+    issued_at: NOW,
+    cancelled_at: NOW,
+    ...over,
+  })
+
+  it('requires a due date on anything that has left draft and charges on terms', () => {
+    expect(() => writeDocument('d-1', gone({ due_date: null }))).toThrow(
+      /DOCUMENT_DUE_DATE_INVALID/,
+    )
+    expect(() => writeDocument('d-2', gone())).not.toThrow()
+  })
+
+  /*
+   * THE OTHER HALF OF THE BICONDITIONAL, and the one a pair of separate CHECKs would
+   * likely have left out. A quotation with a due date reads to a report as an obligation
+   * that was never created.
+   */
+  it('refuses a due date on a draft, and on a kind that charges nobody', () => {
+    expect(() => writeDocument('d-1', { due_date: '2026-05-15' })).toThrow(
+      /DOCUMENT_DUE_DATE_INVALID/,
+    )
+    expect(() =>
+      writeDocument('d-2', gone({ kind: 'quotation', number: 'QTN/1', due_date: '2026-05-15' })),
+    ).toThrow(/DOCUMENT_DUE_DATE_INVALID/)
+  })
+
+  /*
+   * COUNTED FROM THE KIND TABLE, NOT LISTED HERE. The trigger enumerates two kinds in SQL
+   * because a trigger cannot import a union, and this is the join: for every kind the
+   * build knows, the database agrees with `chargesOnTerms` in both directions. A sixth
+   * kind added to the table without a matching migration fails here rather than in a
+   * report six months later.
+   */
+  it('agrees with the kind table about which kinds fall due', () => {
+    for (const definition of DOCUMENT_KINDS) {
+      const onTerms = chargesOnTerms(definition.kind)
+      const write =
+        (suffix: string, dueDate: string | null): (() => void) =>
+        () =>
+          writeDocument(`d-${definition.kind}-${suffix}`, {
+            ...gone({ kind: definition.kind, number: `NUM/${definition.kind}/${suffix}` }),
+            due_date: dueDate,
+          })
+
+      if (onTerms) {
+        expect(write('with', '2026-05-15'), `${definition.kind} must take a due date`).not.toThrow()
+        expect(write('without', null), `${definition.kind} must require one`).toThrow(
+          /DOCUMENT_DUE_DATE_INVALID/,
+        )
+      } else {
+        expect(write('without', null), `${definition.kind} must not need one`).not.toThrow()
+        expect(write('with', '2026-05-15'), `${definition.kind} must refuse one`).toThrow(
+          /DOCUMENT_DUE_DATE_INVALID/,
+        )
+      }
+    }
+  })
+
+  /* Terms are never negative — three layers say so — and this is the fourth, at the point
+   * where the wrong answer would be a date the invoice was already overdue on. */
+  it('refuses a due date earlier than the document itself', () => {
+    expect(() => writeDocument('d-1', gone({ due_date: '2026-04-14' }))).toThrow(
+      /DOCUMENT_DUE_DATE_INVALID/,
+    )
+    /* The same day is due on receipt, which is the ordinary answer for no terms. */
+    expect(() => writeDocument('d-2', gone({ due_date: '2026-04-15' }))).not.toThrow()
+  })
+
+  /*
+   * '2026-5-15' SORTS BEFORE '2026-04-15' AS TEXT, which is the failure this length check
+   * is really about: every comparison the aged report makes is a string comparison, so a
+   * date written a character short would land in the wrong bucket rather than fail.
+   */
+  it('refuses a due date that is not ten characters', () => {
+    expect(() => writeDocument('d-1', gone({ due_date: '2026-5-15' }))).toThrow(
+      /DOCUMENT_DUE_DATE_INVALID/,
+    )
+  })
+
+  /* The insert arm and the update arm are the same condition and are two triggers, so
+   * both are exercised — a document is far more likely to reach this rule by being
+   * cancelled than by being written whole. */
+  it('holds when a draft is taken out of draft by an update', () => {
+    writeDocument('d-1')
+
+    expect(() =>
+      connection
+        .prepare(
+          `UPDATE documents SET status = 'cancelled', number = 'INV/1', issued_at = ?,
+             cancelled_at = ? WHERE id = ?`,
+        )
+        .run(NOW, NOW, 'd-1'),
+    ).toThrow(/DOCUMENT_DUE_DATE_INVALID/)
+  })
+
+  it('freezes the due date once the document has left draft', () => {
+    writeDocument('d-1', gone())
+
+    expect(() =>
+      connection.prepare(`UPDATE documents SET due_date = '2026-06-30' WHERE id = ?`).run('d-1'),
+    ).toThrow(/DOCUMENT_NOT_DRAFT/)
+  })
+
+  it('takes the column and its rules away again on rollback', () => {
+    rollbackMigrations(connection, MIGRATIONS, { to: '0013' })
+
+    const columns = connection
+      .prepare<[], { name: string }>(`SELECT name FROM pragma_table_info('documents')`)
+      .all()
+      .map((column) => column.name)
+    expect(columns).not.toContain('due_date')
+
+    /* And the older rule is back rather than merely unenforced: a document that has left
+     * draft is legal with no due date, because there is nowhere to put one. */
+    expect(() => writeDocument('d-1', gone())).not.toThrow()
+  })
+
+  /* 0013's freeze list is restored on the way down, not 0010's. The trap 0010's own header
+   * describes: recreating an older version of a trigger silently rolls a migration back,
+   * and every test still passes on a fresh database because the last writer wins. */
+  it('leaves 0013 s freeze rule intact after rolling 0014 off', () => {
+    writeDocument('d-1', gone())
+    rollbackMigrations(connection, MIGRATIONS, { to: '0013' })
+
+    expect(() =>
+      connection.prepare(`UPDATE documents SET narration = 'edited' WHERE id = ?`).run('d-1'),
+    ).toThrow(/DOCUMENT_NOT_DRAFT/)
   })
 })
 
@@ -952,7 +1127,7 @@ describe('editing a draft', () => {
     const document = await createDocument(db, draft(), NOW)
     connection
       .prepare(
-        `UPDATE documents SET status = 'cancelled', number = 'INV/1', issued_at = ?, cancelled_at = ? WHERE id = ?`,
+        `UPDATE documents SET status = 'cancelled', number = 'INV/1', due_date = document_date, issued_at = ?, cancelled_at = ? WHERE id = ?`,
       )
       .run(NOW, NOW, document.id)
 
@@ -974,7 +1149,7 @@ describe('throwing a draft away', () => {
     const document = await createDocument(db, draft(), NOW)
     connection
       .prepare(
-        `UPDATE documents SET status = 'cancelled', number = 'INV/1', issued_at = ?, cancelled_at = ? WHERE id = ?`,
+        `UPDATE documents SET status = 'cancelled', number = 'INV/1', due_date = document_date, issued_at = ?, cancelled_at = ? WHERE id = ?`,
       )
       .run(NOW, NOW, document.id)
 
@@ -994,6 +1169,35 @@ describe('the register', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]?.partyName).toBe('Bharat Steel')
     expect(rows[0]?.grandTotal).toBe('1180.00')
+  })
+
+  /*
+   * The due date reaches the LIST as well as the single document, which is a separate
+   * mapper and therefore a separate way to lose it. The register draws a column from this
+   * field; a null arriving here would make every issued invoice on the screen show a dash
+   * and look like a draft.
+   *
+   * Written straight to the table rather than issued, because issuing needs the whole
+   * apparatus of periods, series and a chart — that path is covered in issuing.test.ts.
+   */
+  it('carries the due date of a document that has one', async () => {
+    writeDocument('d-1', {
+      status: 'cancelled',
+      number: 'INV/1',
+      issued_at: NOW,
+      cancelled_at: NOW,
+      due_date: '2026-05-15',
+    })
+
+    const rows = await listDocuments(db)
+
+    expect(rows.map((row) => row.dueDate)).toEqual(['2026-05-15'])
+  })
+
+  it('carries a null through for a document that has none', async () => {
+    await createDocument(db, draft(), NOW)
+
+    expect((await listDocuments(db))[0]?.dueDate).toBeNull()
   })
 
   /* Each document rounds by its own policy, so two on one page may round differently and

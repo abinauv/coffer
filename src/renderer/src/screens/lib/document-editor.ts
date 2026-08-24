@@ -178,20 +178,28 @@ export function canDelete(status: DocumentStatusDto): boolean {
  *
  * Every other sentence is shared, because every other kind behaves identically — which is
  * the whole argument for one editor.
+ *
+ * THE DUE DATE IS SAID ONLY WHILE THE DOCUMENT IS ISSUED, which is not the same as "only
+ * where there is one". A cancelled invoice keeps the date it was stamped with — the column
+ * is frozen, and 0014 argues for that — but nothing is owed on it any more, so repeating
+ * the date beside the word "Cancelled" would be stating a deadline that has stopped
+ * existing. A draft has none at all: it has no number either, and for the same reason.
  */
 export function stateSentence(
   kind: DocumentKind,
   status: DocumentStatusDto,
   number: string | null,
+  dueDate: string | null,
 ): string {
   const definition = definitionOf(kind)
   const posts = definition.postsToLedger
   const named = number ?? `a numbered ${definition.label.toLowerCase()}`
 
   if (status === 'issued') {
+    const due = dueDate === null ? '' : ` Due ${dueDate}.`
     return posts
-      ? `Issued as ${named}. It is in the books and cannot be edited.`
-      : `Issued as ${named}. It has been sent and cannot be edited, and it puts nothing in the books.`
+      ? `Issued as ${named}.${due} It is in the books and cannot be edited.`
+      : `Issued as ${named}.${due} It has been sent and cannot be edited, and it puts nothing in the books.`
   }
   if (status === 'cancelled') {
     return posts

@@ -24,7 +24,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { DocumentSummary, Result } from '@shared/dto'
-import { DOCUMENT_KINDS, type DocumentKind } from '@shared/documents'
+import { chargesOnTerms, DOCUMENT_KINDS, type DocumentKind } from '@shared/documents'
 import { renderScreen, screenContext, type BridgeStub } from '../../test/harness'
 import { documentRegisterScreens, DocumentRegister } from './DocumentRegister'
 
@@ -40,6 +40,7 @@ function invoice(over: Partial<DocumentSummary> = {}): DocumentSummary {
     status: 'issued',
     number: 'INV/2026-27/0001',
     date: '2026-04-15',
+    dueDate: '2026-05-15',
     partyId: 'party-1',
     partyName: 'Sunrise Components',
     grandTotal: '125000.00',
@@ -364,6 +365,49 @@ describe('the other four kinds', () => {
     renderScreen(register('credit-note'), { bridge: listing(ROWS) })
 
     expect(await screen.findByRole('columnheader', { name: 'Customer' })).toBeInTheDocument()
+  })
+
+  /*
+   * COUNTED FROM THE KIND TABLE, so a sixth kind cannot arrive with a column of dashes.
+   * The register asks `chargesOnTerms` rather than testing the kind, which is the same
+   * question migration 0014's trigger asks and the same one issuing asks.
+   */
+  it('shows the due column for exactly the kinds that fall due', async () => {
+    for (const definition of DOCUMENT_KINDS) {
+      const { unmount } = renderScreen(register(definition.kind), { bridge: listing(ROWS) })
+      await screen.findByRole('columnheader', { name: 'Number' })
+
+      const due = screen.queryByRole('columnheader', { name: 'Due' })
+      expect(due === null, `${definition.kind} draws the due column`).toBe(
+        !chargesOnTerms(definition.kind),
+      )
+      unmount()
+    }
+  })
+
+  /*
+   * ASSERTED ON THE CELL, NOT ON THE ROW, for the reason the Draft test above gives: the
+   * document date sits in the cell beside this one, and a version that drew the wrong one
+   * of the two would satisfy any assertion made about the row as a whole. Cell two is Due.
+   */
+  it('shows the date an invoice falls due, in its own column', async () => {
+    renderScreen(register('sales-invoice'), { bridge: listing(ROWS) })
+
+    const cells = within(await rowFor('INV/2026-27/0001')).getAllByRole('cell')
+
+    expect(cells[1]).toHaveTextContent('2026-04-15')
+    expect(cells[2]).toHaveTextContent('2026-05-15')
+  })
+
+  /* A draft has none, and a blank cell reads as a date that failed to load. */
+  it('draws a dash where a draft has no due date', async () => {
+    renderScreen(register('sales-invoice'), {
+      bridge: listing([invoice({ status: 'draft', number: null, dueDate: null })]),
+    })
+
+    const cells = within(await rowFor('Sunrise Components')).getAllByRole('cell')
+
+    expect(cells[2]).toHaveTextContent('—')
   })
 
   it('names the kind on the button that starts one', async () => {

@@ -15,7 +15,16 @@ Breaking any of these is a review rejection, not a discussion.
 2. **`domain/` is pure.** No imports from `db`, `electron`, `node:fs`, or any I/O. If a
    domain function needs data, it takes it as an argument.
 3. **No stored balances.** Never add a column that caches a total the journal could
-   contradict. Derive it.
+   contradict. Derive it. **The test is whether the INPUTS can change, not whether the
+   answer can be computed.** A balance is derived because every line it sums is immutable,
+   so the answer cannot drift and a stored copy can only ever disagree. A due date is
+   computed from the document's date and the party's terms and is stored anyway (migration
+   0014), because `payment_terms_days` is a fact about the party _today_: deriving it would
+   mean that editing one customer re-ages every invoice they have ever had, including ones
+   in closed periods and on reports already printed and signed. Where a computed value
+   depends on something a user can edit later, it is not derived — it is **historical**.
+   Stamp it when the event happens and freeze it, the way a document's number and its entry
+   already are.
 4. **No `any`.** `strict: true`, `noUncheckedIndexedAccess: true`. Use `unknown` and
    narrow. `@ts-expect-error` needs a comment explaining why.
 5. **Never edit a merged migration.** Fix it forward with a new one.
@@ -56,6 +65,15 @@ repo layer sees a snake_case key.
 | Money in a DTO | `string`                 | —                                   |
 
 Never store a local-time timestamp. Never store a `Date` object.
+
+**A column that must be filled in exactly some of the time gets ONE rule, written as a
+biconditional, not two checks.** `due_date` is present exactly when a document has left
+draft on a kind that charges on terms — one trigger condition, both directions at once.
+Two separate checks would leave whichever direction nobody thought to write, and the one
+people forget is reliably the dangerous one: an issued invoice with a MISSING due date
+reads to an aged report as a document that is never late, and every total on the page
+still ties. A wrong answer that disagrees with something gets found; a wrong answer that
+agrees with everything does not.
 
 ## 4. Adding an IPC endpoint
 
@@ -204,6 +222,22 @@ new name's presence beside the old name's absence (0013-3).
 harness reports as no result — and "no result" reads exactly like "nothing caught it". It
 is the loudest possible kill: every test in every importing file fails to collect. The
 harness now reads `Test Files N failed` as a kill in its own right and says so (0013-2).
+
+**The harder half of the same trap: when SOME files load and some do not, there is a Tests
+line and it reports no failures.** A run of nine files where one throws at import prints
+`Test Files 1 failed | 8 passed` above `Tests 384 passed` — the broken file collected
+nothing, so not one test failed. A harness reading the Tests line alone calls that
+SURVIVED, which is the exact opposite of what happened. Two rules, and the second is the
+general one: **read the FILE count before the test count, and compare the total against a
+baseline taken before any mutation — tests that never ran are tests that disappeared.**
+Found in 0014-1, where it reported two of the loudest kills in the batch as gaps (0014-1).
+
+The general shape is worth stating on its own, because it has now cost three batches: **a
+mutation harness reports what it can measure, and a measurement that goes missing looks
+identical to a measurement that came back clean.** Anything that reduces what the suite
+observes — a file that will not load, a test that stops being collected, a run that never
+starts — must be a kill by construction, never an inference from a number that happens to
+look fine.
 
 ## 7. Commits
 

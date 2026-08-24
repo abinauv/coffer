@@ -38,6 +38,14 @@
  *   0011  company_profile                            — who these books are for  LANDED
  *   0012  receipts, receipt_allocations,
  *         numbering_series rebuilt                   — what has been paid against one  LANDED
+ *   0013  documents.original_document_id             — the invoice a credit note corrects  LANDED
+ *   0014  documents.due_date                         — when an invoice falls due  LANDED
+ *
+ * 0014 IS THE FIRST MIGRATION TO BACKFILL A COLUMN rather than leave it null, and its
+ * header is the argument for why — read it before adding a second one. The short version:
+ * the value it fills in is a RECONSTRUCTION and cannot be anything better, and it is worth
+ * having anyway because it makes the column's invariant hold for every row in the file,
+ * old and new, which is what lets a reader trust it instead of defending against it.
  *
  * 0012 HAS LANDED, and it rebuilds `numbering_series` as well as adding two tables. A
  * receipt voucher is numbered for the reason an invoice is (rule 50 against rule 46(b)),
@@ -126,6 +134,7 @@ import { m0010 } from './0010_quotation_issuable'
 import { m0011 } from './0011_company_profile'
 import { m0012 } from './0012_receipts'
 import { m0013 } from './0013_document_links'
+import { m0014 } from './0014_document_due_date'
 
 export const MIGRATIONS: readonly Migration[] = [
   m0001,
@@ -141,4 +150,5 @@ export const MIGRATIONS: readonly Migration[] = [
   m0011,
   m0012,
   m0013,
+  m0014,
 ]

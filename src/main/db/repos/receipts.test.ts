@@ -966,11 +966,13 @@ describe('what a document has outstanding', () => {
     const documentId = randomUUID()
     connection
       .prepare(
-        `INSERT INTO documents (id, kind, status, number, document_date, party_id,
+        /* `due_date` is required on an issued bill as of 0014, and due on receipt is the
+         * right answer for a vendor these tests never gave terms to. */
+        `INSERT INTO documents (id, kind, status, number, document_date, due_date, party_id,
            place_of_supply_country, rounding_policy, narration, entry_id, created_at,
            updated_at, issued_at)
-         VALUES (?, 'purchase-bill', 'issued', 'BILL/1', '2026-04-15', ?, 'in', 'none', '',
-           ?, ?, ?, ?)`,
+         VALUES (?, 'purchase-bill', 'issued', 'BILL/1', '2026-04-15', '2026-04-15', ?, 'in',
+           'none', '', ?, ?, ?, ?)`,
       )
       .run(documentId, vendor, posted.entryId, NOW, NOW, NOW)
 
@@ -1048,11 +1050,11 @@ describe('what a document has outstanding', () => {
 
     connection
       .prepare(
-        `INSERT INTO documents (id, kind, status, number, document_date, party_id,
+        `INSERT INTO documents (id, kind, status, number, document_date, due_date, party_id,
            place_of_supply_country, rounding_policy, narration, entry_id, created_at,
            updated_at, issued_at)
-         VALUES (?, 'purchase-bill', 'issued', 'BILL/9', '2026-04-15', ?, 'in', 'none', '',
-           ?, ?, ?, ?)`,
+         VALUES (?, 'purchase-bill', 'issued', 'BILL/9', '2026-04-15', '2026-04-15', ?, 'in',
+           'none', '', ?, ?, ?, ?)`,
       )
       .run(randomUUID(), vendor, posted.entryId, NOW, NOW, NOW)
 
@@ -1211,10 +1213,10 @@ describe('what a document has outstanding', () => {
     })
 
     const insert = connection.prepare(
-      `INSERT INTO documents (id, kind, status, number, document_date, party_id,
+      `INSERT INTO documents (id, kind, status, number, document_date, due_date, party_id,
          place_of_supply_country, rounding_policy, narration, entry_id, created_at,
          updated_at, issued_at)
-       VALUES (?, ?, 'issued', ?, '2026-04-15', ?, 'in', 'none', '', ?, ?, ?, ?)`,
+       VALUES (?, ?, 'issued', ?, '2026-04-15', '2026-04-15', ?, 'in', 'none', '', ?, ?, ?, ?)`,
     )
     insert.run(randomUUID(), 'sales-invoice', 'INV/77', both, sale.entryId, NOW, NOW, NOW)
     insert.run(randomUUID(), 'purchase-bill', 'BILL/77', both, bill.entryId, NOW, NOW, NOW)

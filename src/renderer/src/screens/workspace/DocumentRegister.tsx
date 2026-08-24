@@ -36,7 +36,7 @@ import { makeRoute } from '@renderer/lib/routing'
 import { registerScreens, type ScreenContext, type ScreenDefinition } from '@renderer/lib/screens'
 import { useRegisterCommands } from '@renderer/store/commands'
 import { useNumberFormat } from '@renderer/store/regime'
-import { definitionOf, DOCUMENT_KINDS, type DocumentKind } from '@shared/documents'
+import { chargesOnTerms, definitionOf, DOCUMENT_KINDS, type DocumentKind } from '@shared/documents'
 import type { AppError, DocumentStatusDto, DocumentSummary } from '@shared/dto'
 import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
@@ -61,6 +61,20 @@ export function DocumentRegister({
 }: ScreenContext & { kind: DocumentKind }): JSX.Element {
   const format = useNumberFormat()
   const definition = definitionOf(kind)
+
+  /*
+   * A due date, and DELIBERATELY NOT AN OVERDUE FLAG.
+   *
+   * The obvious next step is a red badge on anything past its date, and this screen is
+   * the wrong place for it: a register lists documents and knows nothing about what has
+   * been paid against them. "Overdue" is a statement about money still outstanding, not
+   * about a date that has gone by, and an invoice settled in full last week would wear
+   * the badge for ever.
+   *
+   * The screen that can say it is the aged report, because outstanding is what it is made
+   * of. Here the date is shown and the reader draws their own conclusion.
+   */
+  const showsDue = chargesOnTerms(kind)
 
   /* One place that knows where the editor lives. No id is a new document — the editor
    * creates nothing until it is asked to. */
@@ -208,6 +222,10 @@ export function DocumentRegister({
               <tr>
                 <th scope="col">Number</th>
                 <th scope="col">Date</th>
+                {/* Only where there is an obligation to fall due. A quotation and a
+                    credit note would show a column of dashes, which is a column that
+                    teaches a reader nothing and takes width from the ones that do. */}
+                {showsDue && <th scope="col">Due</th>}
                 <th scope="col">{partyLabel(definition.side)}</th>
                 <th scope="col">Status</th>
                 <th scope="col" className="ledger-table__figure">
@@ -227,6 +245,9 @@ export function DocumentRegister({
                     </Button>
                   </td>
                   <td className="ledger-table__code">{document.date}</td>
+                  {/* A draft has none, for the same reason it has no number: nothing has
+                      been issued, so nothing is owed by any date. */}
+                  {showsDue && <td className="ledger-table__code">{document.dueDate ?? '—'}</td>}
                   <td>{document.partyName}</td>
                   <td>
                     <Badge tone={statusTone(document.status)}>{statusLabel(document.status)}</Badge>

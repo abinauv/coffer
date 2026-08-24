@@ -437,7 +437,7 @@ export function DocumentEditor({
       isInset
       width="list"
       title={document?.number ?? `New ${label}`}
-      lede={stateSentence(kind, status, document?.number ?? null)}
+      lede={stateSentence(kind, status, document?.number ?? null, document?.dueDate ?? null)}
       actions={
         <>
           <Button

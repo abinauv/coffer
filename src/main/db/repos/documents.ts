@@ -104,6 +104,7 @@ export async function listDocuments(
       'documents.status as status',
       'documents.number as number',
       'documents.document_date as document_date',
+      'documents.due_date as due_date',
       'documents.party_id as party_id',
       'documents.rounding_policy as rounding_policy',
       'parties.name as party_name',
@@ -153,6 +154,7 @@ export async function listDocuments(
     status: row.status as DocumentStatusDto,
     number: row.number,
     date: row.document_date,
+    dueDate: row.due_date,
     partyId: row.party_id,
     partyName: row.party_name,
     /* Folded per document, because there is no stored total to read instead. The
@@ -186,6 +188,7 @@ export async function getDocument(db: CofferDb, id: string): Promise<Document | 
     status: row.status as DocumentStatusDto,
     number: row.number,
     date: row.document_date,
+    dueDate: row.due_date,
     partyId: row.party_id,
     partyName: row.party_name,
     seriesId: row.series_id,

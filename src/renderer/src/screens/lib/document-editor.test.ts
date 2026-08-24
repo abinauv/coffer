@@ -175,11 +175,11 @@ describe('what may be done in each state', () => {
 
 describe('stateSentence', () => {
   it('says a draft is not in the books', () => {
-    expect(stateSentence('sales-invoice', 'draft', null)).toContain('Nothing is in the books')
+    expect(stateSentence('sales-invoice', 'draft', null, null)).toContain('Nothing is in the books')
   })
 
   it('names the number an issued document was given', () => {
-    const sentence = stateSentence('sales-invoice', 'issued', 'INV/2026-27/0001')
+    const sentence = stateSentence('sales-invoice', 'issued', 'INV/2026-27/0001', null)
 
     expect(sentence).toContain('INV/2026-27/0001')
     expect(sentence).toContain('cannot be edited')
@@ -188,7 +188,7 @@ describe('stateSentence', () => {
   /* The number is KEPT through cancellation — rule 2. Saying so is what stops somebody
    * looking for the hole in the series. */
   it('says the number is kept when the document was cancelled', () => {
-    const sentence = stateSentence('credit-note', 'cancelled', 'CRN/2026-27/0001')
+    const sentence = stateSentence('credit-note', 'cancelled', 'CRN/2026-27/0001', null)
 
     expect(sentence).toContain('CRN/2026-27/0001')
     expect(sentence).toContain('kept')
@@ -203,26 +203,58 @@ describe('stateSentence', () => {
    */
   it('never promises a quotation reaches the books', () => {
     for (const status of ['draft', 'issued', 'cancelled'] as const) {
-      expect(stateSentence('quotation', status, 'QTN/2026-27/0001')).not.toContain(
+      expect(stateSentence('quotation', status, 'QTN/2026-27/0001', null)).not.toContain(
         'until it is issued',
       )
     }
-    expect(stateSentence('quotation', 'draft', null)).toContain('never reaches the books')
-    expect(stateSentence('quotation', 'cancelled', 'QTN/1')).not.toContain('reversed')
+    expect(stateSentence('quotation', 'draft', null, null)).toContain('never reaches the books')
+    expect(stateSentence('quotation', 'cancelled', 'QTN/1', null)).not.toContain('reversed')
   })
 
   /* Every other kind shares the invoice's sentences, which is the argument for one
    * editor. A kind quietly given different words would mean the rules had diverged. */
   it('says the same thing for every kind that posts', () => {
     const posting = KINDS.filter((kind) => kind !== 'quotation')
-    const sentences = posting.map((kind) => stateSentence(kind, 'draft', null))
+    const sentences = posting.map((kind) => stateSentence(kind, 'draft', null, null))
 
     expect(new Set(sentences).size).toBe(1)
   })
 
   /* A draft has no number and must not be described as if it had one. */
   it('stands in for the number a draft does not have, in its own words', () => {
-    expect(stateSentence('debit-note', 'issued', null)).toContain('a numbered debit note')
+    expect(stateSentence('debit-note', 'issued', null, null)).toContain('a numbered debit note')
+  })
+
+  it('says when an issued invoice falls due', () => {
+    const sentence = stateSentence('sales-invoice', 'issued', 'INV/2026-27/0001', '2026-05-15')
+
+    expect(sentence).toContain('Due 2026-05-15')
+    /* And still says the rest of it, rather than replacing the sentence. */
+    expect(sentence).toContain('INV/2026-27/0001')
+    expect(sentence).toContain('cannot be edited')
+  })
+
+  /*
+   * A CANCELLED DOCUMENT KEEPS ITS DUE DATE AND MUST NOT ANNOUNCE IT. The column is frozen
+   * — 0014 argues for that, and the number is kept on the same argument — but nothing is
+   * owed on a cancelled invoice by any date, and printing one beside the word "Cancelled"
+   * states a deadline that has stopped existing.
+   */
+  it('says nothing about a due date once the document is cancelled', () => {
+    const sentence = stateSentence('sales-invoice', 'cancelled', 'INV/2026-27/0001', '2026-05-15')
+
+    expect(sentence).not.toContain('2026-05-15')
+    expect(sentence).not.toContain('Due')
+  })
+
+  /* A quotation has none at all, and the sentence must not grow a gap where one would go
+   * — the clause carries its own leading space, so a missing date must leave none behind. */
+  it('leaves no hole in the sentence for a kind that never falls due', () => {
+    const sentence = stateSentence('quotation', 'issued', 'QTN/1', null)
+
+    expect(sentence).not.toContain('Due')
+    expect(sentence).not.toContain('  ')
+    expect(sentence).toContain('QTN/1. It has been sent')
   })
 })
 

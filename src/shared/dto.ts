@@ -564,6 +564,15 @@ export interface DocumentSummary {
   /** Null while draft. Kept through cancellation. */
   number: string | null
   date: DateString
+  /**
+   * When it falls due, stamped at issue from the party's terms.
+   *
+   * Null while draft and null for ever on a kind that charges nobody — `chargesOnTerms`
+   * says which, and a screen asks that rather than testing the kind itself. Kept through
+   * cancellation, like the number, and not recomputed: a party moved to shorter terms
+   * today does not make last year's invoice late (migration 0014).
+   */
+  dueDate: DateString | null
   partyId: string
   /** Denormalised for display, as `JournalLine.partyName` is. */
   partyName: string

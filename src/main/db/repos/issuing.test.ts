@@ -25,7 +25,7 @@ import type { CreateTaxedDocumentInput, TaxedLineInput } from '@shared/dto'
 
 import { DATABASE_KEY_BYTES, closeDatabase, openDatabase, type SqliteDatabase } from '../connection'
 import { createQueryBuilder, type CofferDb } from '../kysely'
-import { runMigrations } from '../migrate'
+import { rollbackMigrations, runMigrations } from '../migrate'
 import { MIGRATIONS } from '../migrations'
 import { clearAccountRole, listAccounts } from './accounts'
 import { accountBalance, trialBalance } from './balances'
@@ -35,7 +35,7 @@ import { cancelDocument, issueDocument, postingContextFor } from './issuing'
 import { getEntry, listEntries } from './journal'
 import { allocateNumber, createSeries, getSeries, previewNumber } from './numbering'
 import { saveCompanyProfile } from './company-profile'
-import { createParty } from './parties'
+import { createParty, updateParty } from './parties'
 import { closePeriod, generateFiscalYear, listPeriods, periodRefForDate } from './periods'
 import { seedChart } from './seed-chart'
 import { taxAccountsFor } from './tax-accounts'
@@ -546,11 +546,191 @@ describe('issueDocument', () => {
     expect(() =>
       connection
         .prepare(
+          /* `due_date` because 0014 requires one on anything that has left draft, and
+           * without it this would fail on that rule instead of on the one it is about. */
           `UPDATE documents SET status = 'issued', number = 'INV/2026-27/9999',
-             entry_id = ?, issued_at = ? WHERE id = ?`,
+             entry_id = ?, due_date = document_date, issued_at = ? WHERE id = ?`,
         )
         .run(first.entryId, NOW, second),
     ).toThrow(/UNIQUE/i)
+  })
+})
+
+// ---- The due date ----------------------------------------------------------
+
+/*
+ * Migration 0014's column, from the only place that writes it.
+ *
+ * The whole argument for storing it rather than deriving it is that a party's terms are a
+ * fact about TODAY and a due date is a fact about the invoice — so the tests that matter
+ * most here are the ones that change the terms afterwards and watch nothing move.
+ */
+describe('the due date an issue stamps', () => {
+  async function dueDateOf(id: string): Promise<string | null> {
+    return (await getDocument(db, id))!.dueDate
+  }
+
+  it('is the document date plus the terms the party was on', async () => {
+    await updateParty(db, { id: customer, paymentTermsDays: 30 })
+    const id = await drafted({ date: '2026-04-15' })
+
+    await issueDocument(db, { id }, NOW)
+
+    expect(await dueDateOf(id)).toBe('2026-05-15')
+  })
+
+  /* Due on receipt, which is what a business that has agreed nothing is owed. Null here
+   * is a decision rather than an absence — see `dueDateFor`. */
+  it('is the document date itself when the party has no terms', async () => {
+    const id = await drafted({ date: '2026-04-15' })
+
+    await issueDocument(db, { id }, NOW)
+
+    expect(await dueDateOf(id)).toBe('2026-04-15')
+  })
+
+  it('is nothing at all while the document is still a draft', async () => {
+    expect(await dueDateOf(await drafted())).toBeNull()
+  })
+
+  /*
+   * THE POINT OF THE WHOLE COLUMN. Under the derived version this test is impossible to
+   * write, because there would be nothing to compare against: moving the customer to
+   * shorter terms would re-age every invoice they have ever had, silently, including ones
+   * on a report already printed.
+   */
+  it('does not move when the party is put on different terms afterwards', async () => {
+    await updateParty(db, { id: customer, paymentTermsDays: 30 })
+    const id = await drafted({ date: '2026-04-15' })
+    await issueDocument(db, { id }, NOW)
+
+    await updateParty(db, { id: customer, paymentTermsDays: 7 })
+
+    expect(await dueDateOf(id)).toBe('2026-05-15')
+  })
+
+  /* Kept, like the number, and for the same reason: what was issued was issued. Whether a
+   * screen should still SAY it is a different question, and the editor's lede answers it
+   * — a cancelled document has no deadline to act on. */
+  it('survives cancellation', async () => {
+    await updateParty(db, { id: customer, paymentTermsDays: 45 })
+    const id = await drafted({ date: '2026-04-15' })
+    await issueDocument(db, { id }, NOW)
+
+    await cancelDocument(db, { id }, LATER)
+
+    expect(await dueDateOf(id)).toBe('2026-05-30')
+  })
+
+  it('is refused a change once the document has left draft', async () => {
+    const id = await drafted({ date: '2026-04-15' })
+    await issueDocument(db, { id }, NOW)
+
+    expect(() =>
+      connection.prepare(`UPDATE documents SET due_date = '2026-12-31' WHERE id = ?`).run(id),
+    ).toThrow(/DOCUMENT_NOT_DRAFT/)
+  })
+
+  describe('for the kinds that charge nobody', () => {
+    beforeEach(async () => {
+      for (const [kind, prefix] of [
+        ['quotation', 'QTN'],
+        ['credit-note', 'CRN'],
+      ] as const) {
+        await createSeries(db, {
+          kind,
+          label: 'Main',
+          prefix,
+          separator: '/',
+          includeFiscalYear: true,
+          width: 4,
+          resetOn: 'fiscal-year',
+        })
+      }
+      await updateParty(db, { id: customer, paymentTermsDays: 30 })
+    })
+
+    /*
+     * Both are stamped with nothing even though the PARTY has terms, which is what
+     * separates "this kind has no due date" from "this party agreed none". A quotation
+     * creates no obligation and a credit note cancels one.
+     */
+    it('stamps no due date, however the party is set up', async () => {
+      for (const kind of ['quotation', 'credit-note'] as const) {
+        const id = await drafted({ kind })
+        await issueDocument(db, { id }, NOW)
+
+        expect(await dueDateOf(id)).toBeNull()
+      }
+    })
+  })
+
+  /*
+   * 0014 BACKFILLS, AND THIS IS WHAT THE BACKFILL IS WORTH.
+   *
+   * Rolling the migration off and on again is the only way to reach the code path a real
+   * upgrade takes, and it puts the two answers side by side: the date `issueDocument`
+   * stamped, and the date the migration reconstructs from the party as it stands.
+   */
+  describe('the backfill, for documents issued before the column existed', () => {
+    function remigrate(): void {
+      rollbackMigrations(connection, MIGRATIONS, { to: '0013' })
+      runMigrations(connection, MIGRATIONS)
+    }
+
+    it('lands on the same date the stamp did, when nothing has changed', async () => {
+      await updateParty(db, { id: customer, paymentTermsDays: 30 })
+      const id = await drafted({ date: '2026-04-15' })
+      await issueDocument(db, { id }, NOW)
+
+      remigrate()
+
+      expect(await dueDateOf(id)).toBe('2026-05-15')
+    })
+
+    /*
+     * THE LOSS, ASSERTED RATHER THAN HOPED AWAY. Terms in force at the time of issue were
+     * never written down before 0014, so a file whose terms have since changed gets the
+     * wrong date and nothing can do better. Stating it here means the next person to read
+     * the migration's header finds a test agreeing with it.
+     */
+    it('uses the terms in force today, which is wrong where they have changed', async () => {
+      await updateParty(db, { id: customer, paymentTermsDays: 30 })
+      const id = await drafted({ date: '2026-04-15' })
+      await issueDocument(db, { id }, NOW)
+      await updateParty(db, { id: customer, paymentTermsDays: 7 })
+
+      remigrate()
+
+      expect(await dueDateOf(id)).toBe('2026-04-22')
+    })
+
+    it('leaves a quotation without one, rather than giving every row a date', async () => {
+      await createSeries(db, {
+        kind: 'quotation',
+        label: 'Main',
+        prefix: 'QTN',
+        separator: '/',
+        includeFiscalYear: true,
+        width: 4,
+        resetOn: 'fiscal-year',
+      })
+      const id = await drafted({ kind: 'quotation' })
+      await issueDocument(db, { id }, NOW)
+
+      remigrate()
+
+      expect(await dueDateOf(id)).toBeNull()
+    })
+
+    it('leaves a draft alone, because a draft owes nothing by any date', async () => {
+      await updateParty(db, { id: customer, paymentTermsDays: 30 })
+      const id = await drafted()
+
+      remigrate()
+
+      expect(await dueDateOf(id)).toBeNull()
+    })
   })
 })
 

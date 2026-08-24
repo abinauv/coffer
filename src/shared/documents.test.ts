@@ -12,6 +12,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   chargeKindOn,
+  chargesOnTerms,
   correctionMap,
   correctsKind,
   definitionOf,
@@ -148,6 +149,37 @@ describe('chargeKindOn', () => {
     for (const kind of KINDS.filter((each) => definitionOf(each).direction === 'refund')) {
       expect(correctsKind(kind)).toBe(chargeKindOn(definitionOf(kind).side))
     }
+  })
+})
+
+describe('chargesOnTerms', () => {
+  /*
+   * COUNTED, NOT LISTED. Naming the two kinds and asserting them would pass on a table
+   * where a third had quietly joined them — and the third would be a document silently
+   * given a due date, which the aged report would then treat as money somebody owes.
+   *
+   * `chargeKindOn` is the same predicate with a side fixed, so the set of kinds that
+   * charge on terms is exactly one per side and nothing else. That is the relationship
+   * worth asserting, because it is the one migration 0014 relies on when it enumerates
+   * two kinds in SQL.
+   */
+  it('is exactly the one charge kind on each side', () => {
+    const onTerms = KINDS.filter((kind) => chargesOnTerms(kind))
+
+    expect([...onTerms].sort()).toEqual([chargeKindOn('purchase'), chargeKindOn('sales')].sort())
+  })
+
+  it('excludes the kinds that create no obligation, one reason each', () => {
+    /* Offers a price. Nothing is owed, so nothing can be late. */
+    expect(chargesOnTerms('quotation')).toBe(false)
+    /* Cancels an obligation rather than creating one, on both sides. */
+    expect(chargesOnTerms('credit-note')).toBe(false)
+    expect(chargesOnTerms('debit-note')).toBe(false)
+  })
+
+  it('holds for a bill exactly as it holds for an invoice', () => {
+    expect(chargesOnTerms('sales-invoice')).toBe(true)
+    expect(chargesOnTerms('purchase-bill')).toBe(true)
   })
 })
 

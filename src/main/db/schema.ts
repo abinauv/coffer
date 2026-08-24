@@ -406,6 +406,16 @@ export interface DocumentsTable {
    * been legal since 2019 and has no single original to name.
    */
   original_document_id: string | null
+  /**
+   * When it falls due, stamped at issue from the party's terms (0014).
+   *
+   * Filled exactly where an obligation exists — a sales invoice or a purchase bill that
+   * has left draft — and null everywhere else, which a trigger proves as a biconditional
+   * rather than as two rules. Stamped rather than derived at read time so that changing a
+   * party's terms tomorrow cannot re-age an invoice issued last year: see 0014's header,
+   * which is the whole argument for the column existing.
+   */
+  due_date: DateString | null
   created_at: Timestamp
   updated_at: Timestamp
   /** When it was issued, and when it was cancelled. Null until each happens. */

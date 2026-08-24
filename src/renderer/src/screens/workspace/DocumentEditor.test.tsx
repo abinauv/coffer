@@ -92,6 +92,7 @@ function document(over: Partial<Document> = {}): Document {
     status: 'draft' as DocumentStatusDto,
     number: null,
     date: '2026-04-15',
+    dueDate: null,
     partyId: 'party-1',
     partyName: 'Sunrise Components',
     grandTotal: '1180.00',
@@ -391,6 +392,26 @@ describe('the four verbs', () => {
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
     expect(screen.getByLabelText('Customer')).toBeDisabled()
     expect(screen.getByLabelText('Description, line 1')).toBeDisabled()
+  })
+
+  /*
+   * THE DUE DATE, FROM THE DOCUMENT RATHER THAN FROM ANYWHERE ELSE. `stateSentence` is
+   * tested next door as a pure function, so what is worth asserting here is only the
+   * wiring: the screen hands it the date the document came back with. Without this a call
+   * site passing `null` for ever would leave every test in both files green.
+   */
+  it('says when the invoice it is showing falls due', async () => {
+    const issued = document({
+      status: 'issued',
+      number: 'INV/2026-27/0001',
+      entryId: 'entry-1',
+      dueDate: '2026-05-15',
+    })
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(issued),
+    })
+
+    expect(await screen.findByText(/Due 2026-05-15/)).toBeInTheDocument()
   })
 
   it('offers nothing at all on a cancelled one', async () => {
@@ -843,6 +864,7 @@ describe('a credit note', () => {
       status: 'issued',
       number: 'INV/2026-27/0001',
       date: '2026-04-15',
+      dueDate: '2026-05-15',
       partyId: 'party-1',
       partyName: 'Sunrise Components',
       grandTotal: '1180.00',

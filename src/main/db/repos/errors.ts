@@ -203,6 +203,18 @@ export type RepoErrorCode =
    * adjusting a supply the books say never happened. Cancel the correction first.
    */
   | 'DOCUMENT_CORRECTED'
+  /**
+   * A due date where there should be none, or none where there should be one (0014).
+   *
+   * One code for both directions because 0014 proves them with one biconditional — an
+   * issued invoice missing its due date is the dangerous half, since it reads to an aged
+   * report as a document that is never late and still ties to the control account.
+   *
+   * Nothing a user does can reach it: `issueDocument` stamps the date and no other path
+   * writes the column. It is here because a trigger that can fire has a code, and because
+   * a repository bug is exactly what it is watching for.
+   */
+  | 'DOCUMENT_DUE_DATE_INVALID'
   /** An issue against a document with no lines, or with every line at zero. */
   | 'DOCUMENT_EMPTY'
   /** A quantity, price or discount that is not a decimal string. */
@@ -336,6 +348,8 @@ const TRIGGER_CODES: readonly RepoErrorCode[] = [
    * does not get cancelled out from under it. */
   'DOCUMENT_CORRECTION_INVALID',
   'DOCUMENT_CORRECTED',
+  /* 0014's two, which hold the due date to exactly the rows that should have one. */
+  'DOCUMENT_DUE_DATE_INVALID',
   /*
    * 0012's six, which guard the one thing an allocation can silently corrupt: a party's
    * statement. `DOCUMENT_NOT_ISSUED` joins the list here rather than with the document

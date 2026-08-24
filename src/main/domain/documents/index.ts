@@ -16,6 +16,7 @@ export {
   POSTING_KINDS,
   chargeKindIn,
   chargeKindOn,
+  chargesOnTerms,
   correctionMap,
   correctsKind,
   definitionOf,
@@ -58,5 +59,7 @@ export {
 } from './numbering'
 
 export { documentTotals, lineTax, lineTotal, type DocumentTotals, type Summable } from './totals'
+
+export { dueDateFor } from './terms'
 
 export { postingRuleFor, salesInvoiceRule, type PostableDocument } from './posting'

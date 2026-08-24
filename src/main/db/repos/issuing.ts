@@ -87,7 +87,9 @@ import {
   type PostingContext,
 } from '@main/domain/ledger'
 import {
+  chargesOnTerms,
   definitionOf,
+  dueDateFor,
   postingRuleFor,
   postsToLedger,
   type DocumentKind,
@@ -148,6 +150,7 @@ export async function issueDocument(
      */
     const period = await requireCoveringPeriod(trx, document.date)
     const number = await allocateNumber(trx, seriesId, period.fiscalYearLabel)
+    const dueDate = await dueDateAtIssue(trx, kind, document)
 
     let entryId: string | null = null
     if (rule !== null) {
@@ -180,6 +183,7 @@ export async function issueDocument(
         number,
         series_id: seriesId,
         entry_id: entryId,
+        due_date: dueDate,
         issued_at: now,
         updated_at: now,
       })
@@ -413,6 +417,39 @@ async function requireDefaultSeries(
       'Set one up before issuing.',
     { kind, documentId: document.id },
   )
+}
+
+/**
+ * When this document falls due, read once and stamped — see migration 0014's header.
+ *
+ * The party's terms are read HERE rather than at the moment the draft was saved, because
+ * issuing is the event that creates the obligation and the terms in force at that moment
+ * are the ones it is on. Everything after this point reads the column, so a customer moved
+ * to shorter terms tomorrow re-ages nothing.
+ *
+ * A kind that charges nobody gets null, which is the same answer the trigger insists on:
+ * there is no such thing as a quotation falling due.
+ *
+ * `?? null` covers two cases with one answer, deliberately. A party with no terms means
+ * nothing was negotiated, and a party row that is not there at all would mean the same
+ * thing to the arithmetic — but it cannot happen: `getDocument` reached this document
+ * through an inner join on `parties`, and the foreign key is what makes that true rather
+ * than this line.
+ */
+async function dueDateAtIssue(
+  db: CofferDb,
+  kind: DocumentKind,
+  document: Document,
+): Promise<DateString | null> {
+  if (!chargesOnTerms(kind)) return null
+
+  const party = await db
+    .selectFrom('parties')
+    .select('payment_terms_days')
+    .where('id', '=', document.partyId)
+    .executeTakeFirst()
+
+  return dueDateFor(document.date, party?.payment_terms_days ?? null)
 }
 
 /** What the day book says about a reversal, when the caller does not say it themselves. */
