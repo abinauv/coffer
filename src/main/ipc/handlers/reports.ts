@@ -12,9 +12,12 @@
  * refusal instead of a wrong report.
  */
 
+import { TRADE_SIDES } from '../../../shared/documents'
 import type {
   AccountLedger,
   AccountLedgerInput,
+  AgedReport,
+  AgedReportInput,
   AsAtDateInput,
   BalanceSheet,
   DateRangeInput,
@@ -23,7 +26,13 @@ import type {
 } from '../../../shared/dto'
 import type { GroupHandlers } from '../registry'
 import { ok } from '../surface'
-import { expectDateString, expectNonEmptyString, expectRecord, optional } from '../validate'
+import {
+  expectDateString,
+  expectNonEmptyString,
+  expectOneOf,
+  expectRecord,
+  optional,
+} from '../validate'
 
 /**
  * What the IPC layer needs from the reporting side of src/main/ledger.
@@ -35,6 +44,7 @@ export interface ReportService {
   profitAndLoss(input: DateRangeInput): Promise<ProfitAndLoss>
   accountLedger(input: AccountLedgerInput): Promise<AccountLedger>
   dayBook(input: DateRangeInput): Promise<DayBook>
+  aged(input: AgedReportInput): Promise<AgedReport>
 }
 
 function parseDateRange(value: unknown): DateRangeInput {
@@ -61,6 +71,22 @@ function parseAccountLedger(value: unknown): AccountLedgerInput {
   }
 }
 
+/**
+ * Both fields required, and the side checked against the kind table rather than against
+ * a pair of strings written here.
+ *
+ * `TRADE_SIDES` is derived from `DOCUMENT_KINDS`, so this cannot drift from what the
+ * posting rules understand — which matters more here than in the other handlers, because
+ * a side is what chooses the control account the whole report is about.
+ */
+function parseAged(value: unknown): AgedReportInput {
+  const input = expectRecord(value, 'input')
+  return {
+    side: expectOneOf(input['side'], 'side', TRADE_SIDES),
+    asAtDate: expectDateString(input['asAtDate'], 'asAtDate'),
+  }
+}
+
 export function createReportHandlers(service: ReportService): GroupHandlers<'reports'> {
   return {
     balanceSheet: {
@@ -83,6 +109,11 @@ export function createReportHandlers(service: ReportService): GroupHandlers<'rep
     dayBook: {
       parseArgs: (raw): [DateRangeInput] => [parseDateRange(raw[0])],
       handle: async (input = {}) => ok(await service.dayBook(input)),
+    },
+
+    aged: {
+      parseArgs: (raw): [AgedReportInput] => [parseAged(raw[0])],
+      handle: async (input) => ok(await service.aged(input)),
     },
   }
 }

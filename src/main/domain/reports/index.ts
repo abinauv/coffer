@@ -10,6 +10,19 @@
  */
 
 export {
+  AGE_BUCKETS,
+  ageItems,
+  assertBucketsCover,
+  bucketIndexIn,
+  type AgeBucket,
+  type AgeableItem,
+  type AgedParty,
+  type Ageing,
+  type AgeingTotals,
+  type PlacedItem,
+} from './ageing'
+
+export {
   buildReportTree,
   profitInEquity,
   type BuildOptions,

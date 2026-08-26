@@ -36,6 +36,16 @@ Breaking any of these is a review rejection, not a discussion.
    `NumberFormat`; there is no default, because the default was the lakh/crore grouping
    and it was silently wrong for everyone outside India.
 
+8. **"As at a date" is a filter on the LEDGER, never on the document.** A report drawn as
+   at 30 June counts entries dated on or before it — not documents raised by then, and not
+   today's rows under last month's heading. The difference is invisible until something is
+   cancelled or settled after the date: an invoice cancelled in July WAS outstanding on 30
+   June, because the reversal is a second entry and it was not in the books yet. And where
+   a figure is netted off by a MATCH between two things — a receipt against an invoice —
+   the match counts only once BOTH ends were in the books by the date. One end alone gives
+   a page that reads plausibly and shows an invoice nobody had yet raised as part paid
+   (migration 0014, `db/repos/ageing.ts`).
+
 ## 2. Naming
 
 | Thing                    | Style                           | Example                        |
@@ -231,6 +241,17 @@ SURVIVED, which is the exact opposite of what happened. Two rules, and the secon
 general one: **read the FILE count before the test count, and compare the total against a
 baseline taken before any mutation — tests that never ran are tests that disappeared.**
 Found in 0014-1, where it reported two of the loudest kills in the batch as gaps (0014-1).
+
+**A self-check that cannot fail is not a check.** The aged report carries `ties` — whether
+its foot equals the control account it decomposes — in the same spirit as a balance sheet's
+`balanced`. Every test asserted it true, and a mutation replacing the whole expression with
+`true` survived, because nothing in the suite could produce a file where it was false. The
+answer is not a better assertion, it is a FIXTURE: 0012's triggers check that an allocation
+names one party but leave the SIDE of the trade to the repository, so a write straight at
+the table can settle a purchase bill out of a sales receipt — putting the two ends on two
+different control accounts and making the identity genuinely false. **When a reported
+invariant is always true, go and build the file where it is not; and when the repository
+refuses to create that file, write past the repository** (0014-2).
 
 The general shape is worth stating on its own, because it has now cost three batches: **a
 mutation harness reports what it can measure, and a measurement that goes missing looks

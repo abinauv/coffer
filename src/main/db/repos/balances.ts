@@ -35,7 +35,7 @@
 
 import { D, ZERO, toMoneyString, type Decimal } from '@main/domain/money'
 import { normalBalanceOf, signedEffect } from '@main/domain/ledger'
-import { sql } from 'kysely'
+import { sql, type RawBuilder } from 'kysely'
 
 import type {
   AccountBalance,
@@ -55,12 +55,24 @@ export interface BalanceRangeOptions {
   toDate?: DateString
 }
 
-/** Paise, as an exact integer. Never `CAST(x AS REAL)` — see the note at the top. */
-const PAISE_DEBIT = sql<number>`COALESCE(SUM(CAST(REPLACE(journal_lines.debit, '.', '') AS INTEGER)), 0)`
-const PAISE_CREDIT = sql<number>`COALESCE(SUM(CAST(REPLACE(journal_lines.credit, '.', '') AS INTEGER)), 0)`
+/**
+ * The sum of one money column, in paise, as an exact integer.
+ *
+ * Never `CAST(x AS REAL)` — see the note at the top. Written once and exported because
+ * three files now sum money in SQL (here, reports.ts, ageing.ts) and a fourth spelling of
+ * this expression is a fourth place for the `REPLACE` to be forgotten. It is only sound
+ * against a column CHECKed to two decimal places and no sign, which is every money column
+ * in the schema.
+ */
+export function paiseSum(column: string): RawBuilder<number> {
+  return sql<number>`COALESCE(SUM(CAST(REPLACE(${sql.ref(column)}, '.', '') AS INTEGER)), 0)`
+}
+
+const PAISE_DEBIT = paiseSum('journal_lines.debit')
+const PAISE_CREDIT = paiseSum('journal_lines.credit')
 
 /** Integer paise back to a Decimal. Exact: the numerator is a whole number of paise. */
-function fromPaise(paise: number): Decimal {
+export function fromPaise(paise: number): Decimal {
   return D(paise).dividedBy(100)
 }
 

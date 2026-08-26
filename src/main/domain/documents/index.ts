@@ -62,4 +62,4 @@ export { documentTotals, lineTax, lineTotal, type DocumentTotals, type Summable 
 
 export { dueDateFor } from './terms'
 
-export { postingRuleFor, salesInvoiceRule, type PostableDocument } from './posting'
+export { controlRoleFor, postingRuleFor, salesInvoiceRule, type PostableDocument } from './posting'

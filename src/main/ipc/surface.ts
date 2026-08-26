@@ -107,6 +107,7 @@ export const API_SURFACE: ApiSurface = {
     profitAndLoss: true,
     accountLedger: true,
     dayBook: true,
+    aged: true,
   },
 }
 

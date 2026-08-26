@@ -33,6 +33,7 @@ import type { AccountRef, AccountResolver, PostingContext } from '@main/domain/l
 import { isPostingError } from '@main/domain/ledger'
 
 import {
+  controlRoleFor,
   creditNoteRule,
   debitNoteRule,
   postingRuleFor,
@@ -1110,5 +1111,26 @@ describe('a rule given the wrong kind', () => {
         }
       }
     }
+  })
+})
+
+describe('controlRoleFor', () => {
+  /*
+   * The aged report resolves the account it decomposes through this, so the two rows are
+   * pinned BY VALUE rather than by asking the table twice. Swapping them would send every
+   * customer's balance to the payables report and nothing else would notice: both answers
+   * are valid roles, both resolve to a real account, and both produce a page that ties —
+   * to the wrong account.
+   */
+  it('names the account each side moves', () => {
+    expect(controlRoleFor('sales')).toBe('accounts-receivable')
+    expect(controlRoleFor('purchase')).toBe('accounts-payable')
+  })
+
+  it('agrees with the account the posting rule actually debits', () => {
+    const entry = salesInvoiceRule.toEntry(documentOf('sales-invoice'), context())
+    const control = entry.lines.find((line) => line.partyId !== null)
+
+    expect(control?.accountId).toBe(ACCOUNTS['receivable']?.id)
   })
 })

@@ -162,6 +162,18 @@ const BY_KIND: ReadonlyMap<DocumentKind, DocumentKindDefinition> = new Map(
 )
 
 /**
+ * Every side of the trade, in the order the table first mentions each.
+ *
+ * DERIVED, NOT WRITTEN OUT. `TradeSide` is a type and a type has no values at runtime, so
+ * something has to enumerate them for a validator to check against and for a screen to
+ * offer — and a hand-written pair would be a second list agreeing with the table by
+ * inspection, which is the shape this file's header spends four paragraphs deleting.
+ */
+export const TRADE_SIDES: readonly TradeSide[] = [
+  ...new Set(DOCUMENT_KINDS.map((definition) => definition.side)),
+]
+
+/**
  * The definition for a kind.
  *
  * Throws rather than returning null. Every caller has a `DocumentKind`, which the type

@@ -171,6 +171,23 @@ const CONTROL_ROLES: Readonly<Record<TradeSide, AccountRole>> = {
   purchase: 'accounts-payable',
 }
 
+/**
+ * The control account a side's documents move.
+ *
+ * EXPORTED FOR THE AGED REPORT, which is the second reader of this table and the reason
+ * it stopped being private. An aged report is one control account decomposed by what put
+ * money on it, so it has to ask the posting rules WHICH account that is rather than
+ * deciding for itself — a second copy of these two rows would let the report age an
+ * account nothing posts to and show every party at nil.
+ *
+ * Note what it does NOT do: it does not decide which line of an entry is the control
+ * line. That is the party's id, for the reasons at the top of db/repos/outstanding.ts,
+ * and remains true through any remapping of the role.
+ */
+export function controlRoleFor(side: TradeSide): AccountRole {
+  return CONTROL_ROLES[side]
+}
+
 /** Where the value of an ordinary line lands. A return goes to its own contra account. */
 const VALUE_ROLES: Readonly<Record<TradeSide, Readonly<Record<DocumentDirection, AccountRole>>>> = {
   sales: { charge: 'sales', refund: 'sales-returns' },

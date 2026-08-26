@@ -14,6 +14,8 @@ import type {
   AccountLedger,
   AccountLedgerInput,
   AccountingPeriod,
+  AgedReport,
+  AgedReportInput,
   AsAtDateInput,
   BalanceSheet,
   CloseFiscalYearInput,
@@ -34,6 +36,7 @@ import type {
   YearEndCloseResult,
 } from '@shared/dto'
 
+import type { TradeSide } from '../../shared/documents'
 import type { CofferDb } from '../db/kysely'
 import { OpenBooks, type OpenCompanyHandle } from '../books/open-books'
 import {
@@ -44,6 +47,7 @@ import {
   updateAccount,
 } from '../db/repos/accounts'
 import { trialBalance } from '../db/repos/balances'
+import { agedReport } from '../db/repos/ageing'
 import { accountLedger, balanceSheet, dayBook, profitAndLoss } from '../db/repos/reports'
 import { getEntry, listEntries, postManualEntry, reverseEntry } from '../db/repos/journal'
 import { postOpeningBalances } from '../db/repos/opening-balances'
@@ -152,6 +156,13 @@ export class LedgerService {
 
   async dayBook(input: DateRangeInput = {}): Promise<DayBook> {
     return dayBook(this.db(), input)
+  }
+
+  async aged(input: AgedReportInput): Promise<AgedReport> {
+    /* The side is already one of `TRADE_SIDES` — the handler checked it against the kind
+     * table — so this cast narrows a boundary string to the union the repository takes,
+     * and adds no trust that the validator has not already earned. */
+    return agedReport(this.db(), { side: input.side as TradeSide, asAtDate: input.asAtDate })
   }
 
   async closeFiscalYear(input: CloseFiscalYearInput): Promise<YearEndCloseResult> {

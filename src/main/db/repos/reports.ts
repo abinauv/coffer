@@ -35,7 +35,6 @@ import {
   type ReportLine as DomainReportLine,
   type ReportTree,
 } from '@main/domain/reports'
-import { sql } from 'kysely'
 
 import type {
   AccountLedger,
@@ -49,16 +48,13 @@ import type {
 } from '@shared/dto'
 
 import type { CofferDb } from '../kysely'
+import { fromPaise, paiseSum } from './balances'
 import { RepoError } from './errors'
 import { listEntries, type ListEntriesOptions } from './journal'
 
 /** Paise as exact integers. Never `REAL` — the reasoning is at the top of balances.ts. */
-const PAISE_DEBIT = sql<number>`COALESCE(SUM(CAST(REPLACE(journal_lines.debit, '.', '') AS INTEGER)), 0)`
-const PAISE_CREDIT = sql<number>`COALESCE(SUM(CAST(REPLACE(journal_lines.credit, '.', '') AS INTEGER)), 0)`
-
-function fromPaise(paise: number): Decimal {
-  return D(paise).dividedBy(100)
-}
+const PAISE_DEBIT = paiseSum('journal_lines.debit')
+const PAISE_CREDIT = paiseSum('journal_lines.credit')
 
 export interface ReportRangeOptions {
   fromDate?: DateString

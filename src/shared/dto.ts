@@ -1334,6 +1334,109 @@ export interface DayBook {
   total: DecimalString
 }
 
+/*
+ * The aged report — what a control account is made of, oldest first.
+ *
+ * ONE CONTROL ACCOUNT, DECOMPOSED, and the DTO says so out loud: `accountCode` and
+ * `controlBalance` are on the report because the page's claim is that its total IS that
+ * account. A list of unpaid invoices needs neither and cannot be checked against
+ * anything, which is the version this deliberately is not.
+ *
+ * `ties` is the same field, and the same argument, as `balanced` on a balance sheet: the
+ * identity is reported rather than assumed, so a screen can show it and a test can assert
+ * it. See db/repos/ageing.ts for what would make it false.
+ */
+
+/** One column of an aged report. Both ends inclusive; null is an open end. */
+export interface AgedBucket {
+  label: string
+  fromDays: number | null
+  toDays: number | null
+}
+
+/**
+ * What put an amount on the control account.
+ *
+ * 'journal' covers an opening balance and a manual entry alike — anything reaching the
+ * account without a document or a voucher behind it. It is not an error: opening balances
+ * are how an existing business starts, and they are party-tagged for exactly this report.
+ */
+export type AgedItemSource = 'document' | 'receipt' | 'journal'
+
+/** One thing standing against a party, with its age worked out. */
+export interface AgedItem {
+  source: AgedItemSource
+  /** The document, receipt or journal entry it came from. */
+  sourceId: string
+  /** A `DocumentKind` where `source` is 'document'. Null otherwise. */
+  kind: string | null
+  /** What it is known by: a document number, a voucher number, an entry number. */
+  number: string
+  date: DateString
+  /**
+   * What it falls due on.
+   *
+   * The stamped due date on an invoice. Everything else falls due the day it was raised,
+   * which is the rule 0014 wrote for a party on no terms — see domain/reports/ageing.ts.
+   */
+  dueDate: DateString
+  /** The report's date less `dueDate`. Nought or below is not yet due. */
+  daysOverdue: number
+  /** An index into the report's `buckets`, or null where it stands to the party's credit. */
+  bucket: number | null
+  /** Positive: the party owes it. Negative: it stands to their credit. */
+  amount: DecimalString
+}
+
+export interface AgedPartyRow {
+  /** Null where a line on the control account names no party. See `partyName`. */
+  partyId: string | null
+  /** The party's name, or a sentence saying the line names nobody. */
+  partyName: string
+  /** One figure per column, in the report's own `buckets` order. */
+  buckets: DecimalString[]
+  onAccount: DecimalString
+  /** The columns less what is on account. What this party owes. */
+  total: DecimalString
+  /** Oldest due date first. Every item behind the figures above, and nothing else. */
+  items: AgedItem[]
+}
+
+export interface AgedReportTotals {
+  buckets: DecimalString[]
+  onAccount: DecimalString
+  total: DecimalString
+}
+
+export interface AgedReport {
+  /** A `TradeSide` — 'sales' is what customers owe, 'purchase' what is owed to vendors. */
+  side: string
+  asAtDate: DateString
+  /** The control account this decomposes, resolved from the side's account role. */
+  accountId: string
+  accountCode: string
+  accountName: string
+  buckets: AgedBucket[]
+  /** Largest debt first. A party with nothing outstanding is not here at all. */
+  parties: AgedPartyRow[]
+  totals: AgedReportTotals
+  /**
+   * The account's balance as at the date, summed straight from the lines.
+   *
+   * Reached by a different route from `totals.total` — no grouping, no allocations — so
+   * the two agreeing is a statement and not a tautology.
+   */
+  controlBalance: DecimalString
+  /** Whether `totals.total` equals `controlBalance`. Reported, so it can be asserted. */
+  ties: boolean
+}
+
+export interface AgedReportInput {
+  /** A `TradeSide`. Refused if it is anything else. */
+  side: string
+  asAtDate: DateString
+}
+
 export interface AsAtDateInput {
   asAtDate: DateString
 }

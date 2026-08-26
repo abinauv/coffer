@@ -19,6 +19,7 @@ import {
   DOCUMENT_KINDS,
   kindsOnSide,
   postsToLedger,
+  TRADE_SIDES,
   type DocumentKind,
   type DocumentKindDefinition,
 } from './documents'
@@ -236,5 +237,31 @@ describe('correctionMap, given a table the real one cannot be', () => {
    * remember to guard. */
   it('maps nothing when nothing corrects anything', () => {
     expect(correctionMap([kind({})]).size).toBe(0)
+  })
+})
+
+describe('TRADE_SIDES', () => {
+  /*
+   * BY VALUE, and in the order the table produces. A test that derived the expectation
+   * from `DOCUMENT_KINDS` would be the same expression twice and would pass against any
+   * mistake made in both — including the one that matters, which is a side missing from
+   * the list a validator checks against and a screen offers.
+   */
+  it('names both sides of the trade, sales first', () => {
+    expect(TRADE_SIDES).toEqual(['sales', 'purchase'])
+  })
+
+  /* No side named twice. Four of the five kinds share a side with another, so a list
+   * built without de-duplicating would have five entries and a screen would offer a
+   * duplicate tab — cheap to get wrong and invisible in the assertion above only if that
+   * one were derived. */
+  it('names each side once', () => {
+    expect(new Set(TRADE_SIDES).size).toBe(TRADE_SIDES.length)
+  })
+
+  it('leaves no kind on a side it does not list', () => {
+    for (const definition of DOCUMENT_KINDS) {
+      expect(TRADE_SIDES).toContain(definition.side)
+    }
   })
 })

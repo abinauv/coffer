@@ -17,6 +17,8 @@ import type {
   Account,
   AccountLedger,
   AccountLedgerInput,
+  AgedReport,
+  AgedReportInput,
   AccountingPeriod,
   AppInfo,
   AsAtDateInput,
@@ -329,6 +331,19 @@ export interface CofferApi {
     accountLedger(input: AccountLedgerInput): Promise<Result<AccountLedger>>
     /** Entries in the range, grouped by day, with each day's total. */
     dayBook(input?: DateRangeInput): Promise<Result<DayBook>>
+    /**
+     * What a control account is made of as at a date, by party and by age.
+     *
+     * AS AT, in the ledger's sense: entries dated after the day are not in it, so a
+     * report run for the end of last month is what last month looked like rather than
+     * today's rows wearing last month's heading.
+     *
+     * It carries the money sitting ON ACCOUNT as well as the charges — unallocated
+     * receipts and credit notes — because without them the page would disagree with the
+     * balance sheet by exactly the amount a customer has already sent. `ties` says
+     * whether it does agree, and `controlBalance` is the figure it is agreeing with.
+     */
+    aged(input: AgedReportInput): Promise<Result<AgedReport>>
   }
 }
 
