@@ -27,9 +27,9 @@
 
 import type { BadgeTone } from '@renderer/components/atoms'
 import type { ScreenNav } from '@renderer/lib/screens'
-import { chargeKindOn, definitionOf, type TradeSide } from '@shared/documents'
+import { definitionOf, type TradeSide } from '@shared/documents'
 import type { AllocationInput, OpenDocument, ReceiptStatusDto } from '@shared/dto'
-import { receiptDefinitionOf, type ReceiptKind } from '@shared/receipts'
+import { receiptDefinitionOf, settles, type ReceiptKind } from '@shared/receipts'
 
 // ---- Where each kind's screens live -----------------------------------------
 
@@ -63,6 +63,8 @@ export function editorScreenId(kind: ReceiptKind): string {
 const NAV_ORDER: Readonly<Record<ReceiptKind, number>> = {
   receipt: 4,
   payment: 3,
+  refund: 5,
+  'refund-received': 4,
 }
 
 export function registerNav(kind: ReceiptKind): ScreenNav {
@@ -93,15 +95,19 @@ export function partyLabel(side: TradeSide): string {
 }
 
 /**
- * What the documents this settles are called.
+ * What the documents this voucher settles are called.
  *
- * READ OFF THE DOCUMENT TABLE, not written out here. `chargeKindOn` is the same function
- * `correctsKind` is built from: the one kind on a side that puts the party in debt. The
- * allocation table's heading and the picker's empty state both use it, so a sixth
- * document kind cannot leave this screen calling a bill an invoice.
+ * READ OFF THE DOCUMENT TABLE, not written out here. `settles` is the same function the
+ * picker filters on and the same one 0015's trigger enumerates: the one kind a voucher of
+ * this kind settles. The allocation table's heading and the picker's empty state both use
+ * it, so a sixth document kind cannot leave this screen calling a bill an invoice.
+ *
+ * IT TOOK A SIDE UNTIL 0015 and could not have answered for a refund: a refund and a
+ * receipt are both sales-side, and a heading reading "Sales invoices" over a list of
+ * credit notes is the screen agreeing with the wrong half of the rule.
  */
-export function settlesLabel(side: TradeSide): string {
-  return definitionOf(chargeKindOn(side)).label
+export function settlesLabel(kind: ReceiptKind): string {
+  return definitionOf(settles(kind)).label
 }
 
 /** The lede under a register's heading. */
@@ -143,7 +149,7 @@ export function emptyRegisterSentence(kind: ReceiptKind): string {
   const definition = receiptDefinitionOf(kind)
   const label = definition.label.toLowerCase()
   const party = partyLabel(definition.side).toLowerCase()
-  const document = settlesLabel(definition.side).toLowerCase()
+  const document = settlesLabel(kind).toLowerCase()
   const landed = definition.direction === 'in' ? 'land in' : 'come out of'
   return (
     `A ${label} needs a ${party} and an account for the money to ${landed}. New ${label} ` +

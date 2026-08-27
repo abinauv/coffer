@@ -1624,7 +1624,12 @@ export interface SettlementReceiptDto {
 export interface DocumentSettlement {
   documentId: string
   /**
-   * What the document put on the party's control account, in its own direction.
+   * What the document put on the party's control account, in THE DOCUMENT's own facing.
+   *
+   * Positive for all four posting kinds, which is what "its own facing" buys: a credit
+   * note's movement on the account is a credit, so read raw it would arrive negative and
+   * every rupee refunded against it would take the figure further from zero. What a
+   * reader wants beside the word "outstanding" is how much of it is still to give back.
    *
    * Not the same as its grand total once it has been cancelled: the reversal nets it to
    * nothing, which is how a cancelled invoice stops being owed with no code written to
@@ -1632,7 +1637,13 @@ export interface DocumentSettlement {
    */
   movement: DecimalString
   allocated: DecimalString
-  /** `movement - allocated`. Negative would mean more was matched than was ever owed. */
+  /**
+   * `movement - allocated`, in the same facing.
+   *
+   * Negative would mean more was matched than the document ever put on the account —
+   * which is one meaning for all four kinds, and would not have been if the sign came
+   * off the account instead.
+   */
   outstanding: DecimalString
   receipts: readonly SettlementReceiptDto[]
 }
@@ -1644,14 +1655,22 @@ export interface OpenDocument {
   /** Never null: only an issued document can be open, and those all have numbers. */
   number: string
   date: DateString
-  /** What it put on the party's account. */
+  /** What it put on the party's account, in the document's own facing — see
+   * `DocumentSettlement.movement`. Positive whichever way the document points. */
   grandTotal: DecimalString
   outstanding: DecimalString
 }
 
 export interface OpenDocumentsInput {
   partyId: string
-  /** A `ReceiptKind`. A receipt settles sales documents; a payment settles purchases. */
+  /**
+   * A `ReceiptKind`, and it decides WHICH DOCUMENTS come back rather than merely which
+   * side they are on.
+   *
+   * A receipt settles sales invoices and a refund settles credit notes; both are
+   * sales-side, so a side is no longer an answer. `settles()` in `@shared/receipts` is
+   * the one place that decides, and migration 0015 holds the same mapping as a trigger.
+   */
   kind: string
   /**
    * Treat this receipt's own allocations as available again.

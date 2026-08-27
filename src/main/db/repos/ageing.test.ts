@@ -26,10 +26,10 @@ import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
 import { controlRoleFor } from '@main/domain/documents'
-import { receiptTreatmentOf, settlingKind } from '@main/domain/receipts'
+import { RECEIPT_KINDS, receiptTreatmentOf, settles } from '@main/domain/receipts'
 import { AGE_BUCKETS } from '@main/domain/reports'
 import { aprilToMarch, fixedClock } from '@main/domain/time'
-import { TRADE_SIDES } from '@shared/documents'
+import { postingKindOn, TRADE_SIDES } from '@shared/documents'
 import type {
   AgedReport,
   AgedPartyRow,
@@ -772,8 +772,22 @@ describe('the report cannot be drawn', () => {
  * rather than by collapsing a distinction another file made deliberately.
  */
 describe('the two role tables the report depends on', () => {
-  it.each(TRADE_SIDES)('settles a %s document on the account that raised it', (side) => {
-    expect(receiptTreatmentOf(settlingKind(side)).controlRole).toBe(controlRoleFor(side))
+  /* EVERY VOUCHER KIND, not just the one that settles a charge. 0015 put a second voucher
+   * on each side — a refund moves receivables the other way — and the dependency this
+   * pins is that BOTH of a side's vouchers land on the account that side's documents are
+   * reported from. A refund on the wrong account would be money leaving the business that
+   * the aged report never sees. */
+  it.each(RECEIPT_KINDS)('settles a $kind on the account that raised it', (definition) => {
+    expect(receiptTreatmentOf(definition.kind).controlRole).toBe(controlRoleFor(definition.side))
+  })
+
+  it.each(TRADE_SIDES)('gives the %s side two vouchers on one account', (side) => {
+    const onSide = RECEIPT_KINDS.filter((definition) => definition.side === side)
+
+    expect(onSide).toHaveLength(2)
+    expect(onSide.map((definition) => settles(definition.kind)).sort()).toEqual(
+      [postingKindOn(side, 'charge'), postingKindOn(side, 'refund')].sort(),
+    )
   })
 })
 
@@ -782,46 +796,50 @@ describe('the two role tables the report depends on', () => {
 /*
  * `ties` IS NOT DECORATION, and this is the file that proves it by making it false.
  *
- * `requireSettleableDocument` asks four questions of an allocation and 0012 makes three of
- * them triggers as well — the missing one is the SIDE of the trade, which the repository
- * checks and the database does not. So a party who is both a customer and a vendor can, by
- * a write that goes past the repository, have a RECEIPT settling a PURCHASE BILL. The two
- * ends then sit on two different control accounts and neither report can be made to add
- * up: the sales page loses a receipt it should be carrying, and the purchase page reduces
- * a bill with money that never touched payables.
+ * THE WAY 0014-2 MADE IT FALSE IS GONE, and that is a correction worth recording. It used
+ * a RECEIPT settling a PURCHASE BILL — a state the repository refused and the database
+ * did not — so the two ends of one allocation sat on two different control accounts.
+ * Migration 0015 made that a trigger, because a refund shares a control account with a
+ * receipt and the mistake stopped being visible. The fixture that exploited the hole had
+ * to go with it.
+ *
+ * WHAT REPLACES IT NEEDS NO WRITE PAST ANYTHING, which is why it is a better test.
+ * `outstanding.ts` has warned since 0012 that repointing a control role is "a perfectly
+ * ordinary thing to do while tidying a chart" — and a business that does it between
+ * raising an invoice and banking the cheque leaves one end of the allocation on the old
+ * account and the other on the new one. Every step below is an operation the app offers.
+ *
+ * The report then sees the receipt and not the invoice: the receipt's own movement and
+ * the allocation put back on it cancel exactly, the page comes to nothing, and the
+ * account it claims to equal is five hundred rupees the other way.
  *
  * There is nothing this report can do about that except say so. Refusing to draw would
  * leave a damaged file with no page to diagnose it from, and quietly balancing to the
  * account would hide the one number that shows something is wrong.
  */
-describe('an allocation that crosses the two control accounts', () => {
-  async function crossAllocated(): Promise<void> {
-    const both = (
-      await createParty(db, {
-        name: 'Ravi Enterprises',
-        countryCode: 'in',
-        isCustomer: true,
-        isVendor: true,
-      })
-    ).id
-
-    const bill = await issued({ kind: 'purchase-bill', partyId: both, date: '2026-05-01' })
-    const receipt = await createReceipt(
-      db,
-      receiptInput({ partyId: both, amount: '500.00', date: '2026-05-10' }),
-      NOW,
-    )
-
-    connection
-      .prepare(
-        `INSERT INTO receipt_allocations (id, receipt_id, document_id, amount, created_at)
-         VALUES (?, ?, ?, ?, ?)`,
-      )
-      .run(randomUUID(), receipt.id, bill.id, '500.00', NOW)
+describe('a control account repointed between the document and the money', () => {
+  /** A leaf that fills no role, standing in for wherever somebody moved the control to. */
+  async function movedTo(code: string): Promise<string> {
+    const row = await db
+      .selectFrom('accounts')
+      .select('id')
+      .where('code', '=', code)
+      .executeTakeFirstOrThrow()
+    return row.id
   }
 
   it('reports that the sales page no longer equals the receivable account', async () => {
-    await crossAllocated()
+    const invoice = await issued({ date: '2026-05-01' })
+    await setAccountRole(db, 'accounts-receivable', await movedTo('1600'))
+    await createReceipt(
+      db,
+      receiptInput({
+        amount: '500.00',
+        date: '2026-05-10',
+        allocations: [{ documentId: invoice.id, amount: '500.00' }],
+      }),
+      NOW,
+    )
 
     const aged = await report()
 
@@ -831,13 +849,52 @@ describe('an allocation that crosses the two control accounts', () => {
   })
 
   it('reports the same of the purchase page', async () => {
-    await crossAllocated()
+    const bill = await issued({ kind: 'purchase-bill', partyId: vendor, date: '2026-05-01' })
+    await setAccountRole(db, 'accounts-payable', await movedTo('2400'))
+    await createReceipt(
+      db,
+      receiptInput({
+        kind: 'payment',
+        partyId: vendor,
+        amount: '500.00',
+        date: '2026-05-10',
+        allocations: [{ documentId: bill.id, amount: '500.00' }],
+      }),
+      NOW,
+    )
 
     const aged = await report(AS_AT, 'purchase')
 
     expect(aged.ties).toBe(false)
-    expect(aged.controlBalance).toBe('1180.00')
-    expect(aged.totals.total).toBe('680.00')
+    expect(aged.controlBalance).toBe('-500.00')
+    expect(aged.totals.total).toBe('0.00')
+  })
+
+  /*
+   * AND THE PAGE STILL DRAWS THE OTHER PARTIES. The whole argument for reporting `ties`
+   * rather than refusing is that the rows are the diagnosis, so a second party whose
+   * money never moved has to appear on the same broken page — on the new account, where
+   * their receipt landed.
+   */
+  it('still lists what did land on the account it is reporting from', async () => {
+    const invoice = await issued({ date: '2026-05-01' })
+    await setAccountRole(db, 'accounts-receivable', await movedTo('1600'))
+    await createReceipt(
+      db,
+      receiptInput({
+        amount: '500.00',
+        date: '2026-05-10',
+        allocations: [{ documentId: invoice.id, amount: '500.00' }],
+      }),
+      NOW,
+    )
+    await createReceipt(db, receiptInput({ amount: '200.00', date: '2026-05-11' }), NOW)
+
+    const aged = await report()
+
+    expect(aged.ties).toBe(false)
+    expect(aged.totals.total).toBe('-200.00')
+    expect(rowFor(aged, customer)?.total).toBe('-200.00')
   })
 })
 

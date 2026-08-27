@@ -245,6 +245,8 @@ export type SourceDocumentType =
   | 'debit-note'
   | 'receipt'
   | 'payment'
+  | 'refund'
+  | 'refund-received'
   | 'stock-adjustment'
   | 'year-end-close'
 

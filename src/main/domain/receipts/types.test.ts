@@ -32,9 +32,14 @@ const allocation = (amount: string): ReceiptAllocation => ({
   amount: D(amount),
 })
 
-describe('the two kinds', () => {
-  it('are a receipt and a payment, and nothing else', () => {
-    expect(RECEIPT_KINDS.map((definition) => definition.kind)).toEqual(['receipt', 'payment'])
+describe('the four kinds', () => {
+  it('are the two sides by the two directions, and nothing else', () => {
+    expect(RECEIPT_KINDS.map((definition) => definition.kind)).toEqual([
+      'receipt',
+      'payment',
+      'refund',
+      'refund-received',
+    ])
   })
 
   it('move opposite control accounts in opposite directions', () => {
@@ -48,6 +53,42 @@ describe('the two kinds', () => {
       controlRole: 'accounts-payable',
       sourceType: 'payment',
     })
+  })
+
+  /*
+   * THE TWO ROWS THAT MAKE `controlRole` A FACT RATHER THAN A RESTATEMENT OF `side`.
+   * A refund paid is sales-side money going OUT and it moves RECEIVABLES — the same
+   * account a receipt moves, the other way. Its side agrees with a receipt's and its
+   * direction does not, so this is the pair where "sales means receivable" and "money in
+   * means receivable" stop being the same sentence.
+   */
+  it('puts a refund on the control account its own side names, not its direction', () => {
+    expect(receiptDefinitionOf('refund')).toMatchObject({ side: 'sales', direction: 'out' })
+    expect(receiptTreatmentOf('refund')).toMatchObject({
+      controlRole: 'accounts-receivable',
+      sourceType: 'refund',
+    })
+    expect(receiptDefinitionOf('refund-received')).toMatchObject({
+      side: 'purchase',
+      direction: 'in',
+    })
+    expect(receiptTreatmentOf('refund-received')).toMatchObject({
+      controlRole: 'accounts-payable',
+      sourceType: 'refund-received',
+    })
+  })
+
+  /* Counted rather than listed, so a fifth kind sharing a control account with the wrong
+   * side fails here as well as in the four assertions above. */
+  it('gives each side exactly two vouchers, sharing one control account', () => {
+    for (const side of ['sales', 'purchase'] as const) {
+      const onSide = RECEIPT_KINDS.filter((definition) => definition.side === side)
+      const roles = onSide.map((definition) => receiptTreatmentOf(definition.kind).controlRole)
+
+      expect(onSide).toHaveLength(2)
+      expect(new Set(roles).size).toBe(1)
+      expect(new Set(onSide.map((definition) => definition.direction)).size).toBe(2)
+    }
   })
 
   /*
@@ -71,6 +112,8 @@ describe('the two kinds', () => {
   it('moves the control account its side implies', () => {
     expect(receiptTreatmentOf('receipt').controlRole).toBe('accounts-receivable')
     expect(receiptTreatmentOf('payment').controlRole).toBe('accounts-payable')
+    expect(receiptTreatmentOf('refund').controlRole).toBe('accounts-receivable')
+    expect(receiptTreatmentOf('refund-received').controlRole).toBe('accounts-payable')
   })
 
   /* A voucher is recorded in the ledger under its own name, so drilling from an entry
@@ -81,9 +124,11 @@ describe('the two kinds', () => {
     }
   })
 
-  it('says which side a kind settles', () => {
+  it('says which side a kind belongs to', () => {
     expect(settlesSide('receipt')).toBe('sales')
     expect(settlesSide('payment')).toBe('purchase')
+    expect(settlesSide('refund')).toBe('sales')
+    expect(settlesSide('refund-received')).toBe('purchase')
   })
 
   it('refuses a kind this build does not know', () => {

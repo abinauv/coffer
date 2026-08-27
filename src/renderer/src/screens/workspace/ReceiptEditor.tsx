@@ -44,7 +44,6 @@ import { makeRoute } from '@renderer/lib/routing'
 import { registerScreens, type ScreenContext, type ScreenDefinition } from '@renderer/lib/screens'
 import { useNumberFormat } from '@renderer/store/regime'
 import { useToasts } from '@renderer/store/toasts'
-import type { TradeSide } from '@shared/documents'
 import type {
   Account,
   AppError,
@@ -90,7 +89,7 @@ export function ReceiptEditor({
   const party = partyLabel(definition.side)
   /* What this settles, plural and lower case, for the sentences that name it. Read off
    * the DOCUMENT table so a payment says "purchase bills" — see `settlesLabel`. */
-  const settled = `${settlesLabel(definition.side).toLowerCase()}s`
+  const settled = `${settlesLabel(kind).toLowerCase()}s`
 
   const [receipt, setReceipt] = useState<ReceiptDto | null>(null)
   const [parties, setParties] = useState<PartySummary[]>([])
@@ -460,7 +459,7 @@ export function ReceiptEditor({
 
         <Allocations
           open={open}
-          side={definition.side}
+          kind={kind}
           values={allocations}
           format={format}
           isEditable={isNew || canAllocate(status)}
@@ -493,7 +492,7 @@ function preselected(
 
 function Allocations({
   open,
-  side,
+  kind,
   values,
   format,
   isEditable,
@@ -501,7 +500,7 @@ function Allocations({
   onChange,
 }: {
   open: readonly OpenDocument[]
-  side: TradeSide
+  kind: ReceiptKind
   values: Readonly<Record<string, string>>
   format: Parameters<typeof formatAmount>[1]
   isEditable: boolean
@@ -510,9 +509,10 @@ function Allocations({
 }): JSX.Element {
   /* Read off the document table rather than written out here — see `settlesLabel`. A
    * payment settles bills, and calling one an invoice on this screen would be the first
-   * place a user learned the wrong word for their own paperwork. */
-  const settles = settlesLabel(side)
-  const party = partyLabel(side).toLowerCase()
+   * place a user learned the wrong word for their own paperwork. THE KIND AND NOT THE
+   * SIDE, since 0015: a refund is sales-side and settles credit notes. */
+  const settles = settlesLabel(kind)
+  const party = partyLabel(receiptDefinitionOf(kind).side).toLowerCase()
 
   if (!hasParty) {
     return (

@@ -56,15 +56,26 @@
  * way round, which makes "what is still outstanding" a positive number for both — and
  * leaves a negative meaning the one thing it should: more has been allocated to this
  * document than it ever put on the account.
+ *
+ * ---------------------------------------------------------------------------
+ * AND SINCE 0015, IN THE DOCUMENT'S DIRECTION AS WELL AS ITS SIDE
+ *
+ * `side` alone was enough while only CHARGE documents could be settled. A credit note is
+ * on the sales side and moves receivables the other way, so its movement in the side's
+ * signing is NEGATIVE — and `movement - allocated` on a credit note with a refund against
+ * it would have driven the figure further from zero with every rupee actually refunded.
+ *
+ * `facing` is that fixed, and it is one multiplication rather than a second query or a
+ * second set of rules: a refund document's figures are read with the sign flipped, so
+ * "how much of this is still unsettled" comes out POSITIVE for all four kinds and a
+ * negative still means the one thing it always meant. Everything else in this file — the
+ * movement query, the allocation sum, the reversal netting — is untouched, because none
+ * of it was wrong.
  */
 
 import { D, ZERO, toMoneyString, type Decimal } from '@main/domain/money'
-import {
-  chargeKindOn,
-  definitionOf,
-  type DocumentKind,
-  type TradeSide,
-} from '@main/domain/documents'
+import { definitionOf, type DocumentKind } from '@main/domain/documents'
+import { settles, type ReceiptKind } from '@shared/receipts'
 import type { DateString } from '@shared/scalars'
 
 import type { CofferDb } from '../kysely'
@@ -99,6 +110,25 @@ export async function documentMovement(db: CofferDb, document: DocumentControl):
 }
 
 /**
+ * A figure turned round into the DOCUMENT's own facing.
+ *
+ * A charge is already facing that way and comes back untouched; a refund's sign is
+ * flipped. What that buys is one subtraction that is right for all four kinds: an
+ * allocation always REDUCES what is unsettled, whichever way the document points, and a
+ * refund is the case where the account's direction and the document's disagree.
+ *
+ * IT TAKES THE KIND AND NOT THE MOVEMENT, which is the part worth reading. Deriving the
+ * facing from the movement's own sign would look identical on every row this codebase has
+ * a test for and would be wrong on two it does not: a document that has come to nothing
+ * has no sign to read, and an over-allocated one has the WRONG sign — so a credit note
+ * refunded past its face value would flip to being treated as a charge, and the figure
+ * naming the mistake would come back positive and look correct.
+ */
+function facing(kind: string, value: Decimal): Decimal {
+  return definitionOf(kind as DocumentKind).direction === 'refund' ? value.negated() : value
+}
+
+/**
  * What has been allocated to one document, from every receipt.
  *
  * `exceptReceiptId` is for the caller that is about to REPLACE one receipt's allocations
@@ -128,12 +158,20 @@ export async function allocatedToDocument(
 }
 
 /**
- * What one document still has against it.
+ * What one document still has against it, in the DOCUMENT's own facing.
  *
  * The whole sentence at the top of this file, as one function. Negative is possible and
  * is not defended against here — it means more has been allocated than the document put
  * on the account, which is a state the repository refuses to create and which a report
  * should show rather than hide if a file ever holds one.
+ *
+ * `facing` is what makes that last sentence still true for a REFUND document. A credit
+ * note's movement on the account is negative, so without it a credit note with nothing
+ * refunded would read as -1,180 outstanding and every rupee actually paid back would take
+ * it further from zero — and a negative would then mean two opposite things depending on
+ * which kind you were holding. `exceptReceiptId` is `allocatedToDocument`'s and means the
+ * same thing: treat that voucher's allocations as available again, for the caller that is
+ * about to replace them.
  */
 export async function outstandingForDocument(
   db: CofferDb,
@@ -142,7 +180,7 @@ export async function outstandingForDocument(
 ): Promise<Decimal> {
   const movement = await documentMovement(db, document)
   const allocated = await allocatedToDocument(db, document.id, exceptReceiptId)
-  return movement.minus(allocated)
+  return facing(document.kind, movement).minus(allocated)
 }
 
 /** What has been allocated out of one receipt. */
@@ -289,8 +327,15 @@ async function allocatedByDocument(
 
 export interface OpenDocumentsOptions {
   partyId: string
-  /** Which half of the trade. A receipt settles sales; a payment settles purchases. */
-  side: TradeSide
+  /**
+   * The voucher the picker is being filled for, which decides what it may list.
+   *
+   * A SIDE UNTIL 0015, and a side is no longer enough: a receipt and a refund are both
+   * sales-side vouchers and they settle different documents. `settles()` answers it from
+   * one place — see the note it carries about an allocation being two movements on one
+   * account pointing opposite ways.
+   */
+  kind: ReceiptKind
   /**
    * Treat this receipt's allocations as available again.
    *
@@ -318,26 +363,20 @@ export async function openDocumentsFor(
   options: OpenDocumentsOptions,
 ): Promise<OpenDocumentRow[]> {
   /*
-   * CHARGES ONLY, AND THE `direction` TEST IS NOT COSMETIC. A receipt reduces what a
-   * customer owes; a credit note ALSO reduces what a customer owes. Both are sales-side
-   * documents that post, so until this filter existed the picker would have offered a
-   * credit note as something an incoming receipt could settle — which is money arriving
-   * to pay off a refund, and reads to the ledger as a customer paying us for a return we
-   * gave them. It could not have been noticed before 0013, because nothing else posted.
+   * ONE KIND, AND WHICH ONE IS THE VOUCHER'S BUSINESS. A receipt reduces what a customer
+   * owes; a credit note ALSO reduces what a customer owes. Both are sales-side documents
+   * that post, so a picker filtered on the side alone would offer a credit note as
+   * something an incoming receipt could settle — money arriving to pay off a refund,
+   * which reads to the ledger as a customer paying us for a return we gave them. It could
+   * not have been noticed before 0013, because nothing else posted.
    *
-   * What settles a refund is a refund: paying a credit note is money going OUT, which is
-   * a payment, and matching one against an invoice instead is offsetting — neither of
-   * which this picker is. Both are owed work, and both are the next unit rather than a
-   * widening of this filter.
-   *
-   * ONE KIND, NOT A LIST, AS OF 0013-3. This filter was written out here and it is the
-   * same sentence `correctsKind` is built from and the same one the receipt screen heads
-   * its allocation table with — three copies of "the one charge kind on this side that
-   * posts", agreeing by inspection. `chargeKindOn` is that sentence said once, and it
-   * REFUSES an ambiguous table rather than returning the first match, so the `= ?` below
-   * is safe in a way `in (…)` never said out loud.
+   * 0013-3 fixed that by writing `charge` into the filter, which was right for as long as
+   * a receipt was the only voucher on its side. IT IS NOT ANY MORE: a refund settles the
+   * credit note, and the same picker fills for it. `settles()` is the one place that
+   * decides, and it REFUSES an ambiguous table rather than returning the first match, so
+   * the `= ?` below is safe in a way `in (…)` never said out loud.
    */
-  const kind = chargeKindOn(options.side)
+  const kind = settles(options.kind)
 
   /*
    * `status = 'issued'` LOOKS REDUNDANT BESIDE THE ZERO TEST BELOW and is not quite. A
@@ -373,7 +412,10 @@ export async function openDocumentsFor(
 
   const open: OpenDocumentRow[] = []
   for (const row of rows) {
-    const movement = movements.get(row.id) ?? ZERO
+    /* In the DOCUMENT's facing, so a credit note offers the refund screen the money it
+     * has left rather than that figure with a minus in front of it. Every row here is of
+     * one kind, so the flip is the same for all of them. */
+    const movement = facing(row.kind, movements.get(row.id) ?? ZERO)
     const outstanding = movement.minus(allocated.get(row.id) ?? ZERO)
     if (outstanding.isZero()) continue
     open.push({
@@ -415,7 +457,10 @@ export async function settlementFor(
   db: CofferDb,
   document: DocumentControl,
 ): Promise<DocumentSettlementResult> {
-  const movement = await documentMovement(db, document)
+  /* The document's own facing, for the reason the picker uses it: this figure is read by
+   * a human beside the word "outstanding", and a credit note's is what is left to refund
+   * or to offset, not a negative amount owed. */
+  const movement = facing(document.kind, await documentMovement(db, document))
 
   const rows = await db
     .selectFrom('receipt_allocations')

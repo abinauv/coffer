@@ -18,6 +18,7 @@ import {
   type DocumentStatus,
   type NumberedKind,
 } from './types'
+import { RECEIPT_KINDS } from '@shared/receipts'
 
 describe('the kinds table', () => {
   it('has a definition for every kind, reachable by its own key', () => {
@@ -203,12 +204,28 @@ describe('the statuses', () => {
  * records twice.
  */
 describe('the numbered kinds', () => {
-  it('are every document kind and the two vouchers, documents first', () => {
+  it('are every document kind and every voucher kind, documents first', () => {
     expect(NUMBERED_KINDS.map((definition) => definition.kind)).toEqual([
       ...DOCUMENT_KINDS.map((definition) => definition.kind),
-      'receipt',
-      'payment',
+      ...RECEIPT_KINDS.map((definition) => definition.kind),
     ])
+  })
+
+  /*
+   * AND THE VOUCHER WORDS COME FROM THE VOUCHER TABLE, which is 0015 deleting a second
+   * copy. `VOUCHER_KINDS` used to write out two labels by hand, on the stated grounds
+   * that importing the receipt table would be a cycle — true of `@main/domain/receipts`
+   * and not of `@shared/receipts`, which is where 0013-3 put the table. Nobody kept the
+   * copies in step because nothing ever changed either; the batch that added two kinds
+   * is the one that would have found out.
+   */
+  it('take a voucher kind words from the receipt kinds table', () => {
+    for (const definition of RECEIPT_KINDS) {
+      expect(numberedKindDefinition(definition.kind)).toMatchObject({
+        label: definition.label,
+        pluralLabel: definition.pluralLabel,
+      })
+    }
   })
 
   /* A document kind's label lives in `DOCUMENT_KINDS` and nowhere else. If this table
@@ -231,8 +248,12 @@ describe('the numbered kinds', () => {
         postsToLedger(definition.kind),
       )
     }
-    expect(numberedKindDefinition('receipt').resetsYearly).toBe(true)
-    expect(numberedKindDefinition('payment').resetsYearly).toBe(true)
+    /* Every voucher reaches the ledger — there is no receipt that records no money — so
+     * all of them reset, and this is counted rather than listed for the same reason the
+     * document arm is. */
+    for (const definition of RECEIPT_KINDS) {
+      expect(numberedKindDefinition(definition.kind).resetsYearly).toBe(true)
+    }
   })
 
   it('refuse a kind this build does not know', () => {

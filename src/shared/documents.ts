@@ -202,7 +202,7 @@ export function kindsOnSide(side: TradeSide): readonly DocumentKindDefinition[] 
 /**
  * Raising one of these puts somebody in debt, so it is the kind that falls due.
  *
- * The predicate `chargeKindIn` filters by, minus the side — written once because 0014
+ * The predicate `postingKindIn` filters by, minus the side — written once because 0014
  * needed the same three words with the side left off, and two spellings of one rule is
  * how `correctsKind` came to depend on table order.
  *
@@ -211,8 +211,8 @@ export function kindsOnSide(side: TradeSide): readonly DocumentKindDefinition[] 
  * does not qualify either — it CANCELS an obligation, and 0015's work is saying which one
  * rather than giving it a due date of its own.
  */
-function isChargeOnTerms(definition: DocumentKindDefinition): boolean {
-  return definition.direction === 'charge' && definition.postsToLedger
+function postsAs(definition: DocumentKindDefinition, direction: DocumentDirection): boolean {
+  return definition.direction === direction && definition.postsToLedger
 }
 
 /**
@@ -224,23 +224,27 @@ function isChargeOnTerms(definition: DocumentKindDefinition): boolean {
  * trigger cannot import a union, and a test asserts the two lists agree.
  */
 export function chargesOnTerms(kind: DocumentKind): boolean {
-  return isChargeOnTerms(definitionOf(kind))
+  return postsAs(definitionOf(kind), 'charge')
 }
 
 /**
- * THE ONE KIND ON A SIDE THAT PUTS THE PARTY IN DEBT, and the phrase is load-bearing in
- * three places, which is why it is a function rather than three filters.
+ * THE ONE KIND ON A SIDE THAT POSTS AND FACES A GIVEN WAY, and the phrase is load-bearing
+ * in four places, which is why it is a function rather than four filters.
  *
- * A credit note corrects it. A receipt settles it. The picker on the receipt screen lists
- * it. All three mean "the charge kind on that side that posts", and none of them means
- * anything else — so a fourth caller gets the same answer rather than a fourth filter
- * that agrees by inspection.
+ * A credit note corrects the sales-side CHARGE. A receipt settles it. A refund settles the
+ * sales-side REFUND. Every one of them means "the posting kind on that side facing that
+ * way", and none of them means anything else — so a fifth caller gets the same answer
+ * rather than a fifth filter that agrees by inspection.
  *
- * THE LAST THREE WORDS ARE THE PART WORTH READING. A quotation is also `sales` and also
- * `charge`, so without `postsToLedger` the rule has two answers on the sales side.
- * Excluding it is not a patch to make the answer come out right: a quotation makes no
- * supply, raises no tax and moves no balance, so there is nothing to correct and nothing
- * to settle.
+ * THE DIRECTION BECAME AN ARGUMENT IN 0015 and it was `'charge'` written into the filter
+ * before that. Nothing was wrong with it while the only voucher on a side settled the only
+ * charge on it; a refund settles the credit note instead, and a function that can only
+ * find charges cannot answer for one.
+ *
+ * `postsToLedger` IS THE PART WORTH READING TWICE. A quotation is also `sales` and also
+ * `charge`, so without it the rule has two answers on the sales side. Excluding it is not
+ * a patch to make the answer come out right: a quotation makes no supply, raises no tax
+ * and moves no balance, so there is nothing to correct and nothing to settle.
  *
  * FOUND BY COUNTING THE MATCHES RATHER THAN BY TAKING THE FIRST. Migration 0013's test
  * asserted this mapping in the ambiguous form — derived inline with a `.find` — and it
@@ -257,31 +261,40 @@ export function chargesOnTerms(kind: DocumentKind): boolean {
  * mutation pass found exactly that, and the answer was not to accept an untestable line
  * but to let a test hand it the table it is guarding against.
  */
-export function chargeKindIn(
+export function postingKindIn(
   kinds: readonly DocumentKindDefinition[],
   side: TradeSide,
+  direction: DocumentDirection,
   /** Named in the refusal, so a crash at boot says which row could not be resolved. */
   asking: string,
 ): DocumentKind {
-  const charges = kinds.filter((each) => each.side === side && isChargeOnTerms(each))
-  const [charge, ...rest] = charges
-  if (charge === undefined || rest.length > 0) {
+  const matches = kinds.filter((each) => each.side === side && postsAs(each, direction))
+  const [only, ...rest] = matches
+  if (only === undefined || rest.length > 0) {
     throw new Error(
-      `${asking} names ${String(charges.length)} kinds on the ${side} side. Exactly one ` +
-        'posting charge kind per side, or there is nothing to correct and nothing to settle.',
+      `${asking} names ${String(matches.length)} ${direction} kinds on the ${side} side. ` +
+        'Exactly one posting kind per side and direction, or there is nothing to correct ' +
+        'and nothing to settle.',
     )
   }
-  return charge.kind
+  return only.kind
+}
+
+/** The one kind on a side that posts and faces this way. */
+export function postingKindOn(side: TradeSide, direction: DocumentDirection): DocumentKind {
+  return postingKindIn(DOCUMENT_KINDS, side, direction, `the ${side} side`)
 }
 
 /**
- * What a receipt on this side settles, and what its picker lists.
+ * What puts a party in debt on this side: the kind a credit note corrects and a receipt
+ * settles.
  *
- * The same fact `correctsKind` is built from, asked from the money's end rather than the
- * correction's — see `chargeKindIn`.
+ * The named half of `postingKindOn`, kept because "the charge kind on this side" is the
+ * phrase three rules are written in and `postingKindOn(side, 'charge')` reads as an
+ * argument rather than as a fact.
  */
 export function chargeKindOn(side: TradeSide): DocumentKind {
-  return chargeKindIn(DOCUMENT_KINDS, side, `the ${side} side`)
+  return postingKindOn(side, 'charge')
 }
 
 /**
@@ -298,7 +311,7 @@ export function correctionMap(
       .filter((definition) => definition.direction === 'refund')
       .map((definition) => [
         definition.kind,
-        chargeKindIn(kinds, definition.side, definition.kind),
+        postingKindIn(kinds, definition.side, 'charge', definition.kind),
       ]),
   )
 }

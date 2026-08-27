@@ -95,7 +95,15 @@ import type { DateString } from '@shared/scalars'
 
 export type { MoneyDirection, ReceiptKind, ReceiptKindDefinition } from '@shared/receipts'
 
-export { RECEIPT_KINDS, receiptDefinitionOf, settlesSide, settlingKind } from '@shared/receipts'
+export {
+  RECEIPT_KINDS,
+  receiptDefinitionOf,
+  settledBy,
+  settledByIn,
+  settledDirection,
+  settles,
+  settlesSide,
+} from '@shared/receipts'
 
 /** What the ledger does with a voucher of one kind. */
 export interface ReceiptTreatment {
@@ -125,6 +133,17 @@ export interface ReceiptTreatment {
 const TREATMENTS: Readonly<Record<ReceiptKind, ReceiptTreatment>> = {
   receipt: { controlRole: 'accounts-receivable', sourceType: 'receipt' },
   payment: { controlRole: 'accounts-payable', sourceType: 'payment' },
+  /*
+   * THE TWO ROWS THAT MAKE `controlRole` EARN ITS KEEP. A refund paid is sales-side and
+   * moves RECEIVABLES, the same account a receipt moves and the opposite way; a refund
+   * received is purchase-side and moves payables. A derivation from `side` would have
+   * given the same four answers, which is exactly the coincidence the field's own comment
+   * warns about — the difference is that here the coincidence is now visible, because
+   * `direction` disagrees with `side` on two of the four rows and the control account
+   * does not.
+   */
+  refund: { controlRole: 'accounts-receivable', sourceType: 'refund' },
+  'refund-received': { controlRole: 'accounts-payable', sourceType: 'refund-received' },
 }
 
 /** What the ledger does with a voucher of this kind. */

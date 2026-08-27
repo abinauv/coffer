@@ -33,12 +33,19 @@
  * column somebody would have to keep in step. A cancelled document comes back at nothing
  * with no code written to make it so.
  *
- * ONLY A CHARGE THAT POSTS SHOWS THAT PANEL, which is new here and deliberate. A credit
- * note's movement is negative, so its "outstanding" is money owed BACK — a real figure
- * with no screen to act on it yet, since offsetting a credit note against an invoice and
- * refunding one are both unbuilt. Showing a negative outstanding beside a Record-a-receipt
- * button would offer a user an operation that does not exist. The same filter 0013-1 put
- * on the receipt picker, arriving on the screen the picker feeds.
+ * EVERY KIND THAT POSTS SHOWS THAT PANEL AS OF 0015, and until then only a CHARGE did.
+ * The reason it was gated is worth keeping, because it was not the panel that was wrong:
+ * a credit note's movement is negative, so its "outstanding" was money owed BACK with no
+ * screen anywhere to act on it, and a Record-a-receipt button beside it offered an
+ * operation that did not exist. Both halves of that are now false. `settlementFor` reads
+ * the figure in the DOCUMENT's own facing, so a credit note's outstanding is what is left
+ * to refund rather than a negative; and the button reaches the refund editor, which
+ * exists.
+ *
+ * WHAT IT STILL DOES NOT SHOW is money offset against another document rather than paid.
+ * That is 0015-2's table and this panel grows a second list when it lands — the figures
+ * above it are already right, because `allocated` is a sum over rows and an offset is one
+ * more row.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -50,7 +57,7 @@ import { registerScreens, type ScreenContext, type ScreenDefinition } from '@ren
 import { useNumberFormat, useRegime } from '@renderer/store/regime'
 import { useToasts } from '@renderer/store/toasts'
 import { correctsKind, definitionOf, DOCUMENT_KINDS, type DocumentKind } from '@shared/documents'
-import { receiptDefinitionOf, settlingKind, type ReceiptKind } from '@shared/receipts'
+import { receiptDefinitionOf, settledBy, type ReceiptKind } from '@shared/receipts'
 import type {
   AppError,
   Document,
@@ -103,13 +110,19 @@ export function DocumentEditor({
   const label = definition.label.toLowerCase()
   const corrects = correctsKind(kind)
   /*
-   * The voucher that settles this side, which is also its editor's route id. Derived
+   * The voucher that settles THIS KIND, which is also its editor's route id. Derived
    * rather than named, because 0013-2 shipped this as `'receipt'` with the purchase side
    * gated off — the payment editor did not exist, and a button reaching an unregistered
    * screen would have landed a user on a blank page. It exists as of 0013-3, and one
    * lookup replaces both the literal and the gate.
+   *
+   * NULL FOR A QUOTATION, which is 0015 saying out loud what was previously true by
+   * accident: the side-only version answered `'receipt'` for one, and the settlement
+   * panel's `postsToLedger` gate was the only thing stopping a button offering to receipt
+   * a quotation. The gate is still there and now agrees with the value rather than
+   * covering for it.
    */
-  const settlesWith = settlingKind(definition.side)
+  const settlesWith = settledBy(kind)
 
   const [document, setDocument] = useState<Document | null>(null)
   const [parties, setParties] = useState<PartySummary[]>([])
@@ -240,7 +253,7 @@ export function DocumentEditor({
    * flight would otherwise paint an outstanding figure over one that owes nothing.
    */
   const documentStatus = document?.status ?? null
-  const isSettleable = definition.postsToLedger && definition.direction === 'charge'
+  const isSettleable = definition.postsToLedger
   const settledId =
     document !== null && isSettleable && documentStatus !== 'draft' ? document.id : null
 
@@ -575,7 +588,7 @@ export function DocumentEditor({
 
         {document !== null && <Totals document={document} isStale={isDirty} format={format} />}
 
-        {settlement !== null && (
+        {settlement !== null && settlesWith !== null && (
           <Settlement
             settlement={settlement}
             label={label}

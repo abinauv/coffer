@@ -64,6 +64,7 @@ import {
   receiptDefinitionOf,
   receiptTreatmentOf,
   receiptPostingRuleFor,
+  settles,
   type PostableReceipt,
   type ReceiptKind,
 } from '@main/domain/receipts'
@@ -85,7 +86,7 @@ import { buildResolver } from './accounts'
 import { RepoError, repoErrorFrom, type RepoErrorCode } from './errors'
 import { postEntry, reverseEntry } from './journal'
 import { allocateNumber, defaultSeriesFor } from './numbering'
-import { allocatedToDocument, documentMovement, type DocumentControl } from './outstanding'
+import { outstandingForDocument, type DocumentControl } from './outstanding'
 import { assertPartiesActive } from './parties'
 import { periodRefForDate } from './periods'
 import { inTransaction } from './transaction'
@@ -470,11 +471,18 @@ async function replaceAllocations(
 }
 
 /**
- * The document an allocation names, proved settleable by this receipt.
+ * The document an allocation names, proved settleable by this voucher.
  *
  * Four questions, and each of them has its own sentence because they are four different
- * mistakes: it does not exist, it has not been issued, it is somebody else's, or it is on
- * the wrong side of the trade. 0012 makes three of them triggers as well.
+ * mistakes: it does not exist, it has not been issued, it is somebody else's, or it is
+ * not the kind this voucher settles. 0015 makes all four of them triggers as well.
+ *
+ * THE FOURTH ONE WAS "the wrong side of the trade" UNTIL 0015, and a side stopped being
+ * enough when a second voucher arrived on each side. A refund and a receipt are both
+ * sales-side and settle different documents, so the question is now which KIND this
+ * voucher settles — one lookup instead of a comparison, and the same one the trigger
+ * holds. The sentence still names both documents, because "a refund does not settle an
+ * invoice" is only useful to somebody who is told what does.
  */
 async function requireSettleableDocument(
   db: CofferDb,
@@ -511,13 +519,14 @@ async function requireSettleableDocument(
     )
   }
 
-  const side = definitionOf(row.kind as DocumentKind).side
-  if (side !== receiptDefinitionOf(kind).side) {
+  const settled = settles(kind)
+  if (row.kind !== settled) {
     throw new RepoError(
-      'ALLOCATION_SIDE_MISMATCH',
+      'ALLOCATION_KIND_MISMATCH',
       `${receiptDefinitionOf(kind).pluralLabel} settle ` +
-        `${side === 'sales' ? 'purchases' : 'sales'}, not ${side}. ` +
-        `${row.number ?? 'That document'} is a ${definitionOf(row.kind as DocumentKind).label.toLowerCase()}.`,
+        `${definitionOf(settled).pluralLabel.toLowerCase()}. ` +
+        `${row.number ?? 'That document'} is a ` +
+        `${definitionOf(row.kind as DocumentKind).label.toLowerCase()}.`,
       { documentId, documentKind: row.kind, receiptKind: kind },
     )
   }
@@ -550,9 +559,11 @@ async function assertWithinDocument(
   receiptId: string,
   amount: Decimal,
 ): Promise<void> {
-  const movement = await documentMovement(db, document)
-  const already = await allocatedToDocument(db, document.id, receiptId)
-  const outstanding = movement.minus(already)
+  /* IN THE DOCUMENT'S OWN FACING, which is what makes this one comparison rather than
+   * two. A credit note's movement on the account is negative, so a cap written against
+   * the raw figure would refuse every refund ever offered against one — including the
+   * first rupee of a credit note with nothing on it. */
+  const outstanding = await outstandingForDocument(db, document, receiptId)
 
   if (amount.lessThanOrEqualTo(outstanding)) return
 

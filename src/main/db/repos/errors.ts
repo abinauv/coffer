@@ -278,8 +278,16 @@ export type RepoErrorCode =
   | 'ALLOCATION_EXCEEDS_RECEIPT'
   /** More was allocated to a document than that document put on the control account. */
   | 'ALLOCATION_EXCEEDS_DOCUMENT'
-  /** A payment cannot settle a sales invoice, nor a receipt a purchase bill. */
-  | 'ALLOCATION_SIDE_MISMATCH'
+  /**
+   * The voucher does not settle documents of that kind.
+   *
+   * ONE CODE FOR WHAT READS AS TWO RULES — the wrong side, and the wrong way round — for
+   * the reason 0015's trigger is one expression: a voucher settles exactly one document
+   * kind, so "a payment cannot settle a sales invoice" and "a refund cannot settle a
+   * sales invoice" are the same disagreement. It was `ALLOCATION_SIDE_MISMATCH` until
+   * 0015, when a side stopped being enough to name the rule.
+   */
+  | 'ALLOCATION_KIND_MISMATCH'
   /** An allocation is written and deleted, never edited. See 0012. */
   | 'ALLOCATION_IMMUTABLE'
   /**
@@ -360,6 +368,11 @@ const TRIGGER_CODES: readonly RepoErrorCode[] = [
   'ALLOCATION_PARTY_MISMATCH',
   'ALLOCATION_EXCEEDS_RECEIPT',
   'ALLOCATION_IMMUTABLE',
+  /* 0015's, which is 0012's seventh: the document an allocation points at is the one
+   * kind its voucher settles. 0012 left this to the repository on the grounds that a
+   * wrong pairing was visible; a refund moves the same control account as a receipt, so
+   * it stopped being. */
+  'ALLOCATION_KIND_MISMATCH',
   'RECEIPT_CANCELLED',
   'DOCUMENT_ALLOCATED',
   'DOCUMENT_NOT_ISSUED',

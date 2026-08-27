@@ -39,12 +39,14 @@ import { createDocument } from './documents'
 import { isRepoError, type RepoError, type RepoErrorCode } from './errors'
 import { cancelDocument, issueDocument } from './issuing'
 import { getEntry, postManualEntry } from './journal'
+import { RECEIPT_KINDS, settles } from '@main/domain/receipts'
 import { createSeries } from './numbering'
 import {
   allocatedFromReceipt,
   documentMovement,
   openDocumentsFor,
   outstandingForDocument,
+  settlementFor,
 } from './outstanding'
 import { createParty } from './parties'
 import { closePeriod, listPeriods, reopenPeriod } from './periods'
@@ -170,6 +172,12 @@ const draft = (over: Partial<CreateTaxedDocumentInput> = {}): CreateTaxedDocumen
 /** An issued invoice for 1,180.00 unless told otherwise. */
 async function invoice(over: Partial<CreateTaxedDocumentInput> = {}) {
   const document = await createDocument(db, draft(over), NOW)
+  return issueDocument(db, { id: document.id }, NOW)
+}
+
+/** An issued credit note for 1,180.00 unless told otherwise. */
+async function creditNote(over: Partial<CreateTaxedDocumentInput> = {}) {
+  const document = await createDocument(db, draft({ kind: 'credit-note', ...over }), NOW)
   return issueDocument(db, { id: document.id }, NOW)
 }
 
@@ -665,7 +673,48 @@ describe('what allocation refuses', () => {
         NOW,
       ),
     )
-    expect(failure.code).toBe('ALLOCATION_SIDE_MISMATCH')
+    expect(failure.code).toBe('ALLOCATION_KIND_MISMATCH')
+  })
+
+  /*
+   * AND THE ONE THAT NEEDED 0015 TO BE POSSIBLE AT ALL. A refund is on the SAME side as a
+   * receipt and moves the SAME control account, so every question the old rule asked
+   * answers yes: same party, sales side, issued, posting document with a real movement.
+   * The only thing wrong with it is which way the money points — the customer's balance
+   * would go up while one of their invoices was marked settled — and a rule comparing
+   * sides cannot see it.
+   */
+  it('refuses a refund against a sales invoice, which the side rule could not', async () => {
+    const document = await invoice()
+    const failure = await failureOf(() =>
+      createReceipt(
+        db,
+        receiptInput({
+          kind: 'refund',
+          allocations: [{ documentId: document.id, amount: '100.00' }],
+        }),
+        NOW,
+      ),
+    )
+
+    expect(failure.code).toBe('ALLOCATION_KIND_MISMATCH')
+    /* The sentence names what a refund DOES settle. "Not an invoice" on its own leaves a
+     * user holding a voucher and no idea which screen wants it. */
+    expect(failure.message).toContain('credit notes')
+  })
+
+  it('refuses a receipt against a credit note, which is the same rule backwards', async () => {
+    const note = await creditNote()
+    const failure = await failureOf(() =>
+      createReceipt(
+        db,
+        receiptInput({ allocations: [{ documentId: note.id, amount: '100.00' }] }),
+        NOW,
+      ),
+    )
+
+    expect(failure.code).toBe('ALLOCATION_KIND_MISMATCH')
+    expect(failure.message).toContain('sales invoices')
   })
 
   it('refuses the same document twice in one receipt', async () => {
@@ -730,6 +779,158 @@ describe('what allocation refuses', () => {
     /* 0012's trigger raises the same code, so the code alone cannot tell whether the
      * repository still checks. Its own sentence can. */
     expect(failure.message).toMatch(/settles nothing/)
+  })
+})
+
+// ---- Refunding -------------------------------------------------------------
+
+/*
+ * THE FOURTH QUADRANT (0015). A refund paid is money going OUT on the SALES side, which is
+ * the case `MoneyDirection` was written for and the case nothing could record until now.
+ *
+ * Everything below is the receipt tests above with one word changed, and that is the
+ * finding rather than a coincidence: `toEntry` reads `direction` and never the kind, so
+ * both new kinds posted correctly the first time they existed. What did NOT come free was
+ * the ROUTER — `receiptPostingRuleFor` was a ternary over two kinds and would have handed
+ * a refund to the payment rule, onto accounts payable, where no customer statement would
+ * ever have shown it.
+ */
+describe('refunding a credit note', () => {
+  it('numbers it from its own series and posts it', async () => {
+    const note = await creditNote()
+    const refund = await createReceipt(
+      db,
+      receiptInput({
+        kind: 'refund',
+        amount: '400.00',
+        allocations: [{ documentId: note.id, amount: '400.00' }],
+      }),
+      NOW,
+    )
+
+    expect(refund.number).toBe('REF/2026-27/0001')
+    expect(refund.status).toBe('posted')
+    expect(refund.allocations.map((row) => row.documentNumber)).toEqual([note.number])
+  })
+
+  /*
+   * THE ASSERTION THE WHOLE KIND EXISTS FOR. A refund debits RECEIVABLES — the same
+   * account a receipt credits — and credits the bank. A payment would have debited
+   * accounts payable, and the two look identical on a bank statement.
+   */
+  it('debits receivables and credits the bank, carrying the customer', async () => {
+    const note = await creditNote()
+    const refund = await createReceipt(
+      db,
+      receiptInput({
+        kind: 'refund',
+        amount: '400.00',
+        allocations: [{ documentId: note.id, amount: '400.00' }],
+      }),
+      NOW,
+    )
+    const entry = await getEntry(db, refund.entryId)
+
+    expect(entry?.lines).toHaveLength(2)
+    expect(entry?.lines[0]).toMatchObject({
+      accountId: receivable,
+      debit: '400.00',
+      credit: '0.00',
+      partyId: customer,
+    })
+    expect(entry?.lines[1]).toMatchObject({ accountId: bank, debit: '0.00', credit: '400.00' })
+  })
+
+  /* And the entry drills back to the refund under its own name rather than a payment's,
+   * which is what `sourceType` being per-kind buys. */
+  it('records itself as the source under its own name', async () => {
+    const refund = await createReceipt(db, receiptInput({ kind: 'refund', amount: '400.00' }), NOW)
+    const entry = await getEntry(db, refund.entryId)
+
+    expect(entry).toMatchObject({ sourceType: 'refund', sourceId: refund.id })
+  })
+
+  /*
+   * WHAT IS LEFT ON THE CREDIT NOTE, IN THE CREDIT NOTE'S OWN FACING. Its movement on the
+   * account is a CREDIT, so the raw arithmetic gives -1180 and a refund against it would
+   * have driven that figure further from zero with every rupee actually paid back. The
+   * figure a human reads is how much of it is still to give back.
+   */
+  it('takes what is left to refund down rather than up', async () => {
+    const note = await creditNote()
+    const before = await outstandingForDocument(db, await control(note.id))
+    await createReceipt(
+      db,
+      receiptInput({
+        kind: 'refund',
+        amount: '400.00',
+        allocations: [{ documentId: note.id, amount: '400.00' }],
+      }),
+      NOW,
+    )
+    const after = await outstandingForDocument(db, await control(note.id))
+
+    expect(before.toString()).toBe('1180')
+    expect(after.toString()).toBe('780')
+  })
+
+  /*
+   * AND THE CAP IS IN THAT FACING TOO. Written against the raw movement it would have
+   * refused every refund ever offered — including the first rupee against a credit note
+   * with nothing on it — because a negative figure is less than any amount asked for.
+   */
+  it('refuses more than the credit note ever put on the account', async () => {
+    const note = await creditNote()
+    const failure = await failureOf(() =>
+      createReceipt(
+        db,
+        receiptInput({
+          kind: 'refund',
+          amount: '2000.00',
+          allocations: [{ documentId: note.id, amount: '1500.00' }],
+        }),
+        NOW,
+      ),
+    )
+
+    expect(failure.code).toBe('ALLOCATION_EXCEEDS_DOCUMENT')
+    expect(failure.message).toContain('1180.00')
+  })
+
+  /* Money paid back without saying which note it answers is on account, exactly as money
+   * taken in without saying which invoice it pays is. */
+  it('may be left on account', async () => {
+    const refund = await createReceipt(db, receiptInput({ kind: 'refund', amount: '400.00' }), NOW)
+
+    expect(refund.allocations).toEqual([])
+    expect((await allocatedFromReceipt(db, refund.id)).toString()).toBe('0')
+  })
+
+  /* The purchase-side mirror, so neither half of the square is the one that happens to
+   * work: a vendor refunding us is money IN that moves payables. */
+  it('has a purchase-side mirror that moves payables the other way', async () => {
+    const payable = (
+      await db
+        .selectFrom('account_roles')
+        .select('account_id')
+        .where('role', '=', 'accounts-payable')
+        .executeTakeFirstOrThrow()
+    ).account_id
+    const received = await createReceipt(
+      db,
+      receiptInput({ kind: 'refund-received', partyId: vendor, amount: '400.00' }),
+      NOW,
+    )
+    const entry = await getEntry(db, received.entryId)
+
+    expect(received.number).toBe('RRV/2026-27/0001')
+    expect(entry?.lines[0]).toMatchObject({ accountId: bank, debit: '400.00', credit: '0.00' })
+    expect(entry?.lines[1]).toMatchObject({
+      accountId: payable,
+      debit: '0.00',
+      credit: '400.00',
+      partyId: vendor,
+    })
   })
 })
 
@@ -1014,7 +1215,7 @@ describe('what a document has outstanding', () => {
       )
       .run(randomUUID(), customer, posted.entryId, NOW, NOW)
 
-    const open = await openDocumentsFor(db, { partyId: customer, side: 'sales' })
+    const open = await openDocumentsFor(db, { partyId: customer, kind: 'receipt' })
     expect(open.map((row) => row.id)).toEqual([document.id])
   })
 
@@ -1058,7 +1259,7 @@ describe('what a document has outstanding', () => {
       )
       .run(randomUUID(), vendor, posted.entryId, NOW, NOW, NOW)
 
-    const open = await openDocumentsFor(db, { partyId: vendor, side: 'purchase' })
+    const open = await openDocumentsFor(db, { partyId: vendor, kind: 'payment' })
     expect(open).toHaveLength(1)
     expect(open[0]?.outstanding.toString()).toBe('5000')
   })
@@ -1110,7 +1311,18 @@ describe('what a document has outstanding', () => {
       )
       .run(randomUUID(), customer, posted.entryId, NOW, NOW, NOW)
 
-    expect(await openDocumentsFor(db, { partyId: customer, side: 'sales' })).toEqual([])
+    expect(await openDocumentsFor(db, { partyId: customer, kind: 'receipt' })).toEqual([])
+
+    /*
+     * AND THE HALF 0015 ADDS, in the same test because it is the same row: what a receipt
+     * must not be offered, a REFUND must be — and at a POSITIVE figure. The credit note's
+     * movement on the account is a credit, so the raw arithmetic gives -400; the picker
+     * reports what is left to refund, which is 400.
+     */
+    const refundable = await openDocumentsFor(db, { partyId: customer, kind: 'refund' })
+    expect(refundable.map((row) => row.number)).toEqual(['CRN/9'])
+    expect(refundable[0]?.outstanding.toString()).toBe('400')
+    expect(refundable[0]?.grandTotal.toString()).toBe('400')
   })
 
   /* And the same on the other side: a debit note reduces what we owe a vendor, so it is
@@ -1150,7 +1362,95 @@ describe('what a document has outstanding', () => {
       )
       .run(randomUUID(), vendor, posted.entryId, NOW, NOW, NOW)
 
-    expect(await openDocumentsFor(db, { partyId: vendor, side: 'purchase' })).toEqual([])
+    expect(await openDocumentsFor(db, { partyId: vendor, kind: 'payment' })).toEqual([])
+
+    /* And the mirror, so neither side is the one that happens to work. */
+    const refundable = await openDocumentsFor(db, { partyId: vendor, kind: 'refund-received' })
+    expect(refundable.map((row) => row.number)).toEqual(['DBN/9'])
+    expect(refundable[0]?.outstanding.toString()).toBe('400')
+  })
+
+  /*
+   * NOTHING LEFT ON IT MEANS IT IS NOT OFFERED, and a mutation pass is why this is here:
+   * deleting the zero test survived the whole suite. Every other picker test either has
+   * money left on the document or has none of it in the books at all, so an invoice
+   * settled in full would have been listed at 0.00 — and a user picking it would allocate
+   * nothing, or would be refused by a cap for a document they had just been shown.
+   */
+  it('stops offering a document once nothing is left on it', async () => {
+    const document = await invoice()
+    await createReceipt(
+      db,
+      receiptInput({ allocations: [{ documentId: document.id, amount: '1180.00' }] }),
+      NOW,
+    )
+
+    expect(await openDocumentsFor(db, { partyId: customer, kind: 'receipt' })).toEqual([])
+  })
+
+  /* Part paid is still offered, with what is left. Or the test above would be satisfied by
+   * a picker that offers nothing at all. */
+  it('keeps offering one that is part paid, at what is left', async () => {
+    const document = await invoice()
+    await createReceipt(
+      db,
+      receiptInput({
+        amount: '500.00',
+        allocations: [{ documentId: document.id, amount: '500.00' }],
+      }),
+      NOW,
+    )
+
+    const open = await openDocumentsFor(db, { partyId: customer, kind: 'receipt' })
+    expect(open).toHaveLength(1)
+    expect(open[0]?.outstanding.toString()).toBe('680')
+    expect(open[0]?.grandTotal.toString()).toBe('1180')
+  })
+
+  /*
+   * WHAT THE SETTLEMENT PANEL IS HANDED, and it had no test of its own until a mutation
+   * pass said so — `settlementFor` was reachable only through the service. The figures
+   * matter most on a REFUND document, where the movement on the account is a credit: read
+   * raw, a credit note with 400 refunded would report -1,580 outstanding, and a user would
+   * be looking at a number that grows every time they pay some of it back.
+   */
+  it('hands the settlement panel a credit note figure in its own facing', async () => {
+    const note = await creditNote()
+    const refund = await createReceipt(
+      db,
+      receiptInput({
+        kind: 'refund',
+        amount: '400.00',
+        allocations: [{ documentId: note.id, amount: '400.00' }],
+      }),
+      NOW,
+    )
+
+    const settled = await settlementFor(db, await control(note.id))
+
+    expect(settled.movement.toString()).toBe('1180')
+    expect(settled.allocated.toString()).toBe('400')
+    expect(settled.outstanding.toString()).toBe('780')
+    expect(settled.receipts.map((row) => row.number)).toEqual([refund.number])
+  })
+
+  /* And an invoice, unchanged, so the facing is read rather than applied to everything. */
+  it('hands the settlement panel an invoice figure unchanged', async () => {
+    const document = await invoice()
+    await createReceipt(
+      db,
+      receiptInput({
+        amount: '500.00',
+        allocations: [{ documentId: document.id, amount: '500.00' }],
+      }),
+      NOW,
+    )
+
+    const settled = await settlementFor(db, await control(document.id))
+
+    expect(settled.movement.toString()).toBe('1180')
+    expect(settled.allocated.toString()).toBe('500')
+    expect(settled.outstanding.toString()).toBe('680')
   })
 
   /*
@@ -1221,8 +1521,8 @@ describe('what a document has outstanding', () => {
     insert.run(randomUUID(), 'sales-invoice', 'INV/77', both, sale.entryId, NOW, NOW, NOW)
     insert.run(randomUUID(), 'purchase-bill', 'BILL/77', both, bill.entryId, NOW, NOW, NOW)
 
-    const sales = await openDocumentsFor(db, { partyId: both, side: 'sales' })
-    const purchases = await openDocumentsFor(db, { partyId: both, side: 'purchase' })
+    const sales = await openDocumentsFor(db, { partyId: both, kind: 'receipt' })
+    const purchases = await openDocumentsFor(db, { partyId: both, kind: 'payment' })
 
     expect(sales.map((row) => row.number)).toEqual(['INV/77'])
     expect(purchases.map((row) => row.number)).toEqual(['BILL/77'])
@@ -1519,5 +1819,94 @@ describe('migration 0012', () => {
         )
         .run(randomUUID(), NOW, NOW),
     ).toThrow(/UNIQUE/)
+  })
+})
+
+// ---- Migration 0015 --------------------------------------------------------
+
+describe('migration 0015', () => {
+  /*
+   * THE RULE 0012 CONSIDERED AND DECLINED, and its header said why: a wrong pairing was
+   * always cross-account, so "the money lands in the wrong party's statement immediately
+   * and visibly". That was true of the mistake 0012 could make and stopped being true the
+   * moment a second voucher appeared on a side.
+   *
+   * STRAIGHT AT THE TABLE, like every other test in the 0012 block above, because the
+   * repository refuses the same thing first and a test that went through it would pass
+   * against a database with no trigger at all.
+   */
+  it('refuses a refund allocated to a sales invoice', async () => {
+    const document = await invoice()
+    const refund = (await createReceipt(db, receiptInput({ kind: 'refund' }), NOW)).id
+
+    expect(() => writeAllocation(refund, document.id, '100.00')).toThrow(/ALLOCATION_KIND_MISMATCH/)
+  })
+
+  /*
+   * THE ONE THAT MAKES THE POINT. Same party, same SIDE, same control account, both
+   * issued, both posting — every question 0012's repository check asked answers yes. The
+   * customer's balance would go UP while one of their invoices was marked settled, and
+   * the only thing anywhere that could see it is an aged report saying it does not tie.
+   */
+  it('refuses a receipt allocated to a credit note, which shares its account', async () => {
+    const note = await creditNote()
+    const receipt = (await createReceipt(db, receiptInput(), NOW)).id
+
+    expect(() => writeAllocation(receipt, note.id, '100.00')).toThrow(/ALLOCATION_KIND_MISMATCH/)
+  })
+
+  it('refuses a payment allocated to a sales invoice, which 0012 left to the repository', async () => {
+    const document = await invoice()
+    const payment = (
+      await createReceipt(db, receiptInput({ kind: 'payment', partyId: customer }), NOW)
+    ).id
+
+    expect(() => writeAllocation(payment, document.id, '100.00')).toThrow(
+      /ALLOCATION_KIND_MISMATCH/,
+    )
+  })
+
+  /* And it lets the four right pairs through, or the rule above would be "refuse
+   * everything" and every one of those assertions would still pass. */
+  it('allows each voucher against the one document it settles', async () => {
+    const note = await creditNote()
+    const refund = (await createReceipt(db, receiptInput({ kind: 'refund' }), NOW)).id
+
+    expect(() => writeAllocation(refund, note.id, '100.00')).not.toThrow()
+  })
+
+  /*
+   * WHAT 0015'S `CASE` CLAIMS, ASKED OF THE DOMAIN — the shape 0013's own agreement test
+   * has. The migration enumerates the mapping in SQL because a CHECK cannot import a
+   * union and cannot do the derivation; this is what stops the two drifting. A fifth
+   * voucher kind added without touching 0015 fails here.
+   */
+  it('agrees with the domain about what each voucher settles', () => {
+    const enumerated: Record<string, string> = {
+      receipt: 'sales-invoice',
+      payment: 'purchase-bill',
+      refund: 'credit-note',
+      'refund-received': 'debit-note',
+    }
+
+    for (const definition of RECEIPT_KINDS) {
+      expect(`${definition.kind} -> ${enumerated[definition.kind] ?? 'nothing'}`).toBe(
+        `${definition.kind} -> ${settles(definition.kind)}`,
+      )
+    }
+  })
+
+  /* The widened CHECK, asked of the table rather than of the constant: a series for a
+   * refund is what lets one be numbered at all, and without the rebuild the insert fails
+   * with `CHECK constraint failed` at the moment a user records their first refund. */
+  it('lets a numbering series exist for every voucher kind', async () => {
+    for (const definition of RECEIPT_KINDS) {
+      const series = await db
+        .selectFrom('numbering_series')
+        .select('id')
+        .where('kind', '=', definition.kind)
+        .executeTakeFirst()
+      expect(series).toBeDefined()
+    }
   })
 })

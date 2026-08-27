@@ -19,8 +19,11 @@ export {
   isLiveReceipt,
   receiptDefinitionOf,
   receiptTreatmentOf,
+  settledBy,
+  settledByIn,
+  settledDirection,
+  settles,
   settlesSide,
-  settlingKind,
   type MoneyDirection,
   type PostableReceipt,
   type ReceiptAllocation,
@@ -30,4 +33,10 @@ export {
   type ReceiptStatus,
 } from './types'
 
-export { paymentRule, receiptPostingRuleFor, receiptRule } from './posting'
+export {
+  paymentRule,
+  receiptPostingRuleFor,
+  receiptRule,
+  refundReceivedRule,
+  refundRule,
+} from './posting'

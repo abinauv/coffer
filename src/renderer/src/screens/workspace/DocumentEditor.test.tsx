@@ -872,8 +872,12 @@ describe('a credit note', () => {
   ]
 
   /** The credit note bridge, which also answers the picker's query. */
-  function correctingBridge(stored: Document | null, answer: Document = note()): BridgeStub {
-    const base = bridgeFor(stored, answer)
+  function correctingBridge(
+    stored: Document | null,
+    answer: Document = note(),
+    settled: DocumentSettlement = settlement(),
+  ): BridgeStub {
+    const base = bridgeFor(stored, answer, settled)
     return {
       ...base,
       documents: {
@@ -1004,20 +1008,52 @@ describe('a credit note', () => {
   })
 
   /*
-   * NO SETTLEMENT PANEL ON A REFUND. A credit note's movement is negative, so its
-   * "outstanding" is money owed BACK — a real figure with no screen to act on it, since
-   * offsetting one against an invoice and refunding one are both unbuilt. Showing it
-   * beside a Record-a-receipt button would offer an operation that does not exist.
+   * A SETTLEMENT PANEL ON A REFUND, WHICH THERE WAS NOT UNTIL 0015. The gate used to be
+   * `postsToLedger && direction === 'charge'`, and the reason it was there is worth
+   * keeping: a credit note's movement on the account is negative, so its "outstanding"
+   * was money owed BACK with no screen anywhere to act on it, and a Record-a-receipt
+   * button beside it offered an operation that did not exist.
+   *
+   * Both halves are now false. `settlementFor` reads the figure in the DOCUMENT's own
+   * facing, so this is what is left to refund rather than a negative; and the button
+   * reaches the refund editor, which exists.
    */
-  it('is never asked what has been received against it', async () => {
+  it('is asked what has been refunded against it', async () => {
     const issuedNote = note({ status: 'issued', number: 'CRN/2026-27/0001', entryId: 'entry-1' })
     const { bridge } = renderScreen(<DocumentEditor {...correcting()} kind="credit-note" />, {
-      bridge: correctingBridge(issuedNote, issuedNote),
+      bridge: correctingBridge(
+        issuedNote,
+        issuedNote,
+        settlement({ movement: '500.00', allocated: '200.00', outstanding: '300.00' }),
+      ),
     })
 
     await screen.findByLabelText('Customer')
-    expect(bridge.callsTo('receipts:settlement')).toHaveLength(0)
-    expect(screen.queryByText('Outstanding')).toBeNull()
+    await waitFor(() => expect(bridge.callsTo('receipts:settlement')).toHaveLength(1))
+    expect(screen.getByText('Outstanding')).toBeInTheDocument()
+  })
+
+  /*
+   * AND THE BUTTON GOES TO THE REFUND EDITOR, NOT THE RECEIPT ONE. This is the assertion
+   * that would have failed on the side-only lookup the screen used before 0015: a credit
+   * note is sales-side, so "the voucher that settles this side" answered `receipt` — and
+   * the button would have offered to take money IN against money the business owes back.
+   */
+  it('sends the user to record a refund, not a receipt', async () => {
+    const user = userEvent.setup()
+    const issuedNote = note({ status: 'issued', number: 'CRN/2026-27/0001', entryId: 'entry-1' })
+    const navigate = vi.fn()
+    renderScreen(<DocumentEditor {...correcting()} kind="credit-note" navigate={navigate} />, {
+      bridge: correctingBridge(
+        issuedNote,
+        issuedNote,
+        settlement({ movement: '500.00', allocated: '0.00', outstanding: '500.00' }),
+      ),
+    })
+
+    await user.click(await screen.findByRole('button', { name: /Record a refund paid/ }))
+
+    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ screenId: 'refund' }))
   })
 })
 

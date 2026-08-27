@@ -83,6 +83,7 @@ import {
   type DocumentKindDefinition,
   type PostingKind,
 } from '@shared/documents'
+import { RECEIPT_KINDS, type ReceiptKind } from '@shared/receipts'
 import type { DateString } from '@shared/scalars'
 
 // ---- Kinds ----------------------------------------------------------------
@@ -113,7 +114,6 @@ export type {
 } from '@shared/documents'
 
 export {
-  chargeKindIn,
   chargeKindOn,
   chargesOnTerms,
   correctionMap,
@@ -121,6 +121,8 @@ export {
   definitionOf,
   DOCUMENT_KINDS,
   kindsOnSide,
+  postingKindIn,
+  postingKindOn,
   postsToLedger,
 } from '@shared/documents'
 
@@ -443,7 +445,7 @@ export type NumberingReset = 'fiscal-year' | 'never'
  * document kinds off `DOCUMENT_KINDS` and holds only what the other two add, so a
  * document kind's label is still stored in exactly one place.
  */
-export type NumberedKind = DocumentKind | 'receipt' | 'payment'
+export type NumberedKind = DocumentKind | ReceiptKind
 
 /**
  * What a numbering series needs to know about the thing it numbers.
@@ -463,15 +465,27 @@ export interface NumberedKindDefinition {
 }
 
 /*
- * The two that are not trade documents.
+ * The ones that are not trade documents.
  *
- * Both always reach the ledger — there is no receipt that records no money — so both
- * reset yearly, and the branch a document kind needs has no case to answer here.
+ * READ OFF `RECEIPT_KINDS` AS OF 0015, where they were written out by hand before. The
+ * labels were a second copy of two rows of that table, kept in step by nobody, and the
+ * batch that added two more kinds is the one that would have found out: a series for a
+ * refund would have been labelled by whichever of the two lists a screen happened to ask.
+ *
+ * The comment this replaces said the import would be a cycle, and it would have been —
+ * `domain/receipts` imports numbering's neighbours. `@shared/receipts` is not that module
+ * and imports nothing from `@main`, which is what 0013-3 moving the table there bought.
+ *
+ * Every voucher kind always reaches the ledger — there is no receipt that records no
+ * money — so all of them reset yearly, and the branch a document kind needs has no case
+ * to answer here.
  */
-const VOUCHER_KINDS: readonly NumberedKindDefinition[] = [
-  { kind: 'receipt', label: 'Receipt', pluralLabel: 'Receipts', resetsYearly: true },
-  { kind: 'payment', label: 'Payment', pluralLabel: 'Payments', resetsYearly: true },
-] as const
+const VOUCHER_KINDS: readonly NumberedKindDefinition[] = RECEIPT_KINDS.map((definition) => ({
+  kind: definition.kind,
+  label: definition.label,
+  pluralLabel: definition.pluralLabel,
+  resetsYearly: true,
+}))
 
 /** Everything a series may be created for, documents first. */
 export const NUMBERED_KINDS: readonly NumberedKindDefinition[] = [

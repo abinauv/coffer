@@ -54,6 +54,25 @@ Breaking any of these is a review rejection, not a discussion.
    a page that reads plausibly and shows an invoice nobody had yet raised as part paid
    (migration 0014, `db/repos/ageing.ts`).
 
+9. **Choosing over a closed union is a TOTAL RECORD, never a conditional.** `Record<Kind,
+T>` — or a lookup that goes through the kind table — and never `kind === 'a' ? x : y`,
+   never an `if/else` chain, never a `.find` that takes the first match. The reason is
+   that the two are indistinguishable while the union has two members and stop being the
+   same thing the moment it has three: a record does not compile until the new member is
+   answered for, and every other shape silently gives it whatever the last branch said.
+
+   MEASURED, TWICE. `receiptPostingRuleFor` was `kind === 'receipt' ? receiptRule :
+paymentRule` and was correct for as long as there were two voucher kinds; 0015 added
+   two and it would have posted a customer's refund with the PAYMENT rule, onto accounts
+   payable, where no statement of theirs would ever have shown it. Nothing in the suite
+   pointed at it. And `chargeKindIn` exists in its counting form because 0013-2 found a
+   `.find` implementing "whichever is listed first" while looking like a rule.
+
+   THE COROLLARY IS THAT THE GUARD TAKES ITS TABLE AS AN ARGUMENT. A refusal that the real
+   table cannot trigger is a line no test can reach and no mutation can kill, so the
+   function is given the list to search and a test hands it the ambiguity (`postingKindIn`,
+   `settledByIn`).
+
 ## 2. Naming
 
 | Thing                    | Style                           | Example                        |

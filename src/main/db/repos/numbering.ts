@@ -207,6 +207,14 @@ export async function defaultSeriesFor(
  * keep looking the way they look. Every field is editable — that is what 0007 holding the
  * shape as data is for — and these are only the starting point.
  *
+ * A COMPANY FILE MADE BEFORE 0015 GETS ITS TWO REFUND SERIES FROM THE SKIP BELOW, and
+ * that is the first time this function has had to do the job it was written for. It runs
+ * only from `setUpBooks`, which runs only once — so today an older file still has no
+ * refund series and still cannot record one, which is the numbering settings screen's
+ * problem and is recorded as owed for the third batch running. What this table being
+ * total over the kinds buys is that the repair, whenever it is built, has nothing to
+ * decide.
+ *
  * `resetOn` is NOT in this table. It comes from the kind's own `resetsYearly`, so the
  * quotation's running series and the invoice's yearly one are the same fact the domain
  * already holds rather than a second copy of it that a reader has to check.
@@ -219,6 +227,8 @@ const DEFAULT_SERIES: readonly { kind: NumberedKind; prefix: string }[] = [
   { kind: 'debit-note', prefix: 'DBN' },
   { kind: 'receipt', prefix: 'RCT' },
   { kind: 'payment', prefix: 'PAY' },
+  { kind: 'refund', prefix: 'REF' },
+  { kind: 'refund-received', prefix: 'RRV' },
 ]
 
 /**

@@ -27,7 +27,13 @@
  * compile until the domain says what it posts.
  */
 
-import type { TradeSide } from './documents'
+import {
+  definitionOf,
+  postingKindOn,
+  type DocumentDirection,
+  type DocumentKind,
+  type TradeSide,
+} from './documents'
 
 /**
  * Money in, or money out.
@@ -35,7 +41,7 @@ import type { TradeSide } from './documents'
  * Closed on purpose, like `DocumentKind`: an unrecognised kind in a company file means
  * the file was written by a newer build.
  */
-export type ReceiptKind = 'receipt' | 'payment'
+export type ReceiptKind = 'receipt' | 'payment' | 'refund' | 'refund-received'
 
 /**
  * Which way the money went.
@@ -59,7 +65,20 @@ export interface ReceiptKindDefinition {
   direction: MoneyDirection
 }
 
-/** The table. Adding a kind means a row, a treatment in the domain, and a posting rule. */
+/**
+ * The table. Adding a kind means a row, a treatment in the domain, and a posting rule.
+ *
+ * FOUR ROWS AS OF 0015, WHICH IS THE WHOLE SQUARE: two sides by two directions, and the
+ * two that were missing are the ones a refund needs. `posting.ts` predicted both and
+ * needed no change to post them, which is what reading `direction` rather than `kind` was
+ * for.
+ *
+ * A refund is not a payment and the difference is the control account, not the party. A
+ * payment moves what the business OWES; a refund to a customer moves what it is OWED, the
+ * other way — money going back out against a credit note. Calling it a payment would file
+ * a customer's refund in accounts payable, where no statement of theirs would ever show
+ * it.
+ */
 export const RECEIPT_KINDS: readonly ReceiptKindDefinition[] = [
   {
     kind: 'receipt',
@@ -74,6 +93,20 @@ export const RECEIPT_KINDS: readonly ReceiptKindDefinition[] = [
     pluralLabel: 'Payments',
     side: 'purchase',
     direction: 'out',
+  },
+  {
+    kind: 'refund',
+    label: 'Refund paid',
+    pluralLabel: 'Refunds paid',
+    side: 'sales',
+    direction: 'out',
+  },
+  {
+    kind: 'refund-received',
+    label: 'Refund received',
+    pluralLabel: 'Refunds received',
+    side: 'purchase',
+    direction: 'in',
   },
 ]
 
@@ -96,17 +129,75 @@ export function receiptDefinitionOf(kind: ReceiptKind): ReceiptKindDefinition {
   return definition
 }
 
-/** Which document kinds a voucher of this kind can be allocated against. */
+/** Which half of the trade a voucher of this kind belongs to. */
 export function settlesSide(kind: ReceiptKind): TradeSide {
   return receiptDefinitionOf(kind).side
 }
 
-/**
- * The voucher kind that settles documents on a side, from a table.
+/*
+ * ---------------------------------------------------------------------------
+ * WHICH DOCUMENT A VOUCHER MAY SETTLE, AND WHY IT IS DERIVED RATHER THAN LISTED
  *
- * COUNTED, NOT FOUND, and the argument is `chargeKindIn`'s in the mirror: "the voucher
- * that settles the purchase side" has to be one voucher, and a `.find` would answer
- * "whichever is listed first" while looking identical. An invoice screen sends a user to
+ * ONE SENTENCE, AND THE WHOLE OF 0015 HANGS OFF IT: an allocation matches two movements
+ * on ONE control account that point OPPOSITE WAYS. A receipt settles an invoice because
+ * the invoice put money on receivables and the receipt takes it off. That is all an
+ * allocation ever says, and it is all that is checked.
+ *
+ * Until 0015 the rule could be spelled "the same side", because each side had exactly one
+ * voucher and the direction never had a second value to get wrong. It has one now, and
+ * "same side" stopped being enough on the day a refund appeared: a refund paid and a
+ * receipt taken are both sales-side vouchers moving the same account in OPPOSITE
+ * directions, so a rule that only compares sides would let a refund settle an invoice —
+ * a customer's balance going UP while one of their invoices is marked paid.
+ *
+ * DERIVED, NOT DECLARED, and that is the one judgement here worth arguing. `controlRole`
+ * on the treatment record next door IS declared, on the stated grounds that deriving it
+ * from `side` would be two facts agreeing by coincidence. This is the opposite case: the
+ * derivation is not a coincidence, it is the MEANING. A row saying "a receipt settles
+ * credit notes" would be a nonsense no test could catch, because there would be nothing
+ * left to check it against.
+ */
+
+/**
+ * Whether money moving this way puts MORE on the party's account, in the side's signing.
+ *
+ * True for a refund paid — it undoes a credit note, so the customer owes more again — and
+ * for a refund received. False for the two vouchers that settle a debt. The equality
+ * rather than a four-armed lookup is deliberate: it is the same fact twice, once per
+ * side, and writing it out as four cases is how the fourth one ends up transposed.
+ */
+function addsToBalance(definition: ReceiptKindDefinition): boolean {
+  return (definition.side === 'sales') === (definition.direction === 'out')
+}
+
+/**
+ * Which of a side's documents a voucher of this kind settles: the charges, or the refunds.
+ *
+ * A charge is positive in the side's own signing and a refund is negative, so a voucher
+ * settles whichever faces the other way from itself.
+ */
+export function settledDirection(definition: ReceiptKindDefinition): DocumentDirection {
+  return addsToBalance(definition) ? 'refund' : 'charge'
+}
+
+/**
+ * The one document kind a voucher of this kind settles, and its picker lists.
+ *
+ * Total over `ReceiptKind`: every voucher posts, and every side has both a charge and a
+ * refund kind that posts, so there is no voucher with nothing to settle. `settledBy` is
+ * this function backwards and a test asserts the round trip.
+ */
+export function settles(kind: ReceiptKind): DocumentKind {
+  const definition = receiptDefinitionOf(kind)
+  return postingKindOn(definition.side, settledDirection(definition))
+}
+
+/**
+ * The voucher kind that settles a document of this kind, from a table.
+ *
+ * COUNTED, NOT FOUND, and the argument is `postingKindIn`'s in the mirror: "the voucher
+ * that settles a credit note" has to be one voucher, and a `.find` would answer
+ * "whichever is listed first" while looking identical. A document screen sends a user to
  * this kind's editor, so being wrong here means offering to record a payment against a
  * customer's invoice.
  *
@@ -114,22 +205,37 @@ export function settlesSide(kind: ReceiptKind): TradeSide {
  * have — the 0013-2 lesson applied on the day it was written rather than after the next
  * mutation pass finds the same hole.
  */
-export function settlingKindIn(
+export function settledByIn(
   kinds: readonly ReceiptKindDefinition[],
   side: TradeSide,
+  direction: DocumentDirection,
+  /** Named in the refusal, so a crash at boot says which document could not be resolved. */
+  asking: string,
 ): ReceiptKind {
-  const matches = kinds.filter((definition) => definition.side === side)
+  const matches = kinds.filter(
+    (definition) => definition.side === side && settledDirection(definition) === direction,
+  )
   const [only, ...rest] = matches
   if (only === undefined || rest.length > 0) {
     throw new Error(
-      `${String(matches.length)} voucher kinds settle the ${side} side. Exactly one, or an ` +
-        'invoice has no single screen to send somebody to.',
+      `${asking} is settled by ${String(matches.length)} voucher kinds. Exactly one, or ` +
+        'there is no single screen to send somebody to.',
     )
   }
   return only.kind
 }
 
-/** The voucher kind that settles documents on a side. */
-export function settlingKind(side: TradeSide): ReceiptKind {
-  return settlingKindIn(RECEIPT_KINDS, side)
+/**
+ * The voucher kind that settles this document, or null where nothing settles it.
+ *
+ * NULL FOR A QUOTATION, which is new and is a correction. The side-only version answered
+ * `'receipt'` for one — a quotation is sales-side — and every caller happened to gate the
+ * answer behind `postsToLedger` before using it. A quotation offers a price and creates
+ * no obligation, so there is nothing to settle, and saying so here is one place instead
+ * of one gate per caller.
+ */
+export function settledBy(kind: DocumentKind): ReceiptKind | null {
+  const definition = definitionOf(kind)
+  if (!definition.postsToLedger) return null
+  return settledByIn(RECEIPT_KINDS, definition.side, definition.direction, definition.label)
 }

@@ -55,13 +55,19 @@
  * a receipt cannot come to nothing at all.
  *
  * ---------------------------------------------------------------------------
- * WHAT A REFUND WOULD TAKE, IF SOMEBODY WANTS ONE
+ * WHAT A REFUND TOOK, NOW THAT SOMEBODY WANTED ONE
  *
  * Money out to a CUSTOMER — a refund against a credit note. It is not a payment: a
  * payment moves accounts payable, and a refund moves receivables the other way. It is a
  * third row in `RECEIPT_KINDS` with `side: 'sales'`, `direction: 'out'` and
- * `controlRole: 'accounts-receivable'`, and this file needs no change to post it, which
- * is the whole point of reading `direction` rather than the kind.
+ * `controlRole: 'accounts-receivable'`, and 0015 added it along with its purchase-side
+ * mirror.
+ *
+ * THE PREDICTION HELD FOR `toEntry` AND NOT FOR THE ROUTER, which is worth recording
+ * because the difference is exactly what a comment can and cannot promise. `toEntry`
+ * needed no change: it reads `direction` and had both new kinds right before either
+ * existed. `receiptPostingRuleFor` was a TERNARY over two kinds, and it would have handed
+ * a refund to the payment rule — see the note on `RULES` below.
  */
 
 import { ZERO } from '@main/domain/money'
@@ -114,8 +120,32 @@ function ruleFor(kind: ReceiptKind): PostingRule<PostableReceipt> {
   }
 }
 
-export const receiptRule: PostingRule<PostableReceipt> = ruleFor('receipt')
-export const paymentRule: PostingRule<PostableReceipt> = ruleFor('payment')
+/**
+ * One rule per kind, TOTAL OVER THE UNION.
+ *
+ * The same shape `TREATMENTS` next door has, and for the same guarantee: a kind added to
+ * `RECEIPT_KINDS` does not compile until it appears here. It replaced a TERNARY in 0015 —
+ * `kind === 'receipt' ? receiptRule : paymentRule` — which was correct for exactly as long
+ * as there were two kinds and would have posted a refund with the payment rule, silently,
+ * on the day there were four. Only the rule's own kind guard caught it, and only because
+ * this file happens to have one.
+ *
+ * The header above says this file needs no change to post a refund and that is still
+ * true: `toEntry` reads `direction` and got both new kinds right the first time. What
+ * needed changing was the ROUTER, which is a different claim and was not tested by
+ * anything the header could see.
+ */
+const RULES: Readonly<Record<ReceiptKind, PostingRule<PostableReceipt>>> = {
+  receipt: ruleFor('receipt'),
+  payment: ruleFor('payment'),
+  refund: ruleFor('refund'),
+  'refund-received': ruleFor('refund-received'),
+}
+
+export const receiptRule: PostingRule<PostableReceipt> = RULES.receipt
+export const paymentRule: PostingRule<PostableReceipt> = RULES.payment
+export const refundRule: PostingRule<PostableReceipt> = RULES.refund
+export const refundReceivedRule: PostingRule<PostableReceipt> = RULES['refund-received']
 
 /**
  * The rule that turns a voucher of this kind into an entry.
@@ -124,9 +154,14 @@ export const paymentRule: PostingRule<PostableReceipt> = ruleFor('payment')
  * contract and not an accident: every receipt kind posts, so a kind with no rule is a
  * kind that cannot exist, and returning a null here would ask every caller to handle a
  * case the type system has already closed.
+ *
+ * `receiptDefinitionOf` first, so a kind off a company file a newer build wrote is
+ * refused with the sentence written for it rather than reaching an index that would
+ * answer undefined — the same two lines `receiptTreatmentOf` is.
  */
 export function receiptPostingRuleFor(kind: ReceiptKind): PostingRule<PostableReceipt> {
-  return kind === 'receipt' ? receiptRule : paymentRule
+  receiptDefinitionOf(kind)
+  return RULES[kind]
 }
 
 function toEntry(receipt: PostableReceipt, context: PostingContext): EntryDraft {

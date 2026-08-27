@@ -21,8 +21,14 @@ import {
   type PostingContext,
 } from '@main/domain/ledger'
 
-import { paymentRule, receiptPostingRuleFor, receiptRule } from './posting'
-import type { PostableReceipt, ReceiptKind } from './types'
+import {
+  paymentRule,
+  receiptPostingRuleFor,
+  receiptRule,
+  refundReceivedRule,
+  refundRule,
+} from './posting'
+import { RECEIPT_KINDS, type PostableReceipt, type ReceiptKind } from './types'
 
 const ACCOUNTS: Record<string, AccountRef> = {
   receivable: { id: 'a-recv', code: '1300', name: 'Accounts Receivable', type: 'asset' },
@@ -163,6 +169,99 @@ describe('a payment', () => {
 
   it('records itself as a payment', () => {
     expect(paymentRule.toEntry(outgoing(), context()).source.type).toBe('payment')
+  })
+})
+
+describe('a refund', () => {
+  const back = () => receipt({ kind: 'refund', number: 'REF/2026-27/0001', amount: D('900.00') })
+
+  /*
+   * THE ASSERTION THE KIND EXISTS FOR, and the one a payment cannot be made to satisfy. A
+   * refund is money OUT like a payment and it moves RECEIVABLES like a receipt — the two
+   * facts a single `kind ===` test can never hold at once, which is why the rule reads
+   * `direction` for the sides and `controlRole` for the account.
+   */
+  it('debits receivables and credits the bank, the debit first', () => {
+    const entry = refundRule.toEntry(back(), context())
+
+    expect(entry.lines).toEqual([
+      { accountId: 'a-recv', debit: D('900.00'), credit: ZERO, partyId: 'party-1' },
+      { accountId: 'a-bank', debit: ZERO, credit: D('900.00') },
+    ])
+  })
+
+  /* The exact mirror of a receipt on the same account, which is what makes an allocation
+   * between the two mean anything: one puts money on receivables and the other takes it
+   * off, and 0015's trigger is that sentence as a constraint. */
+  it('moves the same account a receipt moves, the other way', () => {
+    const taken = receiptRule.toEntry(receipt({ amount: D('900.00') }), context())
+    const given = refundRule.toEntry(back(), context())
+
+    const takenControl = taken.lines.find((line) => line.accountId === 'a-recv')
+    const givenControl = given.lines.find((line) => line.accountId === 'a-recv')
+
+    expect(takenControl).toMatchObject({ debit: ZERO, credit: D('900.00') })
+    expect(givenControl).toMatchObject({ debit: D('900.00'), credit: ZERO })
+  })
+
+  it('names the customer on the control line and on no other', () => {
+    const named = refundRule
+      .toEntry(back(), context())
+      .lines.filter((line) => line.partyId !== undefined)
+
+    expect(named).toHaveLength(1)
+    expect(named[0]?.accountId).toBe('a-recv')
+  })
+
+  it('records itself as a refund rather than as a payment', () => {
+    expect(refundRule.toEntry(back(), context()).source.type).toBe('refund')
+  })
+
+  /* And the purchase-side mirror: money IN that moves payables, which is the corner of
+   * the square a vendor refunding us falls in. */
+  it('has a mirror that credits payables and debits the bank', () => {
+    const entry = refundReceivedRule.toEntry(
+      receipt({ kind: 'refund-received', number: 'RRV/2026-27/0001', amount: D('900.00') }),
+      context(),
+    )
+
+    expect(entry.lines).toEqual([
+      { accountId: 'a-bank', debit: D('900.00'), credit: ZERO },
+      { accountId: 'a-pay', debit: ZERO, credit: D('900.00'), partyId: 'party-1' },
+    ])
+  })
+})
+
+describe('the rule a kind is routed to', () => {
+  /*
+   * A TERNARY UNTIL 0015 — `kind === 'receipt' ? receiptRule : paymentRule` — and correct
+   * for exactly as long as there were two kinds. With four it would have handed both
+   * refunds to the payment rule, posting a customer's refund to accounts payable where no
+   * statement of theirs would ever have shown it.
+   *
+   * Nothing caught it except the rule's OWN kind guard, which throws a plain Error about
+   * wiring rather than anything a user could act on — so this asserts the routing itself,
+   * not that the wrong route complains.
+   */
+  it('gives every kind its own rule, and no two kinds the same one', () => {
+    const sources = RECEIPT_KINDS.map((definition) => receiptPostingRuleFor(definition.kind).source)
+
+    expect(new Set(sources).size).toBe(sources.length)
+    expect(sources).toEqual(RECEIPT_KINDS.map((definition) => definition.kind))
+  })
+
+  it('routes each kind to a rule that accepts it', () => {
+    for (const definition of RECEIPT_KINDS) {
+      const rule = receiptPostingRuleFor(definition.kind)
+      expect(() => rule.toEntry(receipt({ kind: definition.kind }), context())).not.toThrow()
+    }
+  })
+
+  /* A kind off a company file a newer build wrote gets the sentence written for it,
+   * rather than an index answering undefined and a TypeError naming neither the kind nor
+   * the file. The same two lines `receiptTreatmentOf` is. */
+  it('refuses a kind this build does not know', () => {
+    expect(() => receiptPostingRuleFor('advance' as ReceiptKind)).toThrow(/newer Coffer/)
   })
 })
 

@@ -34,7 +34,7 @@
  */
 
 import { toMoneyString } from '@main/domain/money'
-import { settlesSide, type ReceiptKind } from '@main/domain/receipts'
+import type { ReceiptKind } from '@main/domain/receipts'
 import type {
   AllocateReceiptInput,
   CancelReceiptInput,
@@ -115,17 +115,22 @@ export class ReceiptsService {
   /**
    * A party's documents with something still against them, oldest first.
    *
-   * The kind arrives as a string off IPC, so the cast is the question — and
-   * `settlesSide` is the answer, because it goes through `receiptDefinitionOf` and throws
-   * for anything this build does not know. There WAS a `requireKind` guard on the line
-   * above; a mutation pass found it could be deleted with nothing failing, because it
-   * asked the same function the same question one line earlier. The 2.1a-2 finding: when
-   * a mutation survives because two things agree, ask whether one of them should exist.
+   * The kind arrives as a string off IPC, so the cast is the question — and the picker
+   * itself is the answer, because `openDocumentsFor` puts it through `settles()`, which
+   * goes through `receiptDefinitionOf` and throws for anything this build does not know.
+   * There WAS a `requireKind` guard on the line above; a mutation pass found it could be
+   * deleted with nothing failing, because it asked the same function the same question
+   * one line earlier. The 2.1a-2 finding: when a mutation survives because two things
+   * agree, ask whether one of them should exist.
+   *
+   * IT USED TO PASS A SIDE, worked out here. It passes the kind now and lets the picker
+   * decide, because a side no longer answers which documents a voucher settles — a
+   * receipt and a refund share one.
    */
   async open(input: OpenDocumentsInput): Promise<OpenDocument[]> {
     const rows = await openDocumentsFor(this.books.db(), {
       partyId: input.partyId,
-      side: settlesSide(input.kind as ReceiptKind),
+      kind: input.kind as ReceiptKind,
       exceptReceiptId: input.exceptReceiptId,
     })
 

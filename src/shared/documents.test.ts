@@ -18,6 +18,8 @@ import {
   definitionOf,
   DOCUMENT_KINDS,
   kindsOnSide,
+  postingKindIn,
+  postingKindOn,
   postsToLedger,
   TRADE_SIDES,
   type DocumentKind,
@@ -184,7 +186,41 @@ describe('chargesOnTerms', () => {
   })
 })
 
-describe('correctionMap, given a table the real one cannot be', () => {
+describe('postingKindOn', () => {
+  /*
+   * THE DIRECTION BECAME AN ARGUMENT IN 0015. `chargeKindOn` had it written into the
+   * filter, which was right while a receipt was the only voucher on its side; a refund
+   * settles the credit note, and the picker that fills for it asks this function.
+   *
+   * All four pinned by value, because the pair a transposition would swap is
+   * (sales, refund) against (purchase, refund) and each of them alone reads correctly.
+   */
+  it('names the one posting kind on each side, facing each way', () => {
+    expect(postingKindOn('sales', 'charge')).toBe('sales-invoice')
+    expect(postingKindOn('sales', 'refund')).toBe('credit-note')
+    expect(postingKindOn('purchase', 'charge')).toBe('purchase-bill')
+    expect(postingKindOn('purchase', 'refund')).toBe('debit-note')
+  })
+
+  /* Four answers over four (side, direction) pairs, all different: the quotation is the
+   * only posting-kind gap in the square and it is excluded by `postsToLedger`, not by
+   * being a fifth answer nobody asks for. */
+  it('answers a different kind for every corner of the square', () => {
+    const answers = TRADE_SIDES.flatMap((side) =>
+      (['charge', 'refund'] as const).map((direction) => postingKindOn(side, direction)),
+    )
+
+    expect(new Set(answers).size).toBe(4)
+  })
+
+  it('is what chargeKindOn is, with the direction fixed', () => {
+    for (const side of TRADE_SIDES) {
+      expect(chargeKindOn(side)).toBe(postingKindOn(side, 'charge'))
+    }
+  })
+})
+
+describe('the kind lookups, given a table the real one cannot be', () => {
   /*
    * WHY THIS TAKES AN ARGUMENT AT ALL. The guard it exercises cannot fire on the shipped
    * table — that is the point of the guard — so a mutation removing it survived the whole
@@ -219,7 +255,7 @@ describe('correctionMap, given a table the real one cannot be', () => {
         kind({ kind: 'quotation' }),
         kind({ kind: 'credit-note', direction: 'refund' }),
       ]),
-    ).toThrow(/credit-note names 2 kinds on the sales side/)
+    ).toThrow(/credit-note names 2 charge kinds on the sales side/)
   })
 
   /* And a side with none: a refund that corrects nothing that exists is a link the
@@ -230,13 +266,36 @@ describe('correctionMap, given a table the real one cannot be', () => {
         kind({ postsToLedger: false }),
         kind({ kind: 'credit-note', direction: 'refund' }),
       ]),
-    ).toThrow(/credit-note names 0 kinds on the sales side/)
+    ).toThrow(/credit-note names 0 charge kinds on the sales side/)
   })
 
   /* A table with no refunds in it maps nothing, rather than being a case somebody has to
    * remember to guard. */
   it('maps nothing when nothing corrects anything', () => {
     expect(correctionMap([kind({})]).size).toBe(0)
+  })
+
+  /*
+   * THE DIRECTION IS READ, AND NOT ONLY THE SIDE. A table whose only sales-side posting
+   * kind is a charge answers nothing for a refund rather than answering with the charge —
+   * which is the mistake that would have let a refund voucher settle an invoice.
+   */
+  it('refuses a direction the side has no posting kind for', () => {
+    expect(() => postingKindIn([kind({})], 'sales', 'refund', 'a credit note')).toThrow(
+      /a credit note names 0 refund kinds on the sales side/,
+    )
+  })
+
+  /* And `postsToLedger` is read on the refund arm too, not only on the charge one. */
+  it('does not count a refund kind that posts nothing', () => {
+    expect(() =>
+      postingKindIn(
+        [kind({ kind: 'credit-note', direction: 'refund', postsToLedger: false })],
+        'sales',
+        'refund',
+        'a credit note',
+      ),
+    ).toThrow(/a credit note names 0 refund kinds on the sales side/)
   })
 })
 

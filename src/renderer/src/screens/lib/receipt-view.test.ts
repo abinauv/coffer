@@ -58,15 +58,34 @@ describe('what the register lists', () => {
 
 describe('where each kind lives', () => {
   /*
-   * Four ids, all different. `createScreenRegistry` keys by `area/id` and the second
-   * registration silently replaces the first, so a duplicate would give one kind two
-   * sidebar entries opening the same screen — and nothing would throw.
+   * Two ids per kind, all different. `createScreenRegistry` keys by `area/id` and the
+   * second registration silently replaces the first, so a duplicate would give one kind
+   * two sidebar entries opening the same screen — and nothing would throw.
+   *
+   * COUNTED OFF THE TABLE rather than pinned at eight, so 0015 adding two kinds did not
+   * need this number edited — which is the point: an assertion that has to be rewritten
+   * every time the table grows is one somebody rewrites without reading.
    */
   it('gives every kind a register and an editor, and no two the same', () => {
     const ids = [...KINDS.map(registerScreenId), ...KINDS.map(editorScreenId)]
 
     expect(new Set(ids).size).toBe(ids.length)
-    expect(ids).toHaveLength(4)
+    expect(ids).toHaveLength(KINDS.length * 2)
+  })
+
+  /*
+   * AND NO TWO REGISTERS IN THE SAME PLACE IN THE SIDEBAR. The nav order is a hand-written
+   * record keyed by kind, so 0015's two new kinds had to be given a slot each — and the
+   * failure mode of getting one wrong is two entries at the same order in the same group,
+   * which renders in whatever order the registry happened to build them.
+   */
+  it('gives every kind its own place in its own group', () => {
+    const slots = KINDS.map((kind) => {
+      const nav = registerNav(kind)
+      return `${nav.group}/${String(nav.order)}`
+    })
+
+    expect(new Set(slots).size).toBe(slots.length)
   })
 
   /*
@@ -108,13 +127,28 @@ describe('what each kind is called', () => {
 
   /*
    * READ OFF THE DOCUMENT TABLE, NOT WRITTEN OUT HERE. `settlesLabel` goes through
-   * `chargeKindOn`, the same function `correctsKind` is built from — so a sixth document
-   * kind cannot leave this screen calling a bill an invoice, and the allocation heading
-   * cannot drift from what the picker actually lists.
+   * `settles`, the same function the picker filters on and migration 0015's trigger
+   * enumerates — so a sixth document kind cannot leave this screen calling a bill an
+   * invoice, and the allocation heading cannot drift from what the picker actually lists.
+   *
+   * IT TOOK A SIDE UNTIL 0015 AND COULD NOT HAVE ANSWERED FOR A REFUND. A refund and a
+   * receipt are both sales-side, so a heading keyed on the side would print "Sales
+   * invoice" over a list of credit notes — the screen agreeing with the wrong half of the
+   * rule, which is the version of this bug that looks right.
    */
-  it('names what each side settles from the document table', () => {
-    expect(settlesLabel('sales')).toBe('Sales invoice')
-    expect(settlesLabel('purchase')).toBe('Purchase bill')
+  it('names what each voucher settles from the document table', () => {
+    expect(settlesLabel('receipt')).toBe('Sales invoice')
+    expect(settlesLabel('payment')).toBe('Purchase bill')
+    expect(settlesLabel('refund')).toBe('Credit note')
+    expect(settlesLabel('refund-received')).toBe('Debit note')
+  })
+
+  /* Four vouchers, four different headings. A transposition inside `settles` would have
+   * to survive this as well as the four values above. */
+  it('gives no two vouchers the same heading', () => {
+    const labels = KINDS.map((kind) => settlesLabel(kind))
+
+    expect(new Set(labels).size).toBe(labels.length)
   })
 
   it('says money arrived for a receipt and was paid for a payment', () => {

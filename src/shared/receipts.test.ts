@@ -1,18 +1,27 @@
 /*
  * The voucher kind table, tested where it now lives.
  *
- * What the two kinds ARE is asserted in `main/domain/receipts/types.test.ts`, which reads
+ * What the four kinds ARE is asserted in `main/domain/receipts/types.test.ts`, which reads
  * this table through the domain's re-export and pairs each row with what the ledger does
  * with it. What is here is what belongs to the table itself, and it is almost entirely
- * one function: which voucher settles a side.
+ * one pairing: which voucher settles which document.
+ *
+ * THE PAIRING IS DERIVED, so the tests that matter are the ones a derivation can fail
+ * without looking wrong. Two of them do the work: the four pairs are pinned BY VALUE, and
+ * the four vouchers are asserted to settle four DISTINCT documents — which is what a
+ * transposition breaks, and what a table of four expected values alone would not notice,
+ * because somebody transposing the rule would rewrite those four values to match.
  */
 
 import { describe, expect, it } from 'vitest'
+import { DOCUMENT_KINDS, definitionOf, type DocumentKind } from './documents'
 import {
   RECEIPT_KINDS,
   receiptDefinitionOf,
-  settlingKind,
-  settlingKindIn,
+  settledBy,
+  settledByIn,
+  settledDirection,
+  settles,
   type ReceiptKind,
   type ReceiptKindDefinition,
 } from './receipts'
@@ -43,30 +52,101 @@ describe('the words', () => {
   it('states the direction rather than leaving it to be inferred from the side', () => {
     expect(receiptDefinitionOf('receipt').direction).toBe('in')
     expect(receiptDefinitionOf('payment').direction).toBe('out')
-  })
-})
-
-describe('settlingKind', () => {
-  it('sends a sales document to a receipt and a purchase document to a payment', () => {
-    expect(settlingKind('sales')).toBe('receipt')
-    expect(settlingKind('purchase')).toBe('payment')
+    expect(receiptDefinitionOf('refund').direction).toBe('out')
+    expect(receiptDefinitionOf('refund-received').direction).toBe('in')
   })
 
-  /* Every kind settles a side, and each side has one. A kind whose side nothing routes to
-   * is a screen nothing can reach. */
-  it('covers every kind in the table', () => {
-    expect(KINDS.map((kind) => settlingKind(receiptDefinitionOf(kind).side)).sort()).toEqual(
-      [...KINDS].sort(),
+  /* THE WHOLE SQUARE, and the assertion is that it IS a square: four kinds over two sides
+   * and two directions, with no pair used twice. A missing corner is a document kind with
+   * no voucher that settles it, which is what 0015 exists to close. */
+  it('fills every side and direction exactly once', () => {
+    const pairs = RECEIPT_KINDS.map((definition) => `${definition.side}/${definition.direction}`)
+
+    expect(new Set(pairs).size).toBe(pairs.length)
+    expect([...pairs].sort()).toEqual(
+      ['purchase/in', 'purchase/out', 'sales/in', 'sales/out'].sort(),
     )
   })
 })
 
-describe('settlingKindIn, given a table the real one cannot be', () => {
+describe('what a voucher settles', () => {
   /*
-   * The guard cannot fire on the shipped table — that is the point of it — so the table
-   * is an argument and a test builds the ambiguity. Written this way from the start
-   * because 0013-2's mutation pass found the mirror of it in `chargeKindIn` and the
-   * lesson is cheaper to apply than to relearn (CONVENTIONS §6).
+   * BY VALUE, all four, because this is the pairing every other assertion is derived from.
+   * The two that were not possible before 0015 are the interesting ones: a refund is
+   * SALES-side and settles the credit note, not the invoice its side-mate settles.
+   */
+  it('pairs each voucher with the one document it settles', () => {
+    expect(settles('receipt')).toBe('sales-invoice')
+    expect(settles('payment')).toBe('purchase-bill')
+    expect(settles('refund')).toBe('credit-note')
+    expect(settles('refund-received')).toBe('debit-note')
+  })
+
+  /*
+   * AND THE PART A TABLE OF FOUR VALUES CANNOT CATCH. Transpose the derivation — settle
+   * refunds where charges were meant — and each of the four assertions above would have to
+   * be rewritten to match, which is exactly what somebody making the change would do. This
+   * one cannot be satisfied that way: four vouchers settling four DISTINCT documents,
+   * which is every posting document kind, one voucher each.
+   */
+  it('settles every posting document kind, once each', () => {
+    const settled = KINDS.map((kind) => settles(kind))
+    const posting = DOCUMENT_KINDS.filter((definition) => definition.postsToLedger)
+
+    expect(new Set(settled).size).toBe(settled.length)
+    expect([...settled].sort()).toEqual(posting.map((definition) => definition.kind).sort())
+  })
+
+  it('never reaches across to the other half of the trade', () => {
+    for (const kind of KINDS) {
+      expect(definitionOf(settles(kind)).side).toBe(receiptDefinitionOf(kind).side)
+    }
+  })
+
+  /* Money that ADDS to what the side's control account carries settles a refund; money
+   * that takes it down settles a charge. Both halves pinned, or the equality inside
+   * `addsToBalance` could be inverted and half the table would still read correctly. */
+  it('sends money that adds to the balance at the refunds', () => {
+    expect(settledDirection(receiptDefinitionOf('refund'))).toBe('refund')
+    expect(settledDirection(receiptDefinitionOf('refund-received'))).toBe('refund')
+    expect(settledDirection(receiptDefinitionOf('receipt'))).toBe('charge')
+    expect(settledDirection(receiptDefinitionOf('payment'))).toBe('charge')
+  })
+})
+
+describe('what settles a document', () => {
+  it('is the inverse of what a voucher settles, both ways round', () => {
+    for (const kind of KINDS) {
+      expect(settledBy(settles(kind))).toBe(kind)
+    }
+    for (const definition of DOCUMENT_KINDS.filter((each) => each.postsToLedger)) {
+      const voucher = settledBy(definition.kind)
+      expect(voucher).not.toBeNull()
+      expect(settles(voucher as ReceiptKind)).toBe(definition.kind)
+    }
+  })
+
+  /*
+   * NOTHING SETTLES A QUOTATION, and answering null rather than 'receipt' is the whole of
+   * why this replaced a side lookup. A quotation offers a price and creates no obligation;
+   * the old answer was a real voucher kind that every caller happened to gate away before
+   * using it.
+   */
+  it('answers nothing for a document that posts nothing', () => {
+    expect(settledBy('quotation')).toBeNull()
+  })
+
+  it('refuses a kind this build does not know', () => {
+    expect(() => settledBy('proforma' as DocumentKind)).toThrow(/newer Coffer/)
+  })
+})
+
+describe('settledByIn, given a table the real one cannot be', () => {
+  /*
+   * The guard cannot fire on the shipped table — that is the point of it — so the table is
+   * an argument and a test builds the ambiguity. Written this way from the start because
+   * 0013-2's mutation pass found the mirror of it in `postingKindIn` and the lesson is
+   * cheaper to apply than to relearn (CONVENTIONS §6).
    */
   const kind = (over: Partial<ReceiptKindDefinition>): ReceiptKindDefinition => ({
     kind: 'receipt',
@@ -77,28 +157,42 @@ describe('settlingKindIn, given a table the real one cannot be', () => {
     ...over,
   })
 
-  it('names the one voucher on a side', () => {
-    expect(settlingKindIn([kind({}), kind({ kind: 'payment', side: 'purchase' })], 'sales')).toBe(
-      'receipt',
-    )
+  it('names the one voucher that settles a side facing that way', () => {
+    const table = [kind({}), kind({ kind: 'refund', direction: 'out' })]
+
+    expect(settledByIn(table, 'sales', 'charge', 'a sales invoice')).toBe('receipt')
+    expect(settledByIn(table, 'sales', 'refund', 'a credit note')).toBe('refund')
   })
 
   /*
-   * Two vouchers on one side means "record a receipt against this invoice" has two
-   * screens to go to, and a `.find` would silently pick whichever was listed first.
+   * Two vouchers settling one document means "record money against this" has two screens
+   * to go to, and a `.find` would silently pick whichever was listed first.
    */
-  it('refuses a side with two vouchers', () => {
-    expect(() => settlingKindIn([kind({}), kind({ kind: 'payment' })], 'sales')).toThrow(
-      /2 voucher kinds settle the sales side/,
+  it('refuses a document two vouchers settle', () => {
+    expect(() =>
+      settledByIn([kind({}), kind({ kind: 'payment' })], 'sales', 'charge', 'a sales invoice'),
+    ).toThrow(/a sales invoice is settled by 2 voucher kinds/)
+  })
+
+  /* And a document with none: an invoice with no way to record money against it, offered
+   * as a button that navigates nowhere. */
+  it('refuses a document nothing settles', () => {
+    expect(() => settledByIn([kind({})], 'purchase', 'charge', 'a purchase bill')).toThrow(
+      /a purchase bill is settled by 0 voucher kinds/,
     )
   })
 
-  /* And a side with none: an invoice with no way to record money against it, offered as
-   * a button that navigates nowhere. */
-  it('refuses a side with no voucher', () => {
-    expect(() => settlingKindIn([kind({})], 'purchase')).toThrow(
-      /0 voucher kinds settle the purchase side/,
-    )
+  /* The side is read as well as the direction. A table with the right facing on the wrong
+   * side answers nothing, rather than answering for the other half of the trade. */
+  it('does not reach across to the other side', () => {
+    expect(() =>
+      settledByIn(
+        [kind({ kind: 'refund', direction: 'out' })],
+        'purchase',
+        'refund',
+        'a debit note',
+      ),
+    ).toThrow(/a debit note is settled by 0 voucher kinds/)
   })
 })
 
