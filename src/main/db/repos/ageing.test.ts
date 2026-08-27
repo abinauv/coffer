@@ -434,6 +434,9 @@ describe('money on account', () => {
 
     expect(party?.items[0]).toMatchObject({
       source: 'receipt',
+      /* Carried so a screen can open the row. Not inferable from the report's side —
+       * a refund to a customer is money out on the sales side. */
+      kind: 'receipt',
       number: 'RCT/2026-27/0001',
       date: '2026-05-01',
       bucket: null,

@@ -36,6 +36,14 @@ Breaking any of these is a review rejection, not a discussion.
    `NumberFormat`; there is no default, because the default was the lakh/crore grouping
    and it was silently wrong for everyone outside India.
 
+   A COROLLARY WORTH ITS OWN SENTENCE: where a figure main sends is SUBTRACTED to reach a
+   total beside it, the COLUMN HEADING carries the sign and the figure keeps the one it
+   arrived with. "Less on account", not a negated copy of what main sent as a positive
+   quantity — flipping a sign is arithmetic, and a screen that does it in one place and
+   not another ends up contradicting itself. The aged report is where this bites: the same
+   money is a positive in a party's on-account column and a negative on the item behind
+   it, because it is a credit, and no heading can be right for both (`AgedReport.tsx`).
+
 8. **"As at a date" is a filter on the LEDGER, never on the document.** A report drawn as
    at 30 June counts entries dated on or before it — not documents raised by then, and not
    today's rows under last month's heading. The difference is invisible until something is

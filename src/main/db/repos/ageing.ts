@@ -325,7 +325,7 @@ async function describeOwners(
       .execute(),
     db
       .selectFrom('receipts')
-      .select(['id', 'number', 'receipt_date', 'entry_id'])
+      .select(['id', 'kind', 'number', 'receipt_date', 'entry_id'])
       .where('entry_id', 'in', ids)
       .execute(),
     db
@@ -350,7 +350,16 @@ async function describeOwners(
     described.set(receipt.entry_id, {
       source: 'receipt',
       sourceId: receipt.id,
-      kind: null,
+      /*
+       * A `ReceiptKind`, and it is carried for the same reason a document's is: the
+       * screen has to know which editor a row opens, and it cannot work that out from
+       * the report's side. `domain/receipts/types.ts` argues on purpose that a voucher's
+       * control account is STATED rather than derived from its side, so a voucher on the
+       * receivable account is not necessarily a receipt — a refund to a customer is money
+       * out on the sales side, and guessing would open the wrong editor on the one row
+       * whose whole value is that it can be opened.
+       */
+      kind: receipt.kind,
       number: receipt.number,
       date: receipt.receipt_date,
       /* Money that has arrived is not owed and never ages, so its due date is only ever

@@ -805,3 +805,45 @@
 .day-book__entry {
   margin-bottom: var(--space-2);
 }
+
+/* ---- The aged report ----------------------------------------------------- */
+
+/*
+ * A party's items, drawn inside the row they add up to.
+ *
+ * A nested table rather than more rows in the outer one: an item has a number, a date and
+ * an age, and the outer table has a column per bucket. Forcing one into the other would
+ * mean a row of empty cells with a document number in the first, which reads as a party
+ * that owes nothing.
+ *
+ * Sunken and inset, so it is visibly UNDER the row rather than beside it — the indent is
+ * what says which party's items these are once the table has scrolled.
+ */
+.aged__drill > td {
+  padding: 0 0 var(--space-3) var(--space-6);
+  background: var(--surface-sunken);
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.aged__items {
+  font-size: var(--text-xs);
+}
+
+.aged__items th,
+.aged__items td {
+  border-bottom: 1px solid var(--rule);
+}
+
+.aged__items tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* The column an item fell in, beside the badge saying how late it is. Both are read
+ * together, so they sit on one line and wrap as a pair. */
+.aged__age {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-inline-end: var(--space-2);
+  color: var(--ink-muted);
+}

@@ -1368,7 +1368,14 @@ export interface AgedItem {
   source: AgedItemSource
   /** The document, receipt or journal entry it came from. */
   sourceId: string
-  /** A `DocumentKind` where `source` is 'document'. Null otherwise. */
+  /**
+   * A `DocumentKind` where `source` is 'document', a `ReceiptKind` where it is 'receipt'.
+   *
+   * Null only for a journal entry, which has no kind to name. It is here so a screen can
+   * open the row: `domain/receipts/types.ts` states on purpose that a voucher's control
+   * account is not derived from its side, so a reader of this report cannot infer that a
+   * voucher on the receivable account is a receipt rather than a refund.
+   */
   kind: string | null
   /** What it is known by: a document number, a voucher number, an entry number. */
   number: string
