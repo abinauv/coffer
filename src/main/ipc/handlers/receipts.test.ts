@@ -32,7 +32,6 @@ beforeEach(() => {
     create: vi.fn(async () => ({}) as never),
     allocate: vi.fn(async () => ({}) as never),
     cancel: vi.fn(async () => ({}) as never),
-    settlement: vi.fn(async () => ({}) as never),
     open: vi.fn(async () => []),
   }
   handlers = createReceiptsHandlers(service)
@@ -242,16 +241,10 @@ describe('list', () => {
   })
 })
 
-describe('settlement and open', () => {
-  it('takes a document id', () => {
-    expect(parse('settlement', 'doc-1')).toEqual(['doc-1'])
-  })
-
-  it('refuses a settlement with no document', () => {
-    rejects('settlement', undefined)
-    rejects('settlement', '')
-  })
-
+/* `settlement` MOVED TO THE `documents` GROUP IN 0016 — it takes a document id, answers
+ * about a document, and half of what it returns has no receipt in it. Its boundary tests
+ * went with it, and `open` stayed because its argument is a voucher kind. */
+describe('the picker', () => {
   it('takes a party, a kind, and the receipt being edited', () => {
     expect(first('open', { partyId: 'party-1', kind: 'receipt', exceptReceiptId: 'r-1' })).toEqual({
       partyId: 'party-1',
@@ -293,7 +286,6 @@ describe('the group as a whole', () => {
       'get',
       'list',
       'open',
-      'settlement',
     ])
   })
 })

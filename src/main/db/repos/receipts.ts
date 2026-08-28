@@ -563,7 +563,7 @@ async function assertWithinDocument(
    * two. A credit note's movement on the account is negative, so a cap written against
    * the raw figure would refuse every refund ever offered against one — including the
    * first rupee of a credit note with nothing on it. */
-  const outstanding = await outstandingForDocument(db, document, receiptId)
+  const outstanding = await outstandingForDocument(db, document, { exceptReceiptId: receiptId })
 
   if (amount.lessThanOrEqualTo(outstanding)) return
 

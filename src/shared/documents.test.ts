@@ -18,6 +18,7 @@ import {
   definitionOf,
   DOCUMENT_KINDS,
   kindsOnSide,
+  opposite,
   postingKindIn,
   postingKindOn,
   postsToLedger,
@@ -321,6 +322,23 @@ describe('TRADE_SIDES', () => {
   it('leaves no kind on a side it does not list', () => {
     for (const definition of DOCUMENT_KINDS) {
       expect(TRADE_SIDES).toContain(definition.side)
+    }
+  })
+})
+
+describe('opposite', () => {
+  /*
+   * Two lines of code and it is tested, because it is the hinge 0015 and 0016 both hang
+   * a rule on: what a voucher settles is the opposite of the way it moves the account,
+   * and what an offset matches is a document facing the opposite way from the one it is
+   * on. An involution — applying it twice gives back what you started with — is the
+   * property that says it is a swap rather than a preference for one of the two.
+   */
+  it('swaps the two directions, and is its own inverse', () => {
+    expect(opposite('charge')).toBe('refund')
+    expect(opposite('refund')).toBe('charge')
+    for (const definition of DOCUMENT_KINDS) {
+      expect(opposite(opposite(definition.direction))).toBe(definition.direction)
     }
   })
 })

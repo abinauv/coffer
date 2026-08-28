@@ -26,6 +26,7 @@ export {
   kindsOnSide,
   levyOf,
   numberedKindDefinition,
+  opposite,
   postingKindIn,
   postingKindOn,
   postsToLedger,

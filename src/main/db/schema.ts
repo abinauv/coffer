@@ -578,6 +578,35 @@ export interface ReceiptAllocationsTable {
   created_at: Timestamp
 }
 
+// ---- Offsets (0016) --------------------------------------------------------
+
+/**
+ * How much of one refund document settles one charge document.
+ *
+ * THE SAME KIND OF ROW `receipt_allocations` IS, with money at neither end. A receipt
+ * settles an invoice because the two move the control account opposite ways; a credit
+ * note moves it the same way a receipt does, so it settles an invoice for the same
+ * reason and by the same arithmetic. Nothing here posts, nothing here has a date, and
+ * nothing here changes a balance — see rule 2 in domain/receipts/types.ts, which this
+ * table is the second instance of.
+ *
+ * THE COLUMNS ARE NAMED FOR THE RULE rather than `document_a`/`document_b`. Which end is
+ * which is not an ordering convention: the charge end is the one that put money on the
+ * party's account and the refund end is the one that took it off, and a row with them
+ * swapped is a different (and impossible) statement. 0016's kind trigger is that
+ * sentence, and the names are what make it readable.
+ */
+export interface DocumentOffsetsTable {
+  id: string
+  /** The sales invoice or purchase bill being settled. */
+  charge_document_id: string
+  /** The credit note or debit note settling it. */
+  refund_document_id: string
+  /** Money, 2dp, strictly positive. It reduces what is unsettled at BOTH ends. */
+  amount: DecimalString
+  created_at: Timestamp
+}
+
 export interface Database {
   app_metadata: AppMetadataTable
   accounts: AccountsTable
@@ -596,6 +625,7 @@ export interface Database {
   company_profile: CompanyProfileTable
   receipts: ReceiptsTable
   receipt_allocations: ReceiptAllocationsTable
+  document_offsets: DocumentOffsetsTable
 }
 
 export type { Generated }

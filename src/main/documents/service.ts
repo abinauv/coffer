@@ -41,6 +41,18 @@
  *
  * Reading, issuing and cancelling need none of that and do not ask for it: the tax on an
  * issued document was decided when it was drafted and is stored on it.
+ *
+ * ---------------------------------------------------------------------------
+ * AND SINCE 0016, WHAT HAS SETTLED A DOCUMENT — WHICH ASKS THE REGIME NOTHING
+ *
+ * `settlement`, `offset` and `openForOffset` sit in this service and go nowhere near
+ * `computeTax`. That is not an inconsistency: they are here because they are about a
+ * DOCUMENT, and `settlement` moved out of the receipts service for exactly that reason
+ * when half of what it returns stopped having a receipt in it.
+ *
+ * They are also the three methods on this service with no `new Date()` in them except the
+ * one that writes rows, which is worth noticing — an offset moves no money and posts no
+ * entry, so nothing about it belongs to a period, and there is no clock to get wrong.
  */
 
 import { D, roundAt, toMoneyString } from '@main/domain/money'
@@ -51,9 +63,12 @@ import type {
   Document,
   DocumentLineInput,
   DocumentLineTaxDto,
+  DocumentSettlement,
   DocumentSummary,
   IssueDocumentInput,
   ListDocumentsInput,
+  OpenDocument,
+  SetOffsetsInput,
   TaxedLineInput,
   UpdateDocumentInput,
 } from '@shared/dto'
@@ -69,6 +84,13 @@ import {
 } from '../db/repos/documents'
 import { RepoError } from '../db/repos/errors'
 import { cancelDocument, issueDocument } from '../db/repos/issuing'
+import { setOffsets } from '../db/repos/offsets'
+import {
+  openChargesFor,
+  settlementFor,
+  type DocumentControl,
+  type DocumentSettlementResult,
+} from '../db/repos/outstanding'
 import { getParty } from '../db/repos/parties'
 import type { CofferDb } from '../db/kysely'
 import type { TaxParty, TaxableLine } from '../regimes/types'
@@ -242,6 +264,47 @@ export class DocumentsService {
     }
   }
 
+  /**
+   * What has settled one document, from both sources, and what is left.
+   *
+   * Refuses a document these books do not have rather than answering zeros. An invoice
+   * that is not there and an invoice with nothing outstanding are different facts, and a
+   * screen given the second for the first would show a paid invoice that does not exist.
+   */
+  async settlement(documentId: string): Promise<DocumentSettlement> {
+    const db = this.books.db()
+    const document = await requireControl(db, documentId)
+    return toSettlement(documentId, await settlementFor(db, document))
+  }
+
+  /**
+   * Replace what one refund document settles.
+   *
+   * Answers with the refund document's own settlement rather than with nothing, because
+   * the caller is the panel that just saved and every figure on it has moved — what is
+   * left on the note, and the rows themselves. A screen that had to re-fetch could be
+   * shown a set somebody else had changed in between.
+   */
+  async offset(input: SetOffsetsInput): Promise<DocumentSettlement> {
+    const result = await setOffsets(this.books.db(), input, new Date().toISOString())
+    return toSettlement(input.refundDocumentId, result)
+  }
+
+  /** The charge documents this refund document may be set against, oldest first. */
+  async openForOffset(documentId: string): Promise<OpenDocument[]> {
+    const db = this.books.db()
+    const rows = await openChargesFor(db, await requireControl(db, documentId))
+
+    return rows.map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      number: row.number,
+      date: row.date,
+      grandTotal: toMoneyString(row.grandTotal),
+      outstanding: toMoneyString(row.outstanding),
+    }))
+  }
+
   /** The business these books belong to, as the regime sees it. */
   private async supplier(db: CofferDb): Promise<TaxParty> {
     const profile = await getCompanyProfile(db)
@@ -282,6 +345,59 @@ export class DocumentsService {
 
 export function createDocumentsService(companies: OpenCompanyHandle): DocumentsService {
   return new DocumentsService(companies)
+}
+
+/**
+ * The document a settlement question is about, reduced to what deciding it needs.
+ *
+ * Read here rather than in `settlementFor`, which takes the row it needs as an argument
+ * so that `db/repos/outstanding.ts` stays a file of arithmetic over rows a caller has
+ * already fetched — the same shape `documentTotals` and every posting rule take. It came
+ * across from the receipts service with `settlement`.
+ */
+async function requireControl(db: CofferDb, id: string): Promise<DocumentControl> {
+  const row = await db
+    .selectFrom('documents')
+    .select(['id', 'kind', 'party_id', 'entry_id'])
+    .where('id', '=', id)
+    .executeTakeFirst()
+
+  if (row === undefined) {
+    throw new RepoError('DOCUMENT_NOT_FOUND', 'That document is not in these books.', { id })
+  }
+  return { id: row.id, kind: row.kind, partyId: row.party_id, entryId: row.entry_id }
+}
+
+/**
+ * The arithmetic, as decimal strings a screen can print.
+ *
+ * ONE MAPPER FOR TWO METHODS, because `settlement` and `offset` answer the same shape and
+ * a second copy is where the two would start disagreeing about whether `outstanding` is
+ * net of offsets. Every figure crosses already added up: the renderer never does money
+ * arithmetic (CONVENTIONS §1.7).
+ */
+function toSettlement(documentId: string, result: DocumentSettlementResult): DocumentSettlement {
+  return {
+    documentId,
+    movement: toMoneyString(result.movement),
+    allocated: toMoneyString(result.allocated),
+    offset: toMoneyString(result.offset),
+    outstanding: toMoneyString(result.outstanding),
+    receipts: result.receipts.map((receipt) => ({
+      receiptId: receipt.receiptId,
+      number: receipt.number,
+      date: receipt.date,
+      amount: toMoneyString(receipt.amount),
+    })),
+    offsets: result.offsets.map((row) => ({
+      offsetId: row.offsetId,
+      documentId: row.documentId,
+      documentKind: row.kind,
+      documentNumber: row.number,
+      documentDate: row.date,
+      amount: toMoneyString(row.amount),
+    })),
+  }
 }
 
 // ---- What moves the tax ----------------------------------------------------

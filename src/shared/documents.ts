@@ -71,6 +71,19 @@ export type TradeSide = 'sales' | 'purchase'
  */
 export type DocumentDirection = 'charge' | 'refund'
 
+/**
+ * The other way round, and there are only two ways round.
+ *
+ * Written once because 0015 needs it twice and the second spelling is where a
+ * transposition hides: what a voucher SETTLES is the opposite of the way it moves the
+ * account, and what an offset matches is a document facing the opposite way from the one
+ * it is on. A `=== 'charge' ? 'refund' : 'charge'` at each call site is the same
+ * three-token rule written out again, and one of them eventually gets typed backwards.
+ */
+export function opposite(direction: DocumentDirection): DocumentDirection {
+  return direction === 'charge' ? 'refund' : 'charge'
+}
+
 export interface DocumentKindDefinition {
   kind: DocumentKind
   /** What the user sees, singular. */

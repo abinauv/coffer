@@ -170,7 +170,6 @@ describe('which company is open', () => {
     expect(await codeOf(() => receipts.list())).toBe('NO_COMPANY_OPEN')
     expect(await codeOf(() => receipts.get('r1'))).toBe('NO_COMPANY_OPEN')
     expect(await codeOf(() => receipts.cancel({ id: 'r1' }))).toBe('NO_COMPANY_OPEN')
-    expect(await codeOf(() => receipts.settlement('d1'))).toBe('NO_COMPANY_OPEN')
     expect(await codeOf(() => receipts.open({ partyId: 'p1', kind: 'receipt' }))).toBe(
       'NO_COMPANY_OPEN',
     )
@@ -219,17 +218,26 @@ describe('recording money through the service', () => {
   })
 })
 
+/*
+ * `settlement` IS ON THE DOCUMENTS SERVICE SINCE 0016 and these tests did not follow it,
+ * which is deliberate. It answers about a document settled BY MONEY, and this file holds
+ * the only fixture that can make money — a company with a bank account, a numbering
+ * series and a receipts service beside a documents one. The offsets half of the same
+ * method is tested in db/repos/offsets.test.ts, where the fixture can make two documents.
+ */
 describe('what a document has against it', () => {
   it('is the whole invoice before anything is paid', async () => {
     const fx = await fixture()
     const document = await invoice(fx)
 
-    expect(await fx.receipts.settlement(document.id)).toEqual({
+    expect(await fx.documents.settlement(document.id)).toEqual({
       documentId: document.id,
       movement: '1180.00',
       allocated: '0.00',
+      offset: '0.00',
       outstanding: '1180.00',
       receipts: [],
+      offsets: [],
     })
   })
 
@@ -243,7 +251,7 @@ describe('what a document has against it', () => {
       }),
     )
 
-    const settlement = await fx.receipts.settlement(document.id)
+    const settlement = await fx.documents.settlement(document.id)
     expect(settlement.allocated).toBe('500.00')
     expect(settlement.outstanding).toBe('680.00')
     expect(settlement.receipts).toEqual([
@@ -258,7 +266,7 @@ describe('what a document has against it', () => {
    */
   it('refuses a document these books do not have rather than answering zeros', async () => {
     const fx = await fixture()
-    expect(await codeOf(() => fx.receipts.settlement('nobody'))).toBe('DOCUMENT_NOT_FOUND')
+    expect(await codeOf(() => fx.documents.settlement('nobody'))).toBe('DOCUMENT_NOT_FOUND')
   })
 
   it('comes to nothing once the invoice is cancelled, with nothing written to make it', async () => {
@@ -266,7 +274,7 @@ describe('what a document has against it', () => {
     const document = await invoice(fx)
     await fx.documents.cancel({ id: document.id })
 
-    expect(await fx.receipts.settlement(document.id)).toMatchObject({
+    expect(await fx.documents.settlement(document.id)).toMatchObject({
       movement: '0.00',
       outstanding: '0.00',
     })

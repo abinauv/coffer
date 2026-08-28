@@ -85,6 +85,9 @@ export const API_SURFACE: ApiSurface = {
     delete: true,
     issue: true,
     cancel: true,
+    settlement: true,
+    offset: true,
+    openForOffset: true,
   },
   receipts: {
     list: true,
@@ -92,7 +95,6 @@ export const API_SURFACE: ApiSurface = {
     create: true,
     allocate: true,
     cancel: true,
-    settlement: true,
     open: true,
   },
   companyProfile: {

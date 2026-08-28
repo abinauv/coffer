@@ -39,7 +39,6 @@ import type {
   AllocateReceiptInput,
   CancelReceiptInput,
   CreateReceiptInput,
-  DocumentSettlement,
   ListReceiptsInput,
   OpenDocument,
   OpenDocumentsInput,
@@ -48,9 +47,7 @@ import type {
 } from '@shared/dto'
 
 import { OpenBooks, type OpenCompanyHandle } from '../books/open-books'
-import type { CofferDb } from '../db/kysely'
-import { RepoError } from '../db/repos/errors'
-import { openDocumentsFor, settlementFor } from '../db/repos/outstanding'
+import { openDocumentsFor } from '../db/repos/outstanding'
 import {
   allocateReceipt,
   cancelReceipt,
@@ -84,32 +81,6 @@ export class ReceiptsService {
 
   async cancel(input: CancelReceiptInput): Promise<Receipt> {
     return cancelReceipt(this.books.db(), input, new Date().toISOString())
-  }
-
-  /**
-   * What has been paid against one document, and what is left.
-   *
-   * Refuses a document these books do not have rather than answering zeros. An invoice
-   * that is not there and an invoice with nothing outstanding are different facts, and a
-   * screen given the second for the first would show a paid invoice that does not exist.
-   */
-  async settlement(documentId: string): Promise<DocumentSettlement> {
-    const db = this.books.db()
-    const document = await requireDocument(db, documentId)
-    const result = await settlementFor(db, document)
-
-    return {
-      documentId,
-      movement: toMoneyString(result.movement),
-      allocated: toMoneyString(result.allocated),
-      outstanding: toMoneyString(result.outstanding),
-      receipts: result.receipts.map((receipt) => ({
-        receiptId: receipt.receiptId,
-        number: receipt.number,
-        date: receipt.date,
-        amount: toMoneyString(receipt.amount),
-      })),
-    }
   }
 
   /**
@@ -149,22 +120,15 @@ export function createReceiptsService(companies: OpenCompanyHandle): ReceiptsSer
   return new ReceiptsService(companies)
 }
 
-/**
- * The document a settlement was asked about, reduced to what deciding it needs.
+/*
+ * `settlement` USED TO LIVE HERE AND MOVED TO THE DOCUMENTS SERVICE IN 0016. It takes a
+ * document id and answers about a document, and half of what it now returns has no
+ * receipt anywhere near it — a credit note set against an invoice settles it without any
+ * money moving. It was here because receipts were once the only thing that settled
+ * anything.
  *
- * Read here rather than in `settlementFor`, which takes the row it needs as an argument
- * so that `db/repos/outstanding.ts` stays a file of arithmetic over rows a caller has
- * already fetched — the same shape `documentTotals` and every posting rule take.
+ * `open` STAYS, and the difference is what the argument is. This one takes a
+ * `ReceiptKind` and answers "what may THIS VOUCHER settle", which is a question about the
+ * voucher being written. The offset picker is `documents.openForOffset`, because there
+ * the thing doing the settling is a document.
  */
-async function requireDocument(db: CofferDb, id: string) {
-  const row = await db
-    .selectFrom('documents')
-    .select(['id', 'kind', 'party_id', 'entry_id'])
-    .where('id', '=', id)
-    .executeTakeFirst()
-
-  if (row === undefined) {
-    throw new RepoError('DOCUMENT_NOT_FOUND', 'That document is not in these books.', { id })
-  }
-  return { id: row.id, kind: row.kind, partyId: row.party_id, entryId: row.entry_id }
-}

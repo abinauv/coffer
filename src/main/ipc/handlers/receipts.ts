@@ -23,7 +23,6 @@ import type {
   AllocationInput,
   CancelReceiptInput,
   CreateReceiptInput,
-  DocumentSettlement,
   ListReceiptsInput,
   OpenDocument,
   OpenDocumentsInput,
@@ -56,7 +55,6 @@ export interface ReceiptsService {
   create(input: CreateReceiptInput): Promise<Receipt>
   allocate(input: AllocateReceiptInput): Promise<Receipt>
   cancel(input: CancelReceiptInput): Promise<Receipt>
-  settlement(documentId: string): Promise<DocumentSettlement>
   open(input: OpenDocumentsInput): Promise<OpenDocument[]>
 }
 
@@ -202,11 +200,6 @@ export function createReceiptsHandlers(service: ReceiptsService): GroupHandlers<
     cancel: {
       parseArgs: (raw): [CancelReceiptInput] => [parseCancel(raw[0])],
       handle: async (input) => ok(await service.cancel(input)),
-    },
-
-    settlement: {
-      parseArgs: (raw): [string] => [expectNonEmptyString(raw[0], 'documentId')],
-      handle: async (documentId) => ok(await service.settlement(documentId)),
     },
 
     open: {

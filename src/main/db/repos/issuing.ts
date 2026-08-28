@@ -31,7 +31,8 @@
  * CANCELLING IS A REVERSAL, NEVER AN UNDO
  *
  * It is also refused outright while money has been allocated against the document — see
- * `assertNotAllocated` and 0012. That is the one thing a cancel can be told no for, and
+ * `assertNotAllocated` and 0012 — and while another document has been OFFSET against it,
+ * which is `assertNotOffset` and 0016. Those are the things a cancel can be told no for, and
  * the reason is that outstanding is a ledger fact: reversing the entry takes the
  * movement to nothing, and allocations still pointing at it would take an invoice's
  * outstanding below zero with money that has to belong somewhere else.
@@ -104,7 +105,7 @@ import { getDocument, toDomainLine } from './documents'
 import { RepoError, type RepoErrorCode } from './errors'
 import { postEntry, reverseEntry } from './journal'
 import { allocateNumber, defaultSeriesFor } from './numbering'
-import { assertNotAllocated } from './outstanding'
+import { assertNotAllocated, assertNotOffset } from './outstanding'
 import { periodRefForDate } from './periods'
 import { inTransaction } from './transaction'
 
@@ -218,6 +219,11 @@ export async function cancelDocument(
      * this says it with the figure in it, to a user who is looking at the invoice.
      */
     await assertNotAllocated(trx, document.id)
+    /* And the same rule for the OTHER thing that settles a document. An offset is not
+     * money, so it cannot be described as money the user has to go and find — but a
+     * cancel would leave it settling a supply the books say never happened, which is
+     * 0013's argument about a correction rather than 0012's about a receipt. */
+    await assertNotOffset(trx, document.id)
     await assertNotCorrected(trx, document.id)
 
     const kind = definitionOf(document.kind as DocumentKind).kind

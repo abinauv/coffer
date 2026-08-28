@@ -25,10 +25,14 @@ import type {
   CreateDocumentInput,
   Document,
   DocumentLineInput,
+  DocumentSettlement,
   DocumentStatusDto,
   DocumentSummary,
   IssueDocumentInput,
   ListDocumentsInput,
+  OffsetInput,
+  OpenDocument,
+  SetOffsetsInput,
   UpdateDocumentInput,
 } from '../../../shared/dto'
 import type { GroupHandlers } from '../registry'
@@ -59,6 +63,9 @@ export interface DocumentsService {
   delete(id: string): Promise<void>
   issue(input: IssueDocumentInput): Promise<Document>
   cancel(input: CancelDocumentInput): Promise<Document>
+  settlement(documentId: string): Promise<DocumentSettlement>
+  offset(input: SetOffsetsInput): Promise<DocumentSettlement>
+  openForOffset(documentId: string): Promise<OpenDocument[]>
 }
 
 /*
@@ -71,6 +78,12 @@ const DOCUMENT_STATUSES = [
   'issued',
   'cancelled',
 ] as const satisfies readonly DocumentStatusDto[]
+
+/**
+ * The same ceiling `receipts.allocate` puts on a set of allocations, for the same reason:
+ * a bound that a real save cannot reach and a malicious one cannot get past.
+ */
+const MAX_OFFSETS = 500
 
 /** A description with a full specification in it, and no more. */
 const MAX_TEXT = 500
@@ -203,6 +216,26 @@ function parseCancel(value: unknown): CancelDocumentInput {
   }
 }
 
+function parseOffset(value: unknown, index: number): OffsetInput {
+  const input = expectRecord(value, `offsets[${String(index)}]`)
+  const at = (field: string) => `offsets[${String(index)}].${field}`
+
+  return {
+    chargeDocumentId: expectNonEmptyString(input['chargeDocumentId'], at('chargeDocumentId')),
+    amount: expectDecimalString(input['amount'], at('amount')),
+  }
+}
+
+function parseSetOffsets(value: unknown): SetOffsetsInput {
+  const input = expectRecord(value, 'input')
+  return {
+    refundDocumentId: expectNonEmptyString(input['refundDocumentId'], 'refundDocumentId'),
+    /* Required, not optional, and an empty array is the way to clear the set. `undefined`
+     * would be a third meaning nobody needs: the panel always holds the whole list. */
+    offsets: expectArray(input['offsets'], 'offsets', MAX_OFFSETS).map(parseOffset),
+  }
+}
+
 export function createDocumentsHandlers(service: DocumentsService): GroupHandlers<'documents'> {
   return {
     list: {
@@ -241,6 +274,21 @@ export function createDocumentsHandlers(service: DocumentsService): GroupHandler
     cancel: {
       parseArgs: (raw): [CancelDocumentInput] => [parseCancel(raw[0])],
       handle: async (input) => ok(await service.cancel(input)),
+    },
+
+    settlement: {
+      parseArgs: (raw): [string] => [expectNonEmptyString(raw[0], 'documentId')],
+      handle: async (documentId) => ok(await service.settlement(documentId)),
+    },
+
+    offset: {
+      parseArgs: (raw): [SetOffsetsInput] => [parseSetOffsets(raw[0])],
+      handle: async (input) => ok(await service.offset(input)),
+    },
+
+    openForOffset: {
+      parseArgs: (raw): [string] => [expectNonEmptyString(raw[0], 'documentId')],
+      handle: async (documentId) => ok(await service.openForOffset(documentId)),
     },
   }
 }

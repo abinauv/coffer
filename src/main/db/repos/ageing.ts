@@ -36,10 +36,12 @@
  *      makes a document cancelled next month still outstanding today: the reversal is a
  *      second entry with a later date, so it is simply not in range yet.
  *
- *   2. An allocation counts when BOTH ends were in the books by the date — the receipt
- *      that made it and the document it settles. One end alone gives a readable-looking
- *      answer that is nonsense: a receipt dated in January against an invoice dated in
- *      June shows, in March, an invoice nobody has raised as part paid.
+ *   2. A MATCH counts when BOTH ends were in the books by the date. One end alone gives a
+ *      readable-looking answer that is nonsense: a receipt dated in January against an
+ *      invoice dated in June shows, in March, an invoice nobody has raised as part paid.
+ *      There are two matching tables since 0016 — `receipt_allocations` and
+ *      `document_offsets` — and the rule is the same for both, which is why one function
+ *      folds them together rather than the report doing it twice.
  *
  *   3. The control balance the report checks itself against is summed over the same
  *      lines with the same filter, by `signedEffect` — the same function the balance
@@ -51,6 +53,35 @@
  * simply appears as unallocated instead — so the page still ties, and the distribution
  * across invoices is the part that has genuinely gone. Recording it would mean giving
  * allocations a history, which rule 2 declines to do on purpose.
+ *
+ * ---------------------------------------------------------------------------
+ * A MATCH ALWAYS OPPOSES THE END IT IS ON, AND THAT IS ONE RULE RATHER THAN TWO
+ *
+ * This file took allocations OFF the document and put them BACK ON the receipt, and the
+ * comment beside it explained the asymmetry correctly for the world it was written in: a
+ * document's movement was positive and a receipt's was negative, so bringing each of them
+ * towards zero meant opposite signs.
+ *
+ * IT WAS THE RIGHT PAIR OF SIGNS FOR THE WRONG REASON, and 0015-1 broke it by adding the
+ * two kinds it did not cover. A credit note's movement is NEGATIVE and a refund paid is
+ * POSITIVE, so a refund of 400 against a credit note of 1,180 reported the note at -1,580
+ * and the voucher at +800 — the note driven further from zero by money actually paid back,
+ * and a fully-settled voucher showing double what it was for. MEASURED, not reasoned
+ * about: both figures came off a report that still said `ties: true`, because the two
+ * errors are equal and opposite and cancel at the foot. The rows were nonsense and the
+ * total was right, which is the worst way for a report to be wrong.
+ *
+ * So the sign is now read from the END'S OWN FACING rather than from which table it came
+ * out of: a match reduces what is unsettled at both of its ends, so it opposes a `charge`
+ * and joins a `refund`, whether that end is a document or a voucher. `receiptFacing` is
+ * what lets a voucher be described in the same word a document is — and it says the thing
+ * worth saying out loud, which is that A RECEIPT MOVES RECEIVABLES THE WAY A CREDIT NOTE
+ * DOES.
+ *
+ * AND THE TOTAL STILL TIES BY CONSTRUCTION, for a better reason than before. Every
+ * matching row is applied at two ends that face opposite ways, so it contributes +a and
+ * -a and vanishes from the foot — which is what "a match moves no money" means
+ * arithmetically. That is asserted rather than assumed, in ageing.test.ts.
  *
  * ---------------------------------------------------------------------------
  * WHY THE ROLE DECIDES THE ACCOUNT, WHEN OUTSTANDING.TS REFUSES TO USE IT
@@ -69,8 +100,15 @@
  */
 
 import { ZERO, toMoneyString, type Decimal } from '@main/domain/money'
-import { controlRoleFor, type TradeSide } from '@main/domain/documents'
+import {
+  controlRoleFor,
+  definitionOf,
+  type DocumentDirection,
+  type DocumentKind,
+  type TradeSide,
+} from '@main/domain/documents'
 import { signedEffect, type AccountType } from '@main/domain/ledger'
+import { receiptDefinitionOf, receiptFacing, type ReceiptKind } from '@main/domain/receipts'
 import { AGE_BUCKETS, ageItems, type AgeableItem, type PlacedItem } from '@main/domain/reports'
 import { sql } from 'kysely'
 
@@ -132,22 +170,18 @@ export async function agedReport(db: CofferDb, options: AgedReportOptions): Prom
   const account = await controlAccountFor(db, options.side)
   const { asAtDate } = options
 
-  const [groups, allocatedToDocuments, allocatedFromReceipts, controlPaise] = await Promise.all([
+  const [groups, settled, controlPaise] = await Promise.all([
     movementsByOwner(db, account.id, asAtDate),
-    allocationsAsAt(db, asAtDate, 'documents.entry_id'),
-    allocationsAsAt(db, asAtDate, 'receipts.entry_id'),
+    settledAsAt(db, asAtDate),
     controlBalancePaise(db, account.id, asAtDate),
   ])
 
   /*
-   * ONE SUBTRACTION AND ONE ADDITION, AND THE SECOND IS THE HALF THAT TIES.
-   *
-   * Taking allocations off a document is the obvious move. Putting them back on the
-   * RECEIPT is the one a report gets wrong: a receipt's movement is the whole of what
-   * arrived, so a receipt half applied to an invoice has to come back as half a credit or
-   * that money is counted twice — once as a reduced invoice, once as an unapplied
-   * receipt. The two lines below read the same allocation rows through the two ends they
-   * join, which is what makes the pair exact rather than merely opposite.
+   * ONE ADDITION, AND ITS SIGN CAME OFF THE END'S OWN FACING — see the header. Every
+   * match is applied at both of its ends, opposing each of them, so a receipt half
+   * applied to an invoice reduces the invoice AND comes back as half a credit rather than
+   * being counted twice; and the two contributions cancel at the foot, which is what
+   * makes `ties` a statement about the arithmetic rather than about this loop.
    */
   const open: { partyId: string | null; ownerEntryId: string; amount: Decimal }[] = []
   for (const group of groups) {
@@ -156,9 +190,7 @@ export async function agedReport(db: CofferDb, options: AgedReportOptions): Prom
       fromPaise(group.debitPaise),
       fromPaise(group.creditPaise),
     )
-    const amount = owed
-      .minus(allocatedToDocuments.get(group.ownerEntryId) ?? ZERO)
-      .plus(allocatedFromReceipts.get(group.ownerEntryId) ?? ZERO)
+    const amount = owed.plus(settled.get(group.ownerEntryId) ?? ZERO)
 
     /* Settled in full, or cancelled, or reversed. Not a row — there is nothing to say
      * about it, and an aged report listing every invoice ever paid is a register. */
@@ -241,21 +273,76 @@ async function movementsByOwner(
 }
 
 /**
- * What has been allocated as at the date, keyed by one end of the match.
+ * Everything that has settled anything as at the date, as a SIGNED ADJUSTMENT per owning
+ * entry.
+ *
+ * SIGNED HERE RATHER THAN AT THE CALL SITE, which is the whole shape of the fix. The
+ * caller has an entry id and a movement and nothing else — it cannot know whether that
+ * movement was an invoice or a credit note without looking the owner up, and the version
+ * of this file that decided the sign by which TABLE the figure came out of was wrong for
+ * two of the four kinds. Each row here already knows its own end's kind, so the facing is
+ * read where it is free.
+ *
+ * THREE QUERIES AND ONE MAP. An allocation is read through both of its ends and an offset
+ * through both of its, which is four contributions from two tables — and every one of
+ * them is `against(facing)`, so there is no place left for a sign to be decided by
+ * anything but the end it lands on.
+ */
+async function settledAsAt(db: CofferDb, asAtDate: DateString): Promise<Map<string, Decimal>> {
+  const total = new Map<string, Decimal>()
+  const add = (entryId: string, amount: Decimal): void => {
+    total.set(entryId, (total.get(entryId) ?? ZERO).plus(amount))
+  }
+
+  for (const row of await allocationsAsAt(db, asAtDate, 'documents')) {
+    add(row.ownerEntryId, against(definitionOf(row.kind as DocumentKind).direction, row.amount))
+  }
+  for (const row of await allocationsAsAt(db, asAtDate, 'receipts')) {
+    const facing = receiptFacing(receiptDefinitionOf(row.kind as ReceiptKind))
+    add(row.ownerEntryId, against(facing, row.amount))
+  }
+  for (const row of await offsetsAsAt(db, asAtDate)) {
+    add(row.chargeEntryId, against('charge', row.amount))
+    add(row.refundEntryId, against('refund', row.amount))
+  }
+  return total
+}
+
+/**
+ * How a match moves the end it is on.
+ *
+ * It always OPPOSES it: a charge is positive in the account's signing and a match reduces
+ * it, a refund is negative and a match brings it up. Two lines, and they are the reason
+ * this report ties — applied at two ends facing opposite ways, one row contributes
+ * nothing at all to the foot.
+ */
+function against(facing: DocumentDirection, amount: Decimal): Decimal {
+  return facing === 'charge' ? amount.negated() : amount
+}
+
+/**
+ * What has been allocated as at the date, through one end of the match.
  *
  * TWO CALLS, ONE QUERY, AND THAT IS THE POINT. The document side and the receipt side
  * must count exactly the same rows or the report cannot tie — so the two differ in their
  * GROUP BY and in nothing else, rather than being two queries that would need to be kept
  * in step by whoever edits one of them next.
  *
- * Both entry dates are tested, which is the rule in the header: an allocation is a match
- * between two things, and it is not in force until both of them are in the books.
+ * Both entry dates are tested, which is the rule in the header: a match is between two
+ * things, and it is not in force until both of them are in the books.
+ *
+ * THE KIND RIDES ALONG because the sign depends on it. It is functionally determined by
+ * the entry — one entry is one document or one voucher — so grouping by both changes no
+ * row and saves a second lookup.
  */
 async function allocationsAsAt(
   db: CofferDb,
   asAtDate: DateString,
-  key: 'documents.entry_id' | 'receipts.entry_id',
-): Promise<Map<string, Decimal>> {
+  end: 'documents' | 'receipts',
+): Promise<{ ownerEntryId: string; kind: string; amount: Decimal }[]> {
+  const entryId = sql.ref(`${end}.entry_id`)
+  const kind = sql.ref(`${end}.kind`)
+
   const rows = await db
     .selectFrom('receipt_allocations')
     .innerJoin('receipts', 'receipts.id', 'receipt_allocations.receipt_id')
@@ -263,15 +350,60 @@ async function allocationsAsAt(
     .innerJoin('documents', 'documents.id', 'receipt_allocations.document_id')
     .innerJoin('journal_entries as document_entry', 'document_entry.id', 'documents.entry_id')
     .select([
-      sql<string>`${sql.ref(key)}`.as('ownerEntryId'),
+      sql<string>`${entryId}`.as('ownerEntryId'),
+      sql<string>`${kind}`.as('kind'),
       paiseSum('receipt_allocations.amount').as('paise'),
     ])
     .where('receipt_entry.entry_date', '<=', asAtDate)
     .where('document_entry.entry_date', '<=', asAtDate)
-    .groupBy(sql`${sql.ref(key)}`)
+    .groupBy([sql`${entryId}`, sql`${kind}`])
     .execute()
 
-  return new Map(rows.map((row) => [row.ownerEntryId, fromPaise(row.paise)]))
+  return rows.map((row) => ({
+    ownerEntryId: row.ownerEntryId,
+    kind: row.kind,
+    amount: fromPaise(row.paise),
+  }))
+}
+
+/**
+ * What has been offset as at the date, with BOTH ends named on one row.
+ *
+ * One row rather than two calls, where allocations take two. The difference is that both
+ * ends of an offset are documents, so one query already has both entry ids in hand and
+ * splitting it would be two reads of one table that have to agree — the exact thing the
+ * two allocation calls go out of their way to guarantee by sharing a query body.
+ *
+ * NO KIND COLUMN, because the column names carry it: the charge end is a charge and the
+ * refund end is a refund, which is what 0016's kind trigger enforces on the way in. That
+ * is the one place in this file where a facing is written down rather than looked up, and
+ * it is sound because the database refuses every row where it would not be.
+ */
+async function offsetsAsAt(
+  db: CofferDb,
+  asAtDate: DateString,
+): Promise<{ chargeEntryId: string; refundEntryId: string; amount: Decimal }[]> {
+  const rows = await db
+    .selectFrom('document_offsets')
+    .innerJoin('documents as charge', 'charge.id', 'document_offsets.charge_document_id')
+    .innerJoin('journal_entries as charge_entry', 'charge_entry.id', 'charge.entry_id')
+    .innerJoin('documents as refund', 'refund.id', 'document_offsets.refund_document_id')
+    .innerJoin('journal_entries as refund_entry', 'refund_entry.id', 'refund.entry_id')
+    .select([
+      'charge_entry.id as chargeEntryId',
+      'refund_entry.id as refundEntryId',
+      paiseSum('document_offsets.amount').as('paise'),
+    ])
+    .where('charge_entry.entry_date', '<=', asAtDate)
+    .where('refund_entry.entry_date', '<=', asAtDate)
+    .groupBy(['charge_entry.id', 'refund_entry.id'])
+    .execute()
+
+  return rows.map((row) => ({
+    chargeEntryId: row.chargeEntryId,
+    refundEntryId: row.refundEntryId,
+    amount: fromPaise(row.paise),
+  }))
 }
 
 /** The account's whole balance as at the date, party or no party. */

@@ -264,7 +264,7 @@ export function DocumentEditor({
       return
     }
 
-    void callApi((api) => api.receipts.settlement(settledId)).then((result) => {
+    void callApi((api) => api.documents.settlement(settledId)).then((result) => {
       if (!current) return
       if (result.ok) setSettlement(result.data)
     })

@@ -46,6 +46,18 @@
  *
  *   0015  numbering_series rebuilt,
  *         receipt_allocations_settles_kind          — a refund is a voucher  LANDED
+ *   0016  document_offsets                          — which invoice a credit note settles  LANDED
+ *
+ * 0016 IS `receipt_allocations` WITH MONEY AT NEITHER END, and its header is the argument
+ * for why that is one table rather than a column on `documents` — and, more usefully, for
+ * why it is NOT the `original_document_id` link 0013 already added. Those two point the
+ * same way and say different things: 0013 records what a credit note CORRECTS, which is
+ * frozen at issue because a filed return names it, and 0016 records what it SETTLES,
+ * which is decided afterwards and changed as often as the parties agree.
+ *
+ * IT ALSO PUTS A SECOND FOREIGN TRIGGER ON `documents`. Read the note at the foot of
+ * 0016's `up` before rebuilding that table: 0010's `REBUILD_TAIL` recreates the triggers
+ * by hand, and there are now two rules on it that were written elsewhere.
  *
  * 0015 WRITES A RULE 0012 CONSIDERED AND DECLINED, and its header is the argument for why
  * that is a correction rather than a reversal: with one voucher per side a wrong pairing
@@ -149,6 +161,7 @@ import { m0012 } from './0012_receipts'
 import { m0013 } from './0013_document_links'
 import { m0014 } from './0014_document_due_date'
 import { m0015 } from './0015_refund_vouchers'
+import { m0016 } from './0016_document_offsets'
 
 export const MIGRATIONS: readonly Migration[] = [
   m0001,
@@ -166,4 +179,5 @@ export const MIGRATIONS: readonly Migration[] = [
   m0013,
   m0014,
   m0015,
+  m0016,
 ]

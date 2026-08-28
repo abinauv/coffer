@@ -52,6 +52,7 @@ import { cancelDocument, issueDocument } from './issuing'
 import { postManualEntry } from './journal'
 import { postOpeningBalances } from './opening-balances'
 import { createParty } from './parties'
+import { setOffsets } from './offsets'
 import { createReceipt, cancelReceipt } from './receipts'
 import { taxAccountsFor } from './tax-accounts'
 
@@ -927,6 +928,217 @@ describe('a file holding something the repository would refuse', () => {
     expect(document?.bucket).toBeNull()
     /* The receipt's spare has shrunk by the same 1,500, so the foot is unmoved and the
      * account still agrees — which is the property that makes showing it safe. */
+    expect(aged.ties).toBe(true)
+  })
+})
+
+// ---- The two quadrants 0015 opened, and the table 0016 added ----------------
+
+/*
+ * A REFUND DOCUMENT AND A REFUND VOUCHER, WHICH THIS REPORT USED TO GET WRONG.
+ *
+ * The sign of a match was decided by which TABLE the figure came from — off a document,
+ * back on a receipt — and that is the right pair of signs only while every document is a
+ * charge and every voucher settles one. 0015-1 added the two kinds that break it, and
+ * MEASURED against the version before this batch: a refund of 400 against a credit note
+ * of 1,180 reported the note at -1,580 and the voucher at +800.
+ *
+ * `ties` WAS STILL TRUE, which is what makes these tests worth having. The two errors are
+ * equal and opposite, so the foot of the report was right while both rows were nonsense —
+ * and `ties` alone can never see it. Every test below therefore asserts the ITEMS as well.
+ */
+describe('a refund, on both sides of the match', () => {
+  it('reports a credit note and the refund paid against it, both in their own facing', async () => {
+    const credit = await issued({ kind: 'credit-note' })
+    await createReceipt(
+      db,
+      receiptInput({
+        kind: 'refund',
+        amount: '400.00',
+        date: '2026-05-01',
+        allocations: [{ documentId: credit.id, amount: '400.00' }],
+      }),
+      NOW,
+    )
+
+    const aged = await report()
+    const party = rowFor(aged, customer)
+
+    /* The note, less what has actually been paid back. The voucher is settled in full and
+     * so is not an item at all — an aged report lists what is open. */
+    expect(party?.items).toHaveLength(1)
+    expect(party?.items[0]).toMatchObject({ kind: 'credit-note', amount: '-780.00' })
+    expect(party?.onAccount).toBe('780.00')
+    expect(party?.total).toBe('-780.00')
+    expect(aged.controlBalance).toBe('-780.00')
+    expect(aged.ties).toBe(true)
+  })
+
+  /* Part paid, so the voucher survives as an item too and both figures are checked. A
+   * refund of 400 out of a voucher for 1,000 leaves 600 standing to the customer. */
+  it('leaves the unspent part of a refund voucher on the report', async () => {
+    const credit = await issued({ kind: 'credit-note' })
+    await createReceipt(
+      db,
+      receiptInput({
+        kind: 'refund',
+        amount: '1000.00',
+        date: '2026-05-01',
+        allocations: [{ documentId: credit.id, amount: '400.00' }],
+      }),
+      NOW,
+    )
+
+    const party = rowFor(await report(), customer)
+    const items = new Map(party?.items.map((item) => [item.kind, item.amount]))
+
+    expect(items.get('credit-note')).toBe('-780.00')
+    /* A refund voucher PUTS money on receivables — it is money going back out — so its
+     * unspent part is a debit, and it ages like a debt rather than standing on account. */
+    expect(items.get('refund')).toBe('600.00')
+    expect(party?.total).toBe('-180.00')
+    expect((await report()).ties).toBe(true)
+  })
+
+  it('does the same on the purchase side', async () => {
+    const debit = await issued({ kind: 'debit-note', partyId: vendor, date: '2026-04-15' })
+    await createReceipt(
+      db,
+      receiptInput({
+        kind: 'refund-received',
+        partyId: vendor,
+        amount: '400.00',
+        date: '2026-05-01',
+        allocations: [{ documentId: debit.id, amount: '400.00' }],
+      }),
+      NOW,
+    )
+
+    const aged = await report(AS_AT, 'purchase')
+    const party = rowFor(aged, vendor)
+
+    expect(party?.items).toHaveLength(1)
+    expect(party?.items[0]).toMatchObject({ kind: 'debit-note', amount: '-780.00' })
+    expect(aged.ties).toBe(true)
+  })
+})
+
+describe('an offset between two documents', () => {
+  /*
+   * THE PAGE THIS BATCH EXISTS FOR. Before it, an invoice sat in an overdue column at its
+   * full value with a credit note on account beside it and nothing that could match them
+   * — the two figures a user has to net in their head before they can chase anybody.
+   */
+  it('takes the offset off both documents and still ties', async () => {
+    const invoice = await issued()
+    const credit = await issued({ kind: 'credit-note' })
+    await setOffsets(
+      db,
+      {
+        refundDocumentId: credit.id,
+        offsets: [{ chargeDocumentId: invoice.id, amount: '400.00' }],
+      },
+      NOW,
+    )
+
+    const aged = await report()
+    const party = rowFor(aged, customer)
+    const items = new Map(party?.items.map((item) => [item.kind, item.amount]))
+
+    expect(items.get('sales-invoice')).toBe('780.00')
+    expect(items.get('credit-note')).toBe('-780.00')
+    expect(columns(party)).toEqual(['0.00', '0.00', '780.00', '0.00', '0.00'])
+    expect(party?.onAccount).toBe('780.00')
+    expect(party?.total).toBe('0.00')
+    expect(aged.controlBalance).toBe('0.00')
+    expect(aged.ties).toBe(true)
+  })
+
+  /* Settled in full against each other, so neither is an item and the party drops off the
+   * report — which is the state a business is trying to reach. */
+  it('drops both when they settle each other exactly', async () => {
+    const invoice = await issued()
+    const credit = await issued({ kind: 'credit-note' })
+    await setOffsets(
+      db,
+      {
+        refundDocumentId: credit.id,
+        offsets: [{ chargeDocumentId: invoice.id, amount: '1180.00' }],
+      },
+      NOW,
+    )
+
+    const aged = await report()
+
+    expect(aged.parties).toEqual([])
+    expect(aged.totals.total).toBe('0.00')
+    expect(aged.ties).toBe(true)
+  })
+
+  /*
+   * AS AT MEANS THE LEDGER, FOR AN OFFSET TOO. Both ends have to be in the books by the
+   * date — the same rule an allocation follows, and for the same reason: an April invoice
+   * shown as part settled by a July credit note is a June report that knows the future.
+   */
+  it('ignores an offset whose other end is not in the books yet', async () => {
+    const invoice = await issued()
+    const credit = await issued({ kind: 'credit-note', date: '2026-07-15' })
+    await setOffsets(
+      db,
+      {
+        refundDocumentId: credit.id,
+        offsets: [{ chargeDocumentId: invoice.id, amount: '400.00' }],
+      },
+      NOW,
+    )
+
+    const june = await report()
+    expect(rowFor(june, customer)?.items[0]).toMatchObject({
+      kind: 'sales-invoice',
+      amount: '1180.00',
+    })
+    expect(june.ties).toBe(true)
+
+    const august = await report('2026-08-31')
+    const items = new Map(rowFor(august, customer)?.items.map((item) => [item.kind, item.amount]))
+    expect(items.get('sales-invoice')).toBe('780.00')
+    expect(items.get('credit-note')).toBe('-780.00')
+    expect(august.ties).toBe(true)
+  })
+
+  /*
+   * AN OFFSET AND A RECEIPT AGAINST ONE INVOICE, which is the case where a report that
+   * counted one of the two sources would still tie and still be wrong. 1,180 less a 400
+   * offset less a 300 receipt leaves 480 on the invoice.
+   */
+  it('counts both kinds of match against one invoice', async () => {
+    const invoice = await issued()
+    const credit = await issued({ kind: 'credit-note' })
+    await setOffsets(
+      db,
+      {
+        refundDocumentId: credit.id,
+        offsets: [{ chargeDocumentId: invoice.id, amount: '400.00' }],
+      },
+      NOW,
+    )
+    await createReceipt(
+      db,
+      receiptInput({
+        amount: '300.00',
+        date: '2026-05-01',
+        allocations: [{ documentId: invoice.id, amount: '300.00' }],
+      }),
+      NOW,
+    )
+
+    const aged = await report()
+    const items = new Map(rowFor(aged, customer)?.items.map((item) => [item.kind, item.amount]))
+
+    expect(items.get('sales-invoice')).toBe('480.00')
+    expect(items.get('credit-note')).toBe('-780.00')
+    expect(items.has('receipt')).toBe(false)
+    expect(aged.controlBalance).toBe('-300.00')
     expect(aged.ties).toBe(true)
   })
 })

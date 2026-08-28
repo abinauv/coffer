@@ -14,10 +14,11 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { DOCUMENT_KINDS, definitionOf, type DocumentKind } from './documents'
+import { DOCUMENT_KINDS, definitionOf, opposite, type DocumentKind } from './documents'
 import {
   RECEIPT_KINDS,
   receiptDefinitionOf,
+  receiptFacing,
   settledBy,
   settledByIn,
   settledDirection,
@@ -105,12 +106,54 @@ describe('what a voucher settles', () => {
 
   /* Money that ADDS to what the side's control account carries settles a refund; money
    * that takes it down settles a charge. Both halves pinned, or the equality inside
-   * `addsToBalance` could be inverted and half the table would still read correctly. */
+   * `receiptFacing` could be inverted and half the table would still read correctly. */
   it('sends money that adds to the balance at the refunds', () => {
     expect(settledDirection(receiptDefinitionOf('refund'))).toBe('refund')
     expect(settledDirection(receiptDefinitionOf('refund-received'))).toBe('refund')
     expect(settledDirection(receiptDefinitionOf('receipt'))).toBe('charge')
     expect(settledDirection(receiptDefinitionOf('payment'))).toBe('charge')
+  })
+})
+
+describe('which way a voucher moves the account', () => {
+  /*
+   * THE SENTENCE THIS FUNCTION EXISTS TO SAY: a receipt moves receivables the way a
+   * CREDIT NOTE does. Both take money off what the customer owes, so both are `refund` —
+   * and once a voucher can be described in a document's vocabulary, an offset and an
+   * allocation stop being two rules.
+   *
+   * All four by value, because 0016 reads this to decide the SIGN of every match on the
+   * aged report, and the version of that report which decided the sign by which table the
+   * figure came from was wrong for two of these four.
+   */
+  it('describes each voucher in the same word a document uses', () => {
+    expect(receiptFacing(receiptDefinitionOf('receipt'))).toBe('refund')
+    expect(receiptFacing(receiptDefinitionOf('payment'))).toBe('refund')
+    expect(receiptFacing(receiptDefinitionOf('refund'))).toBe('charge')
+    expect(receiptFacing(receiptDefinitionOf('refund-received'))).toBe('charge')
+  })
+
+  /*
+   * AND THE DERIVATION, WHICH IS THE WHOLE CLAIM. What a voucher settles is what it does
+   * NOT face — two movements on one account pointing opposite ways. If these ever came
+   * apart, a voucher would be settling documents it moves the account alongside.
+   */
+  it('settles the opposite of what it faces, for every kind', () => {
+    for (const kind of KINDS) {
+      const definition = receiptDefinitionOf(kind)
+      expect(settledDirection(definition)).not.toBe(receiptFacing(definition))
+    }
+  })
+
+  /* A voucher faces the way the documents it does NOT settle face — which is the same
+   * statement read from the document side, and is what makes an offset and an allocation
+   * one idea rather than two. */
+  it('faces the way the documents it does not settle face', () => {
+    for (const kind of KINDS) {
+      const definition = receiptDefinitionOf(kind)
+      const settled = definitionOf(settles(kind))
+      expect(receiptFacing(definition)).toBe(opposite(settled.direction))
+    }
   })
 })
 

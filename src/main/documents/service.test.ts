@@ -169,6 +169,11 @@ describe('which company is open', () => {
     expect(await codeOf(() => documents.get('d1'))).toBe('NO_COMPANY_OPEN')
     expect(await codeOf(() => documents.create(draft()))).toBe('NO_COMPANY_OPEN')
     expect(await codeOf(() => documents.delete('d1'))).toBe('NO_COMPANY_OPEN')
+    expect(await codeOf(() => documents.settlement('d1'))).toBe('NO_COMPANY_OPEN')
+    expect(await codeOf(() => documents.openForOffset('d1'))).toBe('NO_COMPANY_OPEN')
+    expect(await codeOf(() => documents.offset({ refundDocumentId: 'd1', offsets: [] }))).toBe(
+      'NO_COMPANY_OPEN',
+    )
   })
 })
 
@@ -512,5 +517,137 @@ describe('issuing, through the service', () => {
 
     expect(await documents.list()).toHaveLength(2)
     expect(await documents.list({ partyId: interstate })).toHaveLength(1)
+  })
+})
+
+/*
+ * WHAT HAS SETTLED A DOCUMENT, THROUGH THE SERVICE (0016).
+ *
+ * `settlement` and `offset` answer the same DTO through one mapper, and a mutation pass
+ * is why these exist: emptying the `offsets` list and reporting `offset` as nought both
+ * survived the whole suite. Everything below the service was covered by
+ * db/repos/offsets.test.ts, and nothing had ever looked at what crossed the boundary.
+ *
+ * The figures are decimal strings and there is no `Decimal` anywhere in the answer, which
+ * is §1.7 at the seam it applies to.
+ */
+describe('offsets, through the service', () => {
+  /** Books that can issue an invoice AND a credit note, which needs two series. */
+  async function ready(): Promise<Fixture> {
+    const parts = await fixture()
+    const db = createQueryBuilder(parts.companies.currentDatabase()!)
+    await generateFiscalYear(db, { rule: aprilToMarch, startYear: 2026 }).catch(() => undefined)
+    for (const [kind, prefix] of [
+      ['sales-invoice', 'INV'],
+      ['credit-note', 'CRN'],
+    ] as const) {
+      await createSeries(db, {
+        kind,
+        label: 'Domestic',
+        prefix,
+        separator: '/',
+        includeFiscalYear: true,
+        width: 4,
+        resetOn: 'fiscal-year',
+      })
+    }
+    return parts
+  }
+
+  async function issuedPair(parts: Fixture) {
+    const invoice = await parts.documents.issue({
+      id: (await parts.documents.create(draft({ partyId: parts.local }))).id,
+    })
+    const note = await parts.documents.issue({
+      id: (await parts.documents.create(draft({ partyId: parts.local, kind: 'credit-note' }))).id,
+    })
+    return { invoice, note }
+  }
+
+  it('is the whole document before anything settles it', async () => {
+    const parts = await ready()
+    const { invoice } = await issuedPair(parts)
+
+    expect(await parts.documents.settlement(invoice.id)).toEqual({
+      documentId: invoice.id,
+      movement: '1180.00',
+      allocated: '0.00',
+      offset: '0.00',
+      outstanding: '1180.00',
+      receipts: [],
+      offsets: [],
+    })
+  })
+
+  it('hands back the offset and the document at the other end', async () => {
+    const parts = await ready()
+    const { invoice, note } = await issuedPair(parts)
+
+    const saved = await parts.documents.offset({
+      refundDocumentId: note.id,
+      offsets: [{ chargeDocumentId: invoice.id, amount: '400.00' }],
+    })
+
+    /* The answer is the NOTE's settlement, because that is the panel that saved. */
+    expect(saved.documentId).toBe(note.id)
+    expect(saved.offset).toBe('400.00')
+    expect(saved.outstanding).toBe('780.00')
+    expect(saved.offsets).toEqual([
+      {
+        offsetId: expect.any(String),
+        documentId: invoice.id,
+        documentKind: 'sales-invoice',
+        documentNumber: 'INV/2026-27/0001',
+        documentDate: DATE,
+        amount: '400.00',
+      },
+    ])
+
+    /* And the same row read from the invoice, naming the note instead. */
+    const onInvoice = await parts.documents.settlement(invoice.id)
+    expect(onInvoice.offset).toBe('400.00')
+    expect(onInvoice.outstanding).toBe('780.00')
+    expect(onInvoice.offsets.map((row) => row.documentNumber)).toEqual(['CRN/2026-27/0001'])
+  })
+
+  it('clears the set when it is sent an empty list', async () => {
+    const parts = await ready()
+    const { invoice, note } = await issuedPair(parts)
+    await parts.documents.offset({
+      refundDocumentId: note.id,
+      offsets: [{ chargeDocumentId: invoice.id, amount: '400.00' }],
+    })
+
+    const cleared = await parts.documents.offset({ refundDocumentId: note.id, offsets: [] })
+
+    expect(cleared.offset).toBe('0.00')
+    expect(cleared.offsets).toEqual([])
+    expect((await parts.documents.settlement(invoice.id)).outstanding).toBe('1180.00')
+  })
+
+  it('offers the invoices a note may be set against, and refuses the reverse', async () => {
+    const parts = await ready()
+    const { invoice, note } = await issuedPair(parts)
+
+    const open = await parts.documents.openForOffset(note.id)
+    expect(open).toEqual([
+      {
+        id: invoice.id,
+        kind: 'sales-invoice',
+        number: 'INV/2026-27/0001',
+        date: DATE,
+        grandTotal: '1180.00',
+        outstanding: '1180.00',
+      },
+    ])
+
+    expect(await codeOf(() => parts.documents.openForOffset(invoice.id))).toBe(
+      'OFFSET_KIND_MISMATCH',
+    )
+  })
+
+  it('refuses a document these books do not have', async () => {
+    const parts = await ready()
+    expect(await codeOf(() => parts.documents.settlement('nobody'))).toBe('DOCUMENT_NOT_FOUND')
   })
 })

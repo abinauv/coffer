@@ -71,10 +71,31 @@
  * negative still means the one thing it always meant. Everything else in this file — the
  * movement query, the allocation sum, the reversal netting — is untouched, because none
  * of it was wrong.
+ *
+ * ---------------------------------------------------------------------------
+ * AND SINCE 0016, TWO SOURCES OF SETTLEMENT RATHER THAN ONE
+ *
+ * A voucher is not the only thing that settles a document. A credit note set against an
+ * invoice settles it just as a receipt does, with no money moving — `document_offsets` is
+ * the matching row for it, and every figure below is now
+ *
+ *   the movement, in the document's own facing,
+ *   less what has been allocated to it from vouchers,
+ *   less what has been offset against it from documents.
+ *
+ * ONE ROW IS READ BY BOTH ENDS, and that is the whole trick. An offset names a charge and
+ * a refund, and it reduces what is unsettled on BOTH — because both figures are already
+ * read in their own facing, so "what is left of this" points the same way whichever
+ * document you are holding. No sign is applied to an offset anywhere in this file.
+ *
+ * WHICH IS ALSO WHY THE IDENTITY STILL HOLDS. Every matching row is subtracted at two
+ * ends whose movements point opposite ways in the account's signing, so it cancels
+ * exactly out of the control balance — which is what "an offset moves no money" means
+ * arithmetically rather than as a claim. `ageing.test.ts` asserts it as a tie.
  */
 
 import { D, ZERO, toMoneyString, type Decimal } from '@main/domain/money'
-import { definitionOf, type DocumentKind } from '@main/domain/documents'
+import { correctsKind, definitionOf, type DocumentKind } from '@main/domain/documents'
 import { settles, type ReceiptKind } from '@shared/receipts'
 import type { DateString } from '@shared/scalars'
 
@@ -129,6 +150,25 @@ function facing(kind: string, value: Decimal): Decimal {
 }
 
 /**
+ * What a caller is in the middle of rewriting, and therefore wants left out.
+ *
+ * ONE EXCLUSION, AND IT WAS TWO UNTIL A MUTATION PASS SAID OTHERWISE. The symmetry is
+ * tempting — the receipt editor replaces one voucher's allocations, so surely the offset
+ * panel replaces one refund document's offsets — but the second one had no caller: the
+ * panel goes through the PICKER, which has its own exclusion, and `setOffsets` deletes
+ * its rows before it reads anything. A parameter nothing passes is a line no test can
+ * reach and no mutation can kill, and the codebase's answer to that is to remove it
+ * rather than label it (`movementsFor`, one function down).
+ *
+ * An object rather than a positional argument, because the picker's options extend this
+ * one and the two exclusions read as one idea at the call sites that have both.
+ */
+export interface UnsettledOptions {
+  /** Treat this voucher's allocations as available again. */
+  exceptReceiptId?: string
+}
+
+/**
  * What has been allocated to one document, from every receipt.
  *
  * `exceptReceiptId` is for the caller that is about to REPLACE one receipt's allocations
@@ -158,6 +198,31 @@ export async function allocatedToDocument(
 }
 
 /**
+ * What has been offset against one document, from the other end of every match.
+ *
+ * EITHER END, AND ONE FUNCTION FOR BOTH. A row names a charge and a refund; asked about
+ * an invoice it is the refund end that matters, and asked about a credit note it is the
+ * charge end. The question — "how much of this has been settled by a document rather
+ * than by money" — is the same question, so it is one query with an `OR` rather than two
+ * functions a caller has to choose between correctly.
+ *
+ * NO EXCLUSION HERE, where `allocatedToDocument` above has one. Nothing needs it: the
+ * only caller that replaces a set of offsets deletes them first, and the picker that has
+ * to put a set back on the table goes through `offsetsByDocument`, which does carry one.
+ * See `UnsettledOptions`.
+ */
+export async function offsetToDocument(db: CofferDb, documentId: string): Promise<Decimal> {
+  const rows = await db
+    .selectFrom('document_offsets')
+    .select('amount')
+    .where((eb) =>
+      eb.or([eb('charge_document_id', '=', documentId), eb('refund_document_id', '=', documentId)]),
+    )
+    .execute()
+  return rows.reduce<Decimal>((total, row) => total.plus(D(row.amount)), ZERO)
+}
+
+/**
  * What one document still has against it, in the DOCUMENT's own facing.
  *
  * The whole sentence at the top of this file, as one function. Negative is possible and
@@ -169,18 +234,22 @@ export async function allocatedToDocument(
  * note's movement on the account is negative, so without it a credit note with nothing
  * refunded would read as -1,180 outstanding and every rupee actually paid back would take
  * it further from zero — and a negative would then mean two opposite things depending on
- * which kind you were holding. `exceptReceiptId` is `allocatedToDocument`'s and means the
- * same thing: treat that voucher's allocations as available again, for the caller that is
- * about to replace them.
+ * which kind you were holding.
+ *
+ * TWO SUBTRACTIONS SINCE 0016, and they are two only because they read two tables. A
+ * credit note settled by a refund voucher and one settled by an offset against an invoice
+ * are the same amount of settled, and both come off the same figure in the same
+ * direction — which is what reading everything in the document's own facing bought.
  */
 export async function outstandingForDocument(
   db: CofferDb,
   document: DocumentControl,
-  exceptReceiptId?: string,
+  options: UnsettledOptions = {},
 ): Promise<Decimal> {
   const movement = await documentMovement(db, document)
-  const allocated = await allocatedToDocument(db, document.id, exceptReceiptId)
-  return facing(document.kind, movement).minus(allocated)
+  const allocated = await allocatedToDocument(db, document.id, options.exceptReceiptId)
+  const offset = await offsetToDocument(db, document.id)
+  return facing(document.kind, movement).minus(allocated).minus(offset)
 }
 
 /** What has been allocated out of one receipt. */
@@ -215,6 +284,31 @@ export async function assertNotAllocated(db: CofferDb, documentId: string): Prom
     `${toMoneyString(allocated)} has been receipted against this document. ` +
       'Take the allocation off the receipt first, so that money goes somewhere you chose.',
     { documentId, allocated: toMoneyString(allocated) },
+  )
+}
+
+/**
+ * Refuse to cancel a document standing at either end of an offset.
+ *
+ * `assertNotAllocated`'s twin, and the sentence is deliberately not the same. There the
+ * remedy is on a receipt the user has to go and find; here it is on the OTHER DOCUMENT,
+ * which is a different place to send somebody — so the message names the count rather
+ * than a figure alone, because "1,180.00 has been offset" leaves a user looking for money
+ * that never moved.
+ *
+ * 0016 enforces the same rule as a trigger on the transition, watching both ends. This is
+ * the half that can say which.
+ */
+export async function assertNotOffset(db: CofferDb, documentId: string): Promise<void> {
+  const offset = await offsetToDocument(db, documentId)
+  if (offset.isZero()) return
+
+  throw new RepoError(
+    'DOCUMENT_OFFSET',
+    `${toMoneyString(offset)} of this document is settled by an offset against another. ` +
+      'Take the offset off first, so the other document goes back to being unsettled ' +
+      'somewhere you can see it.',
+    { documentId, offset: toMoneyString(offset) },
   )
 }
 
@@ -325,6 +419,46 @@ async function allocatedByDocument(
   return totals
 }
 
+/**
+ * What has been offset against each of several documents, in one query.
+ *
+ * A ROW IS COUNTED UNDER BOTH OF ITS ENDS, which is the difference from
+ * `allocatedByDocument` and the reason this could not be one query with it. An offset
+ * between INV/7 and CRN/2 reduces both, so when a picker is listing both — which it never
+ * does, since a picker lists one kind — the same row appears twice on purpose.
+ */
+async function offsetsByDocument(
+  db: CofferDb,
+  documentIds: readonly string[],
+  exceptRefundDocumentId?: string,
+): Promise<Map<string, Decimal>> {
+  const totals = new Map<string, Decimal>()
+  if (documentIds.length === 0) return totals
+
+  const ids = [...documentIds]
+  let query = db
+    .selectFrom('document_offsets')
+    .select(['charge_document_id', 'refund_document_id', 'amount'])
+    .where((eb) =>
+      eb.or([eb('charge_document_id', 'in', ids), eb('refund_document_id', 'in', ids)]),
+    )
+  if (exceptRefundDocumentId !== undefined) {
+    query = query.where('refund_document_id', '!=', exceptRefundDocumentId)
+  }
+
+  for (const row of await query.execute()) {
+    for (const id of [row.charge_document_id, row.refund_document_id]) {
+      /* The `OR` above brings back rows whose OTHER end is out of scope, so each id is
+       * tested rather than trusted. Adding a figure under a document the caller never
+       * asked about would be harmless in the map and wrong the moment somebody iterated
+       * it instead of looking up. */
+      if (!documentIds.includes(id)) continue
+      totals.set(id, (totals.get(id) ?? ZERO).plus(D(row.amount)))
+    }
+  }
+  return totals
+}
+
 export interface OpenDocumentsOptions {
   partyId: string
   /**
@@ -376,7 +510,77 @@ export async function openDocumentsFor(
    * decides, and it REFUSES an ambiguous table rather than returning the first match, so
    * the `= ?` below is safe in a way `in (…)` never said out loud.
    */
-  const kind = settles(options.kind)
+  return openOfKind(db, {
+    partyId: options.partyId,
+    kind: settles(options.kind),
+    exceptReceiptId: options.exceptReceiptId,
+  })
+}
+
+/**
+ * What one refund document may be set against, or a refusal naming what it is.
+ *
+ * `correctsKind` is 0013's mapping and 0016's trigger, read from the third place that
+ * needs it — and it answers null for anything that settles nothing, which is a screen
+ * asking the wrong document for its offsets rather than a user error. So the sentence
+ * says which document to open instead, and there is ONE of it: the picker and the write
+ * path both come through here, because two copies of "a sales invoice settles nothing"
+ * is two chances to disagree about which end of a match owns the set.
+ */
+export function offsetKindFor(document: DocumentControl): DocumentKind {
+  const kind = correctsKind(document.kind as DocumentKind)
+  if (kind === null) {
+    throw new RepoError(
+      'OFFSET_KIND_MISMATCH',
+      `A ${definitionOf(document.kind as DocumentKind).label.toLowerCase()} settles nothing — ` +
+        'it is what gets settled. An offset is set from the credit or debit note.',
+      { documentId: document.id, documentKind: document.kind },
+    )
+  }
+  return kind
+}
+
+/**
+ * The charge documents one refund document may be set against, oldest first.
+ *
+ * The offset panel's picker, and it takes the DOCUMENT rather than a party and a kind
+ * because both of those are already on it — and because a picker that took them
+ * separately could be handed a credit note belonging to one customer and a party id
+ * belonging to another, which is the failure 0016's `same_party` trigger exists for. One
+ * argument cannot disagree with itself.
+ *
+ * What it may be set against is `offsetKindFor`'s answer, which is where the refusal for
+ * a document that settles nothing lives.
+ */
+export async function openChargesFor(
+  db: CofferDb,
+  refund: DocumentControl,
+): Promise<OpenDocumentRow[]> {
+  return openOfKind(db, {
+    partyId: refund.partyId,
+    kind: offsetKindFor(refund),
+    /* Its own offsets, back on the table it is drawing. Without this the panel would list
+     * every invoice EXCEPT the ones it is already showing lines for. */
+    exceptRefundDocumentId: refund.id,
+  })
+}
+
+/** What both pickers actually ask for, once the kind has been decided. */
+interface OpenOfKindOptions extends UnsettledOptions {
+  partyId: string
+  kind: DocumentKind
+  /**
+   * Treat this refund document's offsets as available again.
+   *
+   * The offset panel's, and it is live rather than defensive: opening a note that already
+   * settles INV/0007 in full must show INV/0007 with that credit back on it, or the panel
+   * lists every invoice except the ones it is drawing lines for.
+   */
+  exceptRefundDocumentId?: string
+}
+
+async function openOfKind(db: CofferDb, options: OpenOfKindOptions): Promise<OpenDocumentRow[]> {
+  const kind = options.kind
 
   /*
    * `status = 'issued'` LOOKS REDUNDANT BESIDE THE ZERO TEST BELOW and is not quite. A
@@ -403,12 +607,10 @@ export async function openDocumentsFor(
     entryId: row.entry_id,
   }))
 
+  const ids = rows.map((row) => row.id)
   const movements = await movementsFor(db, options.partyId, documents)
-  const allocated = await allocatedByDocument(
-    db,
-    rows.map((row) => row.id),
-    options.exceptReceiptId,
-  )
+  const allocated = await allocatedByDocument(db, ids, options.exceptReceiptId)
+  const offset = await offsetsByDocument(db, ids, options.exceptRefundDocumentId)
 
   const open: OpenDocumentRow[] = []
   for (const row of rows) {
@@ -416,7 +618,9 @@ export async function openDocumentsFor(
      * has left rather than that figure with a minus in front of it. Every row here is of
      * one kind, so the flip is the same for all of them. */
     const movement = facing(row.kind, movements.get(row.id) ?? ZERO)
-    const outstanding = movement.minus(allocated.get(row.id) ?? ZERO)
+    const outstanding = movement
+      .minus(allocated.get(row.id) ?? ZERO)
+      .minus(offset.get(row.id) ?? ZERO)
     if (outstanding.isZero()) continue
     open.push({
       id: row.id,
@@ -440,18 +644,39 @@ export interface SettlementRow {
   amount: Decimal
 }
 
+/**
+ * One offset's part in settling one document, from the OTHER end of the match.
+ *
+ * The document named here is never the one being asked about: an invoice's panel lists
+ * the credit notes set against it, and a credit note's lists the invoices it settles. One
+ * row read from two directions, which is what the table is.
+ */
+export interface SettlementOffsetRow {
+  offsetId: string
+  documentId: string
+  kind: string
+  number: string
+  date: DateString
+  amount: Decimal
+}
+
 export interface DocumentSettlementResult {
   movement: Decimal
   allocated: Decimal
+  /** What documents rather than money have settled. Zero until somebody says otherwise. */
+  offset: Decimal
   outstanding: Decimal
   receipts: SettlementRow[]
+  offsets: SettlementOffsetRow[]
 }
 
 /**
- * What has been paid against one document, and what is left.
+ * What has settled one document, from both sources, and what is left.
  *
  * The receipts are ordered by their own date, which is when the money arrived — not by
- * when somebody matched it, which nothing records on purpose (rule 2).
+ * when somebody matched it, which nothing records on purpose (rule 2). The offsets are
+ * ordered by the date of the document at the other end, for the same reason: an offset
+ * has no date of its own and is not going to grow one.
  */
 export async function settlementFor(
   db: CofferDb,
@@ -484,5 +709,84 @@ export async function settlementFor(
   }))
   const allocated = receipts.reduce<Decimal>((total, row) => total.plus(row.amount), ZERO)
 
-  return { movement, allocated, outstanding: movement.minus(allocated), receipts }
+  const offsets = await offsetsOn(db, document.id)
+  const offset = offsets.reduce<Decimal>((total, row) => total.plus(row.amount), ZERO)
+
+  return {
+    movement,
+    allocated,
+    offset,
+    outstanding: movement.minus(allocated).minus(offset),
+    receipts,
+    offsets,
+  }
+}
+
+/**
+ * Every offset one document stands at either end of, described by the other end.
+ *
+ * TWO JOINS TO ONE TABLE AND A CHOICE IN TYPESCRIPT, rather than a `UNION` of two queries
+ * or a `CASE` picking columns in SQL. Both alternatives write "which end am I" twice, and
+ * the whole hazard of a table with two foreign keys to one table is a reader — or an
+ * editor — getting the ends the wrong way round in one of the two copies.
+ */
+async function offsetsOn(db: CofferDb, documentId: string): Promise<SettlementOffsetRow[]> {
+  const rows = await db
+    .selectFrom('document_offsets')
+    .innerJoin('documents as charge', 'charge.id', 'document_offsets.charge_document_id')
+    .innerJoin('documents as refund', 'refund.id', 'document_offsets.refund_document_id')
+    .select([
+      'document_offsets.id as id',
+      'document_offsets.amount as amount',
+      'document_offsets.charge_document_id as charge_id',
+      'charge.kind as charge_kind',
+      'charge.number as charge_number',
+      'charge.document_date as charge_date',
+      'document_offsets.refund_document_id as refund_id',
+      'refund.kind as refund_kind',
+      'refund.number as refund_number',
+      'refund.document_date as refund_date',
+    ])
+    .where((eb) =>
+      eb.or([
+        eb('document_offsets.charge_document_id', '=', documentId),
+        eb('document_offsets.refund_document_id', '=', documentId),
+      ]),
+    )
+    .execute()
+
+  return rows
+    .map((row) => {
+      const other =
+        row.charge_id === documentId
+          ? {
+              id: row.refund_id,
+              kind: row.refund_kind,
+              number: row.refund_number,
+              date: row.refund_date,
+            }
+          : {
+              id: row.charge_id,
+              kind: row.charge_kind,
+              number: row.charge_number,
+              date: row.charge_date,
+            }
+      return {
+        offsetId: row.id,
+        documentId: other.id,
+        kind: other.kind,
+        /* Never null: 0016 refuses an offset unless both ends are issued, and rule 2 of
+         * the document contract gives every issued document a number. */
+        number: other.number ?? '',
+        date: other.date,
+        amount: D(row.amount),
+      }
+    })
+    .sort((left, right) =>
+      left.date === right.date
+        ? left.number.localeCompare(right.number)
+        : left.date < right.date
+          ? -1
+          : 1,
+    )
 }

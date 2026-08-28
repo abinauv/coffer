@@ -98,6 +98,7 @@ export type { MoneyDirection, ReceiptKind, ReceiptKindDefinition } from '@shared
 export {
   RECEIPT_KINDS,
   receiptDefinitionOf,
+  receiptFacing,
   settledBy,
   settledByIn,
   settledDirection,

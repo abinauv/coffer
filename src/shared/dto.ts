@@ -1620,7 +1620,25 @@ export interface SettlementReceiptDto {
   amount: DecimalString
 }
 
-/** What has been paid against one document, and what is left. */
+/**
+ * One offset's part in settling one document, described by the OTHER end.
+ *
+ * The document named here is never the one that was asked about: an invoice's panel lists
+ * the credit notes set against it, and a credit note's lists the invoices it settles. One
+ * row read from two directions, which is what `document_offsets` is.
+ */
+export interface DocumentOffsetDto {
+  offsetId: string
+  /** The document at the other end of the match. */
+  documentId: string
+  documentKind: string
+  /** Never null: 0016 refuses an offset unless both ends are issued. */
+  documentNumber: string
+  documentDate: DateString
+  amount: DecimalString
+}
+
+/** What has settled one document, from both sources, and what is left. */
 export interface DocumentSettlement {
   documentId: string
   /**
@@ -1636,9 +1654,20 @@ export interface DocumentSettlement {
    * make it so.
    */
   movement: DecimalString
+  /** What money has settled: the sum of the vouchers below. */
   allocated: DecimalString
   /**
-   * `movement - allocated`, in the same facing.
+   * What DOCUMENTS have settled: the sum of the offsets below.
+   *
+   * A separate figure rather than folded into `allocated`, because the two are two lists
+   * on the screen and a user asking "who paid this" is asking a different question from
+   * "what did we credit against it". They subtract identically, which is the arithmetic
+   * saying they are the same kind of thing; they are shown apart, which is the screen
+   * saying they are not the same event.
+   */
+  offset: DecimalString
+  /**
+   * `movement - allocated - offset`, in the same facing.
    *
    * Negative would mean more was matched than the document ever put on the account —
    * which is one meaning for all four kinds, and would not have been if the sign came
@@ -1646,6 +1675,7 @@ export interface DocumentSettlement {
    */
   outstanding: DecimalString
   receipts: readonly SettlementReceiptDto[]
+  offsets: readonly DocumentOffsetDto[]
 }
 
 /** A document with something still against it, as a picker lists one. */
@@ -1659,6 +1689,39 @@ export interface OpenDocument {
    * `DocumentSettlement.movement`. Positive whichever way the document points. */
   grandTotal: DecimalString
   outstanding: DecimalString
+}
+
+/**
+ * One line of "these are the charges this credit note settles".
+ *
+ * `AllocationInput` with a document where the receipt was, and no amount of money moving
+ * at either end. See `SetOffsetsInput` for why the refund end is not on this row.
+ */
+export interface OffsetInput {
+  /** The sales invoice or purchase bill being settled. */
+  chargeDocumentId: string
+  amount: DecimalString
+}
+
+/**
+ * Replace what one refund document settles.
+ *
+ * THE WHOLE SET, not a patch, exactly as `AllocateReceiptInput` is — and for the same
+ * reason: a matching record is a statement about which charges this credit settles, and
+ * half a statement is not a smaller version of it. An empty list takes every offset off
+ * and puts the credit back on account.
+ *
+ * IT IS SET FROM THE REFUND END, which is a decision rather than a symmetry that happened
+ * to fall out. A credit note is a pool of money drawn down by refunds and offsets — the
+ * same shape a receipt has — so the panel that edits the set belongs on it, and the
+ * invoice's own screen shows the result rather than editing it. Letting either end own
+ * the set would mean two screens replacing overlapping sets, and the last one saved would
+ * silently drop the other's rows.
+ */
+export interface SetOffsetsInput {
+  /** The credit note or debit note whose set this is. */
+  refundDocumentId: string
+  offsets: readonly OffsetInput[]
 }
 
 export interface OpenDocumentsInput {

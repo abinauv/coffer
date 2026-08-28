@@ -73,6 +73,27 @@ paymentRule` and was correct for as long as there were two voucher kinds; 0015 a
    function is given the list to search and a test hands it the ambiguity (`postingKindIn`,
    `settledByIn`).
 
+10. **A SIGN BELONGS TO THE THING, NEVER TO THE QUERY THAT FETCHED IT.** Where a figure has
+    to be added or subtracted, read the direction off the ROW — its kind, its facing — and
+    never off which table, which join or which branch it arrived through. The two agree
+    exactly as long as every row of that table points the same way, which is a property
+    nothing states and nothing tests.
+
+    MEASURED. `ageing.ts` took an allocation OFF a document and put it BACK ON a receipt,
+    and the comment beside it argued the asymmetry correctly: a document's movement was
+    positive, a receipt's was negative, so bringing each to zero meant opposite signs. It
+    was the right pair of signs for the wrong reason. 0015 added the two kinds that break
+    it, and a 400 refund against a 1,180 credit note reported the note at -1,580 and a
+    fully settled voucher at +800. It is one function now — a match opposes the end it is
+    on, whether that end is a document or a voucher — and `receiptFacing` is what lets a
+    voucher be described in a document's word.
+
+    AND THE HALF THAT MATTERS MORE, BECAUSE IT IS ABOUT TESTS: A REPORT THAT CHECKS ITSELF
+    WITH A TOTAL CANNOT SEE AN ERROR THAT APPEARS TWICE WITH OPPOSITE SIGNS. Both figures
+    above were wrong and `ties` stayed TRUE, because a match is applied at two ends and the
+    two mistakes cancelled at the foot. A tie is a statement about the arithmetic between
+    the rows, not about the rows. Assert the items as well, every time.
+
 ## 2. Naming
 
 | Thing                    | Style                           | Example                        |

@@ -18,6 +18,7 @@ export {
   isCancellable,
   isLiveReceipt,
   receiptDefinitionOf,
+  receiptFacing,
   receiptTreatmentOf,
   settledBy,
   settledByIn,

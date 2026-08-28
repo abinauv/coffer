@@ -121,6 +121,7 @@ export {
   definitionOf,
   DOCUMENT_KINDS,
   kindsOnSide,
+  opposite,
   postingKindIn,
   postingKindOn,
   postsToLedger,

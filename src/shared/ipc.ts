@@ -70,6 +70,7 @@ import type {
   Receipt,
   ReceiptSummary,
   ReverseEntryInput,
+  SetOffsetsInput,
   SetAccountRoleInput,
   TitleBarOverlayColors,
   TrialBalance,
@@ -232,6 +233,27 @@ export interface CofferApi {
     issue(input: IssueDocumentInput): Promise<Result<Document>>
     /** Reverses what it posted, keeps the number, keeps the lines. */
     cancel(input: CancelDocumentInput): Promise<Result<Document>>
+    /**
+     * What has settled one document, from both sources, and what is left.
+     *
+     * IT WAS `receipts.settlement` UNTIL 0016 AND HAD OUTGROWN THE GROUP. It takes a
+     * document id, answers about a document, and half of what it now returns — the
+     * offsets — has no receipt anywhere near it. It lived there because receipts were the
+     * only thing that settled anything, which stopped being true the moment a credit note
+     * could be set against an invoice.
+     */
+    settlement(documentId: string): Promise<Result<DocumentSettlement>>
+    /**
+     * Replace what one refund document settles. The whole set; an empty list clears it.
+     *
+     * Set from the CREDIT NOTE and never from the invoice — see `SetOffsetsInput` for why
+     * one end has to own the set. Nothing about this posts, so it is allowed in a closed
+     * period: saying in July which invoice an April note settled changes no figure in
+     * April.
+     */
+    offset(input: SetOffsetsInput): Promise<Result<DocumentSettlement>>
+    /** The charge documents this refund document may be set against, oldest first. */
+    openForOffset(documentId: string): Promise<Result<OpenDocument[]>>
   }
 
   /**
@@ -260,9 +282,14 @@ export interface CofferApi {
     allocate(input: AllocateReceiptInput): Promise<Result<Receipt>>
     /** Reverses the entry, drops what it settled, keeps the number. */
     cancel(input: CancelReceiptInput): Promise<Result<Receipt>>
-    /** What has been paid against one document, and what is left. */
-    settlement(documentId: string): Promise<Result<DocumentSettlement>>
-    /** A party's documents with something still against them, oldest first. */
+    /**
+     * A party's documents with something still against them, oldest first.
+     *
+     * It stays here where `settlement` moved to `documents`, and the difference is what
+     * the argument is: this one takes a `ReceiptKind` and answers "what may THIS VOUCHER
+     * settle", which is a question about the voucher being written. The offset picker is
+     * `documents.openForOffset`, because there the thing doing the settling is a document.
+     */
     open(input: OpenDocumentsInput): Promise<Result<OpenDocument[]>>
   }
 

@@ -299,6 +299,41 @@ export type RepoErrorCode =
    * the two are not symmetrical.
    */
   | 'DOCUMENT_ALLOCATED'
+  // ---- Offsets (0016) ----
+  /*
+   * A SECOND FAMILY RATHER THAN THE `ALLOCATION_*` CODES, and the temptation to reuse
+   * them is real: an offset is the same matching row with a document where the voucher
+   * was, and every rule below has a counterpart in 0012's set.
+   *
+   * They are separate because a CODE IS WHAT A SCREEN BRANCHES ON, and the two land on
+   * different screens saying different sentences. "Take the allocation off the receipt
+   * first" and "take the offset off the credit note first" are two different remedies in
+   * two different places, and a screen that could not tell them apart would send a user
+   * to look for money that was never involved.
+   */
+  /** The two documents in an offset belong to different parties. 0012's worst rule, again. */
+  | 'OFFSET_PARTY_MISMATCH'
+  /**
+   * The two documents do not face opposite ways on one side of the trade.
+   *
+   * One code for what reads as several rules — the wrong side, two charges, two refunds,
+   * a quotation, a document set against itself — because 0016 proves them all with one
+   * expression, and a sentence naming each would be a second place the rule is written.
+   */
+  | 'OFFSET_KIND_MISMATCH'
+  /** More was offset against a document than it has unsettled. Both ends are capped. */
+  | 'OFFSET_EXCEEDS_DOCUMENT'
+  /** An offset of nothing, or of something that is not money. */
+  | 'OFFSET_AMOUNT_INVALID'
+  /** An offset is written and deleted, never edited. See 0016, and 0012 before it. */
+  | 'OFFSET_IMMUTABLE'
+  /**
+   * A cancel against a document standing at either end of an offset.
+   *
+   * `DOCUMENT_ALLOCATED`'s twin, and it watches both ends rather than one: cancelling
+   * either document leaves the offset settling something the books say never happened.
+   */
+  | 'DOCUMENT_OFFSET'
 
 /** An error raised by a repository. Always carries a stable, machine-readable code. */
 export class RepoError extends Error {
@@ -376,6 +411,15 @@ const TRIGGER_CODES: readonly RepoErrorCode[] = [
   'RECEIPT_CANCELLED',
   'DOCUMENT_ALLOCATED',
   'DOCUMENT_NOT_ISSUED',
+  /*
+   * 0016's four. `DOCUMENT_NOT_ISSUED` is raised by one of them too and is already listed
+   * above — an offset against a draft or a cancelled document is the same failure an
+   * allocation against one is, and it earns the same sentence.
+   */
+  'OFFSET_PARTY_MISMATCH',
+  'OFFSET_KIND_MISMATCH',
+  'OFFSET_IMMUTABLE',
+  'DOCUMENT_OFFSET',
 ]
 
 export function repoErrorFrom(error: unknown, fallback: RepoErrorCode): RepoError {

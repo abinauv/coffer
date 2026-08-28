@@ -29,6 +29,9 @@ beforeEach(() => {
     delete: vi.fn(async () => undefined),
     issue: vi.fn(async () => ({}) as never),
     cancel: vi.fn(async () => ({}) as never),
+    settlement: vi.fn(async () => ({}) as never),
+    offset: vi.fn(async () => ({}) as never),
+    openForOffset: vi.fn(async () => []),
   }
   handlers = createDocumentsHandlers(service)
 })
@@ -268,5 +271,81 @@ describe('what a rejection says', () => {
     } catch (error) {
       expect((error as IpcError).message).toContain('lines[1].quantity')
     }
+  })
+})
+
+/*
+ * WHAT SETTLES A DOCUMENT, AT THE BOUNDARY (0016).
+ *
+ * `offset` is the second method in this group that takes a LIST from the renderer, and
+ * the bound and the per-row parse are the same shape `receipts.allocate` uses — a set of
+ * matching rows arriving from an untrusted process is a set of matching rows whichever
+ * group it lands in.
+ */
+describe('settlement, offsets and the offset picker', () => {
+  it('takes a document id for the settlement and for the picker', () => {
+    expect(parse('settlement', 'doc-1')).toEqual(['doc-1'])
+    expect(parse('openForOffset', 'doc-1')).toEqual(['doc-1'])
+  })
+
+  it('refuses either without a document', () => {
+    rejects('settlement', undefined)
+    rejects('settlement', '')
+    rejects('openForOffset', undefined)
+    rejects('openForOffset', '')
+  })
+
+  it('takes the refund document and its whole set of offsets', () => {
+    expect(
+      first('offset', {
+        refundDocumentId: 'crn-1',
+        offsets: [{ chargeDocumentId: 'inv-1', amount: '400.00' }],
+      }),
+    ).toEqual({
+      refundDocumentId: 'crn-1',
+      offsets: [{ chargeDocumentId: 'inv-1', amount: '400.00' }],
+    })
+  })
+
+  /* An empty list is how a set is cleared, so it is a legal argument rather than a
+   * missing one — and `offsets` absent is not the same thing and is refused. */
+  it('takes an empty set, and refuses a missing one', () => {
+    expect(first('offset', { refundDocumentId: 'crn-1', offsets: [] })).toEqual({
+      refundDocumentId: 'crn-1',
+      offsets: [],
+    })
+    rejects('offset', { refundDocumentId: 'crn-1' })
+  })
+
+  it('refuses a set with no refund document, and a row with no charge', () => {
+    rejects('offset', { refundDocumentId: '', offsets: [] })
+    rejects('offset', { refundDocumentId: 'crn-1', offsets: [{ amount: '400.00' }] })
+  })
+
+  /*
+   * THE AMOUNT IS A DECIMAL STRING AND NEVER A NUMBER. A float arriving from the renderer
+   * would be the one thing CONVENTIONS §3 exists to keep out of the books, and it has to
+   * be refused here rather than parsed generously — 4.1 is not 4.10 and neither is what
+   * the column will hold.
+   */
+  it('refuses an amount that is not a decimal string', () => {
+    rejects('offset', {
+      refundDocumentId: 'crn-1',
+      offsets: [{ chargeDocumentId: 'i', amount: 400 }],
+    })
+    rejects('offset', {
+      refundDocumentId: 'crn-1',
+      offsets: [{ chargeDocumentId: 'i', amount: 'four hundred' }],
+    })
+  })
+
+  /* The ceiling can only be tested by exceeding it — 2.2b's finding, and the reason
+   * `MAX_OFFSETS` is a number this test knows rather than one it asks for. */
+  it('refuses a set larger than the bound', () => {
+    const offsets = Array.from({ length: 501 }, (_, index) => ({
+      chargeDocumentId: `inv-${String(index)}`,
+      amount: '1.00',
+    }))
+    rejects('offset', { refundDocumentId: 'crn-1', offsets })
   })
 })

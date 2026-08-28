@@ -29,6 +29,7 @@
 
 import {
   definitionOf,
+  opposite,
   postingKindOn,
   type DocumentDirection,
   type DocumentKind,
@@ -159,25 +160,36 @@ export function settlesSide(kind: ReceiptKind): TradeSide {
  */
 
 /**
- * Whether money moving this way puts MORE on the party's account, in the side's signing.
+ * WHICH WAY A VOUCHER OF THIS KIND MOVES THE PARTY'S CONTROL ACCOUNT, in the same
+ * vocabulary a document uses for it.
  *
- * True for a refund paid — it undoes a credit note, so the customer owes more again — and
- * for a refund received. False for the two vouchers that settle a debt. The equality
- * rather than a four-armed lookup is deliberate: it is the same fact twice, once per
- * side, and writing it out as four cases is how the fourth one ends up transposed.
+ * The primary fact of the four below, and the one worth saying out loud: A RECEIPT MOVES
+ * RECEIVABLES THE WAY A CREDIT NOTE DOES. Both take money off what the customer owes, so
+ * both face `refund`; an invoice and a refund paid both put money on, so both face
+ * `charge`. Once a voucher and a document are described in one word, everything else in
+ * 0015 is a comparison of two of them — what a voucher settles, what an offset may match,
+ * and which way a matching row moves each end.
+ *
+ * THE EQUALITY RATHER THAN A FOUR-ARMED LOOKUP is deliberate: it is the same fact twice,
+ * once per side, and writing it out as four cases is how the fourth one ends up
+ * transposed. Money OUT on the SALES side puts money on — that is a refund paid — and
+ * money IN on the PURCHASE side does the same, because what it lands on is what the
+ * business owes.
  */
-function addsToBalance(definition: ReceiptKindDefinition): boolean {
-  return (definition.side === 'sales') === (definition.direction === 'out')
+export function receiptFacing(definition: ReceiptKindDefinition): DocumentDirection {
+  return (definition.side === 'sales') === (definition.direction === 'out') ? 'charge' : 'refund'
 }
 
 /**
  * Which of a side's documents a voucher of this kind settles: the charges, or the refunds.
  *
- * A charge is positive in the side's own signing and a refund is negative, so a voucher
- * settles whichever faces the other way from itself.
+ * DERIVED FROM THE FACING BY NEGATION, which is the sentence at the top of this section
+ * turned into code: an allocation matches two movements that point opposite ways, so a
+ * voucher settles whatever faces the other way from itself. It is not a second table and
+ * it is not a second rule — it is the rule, read backwards.
  */
 export function settledDirection(definition: ReceiptKindDefinition): DocumentDirection {
-  return addsToBalance(definition) ? 'refund' : 'charge'
+  return opposite(receiptFacing(definition))
 }
 
 /**

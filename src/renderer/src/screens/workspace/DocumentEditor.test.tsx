@@ -131,8 +131,10 @@ function settlement(over: Partial<DocumentSettlement> = {}): DocumentSettlement 
     documentId: 'doc-1',
     movement: '1180.00',
     allocated: '0.00',
+    offset: '0.00',
     outstanding: '1180.00',
     receipts: [],
+    offsets: [],
     ...over,
   }
 }
@@ -147,12 +149,12 @@ function bridgeFor(
     parties: {
       list: () => Promise.resolve<Result<PartySummary[]>>({ ok: true, data: CUSTOMERS }),
     },
-    receipts: {
-      /* Asked for any document that has posted. A draft never reaches it, which is what
-       * the first test in `what has been received` asserts. */
-      settlement: () => Promise.resolve<Result<DocumentSettlement>>({ ok: true, data: settled }),
-    },
     documents: {
+      /* `settlement` is asked for any document that has posted. A draft never reaches it,
+       * which is what the first test in `what has been received` asserts. It is on this
+       * group rather than on `receipts` since 0016, when what settles a document stopped
+       * being only money. */
+      settlement: () => Promise.resolve<Result<DocumentSettlement>>({ ok: true, data: settled }),
       get: () => Promise.resolve<Result<Document | null>>({ ok: true, data: stored }),
       create: () => Promise.resolve<Result<Document>>({ ok: true, data: answer }),
       update: () => Promise.resolve<Result<Document>>({ ok: true, data: answer }),
@@ -573,7 +575,7 @@ describe('what has been received against it', () => {
     })
 
     await waitFor(() => expect(bridge.callsTo('documents:get')).toHaveLength(1))
-    expect(bridge.callsTo('receipts:settlement')).toHaveLength(0)
+    expect(bridge.callsTo('documents:settlement')).toHaveLength(0)
   })
 
   it('shows what is outstanding once it has been issued', async () => {
@@ -1029,7 +1031,7 @@ describe('a credit note', () => {
     })
 
     await screen.findByLabelText('Customer')
-    await waitFor(() => expect(bridge.callsTo('receipts:settlement')).toHaveLength(1))
+    await waitFor(() => expect(bridge.callsTo('documents:settlement')).toHaveLength(1))
     expect(screen.getByText('Outstanding')).toBeInTheDocument()
   })
 
@@ -1166,7 +1168,7 @@ describe('a quotation', () => {
     })
 
     await screen.findByLabelText('Customer')
-    expect(bridge.callsTo('receipts:settlement')).toHaveLength(0)
+    expect(bridge.callsTo('documents:settlement')).toHaveLength(0)
   })
 })
 
