@@ -70,6 +70,10 @@ updates:
           - prettier
           - vite
           - vitest
+          # @vitest/coverage-v8 peers on the exact vitest version, so the two only move
+          # together. PR #11 proved it: vitest went to 4.1.11 without it and `npm ci`
+          # failed with ERESOLVE on every job.
+          - '@vitest/*'
           - '@types/*'
 
     ignore:
