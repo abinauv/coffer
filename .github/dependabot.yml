@@ -71,7 +71,7 @@ updates:
           - vite
           - vitest
           # @vitest/coverage-v8 peers on the exact vitest version, so the two only move
-          # together. PR #11 proved it: vitest went to 4.1.11 without it and `npm ci`
+          # together. Measured: vitest went to 4.1.11 without it and `npm ci`
           # failed with ERESOLVE on every job.
           - '@vitest/*'
           - '@types/*'
@@ -91,7 +91,7 @@ updates:
       - dependency-name: better-sqlite3-multiple-ciphers
         update-types: [version-update:semver-major]
       # Peer-constrained: these cannot move until the package they pair with does.
-      # Each was proposed, failed CI, and was closed by hand — see PRs #2 and #3.
+      # Each was proposed, failed CI, and was closed by hand.
       # @vitejs/plugin-react 6 requires vite ^8; electron-vite 5 caps vite at ^7.
       - dependency-name: '@vitejs/plugin-react'
         update-types: [version-update:semver-major]
@@ -99,7 +99,7 @@ updates:
       - dependency-name: eslint
         update-types: [version-update:semver-major]
       # @eslint/js peers on the matching eslint major, so it cannot move alone.
-      # PR #5 proved it: @eslint/js went to 10.0.1 wanting eslint ^10 while eslint
+      # Measured: @eslint/js went to 10.0.1 wanting eslint ^10 while eslint
       # itself took only a patch, and every job failed.
       - dependency-name: '@eslint/js'
         update-types: [version-update:semver-major]
