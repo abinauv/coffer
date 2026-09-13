@@ -19,7 +19,7 @@
   },
 
   "intraState": {
-    "why": "A Tamil Nadu supplier selling to a Tamil Nadu customer, so the tax splits into CGST and SGST. Three rate slabs (18%, 12%, 5%), a discount on the first line, and a freight line marked as a charge — which prints as an ordinary line, because the reference project's 'freight is never taxed' is listed in CONVENTIONS §9 among the bugs not to port. The lines are stored 3, 1, 4, 2 rather than in line-number order, and the first line lists SGST before CGST, so a mapper that trusted the order it was handed would disagree with the expected output in two different ways. Rounding is whole-unit and the net total ends in .28, so the round-off is NEGATIVE — the one sign a substring assertion would miss.",
+    "why": "A Tamil Nadu supplier selling to a Tamil Nadu customer, so the tax splits into CGST and SGST. Three rate slabs (18%, 12%, 5%), a discount on the first line, and a freight line marked as a charge — which prints as an ordinary line, because hardcoding 'freight is never taxed' is a design CONVENTIONS §9 refuses. The lines are stored 3, 1, 4, 2 rather than in line-number order, and the first line lists SGST before CGST, so a mapper that trusted the order it was handed would disagree with the expected output in two different ways. Rounding is whole-unit and the net total ends in .28, so the round-off is NEGATIVE — the one sign a substring assertion would miss.",
 
     "party": {
       "id": "party-sharma",

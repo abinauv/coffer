@@ -187,8 +187,8 @@ describe('adding', () => {
   })
 
   /*
-   * CUSTOM UNITS ARE THE POINT. The reference project rewrote anything outside four units
-   * to `Nos`; CONVENTIONS §9 calls that a bug to fix rather than port. `BUNDLE` has to
+   * CUSTOM UNITS ARE THE POINT. Rewriting anything outside four units to `Nos` is a
+   * design CONVENTIONS §9 refuses. `BUNDLE` has to
    * reach the boundary spelled exactly as it was typed.
    */
   it('sends a unit nobody has heard of, unchanged', async () => {

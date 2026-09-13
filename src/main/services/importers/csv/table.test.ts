@@ -78,7 +78,7 @@ describe('findColumn', () => {
   })
 
   it('says `ambiguous` for two columns of one name, and never picks the first', () => {
-    /* CONVENTIONS §9: a `.find` here would silently implement "whichever is listed
+    /* CONVENTIONS §1.9: a `.find` here would silently implement "whichever is listed
      * first", and no assertion downstream could tell. */
     const lookup = findColumn(header, 'Amount')
     expect(lookup.kind).toBe('ambiguous')

@@ -310,8 +310,8 @@ export interface CofferApi {
    * decision somebody makes rather than a rename that rewrites what old paperwork said.
    *
    * NOTHING HERE RESTRICTS A BUSINESS TO A KNOWN LIST. `BUNDLE` and `TIN` are as real as
-   * `KGS`. The reference project silently rewrote anything outside four units to `Nos` and
-   * that bug is not being ported (CONVENTIONS §9).
+   * `KGS`. Silently rewriting anything outside a short list to `Nos` is a design this
+   * codebase refuses (CONVENTIONS §9).
    */
   units: {
     list(input?: ListUnitsInput): Promise<Result<UnitOfMeasure[]>>

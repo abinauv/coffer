@@ -213,7 +213,7 @@
     },
     {
       "name": "intra-state, two rates and two charges",
-      "why": "the case the reference project got wrong. Freight is taxed here at 18% because the caller said so; packing is not taxed because the caller said so. Neither decision lives in the tax function. The summary keeps CGST @ 2.5% and CGST @ 9% apart, because a return asks for them separately.",
+      "why": "the case a hardcoded freight rule gets wrong. Freight is taxed here at 18% because the caller said so; packing is not taxed because the caller said so. Neither decision lives in the tax function. The summary keeps CGST @ 2.5% and CGST @ 9% apart, because a return asks for them separately.",
       "supplier": "tamilNaduSupplier",
       "customer": "tamilNaduCustomer",
       "place": "withinTamilNadu",

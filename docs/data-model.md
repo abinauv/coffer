@@ -140,12 +140,12 @@ facts:
 
 It is deliberately not a company profile. Address and registration numbers are business
 data, and they live in `company_profile` (migration `0011`) with their own columns and
-their own constraints. The reference project kept a single-row `settings` table that
-grew into all of that plus the invoice defaults and the e-mail configuration, and every
-new field became a migration that rewrote it.
+their own constraints. The tempting alternative is a single-row `settings` table that
+grows into all of that plus the invoice defaults and the e-mail configuration, where every
+new field is a migration that rewrites it.
 
-`company_profile` is single-row as well, so the distinction is worth stating: the
-reference table's problem was not its row count but that it had no subject. This one
+`company_profile` is single-row as well, so the distinction is worth stating: a
+`settings` table's problem is not its row count but that it has no subject. This one
 holds identity — the name a tax authority knows, the registration, the jurisdiction, the
 address — and nothing that is a preference. **It can legitimately be empty.** A migration
 cannot invent a company's legal name, so no row is seeded and every read answers null

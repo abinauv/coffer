@@ -175,8 +175,8 @@ export type SupplyTreatment =
  * One document, as a return sees it.
  *
  * Note what is NOT here: no party address, no narration, no due date, no ledger entry.
- * A return has no business seeing them, and the reference project's habit of passing the
- * whole record around is how a tax function ended up knowing a customer's payment terms.
+ * A return has no business seeing them, and passing the whole record around is how a tax
+ * function ends up knowing a customer's payment terms.
  */
 export interface ReturnDocument {
   readonly id: string

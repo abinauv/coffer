@@ -197,8 +197,8 @@ describe('a worked intra-state invoice — CGST and SGST', () => {
   })
 
   /*
-   * A charge line is an ordinary line. The reference project hardcoded "freight is never
-   * taxed" and CONVENTIONS §9 lists it among the bugs not to port — so freight prints
+   * A charge line is an ordinary line. Hardcoding "freight is never taxed" is a design
+   * CONVENTIONS §9 refuses — so freight prints
    * with its rate, its tax and its place in the numbering, marked and not hidden.
    */
   it('prints the charge line as an ordinary line, taxed and numbered', () => {

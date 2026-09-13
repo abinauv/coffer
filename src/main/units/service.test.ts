@@ -155,8 +155,7 @@ describe('what a new company starts with', () => {
   })
 
   /* Nothing restricts a business to a known list — a bundle is as real as a kilogram, and
-   * the reference project's silent rewrite to `Nos` is the bug this codebase exists partly
-   * not to repeat (CONVENTIONS §9). */
+   * a silent rewrite to `Nos` is a design this codebase refuses (CONVENTIONS §9). */
   it('takes a unit nobody has heard of', async () => {
     const { units } = await fixture()
 

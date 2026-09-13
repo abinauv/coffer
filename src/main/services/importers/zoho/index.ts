@@ -23,7 +23,7 @@
  *                 a firm on an invoice is a customer and a firm on a bill is a vendor. The
  *                 side comes off `DOCUMENT_KINDS` and `RECEIPT_KINDS` rather than out of a
  *                 condition on the kind, so a kind added later gets the right answer by
- *                 declaring itself (CONVENTIONS §9).
+ *                 declaring itself (CONVENTIONS §1.9).
  *
  *   MISSING       a document naming a party the contacts file does not have is not a
  *   PARTIES       reason to drop the document — the party is the one thing a document

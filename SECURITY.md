@@ -15,8 +15,9 @@ Report it privately through GitHub:
 
 This creates a private advisory visible only to maintainers.
 
-If you cannot use GitHub's private reporting, open a public issue containing **only** a
-request for a private contact channel — no details of the vulnerability.
+If you cannot use GitHub's private reporting, e-mail
+[abinauvselvaraj13@gmail.com](mailto:abinauvselvaraj13@gmail.com) with "Coffer security" in
+the subject. Never put details of a vulnerability in a public issue.
 
 ### What to expect
 

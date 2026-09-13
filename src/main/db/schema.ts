@@ -556,8 +556,8 @@ export interface DocumentLineTaxesTable {
  *
  * Identity, not preferences: the name a tax authority knows, the registration it holds,
  * where it is, and how to reach it. Invoice defaults and mail settings get their own
- * tables when they exist, because the reference project put all of it in one row and
- * every screen wrote to it (CONVENTIONS §9). Read the migration before adding a column.
+ * tables when they exist, because one row holding all of it is a table every screen
+ * writes to (CONVENTIONS §9). Read the migration before adding a column.
  *
  * The table can legitimately be empty. A migration cannot invent a company's legal name,
  * so a profile exists once somebody has entered one, and until then every read answers

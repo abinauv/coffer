@@ -35,7 +35,7 @@
  *
  * TWO PARTY ENTRIES IS A REFUSAL, not a choice of the first. A sales voucher against two
  * debtors has no single customer, and `.find` here would make the answer the order Tally
- * happened to write the entries in (CONVENTIONS §9).
+ * happened to write the entries in (CONVENTIONS §1.9).
  *
  * ---------------------------------------------------------------------------
  * 3. A DOCUMENT'S LINES ARE ITS LEDGER ENTRIES, AND THAT IS A TRADE-OFF WORTH STATING.
@@ -88,7 +88,7 @@
  * A payment voucher whose party is a CUSTOMER is a refund, not a payment, and filing it as
  * a payment would put a customer's money into accounts payable where no statement of
  * theirs would ever show it. That mistake has already been made once in this codebase
- * (CONVENTIONS §9, 0015) and the lookup by two facts is what stops it being made again.
+ * (CONVENTIONS §1.9, 0015) and the lookup by two facts is what stops it being made again.
  *
  * ---------------------------------------------------------------------------
  * 7. A RECEIPT WITH A THIRD LEG IS NOT A RECEIPT COFFER CAN HOLD.
@@ -150,7 +150,7 @@ export interface TallyStagedVoucher {
  *
  * A total record over the three sides an entry can have, not a condition: `nil` is the
  * side of a zero-amount party entry, which multiplies nothing either way, and having to
- * answer for it here is exactly what a record buys over a ternary (CONVENTIONS §9).
+ * answer for it here is exactly what a record buys over a ternary (CONVENTIONS §1.9).
  */
 const LINE_SIGN: Readonly<Record<TallyEntrySide, 1 | -1>> = {
   debit: 1,

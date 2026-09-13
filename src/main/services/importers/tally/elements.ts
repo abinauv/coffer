@@ -34,7 +34,7 @@
  *   - Every field is OVERRIDABLE by the caller (`TallyElementOverrides`), so a user or a
  *     later batch corrects a name without a code change.
  *   - Two candidates that BOTH carry a value, and disagree, resolve to NOTHING and are
- *     reported as ambiguous — never to whichever is listed first (CONVENTIONS §9). Two
+ *     reported as ambiguous — never to whichever is listed first (CONVENTIONS §1.9). Two
  *     candidates that agree are one value, which is what makes `VCHTYPE` plus
  *     `VOUCHERTYPENAME` the ordinary case rather than a conflict.
  *   - An element the reader met and no field claims is REPORTED, and every distinct
@@ -189,7 +189,7 @@ const container = (elements: readonly string[]): TallyElementSpec => ({
 /**
  * The table.
  *
- * A total record over `TallyElementName` (CONVENTIONS §9): a name added to the union does
+ * A total record over `TallyElementName` (CONVENTIONS §1.9): a name added to the union does
  * not compile until it has a row here, rather than falling through to whatever a lookup
  * happened to return.
  *
@@ -365,7 +365,7 @@ export interface TallyReading {
  *
  * Three states and not `string | undefined`, because "two candidates disagree" is a fact
  * the caller has to report rather than resolve. `.find` would turn it into table order
- * (CONVENTIONS §9) and nothing downstream could see the difference.
+ * (CONVENTIONS §1.9) and nothing downstream could see the difference.
  */
 export type TallyValue =
   | { readonly kind: 'one'; readonly value: string; readonly from: string }

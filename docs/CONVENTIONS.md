@@ -417,23 +417,21 @@ When several agents work a batch simultaneously:
 - **Don't drive-by refactor.** Improvements outside your paths go in the report, not the
   diff.
 
-## 9. Porting from the reference project
+## 9. Designs this codebase refuses
 
-`../reference/reference-app/` is a read-only snapshot of the project Coffer is derived from.
-It is a useful reference and a trap in equal measure.
+Each of these is the easy, plausible way to build an accounting app, and each is wrong in a
+way no total at the foot of a report will catch. They are written down so that nobody
+reintroduces one as a simplification.
 
-- **Never copy a file wholesale.** Read it, understand it, write the Coffer version.
-- **Strip client identity.** No `reference-app` string, logo, or invoice-format artefact
-  reaches this repo. The client's `assets/logo.png` and `specs/reference/*.jpeg` are
-  theirs and stay out.
-- **Do not port these bugs:**
-  - freight hardcoded as never taxed, inside the tax function
-  - UoM outside `Nos/Sets/Kg/Mtr` silently rewritten to `Nos`
-  - tax computation called directly from screens
-  - the single-row `settings` company profile — a table with no subject, shared by the
-    profile, the invoice defaults and the e-mail configuration, which every screen wrote
-    to and no constraint could describe. Coffer's `company_profile` (migration `0011`) is
-    one row as well and is not this: its subject is identity, and a preference does not
-    go in it.
-- **Do port the discipline:** the decimal handling, the golden fixtures, the typed IPC
-  proxy, the migration runner, the security model. That is the part worth having.
+- **A tax rule hardcoded inside the tax function**, such as "freight is never taxed". That
+  is one business's policy wearing the costume of a rule. Freight, packing and insurance
+  are ordinary charge lines, taxed at whatever rate the line carries (§1.6).
+- **A fixed list of units**, with anything outside `Nos/Sets/Kg/Mtr` silently rewritten to
+  `Nos`. A unit is whatever the business sells in: `BUNDLE` and `TIN` are as real as
+  `KGS`.
+- **Tax computed from a screen.** The renderer never computes money (§1.7), and every tax
+  figure comes from the regime in main.
+- **A single-row `settings` table** — a table with no subject, shared by the company
+  profile, the invoice defaults and the e-mail configuration, which every screen writes to
+  and no constraint can describe. `company_profile` (migration `0011`) is one row as well
+  and is not this: its subject is identity, and a preference does not go in it.

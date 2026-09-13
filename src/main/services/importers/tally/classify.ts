@@ -71,7 +71,7 @@
  * So the voucher type gives the DIRECTION the money went and the party's parent chain
  * gives the SIDE of the trade, and the kind is whichever row of `RECEIPT_KINDS` holds both.
  *
- * This is CONVENTIONS §9 measured twice already: `receiptPostingRuleFor` was
+ * This is CONVENTIONS §1.9 measured twice already: `receiptPostingRuleFor` was
  * `kind === 'receipt' ? ... : ...` and would have posted a customer's refund into accounts
  * payable, where no statement of theirs would ever have shown it. A lookup by the two
  * facts cannot make that mistake, and `tallyReceiptKind` takes the table as an argument so
@@ -268,7 +268,7 @@ export function classifyTallyLedger(
 
     /* `filter` and a count, never `.find`: two rules claiming one group name is a table
      * somebody has to fix, and taking the first would make the answer table order while
-     * looking like a rule (CONVENTIONS §9). The table is an argument so a test can build
+     * looking like a rule (CONVENTIONS §1.9). The table is an argument so a test can build
      * that collision — the shipped one cannot. */
     const matches = rules.filter((rule) =>
       rule.names.some((candidate) => normaliseHeading(candidate) === key),
@@ -417,7 +417,7 @@ export type TallyVoucherLookup =
   | { readonly kind: 'unknown' }
   | { readonly kind: 'ambiguous'; readonly candidates: readonly string[] }
 
-/** The target for one voucher type. `filter` and a count, never `.find` — CONVENTIONS §9. */
+/** The target for one voucher type. `filter` and a count, never `.find` — CONVENTIONS §1.9. */
 export function tallyVoucherTarget(
   voucherType: string,
   rules: readonly TallyVoucherTypeRule[] = TALLY_VOUCHER_TYPES,

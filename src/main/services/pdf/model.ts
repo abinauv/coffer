@@ -144,8 +144,8 @@ export interface PrintTaxColumn {
  * One line of the document.
  *
  * A CHARGE LINE IS AN ORDINARY LINE. Freight, packing and insurance are goods and
- * services with a rate on them; the reference project hardcoded "freight is never taxed"
- * and CONVENTIONS §9 lists that among the bugs not to port. `isCharge` is here so the
+ * services with a rate on them, and hardcoding "freight is never taxed" is a design
+ * CONVENTIONS §9 refuses. `isCharge` is here so the
  * page can mark one, never so it can leave it out.
  */
 export interface PrintLine {

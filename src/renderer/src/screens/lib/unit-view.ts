@@ -7,8 +7,8 @@
  * saying so, and why nothing here offers to rename one.
  *
  * NOTHING HERE RESTRICTS A BUSINESS TO A KNOWN LIST. `BUNDLE` and `TIN` are as real as
- * `KGS`. The reference project rewrote anything outside four units to `Nos` and
- * CONVENTIONS §9 calls that a bug to fix rather than port, so there is no table of
+ * `KGS`. Rewriting anything outside four units to `Nos` is a design CONVENTIONS §9
+ * refuses, so there is no table of
  * permitted codes in this module and there will not be one.
  *
  * AND NOTHING HERE UPPER-CASES A CODE. The repository normalises — trimmed and

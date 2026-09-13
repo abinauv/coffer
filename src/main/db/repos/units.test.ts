@@ -251,8 +251,8 @@ describe('creating a unit', () => {
   })
 
   it('takes a unit the business made up, which is the point', async () => {
-    /* Not `Nos/Sets/Kg/Mtr`, and not silently rewritten to one of them — that is the
-     * reference project's bug this codebase exists partly to not repeat. */
+    /* Not `Nos/Sets/Kg/Mtr`, and not silently rewritten to one of them — a design this
+     * codebase refuses (CONVENTIONS §9). */
     const unit = await createUnit(db, { code: 'BUNDLE', name: 'Bundles', decimalPlaces: 0 })
     expect(unit.code).toBe('BUNDLE')
     expect(unit.decimalPlaces).toBe(0)

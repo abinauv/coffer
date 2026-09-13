@@ -11,8 +11,8 @@
  * outside its own folder — if it does, something has leaked through this interface and
  * the interface is what needs fixing.
  *
- * The reference project called `computeGst()` straight from its screens. That is the
- * mistake this file exists to prevent.
+ * A `computeGst()` called straight from a screen is the mistake this file exists to
+ * prevent.
  */
 
 import type { Decimal } from '@main/domain/money'

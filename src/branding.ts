@@ -2,9 +2,9 @@
  * Single source of truth for product identity.
  *
  * Every user-visible name, filesystem path segment, URL and identifier resolves here.
- * Nothing else in the codebase may hard-code the product name — the reference project
- * this one is derived from had 412 hard-coded client references across 30+ files, which
- * is precisely the situation this module exists to prevent.
+ * Nothing else in the codebase may hard-code the product name. A name scattered across
+ * dozens of files is a rename nobody can finish, which is precisely the situation this
+ * module exists to prevent.
  *
  * Renaming the product should be a change to this file and nothing else.
  */

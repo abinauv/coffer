@@ -1,5 +1,5 @@
 {
-  "$comment": "Golden cases for the amount-in-words line on an Indian invoice. The word sequences in `numbers` and the numeric part of `cases` come from num2words(lang='en_IN') via the reference project's generated fixtures, normalised the way that project normalised them: no hyphens, no connective 'and', Title Case. The framing around them — the rupee word after the number, the paise tail, 'Only' — is the one documented on TaxRegime.amountInWords, and differs from the reference, which put 'Rupees' first. Changing either the grouping or the framing must fail here.",
+  "$comment": "Golden cases for the amount-in-words line on an Indian invoice. The word sequences in `numbers` and the numeric part of `cases` come from num2words(lang='en_IN'), normalised: no hyphens, no connective 'and', Title Case. The framing around them — the rupee word, the paise tail, 'Only' — is the one documented on TaxRegime.amountInWords. Changing either the grouping or the framing must fail here.",
   "cases": [
     {
       "amount": "1234.50",

@@ -35,7 +35,7 @@ deliberately, not incidentally.
 | Layer         | Choice                                       | Version | Why                                                                                                                                                                                               |
 | ------------- | -------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Shell         | Electron                                     | 43.x    | Chromium's print-to-PDF is the PDF engine; one codebase, three platforms.                                                                                                                         |
-| Build         | electron-vite                                | 5.x     | Main/preload/renderer builds with HMR, already proven on the reference project.                                                                                                                   |
+| Build         | electron-vite                                | 5.x     | Main/preload/renderer builds with HMR, from one config.                                                                                                                                           |
 | Language      | TypeScript                                   | 5.9.3   | TypeScript 7 (the native compiler) is released and much faster, but `typescript-eslint` still caps at `<6.1.0`. Revisit when the lint toolchain catches up — the codebase should need no changes. |
 | UI            | React                                        | 19.x    |                                                                                                                                                                                                   |
 | Bundler       | Vite                                         | 7.3.x   | Not 8 — `electron-vite` 5 peers on `^5 \|\| ^6 \|\| ^7`. Upgrading Vite means waiting for electron-vite.                                                                                          |
@@ -244,9 +244,9 @@ repository. The DTO pair in `shared/dto.ts` is what keeps it there —
 `CreateDocumentInput` carries no tax and `CreateTaxedDocumentInput` requires it, so a
 screen wired to the repository would have to invent the figures.
 
-> The reference project hardcodes `computeGst()` and calls it from screens. Do not
-> reproduce that. It also hardcodes _"freight is never taxed"_, which was one client's
-> policy — freight and packing are configurable charge lines here.
+> Never call a `computeGst()` from a screen, and never hardcode a rule such as _"freight is
+> never taxed"_ — that is one business's policy, not a rule. Freight and packing are
+> ordinary charge lines here, taxed at whatever rate the line carries.
 
 ### 6.3 One encrypted database per company
 

@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: 'If you refer to Coffer in your work, please cite it using these metadata.'
+type: software
+title: Coffer
+abstract: >-
+  Coffer is a free, open-source, local-first desktop accounting and ERP application for
+  small and medium businesses in India. It keeps double-entry books, computes GST on
+  invoices, tracks receivables, payables and stock, and stores each company as one
+  encrypted SQLite file on the user's own computer.
+authors:
+  - name: The Coffer contributors
+repository-code: 'https://github.com/abinauv/coffer'
+url: 'https://github.com/abinauv/coffer'
+license: AGPL-3.0-or-later
+keywords:
+  - accounting software
+  - ERP
+  - GST
+  - India
+  - MSME
+  - small business
+  - double-entry bookkeeping
+  - invoicing
+  - inventory management
+  - local-first
+  - offline-first

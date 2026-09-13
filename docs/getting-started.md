@@ -23,7 +23,9 @@ Windows, macOS and Linux are all supported for development.
 ```bash
 git clone https://github.com/abinauv/coffer.git
 cd coffer
-npm install
+npm ci --ignore-scripts                  # install without compiling anything
+node node_modules/electron/install.js    # the Electron download --ignore-scripts skipped
+npm run native:check                     # prove the prebuilt native modules load
 npm run dev
 ```
 
@@ -31,9 +33,9 @@ npm run dev
 port 5173, and launches Electron against it. A window appears. Editing a renderer file
 hot-reloads; editing a main or preload file restarts the Electron process.
 
-**`npm install`, not `npm ci`.** They behave differently here, and `npm ci` fails with a
-page of `node-gyp` output demanding a C++ compiler for a binary that is already on disk.
-§6 has the fix, which is two lines.
+**Install with `--ignore-scripts`.** A plain `npm ci` — or `npm install` on a fresh clone —
+fails with a page of `node-gyp` output demanding a C++ compiler for a binary that is
+already on disk. §6 explains why, and why the three lines above are the fix.
 
 If no window appears, read §6 before anything else. Two of the traps there produce a
 build that looks entirely successful.
@@ -205,8 +207,8 @@ at the cause.
 
 ### `npm ci` compiles a native module that is already in the tarball
 
-`npm install` works. `npm ci` — on a fresh clone, in CI, or after deleting
-`node_modules` — fails part way through, and what it prints is a wall of `node-gyp`:
+`npm ci` — and `npm install` on a fresh clone, or after deleting `node_modules` — fails
+part way through, and what it prints is a wall of `node-gyp`:
 
 ```
 npm error gyp ERR! find VS You need to install the latest version of Visual Studio
@@ -236,13 +238,16 @@ The fix is to tell it not to:
 
 ```bash
 npm ci --ignore-scripts
+node node_modules/electron/install.js
 node scripts/native-modules.mjs --no-repair
 ```
 
 The first line installs everything and runs no lifecycle script, so the prebuilds land
-untouched. The second is the `postinstall` check run by hand, in verify-only mode — it
-loads both native modules and does a keyed round-trip, which is the thing you actually
-wanted proved:
+untouched. That also skips **Electron's own** install script, which is what downloads the
+Electron binary — without the second line `node_modules/electron/dist` is empty and
+`npm run dev` has nothing to launch. The third is the `postinstall` check run by hand, in
+verify-only mode — it loads both native modules and does a keyed round-trip, which is the
+thing you actually wanted proved:
 
 ```
 [native] node:
@@ -251,9 +256,10 @@ wanted proved:
 [native]   ok   @node-rs/argon2 — argon2id hash and verify (m=19456,t=2,p=1)
 ```
 
-Measured on Node 24.19.0 with npm 11.17.0 and node-gyp 12.4.0. `npm install` in the same
-tree does not do this, which is why the trap is invisible until the first clean clone or
-the first CI run.
+Measured on Node 24.19.0 with npm 11.17.0 and node-gyp 12.4.0, and again on Node 22.23.2
+with npm 10.9.8, where `npm install` on a fresh clone failed in exactly the same way. In a
+tree whose `node_modules` already exists, `npm install` does not do this, which is why the
+trap is invisible until the first clean clone.
 
 ### A sandboxed preload must be CommonJS
 

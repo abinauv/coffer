@@ -17,6 +17,3 @@ Thumbs.db
 *.db
 backups/
 scratch/
-
-# The reference project is a read-only sibling of this repo, never a part of it
-reference/

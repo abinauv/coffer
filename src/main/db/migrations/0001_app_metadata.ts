@@ -5,9 +5,9 @@
  * file is, so that a database which decrypts can still be identified before a single
  * business table exists.
  *
- * WHY A KEY/VALUE TABLE AND NOT A ROW OF COLUMNS. The reference project kept a
- * single-row `settings` table that grew into the company profile, the invoice defaults
- * and the e-mail configuration, and every new field was a migration that rewrote it.
+ * WHY A KEY/VALUE TABLE AND NOT A ROW OF COLUMNS. A single-row `settings` table grows
+ * into the company profile, the invoice defaults and the e-mail configuration, and every
+ * new field becomes a migration that rewrites it.
  * This table is deliberately not that (CONVENTIONS §9): it holds file-level facts about
  * the artefact — format, format version, the name it was created under — and nothing a
  * business screen will ever want. The company profile is a Phase 1 table with its own

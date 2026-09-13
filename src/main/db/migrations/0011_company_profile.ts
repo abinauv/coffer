@@ -20,13 +20,12 @@
  * has already answered. Hence `CHECK (id = 'company')`: at most one row, enforced by a
  * constraint rather than by every caller remembering.
  *
- * CONVENTIONS §9 lists "the single-row `settings` company profile" among the reference
- * project's bugs not to port, and this table is single-row, so the distinction has to be
- * stated rather than assumed. What was wrong there was not the row count. It was that
- * the row had no subject: the company profile, the invoice defaults, the e-mail
- * configuration and the print preferences all lived in it, so every screen wrote to it,
- * no constraint could describe it, and every new field was a migration that rewrote the
- * table.
+ * CONVENTIONS §9 refuses "a single-row `settings` table", and this table is single-row,
+ * so the distinction has to be stated rather than assumed. What is wrong with such a
+ * table is not the row count. It is that the row has no subject: the company profile,
+ * the invoice defaults, the e-mail configuration and the print preferences all live in
+ * it, so every screen writes to it, no constraint can describe it, and every new field
+ * is a migration that rewrites the table.
  *
  * THIS TABLE HAS A SUBJECT, AND IT IS IDENTITY — who the business is, as a tax
  * authority and a customer would recognise it. Nothing that is a preference belongs
@@ -34,7 +33,7 @@
  * do with sending mail, because they change for different reasons and by different
  * hands: a profile changes when the business re-registers or moves, and a default
  * changes because somebody found it inconvenient. The pressure to put
- * `default_payment_terms` in this table will be real, and the reference project is what
+ * `default_payment_terms` in this table will be real, and a `settings` table is what
  * happens after the third time somebody gives in to it.
  *
  * The name is singular against CONVENTIONS §2, deliberately. Plural table names exist so

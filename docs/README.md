@@ -37,6 +37,11 @@ decisions everything else follows from.
 **[Good first issues](./good-first-issues.md)** — scoped starter tasks drawn from what is
 actually in the code, each with the files involved and how to tell when it is done.
 
+**[Brand, UI and the design system](./design.md)** — what is a placeholder and what is
+decided, where every visual decision lives, and the rules a redesign has to keep: money
+the renderer never computes, colour that never carries meaning alone, and nothing loaded
+from the internet.
+
 ### For understanding the system
 
 **[The data model, so far](./data-model.md)** — a company is an encrypted SQLite database
@@ -63,6 +68,7 @@ download's SHA-256 while builds are unsigned.
 | [`README.md`](../README.md)                   | What Coffer is and why it exists.                                                |
 | [`CONTRIBUTING.md`](../CONTRIBUTING.md)       | How to report a bug, propose a feature, and what a good pull request looks like. |
 | [`SECURITY.md`](../SECURITY.md)               | Reporting a vulnerability, what is in scope, and the known gaps.                 |
+| [`SUPPORT.md`](../SUPPORT.md)                 | Where to ask a question, report a bug, or suggest an idea.                       |
 | [`CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md) | How people are expected to behave here.                                          |
 | [`CHANGELOG.md`](../CHANGELOG.md)             | What changed, with `[accounting]` marking anything that alters figures.          |
 

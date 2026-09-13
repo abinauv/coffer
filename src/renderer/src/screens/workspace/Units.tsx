@@ -8,8 +8,8 @@
  * add.
  *
  * NOTHING HERE RESTRICTS A BUSINESS TO A KNOWN LIST. `BUNDLE`, `TIN` and `SQFT` are as
- * real as `KGS`. The reference project silently rewrote every unit outside four to `Nos`,
- * and CONVENTIONS §9 names that as a bug to fix rather than port — so there is no table
+ * real as `KGS`. Silently rewriting every unit outside four to `Nos` is a design
+ * CONVENTIONS §9 refuses — so there is no table
  * of permitted codes in this file, no coercion, and no warning about an unusual one.
  *
  * A CODE IS AN IDENTITY, NOT A LABEL. It is what every item stores and what has printed

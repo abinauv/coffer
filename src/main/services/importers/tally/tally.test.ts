@@ -698,7 +698,7 @@ describe('vouchers that move money', () => {
   it('reads a PAYMENT voucher whose party is a CUSTOMER as a refund, not a payment', () => {
     /* The whole reason the kind is a direction crossed with a side. Filing this as a
      * payment would put a customer's money into accounts payable, where no statement of
-     * theirs would ever show it (CONVENTIONS §9, 0015). */
+     * theirs would ever show it (CONVENTIONS §1.9, 0015). */
     expect(batch.receipts[1]?.number).toBe('PY-2027-014')
     expect(batch.receipts[1]?.kind).toBe('refund')
     expect(batch.receipts[1]?.partyName).toBe('Bharat Metals Pvt Ltd')

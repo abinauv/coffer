@@ -5,7 +5,7 @@
  * (CONVENTIONS §1.6) and the renderer may not compute money (§1.7), so there is exactly
  * one layer that can ask "what tax does this line carry", and this is it. The screen
  * collects what the user typed, this asks the regime, and the repository stores what it
- * answered. The reference project called `computeGst()` straight from its screens; the
+ * answered. A `computeGst()` called straight from a screen is the mistake to avoid; the
  * two DTO families in shared/dto.ts — `CreateDocumentInput` against
  * `CreateTaxedDocumentInput` — exist to make that impossible to do here by accident.
  *

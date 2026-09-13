@@ -44,7 +44,7 @@
  *    that cannot be placed must never abort an 800-row import.
  *
  *    `unmapped` is "I have nowhere to put this". `ambiguous` is "I have two places and
- *    picking one would be a lie" — CONVENTIONS §9, the `.find` trap: a lookup that takes
+ *    picking one would be a lie" — CONVENTIONS §1.9, the `.find` trap: a lookup that takes
  *    the first match silently implements "whichever is listed first" while looking like a
  *    rule. Both are reported; neither is guessed.
  *
@@ -1231,7 +1231,7 @@ function normaliseOverrides(
 /**
  * One ledger name, resolved.
  *
- * Every lookup below is a `filter` and a count. CONVENTIONS §9: `.find` cannot tell "one
+ * Every lookup below is a `filter` and a count. CONVENTIONS §1.9: `.find` cannot tell "one
  * answer" from "the first of two", so it silently implements table order while looking
  * like a rule — and the whole promise of this module is that it does not guess.
  */
@@ -1310,7 +1310,7 @@ function resolveOverride(
   context: ResolutionContext,
 ): LedgerResolution {
   /* A switch, exhaustively checked — the same form mapping.ts uses, and it gives what
-   * CONVENTIONS §9 asks a total record for: `assertNever` stops this compiling the moment
+   * CONVENTIONS §1.9 asks a total record for: `assertNever` stops this compiling the moment
    * a fourth override kind is added, rather than handing it whatever the last branch said. */
   switch (override.kind) {
     case 'role':

@@ -133,8 +133,8 @@ settles. It has settled: `BACKUP_FILE_SUFFIX = '.coffer-backup.zip'` in `backup.
 re-exported from `companies/index.ts`.
 
 `branding.ts` is the single source of truth for every user-visible name and file
-extension — its header explains that the reference project had 412 hard-coded client
-references across 30-odd files, which is the situation it exists to prevent.
+extension — its header explains that a product name hard-coded across dozens of files
+is the situation it exists to prevent.
 
 **Done when** the extension is declared once in `BRAND`, both the picker and `backup.ts`
 read it from there, the stale comment in `electron.ts` goes with it, and picking a backup

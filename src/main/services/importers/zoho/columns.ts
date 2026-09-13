@@ -215,7 +215,7 @@ function voucherColumns(headings: {
 /**
  * The entity table.
  *
- * A total record over `ZohoEntity` (CONVENTIONS §9): adding an entity to the union does
+ * A total record over `ZohoEntity` (CONVENTIONS §1.9): adding an entity to the union does
  * not compile until it has a row here, rather than falling through to whatever a lookup
  * happened to return.
  */

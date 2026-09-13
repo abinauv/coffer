@@ -12,8 +12,8 @@
  * CUSTOM UNITS ARE THE POINT. Nothing here restricts a business to a known list. A unit
  * called `BUNDLE` or `TIN` is as real as `KGS`, and `regime_code` — untouched by
  * everything in Phase 2 — is where the filing layer will later record that `BAGS` is
- * reported as `BAG`. Coercing a unit onto a fixed list is the reference project's bug
- * this codebase exists partly to not repeat (CONVENTIONS §9).
+ * reported as `BAG`. Coercing a unit onto a fixed list is a design this codebase refuses
+ * (CONVENTIONS §9).
  *
  * WHAT THIS FILE DOES NOT DO. It does not check that `decimal_places` is 0 to 3 and it
  * does not check that a name has characters in it. Both are CHECKs in 0006 and neither is
@@ -49,8 +49,8 @@ const DEFAULT_DECIMAL_PLACES = 3
  * THE STARTER SET, AND WHY A FILE THAT ARGUES AGAINST FIXED LISTS HAS ONE.
  *
  * Nothing below restricts anybody. `BUNDLE` and `TIN` are as real as `KGS` and the header
- * of this file spends a paragraph saying so — the reference project's silent rewrite to
- * `Nos` is a bug this codebase exists partly not to repeat. A SEED IS NOT A LIST: these
+ * of this file spends a paragraph saying so — a silent rewrite to `Nos` is a design this
+ * codebase refuses. A SEED IS NOT A LIST: these
  * eight rows are ordinary units a business may rename, archive or delete, and the only
  * thing that makes them special is that they are there on the first day.
  *

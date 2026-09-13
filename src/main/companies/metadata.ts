@@ -4,8 +4,8 @@
  * Created by migration 0001. Everything in it is file-level provenance — the format
  * marker, and the name and moment the company was created under. It is not the company
  * profile: address, registration numbers and invoice defaults are business data with
- * their own Phase 1 table, and putting them here is how the reference project ended up
- * with a single settings row that every screen wrote to.
+ * their own Phase 1 table, and putting them here is how an app ends up with a single
+ * settings row that every screen writes to (CONVENTIONS §9).
  *
  * The display name is stored here as well as in the registry. The two can drift — the
  * registry is authoritative for what the user sees, and this copy is what identifies an

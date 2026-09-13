@@ -65,9 +65,9 @@
  *
  * Whether a line is taxed. The rate arrives on the line, from the caller. Freight,
  * packing and insurance are charge lines like any other: `isCharge` says what a line is,
- * not whether it is taxable. The reference project hardcoded "freight is never taxed"
- * inside its tax function — that was one client's policy wearing the costume of a rule,
- * and a client with a different policy had nowhere to put it. Here a charge that should
+ * not whether it is taxable. Hardcoding "freight is never taxed" inside a tax function
+ * would be one business's policy wearing the costume of a rule, and a business with a
+ * different policy would have nowhere to put it. Here a charge that should
  * not be taxed arrives with a rate of 0, which is a decision the user can see and change.
  */
 

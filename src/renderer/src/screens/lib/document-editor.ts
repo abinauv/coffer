@@ -73,7 +73,7 @@ export interface LineDraft {
    * into a box. The posting rule sends a line carrying it to `freight-outward` on a sale
    * and `freight-inward` on a purchase instead of to sales or purchases; it says nothing
    * about whether the line is taxed, which is the rate's business (posting.ts, and
-   * regimes/in-gst/tax.ts on the bug this project refuses to port).
+   * regimes/in-gst/tax.ts on the design this project refuses).
    */
   isCharge: boolean
   /**

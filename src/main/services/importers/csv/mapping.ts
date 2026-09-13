@@ -25,7 +25,7 @@
  *    one mapping then covers a bank that renamed a column between 2023 and 2025 — but if
  *    MORE THAN ONE of them is actually in the file, that is reported as ambiguous and the
  *    mapping stops. Taking the first would make the list's ORDER the rule while looking
- *    like a set of synonyms, which is CONVENTIONS §9's `.find` trap exactly: it silently
+ *    like a set of synonyms, which is CONVENTIONS §1.9's `.find` trap exactly: it silently
  *    implements "whichever is listed first" and no assertion downstream can see it. The
  *    same applies to two columns in the file sharing one heading.
  *
@@ -412,7 +412,7 @@ function readerFor(
   column: CsvColumn,
 ): FieldReader {
   /* A switch, exhaustively checked: `assertNever` below stops this compiling the moment
-   * a fifth field kind is added, which is the property CONVENTIONS §9 asks a total record
+   * a fifth field kind is added, which is the property CONVENTIONS §1.9 asks a total record
    * for. The union is discriminated, so each branch also gets the narrowed spec. */
   switch (spec.kind) {
     case 'text':

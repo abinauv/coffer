@@ -77,18 +77,20 @@ code as it stands, with the files and what "done" looks like for each.
 ```bash
 git clone https://github.com/abinauv/coffer.git
 cd coffer
-npm install
+npm ci --ignore-scripts                  # install without compiling anything
+node node_modules/electron/install.js    # the Electron download --ignore-scripts skipped
+npm run native:check                     # prove the prebuilt native modules load
 npm run dev
 ```
 
-Node 22 LTS or newer. Nothing is compiled: both native modules are Node-API addons that
-ship prebuilt binaries, so there is no rebuild step and no C++ toolchain requirement.
-`postinstall` runs `scripts/native-modules.mjs`, which only checks that those binaries
-load — it takes about a second.
+Node 22, the version pinned in `.nvmrc`. Nothing needs compiling: both native modules are
+Node-API addons that ship prebuilt binaries, so there is no C++ toolchain requirement.
 
-**`npm install`, not `npm ci`.** `npm ci` reaches for `node-gyp` and fails asking for a
-C++ compiler, to build a binary the package already contains. It is the first trap in
-[`docs/getting-started.md`](./docs/getting-started.md) §6, and the fix is two lines.
+**Install with `--ignore-scripts`.** Without it, npm finds a `binding.gyp` in
+`better-sqlite3-multiple-ciphers` and starts compiling SQLite from source — `npm ci` always,
+and `npm install` too on a fresh clone — then fails asking for a C++ compiler, to build a
+binary the package already contains. It is the first trap in
+[`docs/getting-started.md`](./docs/getting-started.md) §6.
 
 If `npm run dev` builds cleanly and no window appears, read that same section before
 debugging anything else. Two of the traps there produce exactly that.

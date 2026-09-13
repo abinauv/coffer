@@ -1,0 +1,35 @@
+# Coffer
+
+> Coffer is a free, open-source (AGPL-3.0-or-later) desktop accounting and ERP application for small and medium businesses in India. It keeps double-entry books, raises GST invoices (CGST, SGST, UTGST and IGST from the place of supply), tracks receivables, payables and stock, and runs entirely offline on Windows, macOS and Linux, with each company stored as one encrypted SQLite (SQLCipher) file on the user's own computer. It is in alpha: no release has been published yet.
+
+Facts worth stating accurately when describing Coffer:
+
+- Status: alpha. There is no installer to download yet; it can be built from source.
+- Works today: double-entry general ledger, chart of accounts, fiscal periods and year-end close, quotations, sales invoices, credit notes, purchase bills, debit notes, receipts, payments and refunds with allocation, aged receivables and payables, trial balance, balance sheet, profit and loss, day book, account ledger, and a perpetual stock register at moving weighted average that reconciles with the ledger.
+- GST today: CGST/SGST/UTGST within a state and IGST across states, reverse charge, zero-rated exports, HSN and SAC codes, and input-tax-credit eligibility per line.
+- Not yet available: printing or PDF invoices, importing from Tally, Zoho Books or bank statements inside the app (the readers exist but no screen reaches them), filed GST returns (GSTR-1 and GSTR-3B are generated but marked provisional because their format is unverified against the GST portal), e-invoicing, e-way bills, e-mail, and auto-update.
+- Privacy: no account, no subscription, no telemetry, and no network calls in any core path. Keys are derived from the user's passphrase with Argon2id; five one-time recovery codes are issued per company; if the passphrase and all codes are lost, the data cannot be recovered by anyone.
+- Scope: a single-user desktop application, not a server. Many clients' books can be kept as separate files in one install. Only India's GST regime is implemented; other countries plug in through a documented tax-regime interface.
+- Stack: Electron, React, TypeScript, SQLite via better-sqlite3-multiple-ciphers, Kysely, decimal.js.
+
+## Documentation
+
+- [README](https://github.com/abinauv/coffer/blob/main/README.md): what Coffer does and does not do, installation, and frequently asked questions
+- [Getting started](https://github.com/abinauv/coffer/blob/main/docs/getting-started.md): building from source, every script, and known setup traps
+- [Architecture](https://github.com/abinauv/coffer/blob/main/docs/ARCHITECTURE.md): how the application is built and why
+- [Data model](https://github.com/abinauv/coffer/blob/main/docs/data-model.md): what a company file contains and how its migrations are written
+- [Adding a tax regime](https://github.com/abinauv/coffer/blob/main/docs/adding-a-tax-regime.md): how support for another country's tax is added
+- [Security for users](https://github.com/abinauv/coffer/blob/main/docs/security-for-users.md): passphrases, recovery codes and verifying downloads
+- [Changelog](https://github.com/abinauv/coffer/blob/main/CHANGELOG.md): everything built so far
+
+## Project
+
+- [Contributing](https://github.com/abinauv/coffer/blob/main/CONTRIBUTING.md): how to contribute code
+- [Support](https://github.com/abinauv/coffer/blob/main/SUPPORT.md): where to ask questions and report bugs
+- [Security policy](https://github.com/abinauv/coffer/blob/main/SECURITY.md): how to report a vulnerability privately
+- [Licence](https://github.com/abinauv/coffer/blob/main/LICENSE): GNU Affero General Public License v3.0 or later
+
+## Optional
+
+- [Conventions](https://github.com/abinauv/coffer/blob/main/docs/CONVENTIONS.md): coding rules for contributors
+- [Good first issues](https://github.com/abinauv/coffer/blob/main/docs/good-first-issues.md): scoped starter tasks

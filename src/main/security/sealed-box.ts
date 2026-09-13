@@ -20,9 +20,8 @@
  * slot that a maintainer key can open, no path by which anyone but the user can decrypt
  * a company's books. SECURITY.md promises the user, in plain words, that a passphrase
  * lost along with every recovery code means the books are gone — a maintainer escrow
- * slot would make that promise false, and it is not worth having. The reference project
- * this one is derived from does escrow a per-install recovery key to its vendor; that is
- * a deliberate divergence, not an oversight.
+ * slot would make that promise false, and it is not worth having. Leaving vendor escrow
+ * out is a deliberate choice, not an oversight.
  *
  * So: never put a DEK, a passphrase or a recovery code in a sealed request. The payload
  * is whatever the caller passes, and this module cannot enforce that rule for you —

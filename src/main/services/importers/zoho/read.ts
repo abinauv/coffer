@@ -29,7 +29,7 @@
  *
  * `agreedValue` collects the DISTINCT non-blank values a field has across the group's
  * rows. One value is the answer. None is absence. TWO IS A CONFLICT, and it is reported
- * rather than resolved, because "take the first row's" is CONVENTIONS §9's `.find` in
+ * rather than resolved, because "take the first row's" is CONVENTIONS §1.9's `.find` in
  * disguise: it makes the file's sort order the rule while looking like a lookup.
  *
  * The severity depends on what the field is FOR, and that is the only place the two
@@ -330,7 +330,7 @@ function stageGroups(
 
   for (const group of groups) {
     /* A switch, exhaustively checked, so an entity shape added without a reader does not
-     * compile — the property CONVENTIONS §9 asks a total record for. */
+     * compile — the property CONVENTIONS §1.9 asks a total record for. */
     switch (shape.kind) {
       case 'contacts': {
         const read = readContact(group, context)

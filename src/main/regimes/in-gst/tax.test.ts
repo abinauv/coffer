@@ -226,8 +226,8 @@ describe('isCharge says what a line is, not whether it is taxed', () => {
   })
 
   it('a charge is untaxed only because the caller set its rate to zero', () => {
-    /* The reference project hardcoded "freight is never taxed" inside the tax function.
-     * Here the same outcome is reachable, but only as a decision the user made. */
+    /* "Freight is never taxed" is not a rule in the tax function (CONVENTIONS §9). The
+     * same outcome is reachable, but only as a decision the user made. */
     const untaxed = taxOne(withinTamilNadu, '500.00', '0', true)
     expect(untaxed.totalTax).toBe('0.00')
     expect(untaxed.lines[0]?.components).toEqual([])

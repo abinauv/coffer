@@ -13,8 +13,7 @@
  * as immovable property or transport — all resolve to a jurisdiction the caller knows
  * and this function does not. The seam for them is `TaxParty.jurisdictionCode`: the
  * caller passes the jurisdiction it has determined, and this module believes it. Baking
- * a guess in here is how the reference project ended up with one client's policy
- * embedded in a tax function.
+ * a guess in here is how one business's policy ends up embedded in a tax function.
  */
 
 import type { PlaceOfSupply, TaxParty } from '@main/regimes/types'

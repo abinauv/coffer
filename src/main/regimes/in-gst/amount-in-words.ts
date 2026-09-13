@@ -166,8 +166,8 @@ export function numberInWords(value: DecimalInput): string {
  * `1234.50` becomes 'Rupees One Thousand Two Hundred Thirty Four and Fifty Paise Only'.
  *
  * The currency word leads. That is the convention on Indian tax invoices and what every
- * accountant and CA reading a Coffer invoice will expect; it is also what the reference
- * project emitted via `num2words(lang='en_IN')`. An earlier draft of the `TaxRegime`
+ * accountant and CA reading a Coffer invoice will expect, and what
+ * `num2words(lang='en_IN')` produces. An earlier draft of the `TaxRegime`
  * jsdoc put the rupee word after the number — that was a slip in the contract, corrected
  * there rather than here.
  *

@@ -19,8 +19,8 @@ and not of everywhere else lives behind `TaxRegime`: how tax is computed, what a
 registration number looks like, how goods are classified, when the financial year starts,
 how numbers are grouped, how amounts are said in words, and which returns exist.
 
-The reference project this one is derived from called `computeGst()` straight from its
-screens. `src/main/regimes/types.ts` exists to prevent that.
+The mistake this seam exists to prevent is a `computeGst()` called straight from a
+screen. `src/main/regimes/types.ts` is what makes that impossible.
 
 ### What enforces it
 
@@ -101,8 +101,8 @@ not compute money, so there is one legal home for the call and the DTOs enforce 
 `CreateDocumentInput` (what a screen sends) has no taxable amount and no components,
 and `CreateTaxedDocumentInput` (what the repository takes) requires both.
 
-The reference project called `computeGst()` straight from its screens. That is what this
-arrangement exists to prevent.
+A `computeGst()` called straight from a screen is what this arrangement exists to
+prevent.
 
 ### `placeOfSupply`
 
@@ -381,9 +381,9 @@ Pin the equivalents for your regime.
 
 That fourth one deserves a paragraph, because it is the mistake that is hardest to see.
 
-The reference project hardcoded _"freight is never taxed"_ inside its tax function. That
-was one client's policy wearing the costume of a rule, and a client with a different
-policy had nowhere to put it. In Coffer, `isCharge` on a line says what a line **is** —
+The easy version hardcodes _"freight is never taxed"_ inside the tax function. That is
+one business's policy wearing the costume of a rule, and a business with a different
+policy has nowhere to put it. In Coffer, `isCharge` on a line says what a line **is** —
 freight, packing, insurance — not whether it is taxable. A charge that should not be
 taxed arrives with a rate of 0, which is a decision the user can see and change.
 

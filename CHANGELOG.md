@@ -706,10 +706,10 @@ one transaction spanning the numbering counter, the posting rule and the ledger.
 
 - `company_profile` — the name a tax authority knows, the registration, the jurisdiction,
   the address. At most one row, pinned by `CHECK (id = 'company')`.
-- **Identity, not preferences.** The reference project kept a single-row `settings` table
-  that grew into the profile plus invoice defaults plus the mail configuration, and every
-  new field became a migration that rewrote it. The distinction is not the row count: it is
-  that the reference table had no subject.
+- **Identity, not preferences.** The tempting design is a single-row `settings` table that
+  grows into the profile plus invoice defaults plus the mail configuration, where every new
+  field is a migration that rewrites it. The distinction is not the row count: it is that
+  such a table has no subject.
 - **It can legitimately be empty**, and no row is seeded. A migration cannot invent a
   company's legal name, so every read answers null until somebody enters one, and books
   with no profile still keep a chart, periods, parties, drafts and a ledger.
@@ -1127,6 +1127,16 @@ one transaction spanning the numbering counter, the posting rule and the ledger.
 - The README covers what Coffer does today rather than what it will do, where releases
   will appear, how to check a SHA-256, and — the step nobody writes down — which buttons
   get you past Windows SmartScreen and macOS Gatekeeper on an unsigned build.
+- The README says in its first paragraph who Coffer is for and what it is, and answers
+  the questions people ask before trying it — is it free, does it do GST, where does the
+  data live, what if the passphrase is lost — in a FAQ that is honest about what is
+  missing. `SUPPORT.md` says where each kind of question goes, `CITATION.cff` makes the
+  project citable, and `llms.txt` gives AI assistants an accurate summary to quote.
+- Building from source says to install with `--ignore-scripts` and fetch Electron by
+  hand. The earlier advice — `npm install` rather than `npm ci` — fails the same way on a
+  fresh clone, asking for a C++ compiler to build a binary the package already ships.
+- The conduct policy names an e-mail address. It said to send a GitHub direct message,
+  which GitHub no longer has.
 
 ### Fixed
 

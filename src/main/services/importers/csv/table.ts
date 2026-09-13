@@ -26,7 +26,7 @@
  *
  * COLUMN LOOKUP IS BY NORMALISED HEADING AND REFUSES TO GUESS. `findColumn` returns
  * `missing`, `found`, or `ambiguous` — it never returns "the first one that matched".
- * CONVENTIONS §9 is explicit about why: a `.find` over a list silently implements
+ * CONVENTIONS §1.9 is explicit about why: a `.find` over a list silently implements
  * "whichever is listed first" while looking like a rule, and a statement with two
  * columns both called "Amount" is not hypothetical. The caller is told there are two and
  * which positions they are in.
@@ -135,7 +135,7 @@ export function tableOf(grid: CsvGrid): CsvTable {
  * Find the column with a given heading, case- and whitespace-insensitively.
  *
  * Returns `ambiguous` rather than choosing when two columns normalise to the same key.
- * See the module header, and CONVENTIONS §9.
+ * See the module header, and CONVENTIONS §1.9.
  */
 export function findColumn(header: readonly CsvColumn[], heading: string): ColumnLookup {
   const key = normaliseHeading(heading)

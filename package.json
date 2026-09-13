@@ -1,7 +1,35 @@
 {
   "name": "coffer",
   "version": "0.0.0",
-  "description": "A local-first, double-entry ERP for small businesses. Your books, in your own safe.",
+  "description": "Free, open-source accounting and ERP software for small businesses in India: GST invoicing, double-entry books and inventory, offline and encrypted on your own computer.",
+  "keywords": [
+    "accounting",
+    "accounting-software",
+    "erp",
+    "gst",
+    "gst-invoice",
+    "india",
+    "msme",
+    "sme",
+    "small-business",
+    "invoicing",
+    "billing",
+    "bookkeeping",
+    "double-entry-accounting",
+    "inventory-management",
+    "tally-alternative",
+    "local-first",
+    "offline-first",
+    "electron"
+  ],
+  "homepage": "https://github.com/abinauv/coffer#readme",
+  "bugs": {
+    "url": "https://github.com/abinauv/coffer/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abinauv/coffer.git"
+  },
   "license": "AGPL-3.0-or-later",
   "private": true,
   "type": "module",
