@@ -35,7 +35,7 @@
     "coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@node-rs/argon2": "2.1.0",
+    "@node-rs/argon2": "2.2.1",
     "better-sqlite3-multiple-ciphers": "13.0.3",
     "decimal.js": "10.6.0",
     "electron-log": "5.4.4",
