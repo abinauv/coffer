@@ -72,7 +72,7 @@ jobs:
       # time to turn it on is when the default suite is reliably green and someone is
       # actually triaging it.
       - name: Initialise CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: javascript-typescript
 
@@ -81,7 +81,7 @@ jobs:
       # node_modules, so installing would add minutes and no findings. A compiled
       # language would need `github/codeql-action/autobuild` between init and analyze.
       - name: Analyse
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
 
   dependency-review:
     name: Dependency review
@@ -109,4 +109,4 @@ jobs:
       # pinned to an exact version in package.json and they change rarely, so each alert
       # is about something a human deliberately just added.
       - name: Review dependency changes
-        uses: actions/dependency-review-action@v4
+        uses: actions/dependency-review-action@v5
