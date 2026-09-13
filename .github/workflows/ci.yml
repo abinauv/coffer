@@ -139,6 +139,15 @@ jobs:
       # Linux is excluded because `checks` has already run the suite there, with
       # coverage. Last in the job so a failing test cannot mask a broken build: proving
       # these three platforms still build is what this matrix exists for.
+      #
+      # THE TIMEOUT IS RAISED HERE, AND ONLY HERE. This step proves platform behaviour,
+      # not speed, and the hosted Windows runner is slow in a way no test can plan for:
+      # the whole suite takes ~850s there against ~50s on a developer laptop, and single
+      # tests have stalled 100x — `ledger/service.test.ts` took 11.6s where it takes
+      # 116ms locally, with a fast KDF and nothing to wait for. Two consecutive runs on
+      # main failed that way, each on a different test that passes everywhere else. The
+      # `checks` job keeps Vitest's 5s default, so a test that genuinely slows down
+      # still fails where the runner is predictable.
       - name: Test
         if: github.event_name != 'pull_request' && runner.os != 'Linux'
-        run: npm test
+        run: npm test -- --testTimeout=60000 --hookTimeout=60000
