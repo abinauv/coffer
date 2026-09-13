@@ -1594,9 +1594,15 @@ describe('the register', () => {
          VALUES (?, 'receipt', 'posted', ?, ?, '2026-04-20', ?, '1.00', ?, '', '', ?, ?, ?)`,
       )
       const series = (await getReceipt(db, seed.id))!.seriesId
-      for (let index = 0; index < MAX_RECEIPT_PAGE; index += 1) {
-        insert.run(randomUUID(), `BULK/${index}`, series, customer, bank, randomUUID(), NOW, NOW)
-      }
+      /* One transaction, not one per row. The file is opened with `synchronous = FULL`,
+       * so every autocommitted insert was its own encrypted write and sync — which took
+       * this test to 5.3s against the default 5s on a GitHub Windows runner, doing work
+       * the assertion does not need. The rows are identical either way. */
+      connection.transaction(() => {
+        for (let index = 0; index < MAX_RECEIPT_PAGE; index += 1) {
+          insert.run(randomUUID(), `BULK/${index}`, series, customer, bank, randomUUID(), NOW, NOW)
+        }
+      })()
     } finally {
       connection.pragma('foreign_keys = ON')
     }
