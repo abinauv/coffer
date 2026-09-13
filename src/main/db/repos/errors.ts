@@ -9,9 +9,22 @@
  * Codes are shared with `LedgerErrorCode` in domain/ledger where they mean the same
  * thing, so that "you cannot post to a group account" is one code whether the domain
  * or the repository noticed it.
+ *
+ * `InventoryErrorCode` is folded in the same way and by INCLUSION rather than by copying:
+ * the valuation refusals are the domain's own words — "you have 4 on hand and this issue
+ * wants 6" — and a re-spelled list here would be a second copy to keep in step with a
+ * union the domain owns. The ledger's codes were copied because they predate this file;
+ * the inventory ones arrive with a module that already had them written down.
  */
 
+import type { InventoryErrorCode } from '@main/domain/inventory'
+
 export type RepoErrorCode =
+  /*
+   * The domain's own valuation refusals, unchanged. INSUFFICIENT_STOCK, COST_REQUIRED,
+   * NEGATIVE_QUANTITY and the rest — see domain/inventory/types.ts, where each is argued.
+   */
+  | InventoryErrorCode
   // ---- Accounts ----
   /** No account with that id. */
   | 'ACCOUNT_NOT_FOUND'
@@ -153,6 +166,63 @@ export type RepoErrorCode =
   | 'ITEM_CLASSIFICATION_INVALID'
   /** An item posts to an account that holds no figures of its own. */
   | 'ITEM_ACCOUNT_IS_GROUP'
+  // ---- Stock (0017-0019) ----
+  /*
+   * ONE UNION AS OF THE INTEGRATION GATE. Phase 4.1 kept a parallel `StockErrorCode` and
+   * a parallel `StockError` class in db/repos/stock.ts, and its header said plainly why:
+   * this file belonged to nobody that batch, and adding members to a contract other work
+   * was building on would have been editing across a path boundary (CONVENTIONS §8). The
+   * shape was deliberately identical — a stable code, a sentence, structured `details` —
+   * so folding it in is a union member per line and no call site changes.
+   *
+   * Three of them were already here before that, because they are the codes 0019's
+   * TRIGGERS raise and `errors.test.ts` reads the migrations rather than a list somebody
+   * remembered to update: a trigger raising a code nothing maps is the exact blindness
+   * that file exists to catch.
+   */
+  /** A movement was recorded for an item that keeps no quantity balance. */
+  | 'ITEM_NOT_STOCK_TRACKED'
+  /** A stock movement is written and never edited or deleted. See 0019. */
+  | 'MOVEMENT_IMMUTABLE'
+  /** A service cannot keep a quantity balance. 0017's CHECK is the floor under this. */
+  | 'ITEM_NOT_STOCKABLE'
+  /** No warehouse with that id. */
+  | 'WAREHOUSE_NOT_FOUND'
+  /** The warehouse is archived and takes nothing new. */
+  | 'WAREHOUSE_ARCHIVED'
+  /** Another warehouse already uses that code, ignoring case. */
+  | 'WAREHOUSE_CODE_TAKEN'
+  /** Another warehouse already uses that name, ignoring case. */
+  | 'WAREHOUSE_NAME_TAKEN'
+  /** A warehouse code with no characters in it. */
+  | 'WAREHOUSE_CODE_REQUIRED'
+  /** A warehouse name with no characters in it. */
+  | 'WAREHOUSE_NAME_REQUIRED'
+  /** The warehouse still holds stock, or has movements against it. */
+  | 'WAREHOUSE_IN_USE'
+  /** These books have no warehouse at all, so stock has nowhere to be. */
+  | 'WAREHOUSE_NOT_CONFIGURED'
+  /** More than one warehouse exists, so which one this happened at has to be said. */
+  | 'WAREHOUSE_REQUIRED'
+  /** A movement kind this build does not know. */
+  | 'MOVEMENT_KIND_UNKNOWN'
+  /**
+   * The database refused the movement and said nothing this layer recognises.
+   *
+   * A last resort rather than a rule: every refusal above names something a user can act
+   * on, and this one names only that the register would not take it. A code that is
+   * reached often is a rule somebody has not written down yet.
+   */
+  | 'MOVEMENT_REFUSED'
+  /**
+   * A movement reached the register without the journal entry that goes with it.
+   *
+   * ARCHITECTURE §6.4 as an error code. Raised by `stock_ledger_posted` (0022), and by
+   * nothing in the repository — `recordMovement` posts before it writes, so the only way
+   * to reach this is a path that skipped it. The trigger is the floor, and this is what a
+   * caller sees instead of `SQLITE_CONSTRAINT_TRIGGER`.
+   */
+  | 'MOVEMENT_NOT_POSTED'
   // ---- Numbering (0007) ----
   /** No numbering series with that id. */
   | 'SERIES_NOT_FOUND'
@@ -227,6 +297,27 @@ export type RepoErrorCode =
   | 'DUPLICATE_LINE_NUMBER'
   /** A line names a unit these books do not have. */
   | 'UNIT_UNKNOWN'
+  /**
+   * An export treatment on a supply that does not leave the country (0020).
+   *
+   * Refused rather than cleared. "With payment" and "under an undertaking" are the two
+   * ways a ZERO-RATED supply can go out, and neither is a fact about a domestic one — so
+   * a value here is a decision made about the wrong document, and dropping it silently
+   * would lose the decision without telling anybody it had been made.
+   *
+   * The service raises it, not a repository and not a trigger, because WHICH supplies
+   * leave the country is the regime's answer and `db/` may not name a regime.
+   */
+  | 'EXPORT_TAX_PAYMENT_INVALID'
+  /**
+   * A credit eligibility on a line of a document that gives no credit (0021).
+   *
+   * Whether input tax may be reclaimed is a fact about an INWARD supply. A sales invoice
+   * line carrying one is not wrong by a paisa, it is a field filled in about the wrong
+   * side of the trade, and a return that later grew to read it from both sides would find
+   * a value there and believe it.
+   */
+  | 'ITC_ELIGIBILITY_NOT_INWARD'
   // ---- The company profile (0011) ----
   /** The profile was saved without a legal name. It is what prints on a tax invoice. */
   | 'COMPANY_LEGAL_NAME_REQUIRED'
@@ -420,6 +511,24 @@ const TRIGGER_CODES: readonly RepoErrorCode[] = [
   'OFFSET_KIND_MISMATCH',
   'OFFSET_IMMUTABLE',
   'DOCUMENT_OFFSET',
+  /*
+   * 0019's three. `ITEM_IN_USE` joins the list here rather than with the item codes above
+   * for the reason `DOCUMENT_NOT_ISSUED` did: until 0019 nothing raised it from a trigger
+   * — it was a repository refusal only — and a code no trigger raises has no business in
+   * a list of the ones that do. It now means an item whose stock register cannot be
+   * switched off, which is `accounts_no_group_with_postings` in its inventory form.
+   */
+  'ITEM_NOT_STOCK_TRACKED',
+  'MOVEMENT_IMMUTABLE',
+  'ITEM_IN_USE',
+  /*
+   * 0022's one, and the only rule in this list with NO repository check in front of it.
+   * `recordMovement` posts the entry and then writes the row naming it, so there is no
+   * earlier moment at which the repository could refuse — which makes this the one code
+   * here that a trigger is genuinely the first to raise rather than the floor under
+   * something else.
+   */
+  'MOVEMENT_NOT_POSTED',
 ]
 
 export function repoErrorFrom(error: unknown, fallback: RepoErrorCode): RepoError {

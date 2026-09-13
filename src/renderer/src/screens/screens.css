@@ -201,8 +201,12 @@
 
 .checkbox {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
-  gap: var(--space-3);
+  /* Row gap first, column gap second. The row gap is what sits between the label and the
+     hint underneath it, and it wants to be tighter than the space between the box and its
+     label — a hint pushed twelve pixels down reads as a separate paragraph. */
+  gap: var(--space-1) var(--space-3);
   cursor: pointer;
 }
 
@@ -222,6 +226,18 @@
   color: var(--ink);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
+}
+
+/* The hint `CheckboxField` puts on its `FieldMessage`, which is a SIBLING of the box and
+   the label rather than a child of either — it has to be, or it would join the accessible
+   name and a screen reader would read the whole paragraph every time focus landed on the
+   box. Being a sibling in a flex row means it would otherwise sit BESIDE the label, so it
+   takes a full row of its own and is indented past the box to line up under the words it
+   is about. `1em` is the native control's own width, which is what `flex: 0 0 auto` on it
+   resolves to; the gap beside it is the column gap above. */
+.checkbox__hint {
+  flex: 1 0 100%;
+  padding-inline-start: calc(1em + var(--space-3));
 }
 
 /* ---- Strength meter ------------------------------------------------------ */

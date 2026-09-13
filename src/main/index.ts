@@ -20,10 +20,13 @@ import { assertApiSurfaceComplete } from './ipc'
 import { installIpcHandlers } from './ipc/electron'
 import { createCompanyProfileService } from './company-profile/service'
 import { createDocumentsService } from './documents/service'
+import { createItemsService } from './items/service'
 import { createLedgerService } from './ledger/service'
+import { createNumberingService } from './numbering/service'
 import { createPartiesService } from './parties/service'
 import { createReceiptsService } from './receipts/service'
 import { createRegimeService } from './regime/service'
+import { createUnitsService } from './units/service'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -43,6 +46,9 @@ function installHandlers(): void {
     companies,
     ledger,
     parties: createPartiesService(companies),
+    items: createItemsService(companies),
+    units: createUnitsService(companies),
+    numbering: createNumberingService(companies),
     companyProfile: createCompanyProfileService(companies),
     documents: createDocumentsService(companies),
     receipts: createReceiptsService(companies),

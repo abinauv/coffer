@@ -1,0 +1,736 @@
+{
+  "why": "A whole Zoho Books export, held as JSON strings rather than TypeScript template literals ON PURPOSE: a literal CRLF inside a template literal is at the mercy of the editor, of prettier and of git's autocrlf, so the fixture that exists to prove CRLF handling would be the first thing silently rewritten to LF -- and it would still pass. JSON's escapes survive all three. Every date here is in 2026 or 2027, so no value can coincide with the real clock. AND THE ORDERS DISAGREE WITH THE ANSWERS: Invoice.csv interleaves a three-line invoice with a two-line one and introduces the LATER-dated, HIGHER-numbered document first, so an importer that assumed rows were contiguous, or that sorted on the way through, would disagree with the expected output. Contacts.csv does the same with two contact-person rows per firm.",
+  "export": {
+    "Invoice.csv": {
+      "entity": "invoices",
+      "csv": "Invoice Date,Invoice ID,Invoice Number,Invoice Status,Customer ID,Customer Name,Due Date,PurchaseOrder,Place of Supply,Notes,Exchange Rate,Item Name,Item Desc,Quantity,Usage unit,Item Price,Discount Amount,Item Tax %,Item Total,Account,HSN/SAC,Total,Balance\r\n19/07/2027,4207000000200014,INV-2027-014,Sent,4207000000098001,Bharat Metals Pvt Ltd,18/08/2027,PO-77,Karnataka,\"Thank you for your business.\",1.00,Steel Bracket,\"Steel bracket, 6mm\",120,pcs,45.50,0.00,18,5460.00,Sales,7326,\"7,920.00\",\"0.00\"\r\n02/06/2027,4207000000200003,INV-2027-003,Sent,4207000000098005,Nilgiri Traders,02/07/2027,,Tamil Nadu,,1.00,Consulting,Design consultancy,8,hrs,2500.00,500.00,18,19500.00,Sales Accounts,998311,\"21,900.00\",\"21,900.00\"\r\n19/07/2027,4207000000200014,INV-2027-014,Sent,4207000000098001,Bharat Metals Pvt Ltd,18/08/2027,PO-77,Karnataka,\"Thank you for your business.\",1.00,Powder Coating,Powder coating,120,pcs,8.00,0.00,18,960.00,Sales,9988,,\r\n02/06/2027,4207000000200003,INV-2027-003,Sent,4207000000098005,Nilgiri Traders,02/07/2027,,Tamil Nadu,,1.00,Site Visit,,2,nos,1200.00,0.00,18,2400.00,Consultancy Income,998311,\"21,900.00\",\"21,900.00\"\r\n19/07/2027,4207000000200014,INV-2027-014,Sent,4207000000098001,Bharat Metals Pvt Ltd,18/08/2027,PO-77,Karnataka,\"Thank you for your business.\",1.00,Freight,Freight to Hosur,1,nos,1500.00,0.00,18,1500.00,Delivery Charges,,,\r\n",
+      "why": "One row per line item, CRLF endings, Indian digit grouping quoted because it contains commas, a document-level Total written once for INV-2027-014 and on every row for INV-2027-003, one line with no Item Desc (the item name stands in), one line whose Account is in nobody's chart, and an Exchange Rate column nothing claims."
+    },
+    "Contacts.csv": {
+      "entity": "contacts",
+      "csv": "Contact ID,Display Name,Company Name,Contact Type,EmailID,Phone,MobilePhone,GST Identification Number (GSTIN),Place of Contact,Billing State,Billing Country,Billing Address,Billing City,Billing Code,Payment Terms,Credit Limit,Opening Balance,Notes,Status\n4207000000098009,Kaveri Packaging,Kaveri Packaging LLP,vendor,orders@kaveri.example,044-2222-3333,,33AABCK9999K1ZP,Tamil Nadu,Tamil Nadu,in,\"9 Ambattur Industrial Estate\",Chennai,600058,Due on Receipt,,\"45,000.00\",,Active\n4207000000098001,Bharat Metals Pvt Ltd,Bharat Metals Private Limited,customer,accounts@bharatmetals.example,080-4000-1111,,29ABCDE1234F1Z5,Karnataka,Karnataka,in,\"12 Peenya Industrial Area\",Bengaluru,560058,30,\"5,00,000.00\",,,Active\n4207000000098005,Nilgiri Traders,,,priya@nilgiri.example,,98450 22222,33AAACN1111N1Z2,Tamil Nadu,Tamil Nadu,in,\"4 Coonoor Road\",Ooty,643001,15,,,,Active\n4207000000098001,Bharat Metals Pvt Ltd,Bharat Metals Private Limited,customer,accounts@bharatmetals.example,080-4000-1111,98450 11111,29ABCDE1234F1Z5,Karnataka,Karnataka,in,\"12 Peenya Industrial Area\",Bengaluru,560058,30,\"5,00,000.00\",,,Active\n4207000000098005,Nilgiri Traders,,,ravi@nilgiri.example,,98450 22222,33AAACN1111N1Z2,Tamil Nadu,Tamil Nadu,in,\"4 Coonoor Road\",Ooty,643001,15,,,,Active\n",
+      "why": "One row per contact PERSON, so Bharat Metals and Nilgiri Traders each appear twice, non-contiguously. Nilgiri's two rows carry different e-mail addresses, which is a conflict on an optional field: reported, and the field left empty rather than taken from whichever row came first. Nilgiri has no Contact Type at all, so whether they are a customer has to come from the transactions."
+    },
+    "Item.csv": {
+      "entity": "items",
+      "csv": "Item ID,Item Name,SKU,Description,Product Type,Usage unit,HSN/SAC,Tax Percentage,Rate,Purchase Rate,Account,Purchase Account,Status\n4207000000101001,Steel Bracket,SB-6MM,\"Steel bracket, 6mm\",goods,pcs,7326,18,45.50,30.00,Sales,Purchases,Active\n4207000000101002,Consulting,,Design consultancy,digital-service,hrs,998311,18,2500.00,,Sales Accounts,,Active\n",
+      "why": "One item with a Product Type Zoho does not use, to prove an unrecognised value is reported and the item still arrives."
+    },
+    "Chart_of_Accounts.csv": {
+      "entity": "chart-of-accounts",
+      "csv": "Account Code,Account Name,Account Type,Description,Parent Account,Status\n4150,Consultancy Income,Income,Fees for design work,Income,Active\n,Delivery Charges,Shipping Revenue,,,Active\n2410,Duty Drawback Receivable,Other Current Asset,,,Active\n",
+      "why": "Delivery Charges has an account type this build does not know, so it is NOT created -- and the invoice line that names it therefore has nowhere to go, which is the whole chain: a refusal to invent an account surfaces as a question."
+    },
+    "Bill.csv": {
+      "entity": "bills",
+      "csv": "Bill Date,Bill ID,Bill Number,Bill Status,Vendor ID,Vendor Name,Due Date,Item Name,Item Desc,Quantity,Usage unit,Item Price,Discount Amount,Item Tax %,Item Total,Account,HSN/SAC,Total,Balance\n15/06/2027,4207000000300041,BILL-2027-041,Open,4207000000098009,Kaveri Packaging,15/07/2027,Cartons,\"Corrugated cartons, 5-ply\",500,nos,22.00,0.00,12,11000.00,Purchase Accounts,4819,\"14,000.00\",\"14,000.00\"\n15/06/2027,4207000000300041,BILL-2027-041,Open,4207000000098009,Kaveri Packaging,15/07/2027,Printing,Printing on cartons,500,nos,3.00,0.00,18,1500.00,Printing and Stationery,4911,\"14,000.00\",\"14,000.00\"\n",
+      "why": "The purchase side, so the same firm can be a vendor here and the ledger mapping has to reach purchases as well as sales."
+    },
+    "Customer_Payment.csv": {
+      "entity": "customer-payments",
+      "csv": "Payment Number,CustomerPayment ID,Date,Customer ID,Customer Name,Amount,Deposit To,Payment Mode,Reference Number,Invoice Number,Invoice Payment Applied Amount,Description\nCP-00021,4207000000400021,24/07/2027,4207000000098001,Bharat Metals Pvt Ltd,5000.00,Bank Accounts,Cash,,INV-2027-014,3000.00,\nCP-00022,4207000000400022,24/07/2027,4207000000098001,Bharat Metals Pvt Ltd,5000.00,Bank Accounts,Cash,,INV-2027-014,5000.00,\nCP-00021,4207000000400021,24/07/2027,4207000000098001,Bharat Metals Pvt Ltd,5000.00,Bank Accounts,Cash,,INV-2027-003,2000.00,\nCP-00023,4207000000400023,26/07/2027,4207000000098005,Nilgiri Traders,2400.00,Bank Accounts,NEFT,UTR2027072600991,INV-2026-900,2400.00,\n",
+      "why": "One row per applied invoice. CP-00021 settles two invoices and its two rows are split by CP-00022's, so grouping a voucher has the same non-contiguity problem a document does. CP-00023 settles an invoice this export does not contain."
+    }
+  },
+  "chart": [
+    {
+      "code": "6650",
+      "name": "Printing and Stationery"
+    },
+    {
+      "code": "1210",
+      "name": "Bank Account",
+      "role": "bank"
+    }
+  ],
+  "expected": {
+    "documents": [
+      {
+        "sourceId": "4207000000200014",
+        "kind": "sales-invoice",
+        "number": "INV-2027-014",
+        "date": "2027-07-19",
+        "dueDate": "2027-08-18",
+        "partySourceId": "4207000000098001",
+        "partyName": "Bharat Metals Pvt Ltd",
+        "partyReference": "PO-77",
+        "placeOfSupplyName": "Karnataka",
+        "narration": "Thank you for your business.",
+        "statedTotal": "7920.00",
+        "statedBalance": "0.00",
+        "sourceStatus": "Sent",
+        "lines": [
+          {
+            "lineNumber": 1,
+            "description": "Steel bracket, 6mm",
+            "quantity": "120.000",
+            "unitPrice": "45.50",
+            "discount": "0.00",
+            "itemName": "Steel Bracket",
+            "unitLabel": "pcs",
+            "ratePct": "18.000",
+            "classificationCode": "7326",
+            "ledger": "Sales",
+            "statedLineTotal": "5460.00",
+            "provenance": [
+              {
+                "file": "Invoice.csv",
+                "line": 2,
+                "rowNumber": 1
+              }
+            ]
+          },
+          {
+            "lineNumber": 2,
+            "description": "Powder coating",
+            "quantity": "120.000",
+            "unitPrice": "8.00",
+            "discount": "0.00",
+            "itemName": "Powder Coating",
+            "unitLabel": "pcs",
+            "ratePct": "18.000",
+            "classificationCode": "9988",
+            "ledger": "Sales",
+            "statedLineTotal": "960.00",
+            "provenance": [
+              {
+                "file": "Invoice.csv",
+                "line": 4,
+                "rowNumber": 3
+              }
+            ]
+          },
+          {
+            "lineNumber": 3,
+            "description": "Freight to Hosur",
+            "quantity": "1.000",
+            "unitPrice": "1500.00",
+            "discount": "0.00",
+            "itemName": "Freight",
+            "unitLabel": "nos",
+            "ratePct": "18.000",
+            "ledger": "Delivery Charges",
+            "statedLineTotal": "1500.00",
+            "provenance": [
+              {
+                "file": "Invoice.csv",
+                "line": 6,
+                "rowNumber": 5
+              }
+            ]
+          }
+        ],
+        "provenance": [
+          {
+            "file": "Invoice.csv",
+            "line": 2,
+            "rowNumber": 1
+          },
+          {
+            "file": "Invoice.csv",
+            "line": 4,
+            "rowNumber": 3
+          },
+          {
+            "file": "Invoice.csv",
+            "line": 6,
+            "rowNumber": 5
+          }
+        ]
+      },
+      {
+        "sourceId": "4207000000200003",
+        "kind": "sales-invoice",
+        "number": "INV-2027-003",
+        "date": "2027-06-02",
+        "dueDate": "2027-07-02",
+        "partySourceId": "4207000000098005",
+        "partyName": "Nilgiri Traders",
+        "placeOfSupplyName": "Tamil Nadu",
+        "statedTotal": "21900.00",
+        "statedBalance": "21900.00",
+        "sourceStatus": "Sent",
+        "lines": [
+          {
+            "lineNumber": 1,
+            "description": "Design consultancy",
+            "quantity": "8.000",
+            "unitPrice": "2500.00",
+            "discount": "500.00",
+            "itemName": "Consulting",
+            "unitLabel": "hrs",
+            "ratePct": "18.000",
+            "classificationCode": "998311",
+            "ledger": "Sales Accounts",
+            "statedLineTotal": "19500.00",
+            "provenance": [
+              {
+                "file": "Invoice.csv",
+                "line": 3,
+                "rowNumber": 2
+              }
+            ]
+          },
+          {
+            "lineNumber": 2,
+            "description": "Site Visit",
+            "quantity": "2.000",
+            "unitPrice": "1200.00",
+            "discount": "0.00",
+            "itemName": "Site Visit",
+            "unitLabel": "nos",
+            "ratePct": "18.000",
+            "classificationCode": "998311",
+            "ledger": "Consultancy Income",
+            "statedLineTotal": "2400.00",
+            "provenance": [
+              {
+                "file": "Invoice.csv",
+                "line": 5,
+                "rowNumber": 4
+              }
+            ]
+          }
+        ],
+        "provenance": [
+          {
+            "file": "Invoice.csv",
+            "line": 3,
+            "rowNumber": 2
+          },
+          {
+            "file": "Invoice.csv",
+            "line": 5,
+            "rowNumber": 4
+          }
+        ]
+      },
+      {
+        "sourceId": "4207000000300041",
+        "kind": "purchase-bill",
+        "number": "BILL-2027-041",
+        "date": "2027-06-15",
+        "dueDate": "2027-07-15",
+        "partySourceId": "4207000000098009",
+        "partyName": "Kaveri Packaging",
+        "statedTotal": "14000.00",
+        "statedBalance": "14000.00",
+        "sourceStatus": "Open",
+        "lines": [
+          {
+            "lineNumber": 1,
+            "description": "Corrugated cartons, 5-ply",
+            "quantity": "500.000",
+            "unitPrice": "22.00",
+            "discount": "0.00",
+            "itemName": "Cartons",
+            "unitLabel": "nos",
+            "ratePct": "12.000",
+            "classificationCode": "4819",
+            "ledger": "Purchase Accounts",
+            "statedLineTotal": "11000.00",
+            "provenance": [
+              {
+                "file": "Bill.csv",
+                "line": 2,
+                "rowNumber": 1
+              }
+            ]
+          },
+          {
+            "lineNumber": 2,
+            "description": "Printing on cartons",
+            "quantity": "500.000",
+            "unitPrice": "3.00",
+            "discount": "0.00",
+            "itemName": "Printing",
+            "unitLabel": "nos",
+            "ratePct": "18.000",
+            "classificationCode": "4911",
+            "ledger": "Printing and Stationery",
+            "statedLineTotal": "1500.00",
+            "provenance": [
+              {
+                "file": "Bill.csv",
+                "line": 3,
+                "rowNumber": 2
+              }
+            ]
+          }
+        ],
+        "provenance": [
+          {
+            "file": "Bill.csv",
+            "line": 2,
+            "rowNumber": 1
+          },
+          {
+            "file": "Bill.csv",
+            "line": 3,
+            "rowNumber": 2
+          }
+        ]
+      }
+    ],
+    "receipts": [
+      {
+        "sourceId": "4207000000400021",
+        "kind": "receipt",
+        "number": "CP-00021",
+        "date": "2027-07-24",
+        "partySourceId": "4207000000098001",
+        "partyName": "Bharat Metals Pvt Ltd",
+        "amount": "5000.00",
+        "ledger": "Bank Accounts",
+        "narration": "Cash",
+        "allocations": [
+          {
+            "documentNumber": "INV-2027-014",
+            "amount": "3000.00",
+            "provenance": [
+              {
+                "file": "Customer_Payment.csv",
+                "line": 2,
+                "rowNumber": 1
+              }
+            ]
+          },
+          {
+            "documentNumber": "INV-2027-003",
+            "amount": "2000.00",
+            "provenance": [
+              {
+                "file": "Customer_Payment.csv",
+                "line": 4,
+                "rowNumber": 3
+              }
+            ]
+          }
+        ],
+        "provenance": [
+          {
+            "file": "Customer_Payment.csv",
+            "line": 2,
+            "rowNumber": 1
+          },
+          {
+            "file": "Customer_Payment.csv",
+            "line": 4,
+            "rowNumber": 3
+          }
+        ]
+      },
+      {
+        "sourceId": "4207000000400022",
+        "kind": "receipt",
+        "number": "CP-00022",
+        "date": "2027-07-24",
+        "partySourceId": "4207000000098001",
+        "partyName": "Bharat Metals Pvt Ltd",
+        "amount": "5000.00",
+        "ledger": "Bank Accounts",
+        "narration": "Cash",
+        "allocations": [
+          {
+            "documentNumber": "INV-2027-014",
+            "amount": "5000.00",
+            "provenance": [
+              {
+                "file": "Customer_Payment.csv",
+                "line": 3,
+                "rowNumber": 2
+              }
+            ]
+          }
+        ],
+        "provenance": [
+          {
+            "file": "Customer_Payment.csv",
+            "line": 3,
+            "rowNumber": 2
+          }
+        ]
+      },
+      {
+        "sourceId": "4207000000400023",
+        "kind": "receipt",
+        "number": "CP-00023",
+        "date": "2027-07-26",
+        "partySourceId": "4207000000098005",
+        "partyName": "Nilgiri Traders",
+        "amount": "2400.00",
+        "ledger": "Bank Accounts",
+        "reference": "UTR2027072600991",
+        "narration": "NEFT",
+        "allocations": [
+          {
+            "documentNumber": "INV-2026-900",
+            "amount": "2400.00",
+            "provenance": [
+              {
+                "file": "Customer_Payment.csv",
+                "line": 5,
+                "rowNumber": 4
+              }
+            ]
+          }
+        ],
+        "provenance": [
+          {
+            "file": "Customer_Payment.csv",
+            "line": 5,
+            "rowNumber": 4
+          }
+        ]
+      }
+    ],
+    "parties": [
+      {
+        "sourceId": "4207000000098009",
+        "name": "Kaveri Packaging",
+        "isCustomer": false,
+        "isVendor": true,
+        "legalName": "Kaveri Packaging LLP",
+        "registrationNumber": "33AABCK9999K1ZP",
+        "jurisdictionName": "Tamil Nadu",
+        "countryName": "in",
+        "addressLine1": "9 Ambattur Industrial Estate",
+        "city": "Chennai",
+        "postalCode": "600058",
+        "email": "orders@kaveri.example",
+        "phone": "044-2222-3333",
+        "provenance": [
+          {
+            "file": "Contacts.csv",
+            "line": 2,
+            "rowNumber": 1
+          }
+        ]
+      },
+      {
+        "sourceId": "4207000000098001",
+        "name": "Bharat Metals Pvt Ltd",
+        "isCustomer": true,
+        "isVendor": false,
+        "legalName": "Bharat Metals Private Limited",
+        "registrationNumber": "29ABCDE1234F1Z5",
+        "jurisdictionName": "Karnataka",
+        "countryName": "in",
+        "addressLine1": "12 Peenya Industrial Area",
+        "city": "Bengaluru",
+        "postalCode": "560058",
+        "email": "accounts@bharatmetals.example",
+        "phone": "080-4000-1111",
+        "paymentTermsDays": 30,
+        "creditLimit": "500000.00",
+        "provenance": [
+          {
+            "file": "Contacts.csv",
+            "line": 3,
+            "rowNumber": 2
+          },
+          {
+            "file": "Contacts.csv",
+            "line": 5,
+            "rowNumber": 4
+          }
+        ]
+      },
+      {
+        "sourceId": "4207000000098005",
+        "name": "Nilgiri Traders",
+        "isCustomer": true,
+        "isVendor": false,
+        "registrationNumber": "33AAACN1111N1Z2",
+        "jurisdictionName": "Tamil Nadu",
+        "countryName": "in",
+        "addressLine1": "4 Coonoor Road",
+        "city": "Ooty",
+        "postalCode": "643001",
+        "phone": "98450 22222",
+        "paymentTermsDays": 15,
+        "provenance": [
+          {
+            "file": "Contacts.csv",
+            "line": 4,
+            "rowNumber": 3
+          },
+          {
+            "file": "Contacts.csv",
+            "line": 6,
+            "rowNumber": 5
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "sourceId": "4207000000101001",
+        "name": "Steel Bracket",
+        "kind": "goods",
+        "isSold": true,
+        "isPurchased": true,
+        "code": "SB-6MM",
+        "description": "Steel bracket, 6mm",
+        "unitLabel": "pcs",
+        "classificationCode": "7326",
+        "taxRatePct": "18.000",
+        "salePrice": "45.50",
+        "purchasePrice": "30.00",
+        "salesLedger": "Sales",
+        "purchaseLedger": "Purchases",
+        "provenance": [
+          {
+            "file": "Item.csv",
+            "line": 2,
+            "rowNumber": 1
+          }
+        ]
+      },
+      {
+        "sourceId": "4207000000101002",
+        "name": "Consulting",
+        "kind": "goods",
+        "isSold": true,
+        "isPurchased": false,
+        "description": "Design consultancy",
+        "unitLabel": "hrs",
+        "classificationCode": "998311",
+        "taxRatePct": "18.000",
+        "salePrice": "2500.00",
+        "salesLedger": "Sales Accounts",
+        "provenance": [
+          {
+            "file": "Item.csv",
+            "line": 3,
+            "rowNumber": 2
+          }
+        ]
+      }
+    ],
+    "accounts": [
+      {
+        "sourceId": "4150",
+        "name": "Consultancy Income",
+        "type": "income",
+        "sourceType": "Income",
+        "code": "4150",
+        "parentName": "Income",
+        "description": "Fees for design work",
+        "provenance": [
+          {
+            "file": "Chart_of_Accounts.csv",
+            "line": 2,
+            "rowNumber": 1
+          }
+        ]
+      },
+      {
+        "sourceId": "2410",
+        "name": "Duty Drawback Receivable",
+        "type": "asset",
+        "sourceType": "Other Current Asset",
+        "code": "2410",
+        "provenance": [
+          {
+            "file": "Chart_of_Accounts.csv",
+            "line": 4,
+            "rowNumber": 3
+          }
+        ]
+      }
+    ],
+    "units": [
+      {
+        "code": "PCS",
+        "label": "pcs",
+        "provenance": [
+          {
+            "file": "Item.csv",
+            "line": 2,
+            "rowNumber": 1
+          }
+        ]
+      },
+      {
+        "code": "HRS",
+        "label": "hrs",
+        "provenance": [
+          {
+            "file": "Item.csv",
+            "line": 3,
+            "rowNumber": 2
+          }
+        ]
+      },
+      {
+        "code": "NOS",
+        "label": "nos",
+        "provenance": [
+          {
+            "file": "Invoice.csv",
+            "line": 6,
+            "rowNumber": 5
+          }
+        ]
+      }
+    ],
+    "openingBalances": [
+      {
+        "sourceId": "opening:4207000000098009",
+        "ledger": {
+          "kind": "role",
+          "role": "accounts-payable"
+        },
+        "partySourceId": "4207000000098009",
+        "partyName": "Kaveri Packaging",
+        "amount": "45000.00",
+        "provenance": [
+          {
+            "file": "Contacts.csv",
+            "line": 2,
+            "rowNumber": 1
+          }
+        ]
+      }
+    ],
+    "ledgers": [
+      {
+        "ledger": "Sales",
+        "key": "sales",
+        "usageCount": 3,
+        "kind": "role",
+        "target": "sales"
+      },
+      {
+        "ledger": "Delivery Charges",
+        "key": "delivery charges",
+        "usageCount": 1,
+        "kind": "unmapped",
+        "target": null
+      },
+      {
+        "ledger": "Sales Accounts",
+        "key": "sales accounts",
+        "usageCount": 2,
+        "kind": "role",
+        "target": "sales"
+      },
+      {
+        "ledger": "Consultancy Income",
+        "key": "consultancy income",
+        "usageCount": 1,
+        "kind": "new",
+        "target": "4150"
+      },
+      {
+        "ledger": "Purchase Accounts",
+        "key": "purchase accounts",
+        "usageCount": 1,
+        "kind": "role",
+        "target": "purchases"
+      },
+      {
+        "ledger": "Printing and Stationery",
+        "key": "printing and stationery",
+        "usageCount": 1,
+        "kind": "code",
+        "target": "6650"
+      },
+      {
+        "ledger": "Bank Accounts",
+        "key": "bank accounts",
+        "usageCount": 3,
+        "kind": "role",
+        "target": "bank"
+      },
+      {
+        "ledger": "Purchases",
+        "key": "purchases",
+        "usageCount": 1,
+        "kind": "role",
+        "target": "purchases"
+      }
+    ]
+  },
+  "cases": {
+    "datesDisagree": {
+      "why": "Every day in this file is 12 or lower, so DD/MM and MM/DD both read every value and they DISAGREE about which day each one is. Nothing may be imported: 05/06/2027 is the 5th of June or the 6th of May, both are real days, and no report drawn afterwards could ever show which was meant.",
+      "entity": "invoices",
+      "name": "Ambiguous.csv",
+      "csv": "Invoice Date,Invoice Number,Customer Name,Item Name,Quantity,Item Price,Account,Total\n05/06/2027,INV-A,Bharat Metals Pvt Ltd,Widget,1,100.00,Sales,100.00\n07/08/2027,INV-B,Nilgiri Traders,Widget,1,200.00,Sales,200.00\n"
+    },
+    "datesAgree": {
+      "why": "Also ambiguous -- DD/MM and MM/DD both read it -- but every value is a palindrome, so the two readings give the SAME day and there is nothing to ask the user about. Imported, with a warning that the file could not prove its own format.",
+      "entity": "invoices",
+      "name": "Palindromic.csv",
+      "csv": "Invoice Date,Invoice Number,Customer Name,Item Name,Quantity,Item Price,Account,Total\n05/05/2027,INV-C,Bharat Metals Pvt Ltd,Widget,1,100.00,Sales,100.00\n06/06/2027,INV-D,Nilgiri Traders,Widget,1,200.00,Sales,200.00\n"
+    },
+    "datesUnreadable": {
+      "why": "No date format Coffer knows reads 2027.13.45. One sentence about the file, not one per row.",
+      "entity": "invoices",
+      "name": "Unreadable.csv",
+      "csv": "Invoice Date,Invoice Number,Customer Name,Item Name,Quantity,Item Price,Account,Total\n2027.13.45,INV-E,Bharat Metals Pvt Ltd,Widget,1,100.00,Sales,100.00\n"
+    },
+    "conflictingDate": {
+      "why": "INV-F's two rows carry two different dates and are interleaved with INV-G's row. The document is dropped and reported; INV-G is imported, which is the whole point -- one bad document does not abort the file.",
+      "entity": "invoices",
+      "name": "Conflicting.csv",
+      "csv": "Invoice Date,Invoice Number,Customer Name,Item Name,Quantity,Item Price,Account,Total\n13/09/2027,INV-F,Bharat Metals Pvt Ltd,Widget,1,100.00,Sales,300.00\n14/09/2027,INV-G,Nilgiri Traders,Gadget,1,200.00,Sales,200.00\n15/09/2027,INV-F,Bharat Metals Pvt Ltd,Widget,2,100.00,Sales,300.00\n"
+    },
+    "orphanAllocation": {
+      "why": "A payment row that says how much was applied but not to what, and another that names a document but not an amount. Both are reported and neither loses the payment.",
+      "entity": "customer-payments",
+      "name": "Orphans.csv",
+      "csv": "Payment Number,Date,Customer Name,Amount,Deposit To,Invoice Number,Invoice Payment Applied Amount\nCP-00031,21/08/2027,Bharat Metals Pvt Ltd,900.00,Bank Accounts,,400.00\nCP-00031,21/08/2027,Bharat Metals Pvt Ltd,900.00,Bank Accounts,INV-2027-014,\nCP-00031,21/08/2027,Bharat Metals Pvt Ltd,900.00,Bank Accounts,INV-2027-003,500.00\n"
+    },
+    "renamedNumberColumn": {
+      "why": "The one heading this importer cannot do without, spelled the way an older Zoho template spells it. Unreadable by default -- and the error names the column rather than repeating its symptom once per row -- and read correctly once the caller corrects the heading.",
+      "entity": "invoices",
+      "name": "Renamed.csv",
+      "csv": "Invoice Date,Invoice #,Customer Name,Item Name,Quantity,Item Price,Account,Total\n22/08/2027,INV-H,Bharat Metals Pvt Ltd,Widget,1,100.00,Sales,100.00\n"
+    },
+    "ambiguousPriceColumn": {
+      "why": "A bill file carrying BOTH headings the price field lists. Taking the first would make the order of a list in columns.ts into the rule; the file is read, the ambiguity is reported, and the price is left at nothing rather than guessed.",
+      "entity": "bills",
+      "name": "TwoPrices.csv",
+      "csv": "Bill Date,Bill Number,Vendor Name,Item Name,Quantity,Item Price,Rate,Account,Total\n23/08/2027,BILL-Z,Kaveri Packaging,Carton,10,15.00,15.00,Purchase Accounts,150.00\n"
+    },
+    "identicalPayments": {
+      "why": "Two payments from one customer, on one day, for one amount, with no reference to tell them apart. They are two real payments and they fingerprint identically -- which is why a caller must compare COUNTS against the ledger and not membership.",
+      "entity": "customer-payments",
+      "name": "Twins.csv",
+      "csv": "Payment Number,Date,Customer Name,Amount,Deposit To,Reference Number\nCP-00041,18/09/2027,Bharat Metals Pvt Ltd,500.00,Bank Accounts,\nCP-00042,18/09/2027,Bharat Metals Pvt Ltd,500.00,Bank Accounts,\n"
+    },
+    "voucherWithoutNumberColumn": {
+      "why": "The voucher half of the same rule the renamed invoice column proves: the number is the one heading a payment file cannot do without, because it is what groups the rows, and its absence has to be one sentence about the file rather than a warning that leaves the user hunting.",
+      "entity": "customer-payments",
+      "name": "Unnumbered.csv",
+      "csv": "Date,Customer Name,Amount,Deposit To\n19/08/2027,Bharat Metals Pvt Ltd,700.00,Bank Accounts\n"
+    },
+    "zeroOpeningBalance": {
+      "why": "Two halves of one compound condition, separated. A contact with NO Opening Balance column value and a contact whose balance is 0.00 must both stage nothing -- and the third contact proves the test can see one when there is one.",
+      "entity": "contacts",
+      "name": "Openings.csv",
+      "csv": "Contact ID,Display Name,Contact Type,Opening Balance\nC1,Zero Balance Traders,customer,0.00\nC2,No Balance Traders,customer,\nC3,Real Balance Traders,customer,1200.00\n"
+    },
+    "itemSides": {
+      "why": "Which side an item is offered on, one case per branch: a purchase price alone makes it bought and not sold, a sale price alone makes it sold and not bought, and an item the export says nothing about is offered on both -- because an item on neither side appears in no picker and reads as having been dropped.",
+      "entity": "items",
+      "name": "Sides.csv",
+      "csv": "Item ID,Item Name,Product Type,Rate,Purchase Rate,Account,Purchase Account\nI1,Purchase Only,goods,,30.00,,Purchases\nI2,Neither Side,goods,,,,\nI3,Sale Only,service,80.00,,Sales,\n"
+    },
+    "headerOnlyRow": {
+      "why": "A row of a document that carries the total and no line at all, which some templates write. Its header values are read with the rest of the group and it contributes no line -- which is not the same as the row being dropped, and the provenance says so.",
+      "entity": "invoices",
+      "name": "HeaderRow.csv",
+      "csv": "Invoice Date,Invoice Number,Customer Name,Item Name,Quantity,Item Price,Account,Total\n16/09/2027,INV-J,Bharat Metals Pvt Ltd,,,,,\"1,000.00\"\n16/09/2027,INV-J,Bharat Metals Pvt Ltd,Widget,4,250.00,Sales,\n"
+    },
+    "missingDescription": {
+      "why": "A line with neither an item name nor a description. Staged anyway, with a warning: dropping it would change the document's total without saying so, and a total that is quietly wrong is worse than a description somebody types into one field.",
+      "entity": "invoices",
+      "name": "NoDescription.csv",
+      "csv": "Invoice Date,Invoice Number,Customer Name,Item Name,Item Desc,Quantity,Item Price,Account,Total\n17/09/2027,INV-K,Bharat Metals Pvt Ltd,,,3,50.00,Sales,150.00\n"
+    }
+  }
+}

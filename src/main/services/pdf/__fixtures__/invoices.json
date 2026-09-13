@@ -1,0 +1,401 @@
+{
+  "why": "Two worked documents, held as JSON rather than as TypeScript literals so that changing a figure is a diff in a data file and not a diff in the code that reads it. Every date is in 2027 or 2028, so no value here can coincide with the real clock: a fixture whose date happens to match today tests nothing about where the date came from. The regime is NOT in this file — the tests ask the registry for it, so the number format, the jurisdiction names and the component order are the real ones and not a copy that agrees by inspection.",
+
+  "company": {
+    "why": "The supplier. Registered in Tamil Nadu (state code 33), trading under a name that differs from its registered one — so the template has to print both, and a mapper that printed only one would be visible. It carries no logo, no bank details, no terms and no signatory, because migration 0011 has nowhere to put them; that absence is the point of the seam and there is a test that the page degrades cleanly without them.",
+    "legalName": "Kaveri Precision Components Private Limited",
+    "tradeName": "Kaveri Precision",
+    "registrationNumber": "33AABCK1234M1Z7",
+    "jurisdictionCode": "33",
+    "countryCode": "in",
+    "addressLine1": "14, Anna Salai Industrial Estate",
+    "addressLine2": "Guindy",
+    "city": "Chennai",
+    "postalCode": "600032",
+    "email": "accounts@kaveriprecision.example",
+    "phone": "+91 44 2250 1188",
+    "createdAt": "2027-04-01T04:30:00.000Z",
+    "updatedAt": "2027-04-01T04:30:00.000Z"
+  },
+
+  "intraState": {
+    "why": "A Tamil Nadu supplier selling to a Tamil Nadu customer, so the tax splits into CGST and SGST. Three rate slabs (18%, 12%, 5%), a discount on the first line, and a freight line marked as a charge — which prints as an ordinary line, because the reference project's 'freight is never taxed' is listed in CONVENTIONS §9 among the bugs not to port. The lines are stored 3, 1, 4, 2 rather than in line-number order, and the first line lists SGST before CGST, so a mapper that trusted the order it was handed would disagree with the expected output in two different ways. Rounding is whole-unit and the net total ends in .28, so the round-off is NEGATIVE — the one sign a substring assertion would miss.",
+
+    "party": {
+      "id": "party-sharma",
+      "name": "Sharma & Sons Traders",
+      "legalName": "Sharma & Sons Traders Private Limited",
+      "registrationNumber": "33AAFCS9012K1ZB",
+      "jurisdictionCode": "33",
+      "countryCode": "in",
+      "isCustomer": true,
+      "isVendor": false,
+      "addressLine1": "27/3, Trichy Road",
+      "addressLine2": "Singanallur",
+      "city": "Coimbatore",
+      "postalCode": "641005",
+      "email": "purchase@sharmasons.example",
+      "phone": "+91 422 430 9912",
+      "paymentTermsDays": 30,
+      "creditLimit": "500000.00",
+      "notes": null,
+      "isArchived": false,
+      "createdAt": "2027-05-02T06:00:00.000Z",
+      "updatedAt": "2027-05-02T06:00:00.000Z"
+    },
+
+    "document": {
+      "id": "doc-intra-0042",
+      "kind": "sales-invoice",
+      "status": "issued",
+      "number": "KPC/27-28/0042",
+      "date": "2027-11-04",
+      "dueDate": "2027-12-04",
+      "partyId": "party-sharma",
+      "partyName": "Sharma & Sons Traders",
+      "grandTotal": "77259.00",
+      "seriesId": "series-sales",
+      "partyReference": "PO-9931/2027",
+      "placeOfSupplyJurisdiction": "33",
+      "placeOfSupplyCountry": "in",
+      "roundingPolicy": "whole-unit",
+      "narration": "Delivered to the Hosur unit; test certificates attached.",
+      "entryId": "entry-intra-0042",
+      "originalDocumentId": null,
+      "createdAt": "2027-11-04T05:10:00.000Z",
+      "updatedAt": "2027-11-04T05:40:00.000Z",
+      "issuedAt": "2027-11-04T05:40:00.000Z",
+      "cancelledAt": null,
+
+      "lines": [
+        {
+          "id": "line-c",
+          "lineNumber": 3,
+          "itemId": "item-fastener",
+          "description": "Stainless fasteners, M8 x 40, A2-70",
+          "quantity": "500.000",
+          "unitCode": "NOS",
+          "unitPrice": "12.50",
+          "discount": "0.00",
+          "taxableAmount": "6250.00",
+          "ratePct": "18.000",
+          "classificationCode": "7318",
+          "isCharge": false,
+          "accountId": null,
+          "taxes": [
+            { "code": "CGST", "label": "CGST @ 9%", "ratePct": "9", "amount": "562.50" },
+            { "code": "SGST", "label": "SGST @ 9%", "ratePct": "9", "amount": "562.50" }
+          ]
+        },
+        {
+          "id": "line-a",
+          "lineNumber": 1,
+          "itemId": "item-flange",
+          "description": "CNC machined flange, 6 inch, EN8 with black oxide finish",
+          "quantity": "40.000",
+          "unitCode": "NOS",
+          "unitPrice": "1250.00",
+          "discount": "2000.00",
+          "taxableAmount": "48000.00",
+          "ratePct": "18.000",
+          "classificationCode": "8481",
+          "isCharge": false,
+          "accountId": null,
+          "taxes": [
+            { "code": "SGST", "label": "SGST @ 9%", "ratePct": "9", "amount": "4320.00" },
+            { "code": "CGST", "label": "CGST @ 9%", "ratePct": "9", "amount": "4320.00" }
+          ]
+        },
+        {
+          "id": "line-d",
+          "lineNumber": 4,
+          "itemId": "item-freight",
+          "description": "Freight and packing to Coimbatore",
+          "quantity": "1.000",
+          "unitCode": "NOS",
+          "unitPrice": "1740.00",
+          "discount": "0.00",
+          "taxableAmount": "1740.00",
+          "ratePct": "5.000",
+          "classificationCode": "9965",
+          "isCharge": true,
+          "accountId": null,
+          "taxes": [
+            { "code": "CGST", "label": "CGST @ 2.5%", "ratePct": "2.5", "amount": "43.50" },
+            { "code": "SGST", "label": "SGST @ 2.5%", "ratePct": "2.5", "amount": "43.50" }
+          ]
+        },
+        {
+          "id": "line-b",
+          "lineNumber": 2,
+          "itemId": "item-gasket",
+          "description": "Neoprene gasket set",
+          "quantity": "120.000",
+          "unitCode": "NOS",
+          "unitPrice": "84.95",
+          "discount": "0.00",
+          "taxableAmount": "10194.00",
+          "ratePct": "12.000",
+          "classificationCode": "4016",
+          "isCharge": false,
+          "accountId": null,
+          "taxes": [
+            { "code": "CGST", "label": "CGST @ 6%", "ratePct": "6", "amount": "611.64" },
+            { "code": "SGST", "label": "SGST @ 6%", "ratePct": "6", "amount": "611.64" }
+          ]
+        }
+      ],
+
+      "totals": {
+        "taxableValue": "66184.00",
+        "totalDiscount": "2000.00",
+        "totalTax": "11075.28",
+        "netTotal": "77259.28",
+        "roundOff": "-0.28",
+        "grandTotal": "77259.00",
+        "taxSummary": [
+          { "code": "CGST", "label": "CGST @ 2.5%", "ratePct": "2.5", "amount": "43.50" },
+          { "code": "CGST", "label": "CGST @ 6%", "ratePct": "6", "amount": "611.64" },
+          { "code": "CGST", "label": "CGST @ 9%", "ratePct": "9", "amount": "4882.50" },
+          { "code": "SGST", "label": "SGST @ 2.5%", "ratePct": "2.5", "amount": "43.50" },
+          { "code": "SGST", "label": "SGST @ 6%", "ratePct": "6", "amount": "611.64" },
+          { "code": "SGST", "label": "SGST @ 9%", "ratePct": "9", "amount": "4882.50" }
+        ]
+      }
+    },
+
+    "expected": {
+      "why": "The mapper's two folds, written out. Both disagree with the order the lines are stored in: the rate summary is ascending by slab (5, 12, 18) where the lines first mention 18, and the classification summary is ascending by code (4016, 7318, 8481, 9965) where the lines run 7318, 8481, 9965, 4016.",
+      "taxColumns": ["CGST", "SGST"],
+      "lineOrder": [1, 2, 3, 4],
+      "rateSummary": [
+        {
+          "ratePct": "5.000",
+          "taxableValue": "1740.00",
+          "totalTax": "87.00",
+          "taxes": [
+            { "code": "CGST", "ratePct": "2.5", "amount": "43.50" },
+            { "code": "SGST", "ratePct": "2.5", "amount": "43.50" }
+          ]
+        },
+        {
+          "ratePct": "12.000",
+          "taxableValue": "10194.00",
+          "totalTax": "1223.28",
+          "taxes": [
+            { "code": "CGST", "ratePct": "6", "amount": "611.64" },
+            { "code": "SGST", "ratePct": "6", "amount": "611.64" }
+          ]
+        },
+        {
+          "ratePct": "18.000",
+          "taxableValue": "54250.00",
+          "totalTax": "9765.00",
+          "taxes": [
+            { "code": "CGST", "ratePct": "9", "amount": "4882.50" },
+            { "code": "SGST", "ratePct": "9", "amount": "4882.50" }
+          ]
+        }
+      ],
+      "hsnSummary": [
+        {
+          "classificationCode": "4016",
+          "ratePct": "12.000",
+          "quantity": "120.000",
+          "unitCode": "NOS",
+          "taxableValue": "10194.00",
+          "totalTax": "1223.28"
+        },
+        {
+          "classificationCode": "7318",
+          "ratePct": "18.000",
+          "quantity": "500.000",
+          "unitCode": "NOS",
+          "taxableValue": "6250.00",
+          "totalTax": "1125.00"
+        },
+        {
+          "classificationCode": "8481",
+          "ratePct": "18.000",
+          "quantity": "40.000",
+          "unitCode": "NOS",
+          "taxableValue": "48000.00",
+          "totalTax": "8640.00"
+        },
+        {
+          "classificationCode": "9965",
+          "ratePct": "5.000",
+          "quantity": "1.000",
+          "unitCode": "NOS",
+          "taxableValue": "1740.00",
+          "totalTax": "87.00"
+        }
+      ],
+      "placeOfSupply": "Tamil Nadu (33)",
+      "grandTotalInWords": "Rupees Seventy Seven Thousand Two Hundred Fifty Nine Only"
+    }
+  },
+
+  "interState": {
+    "why": "The same supplier selling into Karnataka, so the whole tax is IGST and the line table has one column pair rather than two. Goods and a service on one document, so the classification summary carries an HSN and two SACs and two different units — which is why the unit is part of the grouping key: two days and one policy do not make three of anything. Rounding is 'none', so the round-off is 0.00 and the row must not print at all.",
+
+    "party": {
+      "id": "party-vaidya",
+      "name": "Vaidya Systems LLP",
+      "legalName": null,
+      "registrationNumber": "29AAGCV5678P1ZD",
+      "jurisdictionCode": "29",
+      "countryCode": "in",
+      "isCustomer": true,
+      "isVendor": true,
+      "addressLine1": "4th Floor, Brigade Gateway",
+      "addressLine2": null,
+      "city": "Bengaluru",
+      "postalCode": "560055",
+      "email": null,
+      "phone": "+91 80 4123 7700",
+      "paymentTermsDays": 30,
+      "creditLimit": null,
+      "notes": null,
+      "isArchived": false,
+      "createdAt": "2027-06-11T09:15:00.000Z",
+      "updatedAt": "2027-06-11T09:15:00.000Z"
+    },
+
+    "document": {
+      "id": "doc-inter-0067",
+      "kind": "sales-invoice",
+      "status": "issued",
+      "number": "KPC/27-28/0067",
+      "date": "2028-01-17",
+      "dueDate": "2028-02-16",
+      "partyId": "party-vaidya",
+      "partyName": "Vaidya Systems LLP",
+      "grandTotal": "70628.00",
+      "seriesId": "series-sales",
+      "partyReference": null,
+      "placeOfSupplyJurisdiction": "29",
+      "placeOfSupplyCountry": "in",
+      "roundingPolicy": "none",
+      "narration": "",
+      "entryId": "entry-inter-0067",
+      "originalDocumentId": null,
+      "createdAt": "2028-01-17T03:20:00.000Z",
+      "updatedAt": "2028-01-17T03:55:00.000Z",
+      "issuedAt": "2028-01-17T03:55:00.000Z",
+      "cancelledAt": null,
+
+      "lines": [
+        {
+          "id": "line-e",
+          "lineNumber": 1,
+          "itemId": "item-encoder",
+          "description": "Rotary encoder, 2500 PPR, line driver output",
+          "quantity": "6.000",
+          "unitCode": "NOS",
+          "unitPrice": "8400.00",
+          "discount": "400.00",
+          "taxableAmount": "50000.00",
+          "ratePct": "18.000",
+          "classificationCode": "9031",
+          "isCharge": false,
+          "accountId": null,
+          "taxes": [{ "code": "IGST", "label": "IGST @ 18%", "ratePct": "18", "amount": "9000.00" }]
+        },
+        {
+          "id": "line-f",
+          "lineNumber": 2,
+          "itemId": "item-calibration",
+          "description": "Calibration service, on site",
+          "quantity": "2.000",
+          "unitCode": "DAY",
+          "unitPrice": "4500.00",
+          "discount": "0.00",
+          "taxableAmount": "9000.00",
+          "ratePct": "18.000",
+          "classificationCode": "998719",
+          "isCharge": false,
+          "accountId": null,
+          "taxes": [{ "code": "IGST", "label": "IGST @ 18%", "ratePct": "18", "amount": "1620.00" }]
+        },
+        {
+          "id": "line-g",
+          "lineNumber": 3,
+          "itemId": "item-insurance",
+          "description": "Insurance in transit",
+          "quantity": "1.000",
+          "unitCode": "NOS",
+          "unitPrice": "900.00",
+          "discount": "0.00",
+          "taxableAmount": "900.00",
+          "ratePct": "12.000",
+          "classificationCode": "997134",
+          "isCharge": true,
+          "accountId": null,
+          "taxes": [{ "code": "IGST", "label": "IGST @ 12%", "ratePct": "12", "amount": "108.00" }]
+        }
+      ],
+
+      "totals": {
+        "taxableValue": "59900.00",
+        "totalDiscount": "400.00",
+        "totalTax": "10728.00",
+        "netTotal": "70628.00",
+        "roundOff": "0.00",
+        "grandTotal": "70628.00",
+        "taxSummary": [
+          { "code": "IGST", "label": "IGST @ 12%", "ratePct": "12", "amount": "108.00" },
+          { "code": "IGST", "label": "IGST @ 18%", "ratePct": "18", "amount": "10620.00" }
+        ]
+      }
+    },
+
+    "expected": {
+      "why": "One tax column, two rate slabs, and a classification summary whose order (9031, 997134, 998719) is neither the line order nor the rate order.",
+      "taxColumns": ["IGST"],
+      "lineOrder": [1, 2, 3],
+      "rateSummary": [
+        {
+          "ratePct": "12.000",
+          "taxableValue": "900.00",
+          "totalTax": "108.00",
+          "taxes": [{ "code": "IGST", "ratePct": "12", "amount": "108.00" }]
+        },
+        {
+          "ratePct": "18.000",
+          "taxableValue": "59000.00",
+          "totalTax": "10620.00",
+          "taxes": [{ "code": "IGST", "ratePct": "18", "amount": "10620.00" }]
+        }
+      ],
+      "hsnSummary": [
+        {
+          "classificationCode": "9031",
+          "ratePct": "18.000",
+          "quantity": "6.000",
+          "unitCode": "NOS",
+          "taxableValue": "50000.00",
+          "totalTax": "9000.00"
+        },
+        {
+          "classificationCode": "997134",
+          "ratePct": "12.000",
+          "quantity": "1.000",
+          "unitCode": "NOS",
+          "taxableValue": "900.00",
+          "totalTax": "108.00"
+        },
+        {
+          "classificationCode": "998719",
+          "ratePct": "18.000",
+          "quantity": "2.000",
+          "unitCode": "DAY",
+          "taxableValue": "9000.00",
+          "totalTax": "1620.00"
+        }
+      ],
+      "placeOfSupply": "Karnataka (29)",
+      "grandTotalInWords": "Rupees Seventy Thousand Six Hundred Twenty Eight Only"
+    }
+  }
+}

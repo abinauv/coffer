@@ -9,12 +9,12 @@
 
 ## 1. What you need
 
-|                  |                                                              |
-| ---------------- | ------------------------------------------------------------ |
-| Node             | 22 LTS or newer. `package.json` sets `engines.node: >=22`.   |
-| npm              | Whatever ships with your Node.                               |
-| A compiler       | No. Nothing in this repo is compiled from C or C++ — see §3. |
-| A GPU, a display | For `npm run dev`, yes: it opens a real window.              |
+|                  |                                                                                                                               |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Node             | 22 LTS or newer. `package.json` sets `engines.node: >=22`, and `.nvmrc` says 22 — the version CI and every release build use. |
+| npm              | Whatever ships with your Node.                                                                                                |
+| A compiler       | No. Nothing in this repo is compiled from C or C++ — see §3. If something asks you for one, read §6 before installing it.     |
+| A GPU, a display | For `npm run dev`, yes: it opens a real window.                                                                               |
 
 Windows, macOS and Linux are all supported for development.
 
@@ -31,7 +31,11 @@ npm run dev
 port 5173, and launches Electron against it. A window appears. Editing a renderer file
 hot-reloads; editing a main or preload file restarts the Electron process.
 
-If no window appears, read §6 before anything else. Both of the traps there produce a
+**`npm install`, not `npm ci`.** They behave differently here, and `npm ci` fails with a
+page of `node-gyp` output demanding a C++ compiler for a binary that is already on disk.
+§6 has the fix, which is two lines.
+
+If no window appears, read §6 before anything else. Two of the traps there produce a
 build that looks entirely successful.
 
 ## 3. What `npm install` actually does
@@ -45,6 +49,11 @@ compile or rebuild anything, and it takes under a second:
 [native]   ok   better-sqlite3-multiple-ciphers — keyed round-trip via chacha20, file is not plaintext
 [native]   ok   @node-rs/argon2 — argon2id hash and verify (m=19456,t=2,p=1)
 ```
+
+The `node-api 10` on that line is the whole point: the binaries are ABI-stable, so one
+file satisfies Node 22, Node 24 and Electron 43 without a recompile. Which is what makes
+the `npm ci` behaviour in §6 a trap rather than a requirement — the compiler it asks for
+would produce a binary the tarball already contains.
 
 Coffer has two native dependencies — `better-sqlite3-multiple-ciphers` for the encrypted
 database and `@node-rs/argon2` for the passphrase. Both are Node-API addons and both ship
@@ -69,23 +78,50 @@ Every one of these is in `package.json`. Grouped by when you reach for them.
 | `npm run dev`        | Build all three processes and launch Electron with HMR.          |
 | `npm run test:watch` | Vitest in watch mode. `npm test -- --watch` does the same thing. |
 | `npm run format`     | Prettier, writing in place.                                      |
+| `npm run mutate`     | Break a rule on purpose and check that something fails.          |
 
 ### Before you push
 
-|                     |                                                                      |
-| ------------------- | -------------------------------------------------------------------- |
-| `npm run verify`    | **The gate.** typecheck → lint → format:check → test, in that order. |
-| `npm run typecheck` | `typecheck:node` then `typecheck:web` — two separate projects.       |
-| `npm run lint`      | ESLint over the repo.                                                |
-| `npm test`          | Vitest, one pass.                                                    |
-| `npm run coverage`  | Vitest with v8 coverage.                                             |
+|                        |                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| `npm run verify`       | **The gate.** typecheck → lint → format:check → test → test:scripts, in order. |
+| `npm run typecheck`    | `typecheck:node` then `typecheck:web` — two separate projects.                 |
+| `npm run lint`         | ESLint over the repo.                                                          |
+| `npm test`             | Vitest, one pass.                                                              |
+| `npm run test:scripts` | `node --test scripts/mutate.test.mjs` — the mutation harness's own tests.      |
+| `npm run coverage`     | Vitest with v8 coverage.                                                       |
 
-`npm run verify` runs all four checks. Note that it includes `format:check`, so a file
+`npm run verify` runs all five checks. Note that it includes `format:check`, so a file
 Prettier would reflow fails the gate — run `npm run format` first.
+
+`npm run lint` is plain `eslint .`, which exits 0 on warnings. That is deliberate rather
+than an oversight: locally a warning should be visible without stopping you mid-change,
+and CI runs `npm run lint -- --max-warnings 0` so it cannot be ignored where it counts.
 
 Coverage thresholds are enforced on three directories only: `domain/`, `regimes/` and
 `security/`, at 90% lines, 90% functions and 85% branches (`vitest.config.ts`). Those are
 where correctness lives. The rest of the codebase is not measured.
+
+### Mutation testing
+
+`npm run mutate` is the harness that answers "would anything have noticed?" — coverage
+says a line ran, not that a test would fail if it changed.
+
+```bash
+npm run mutate -- --defs domain-money             # a recorded campaign
+npm run mutate -- --defs domain-money --dry-run   # anchors only, no tests
+npm run mutate -- --file src/main/domain/money/scale.ts \
+                  --anchor '  money: 2,' --replace '  money: 3,'
+```
+
+Campaigns live in `scripts/mutations/`, and the difference between a definitions file and
+a one-off is the difference between evidence and a claim: a file is a run somebody else
+can repeat. The exit code carries the verdict — 0 everything killed, 1 something
+survived, 2 the run was broken. Every campaign needs a control that changes nothing and a
+canary that must die; `CONVENTIONS.md` §6 is why, with the ten ways this harness has
+printed a full page of confident and entirely fictional results.
+
+Run it **after** `npm run format`. Prettier reflowing a file silently deletes an anchor.
 
 ### Packaging and release
 
@@ -160,10 +196,64 @@ Two runtime consequences, because a TypeScript interface does not exist at runti
 - `assertApiSurfaceComplete` runs at startup, before any window exists. A contract method
   with no handler behind it crashes the app at boot rather than at click time.
 
-## 6. Two traps that cost hours
+## 6. Four traps that cost hours
 
-Both of these produce a build that reports success and an app that does not work. Neither
-prints anything pointing at the cause.
+The first stops you before anything is built. The next two produce a build that reports
+success and an app that does not work. The fourth produces a test that fails for a reason
+that has nothing to do with the code under it. None of the four prints anything pointing
+at the cause.
+
+### `npm ci` compiles a native module that is already in the tarball
+
+`npm install` works. `npm ci` — on a fresh clone, in CI, or after deleting
+`node_modules` — fails part way through, and what it prints is a wall of `node-gyp`:
+
+```
+npm error gyp ERR! find VS You need to install the latest version of Visual Studio
+npm error gyp ERR! find VS including the "Desktop development with C++" workload.
+npm error gyp ERR! stack Error: Could not find any Visual Studio installation to use
+npm error gyp ERR! cwd …\node_modules\better-sqlite3-multiple-ciphers
+npm error gyp ERR! node -v v24.19.0
+```
+
+**This reads exactly like a broken dependency and is not one.** Nothing here needs
+compiling. `better-sqlite3-multiple-ciphers` carries its binaries in its own tarball —
+eight of them, one per platform and architecture, Node-API so that the same file
+satisfies Node 22, Node 24 and Electron alike:
+
+```
+node_modules/better-sqlite3-multiple-ciphers/prebuilds/
+  darwin-arm64.node   linux-arm64.node      linuxmusl-arm64.node   win32-arm64.node
+  darwin-x64.node     linux-x64.node        linuxmusl-x64.node     win32-x64.node
+```
+
+The package has a `binding.gyp` and no install script of its own, so `npm ci` reaches for
+its default build step and starts compiling SQLite from source before it has looked in
+`prebuilds/` at all. The toolchain it then asks for is a toolchain this project has never
+needed (§3), and installing one only makes the wrong thing succeed slowly.
+
+The fix is to tell it not to:
+
+```bash
+npm ci --ignore-scripts
+node scripts/native-modules.mjs --no-repair
+```
+
+The first line installs everything and runs no lifecycle script, so the prebuilds land
+untouched. The second is the `postinstall` check run by hand, in verify-only mode — it
+loads both native modules and does a keyed round-trip, which is the thing you actually
+wanted proved:
+
+```
+[native] node:
+[native]   runtime node on win32-x64 (node 24.19.0, node-api 10)
+[native]   ok   better-sqlite3-multiple-ciphers — keyed round-trip via chacha20, file is not plaintext
+[native]   ok   @node-rs/argon2 — argon2id hash and verify (m=19456,t=2,p=1)
+```
+
+Measured on Node 24.19.0 with npm 11.17.0 and node-gyp 12.4.0. `npm install` in the same
+tree does not do this, which is why the trap is invisible until the first clean clone or
+the first CI run.
 
 ### A sandboxed preload must be CommonJS
 
@@ -200,6 +290,23 @@ unset ELECTRON_RUN_AS_NODE
 spawns, for exactly this reason — otherwise its Electron check would quietly downgrade to
 a Node check and pass when it should not.
 
+### Prettier formats the HTML inside an `html` tagged template
+
+`src/main/services/pdf/escape.ts` exports an `html` tag, and Prettier recognises it: the
+markup inside one of those templates is reformatted as HTML, which is why
+`invoice-template.ts` reads as a page rather than as string soup. It is a real benefit and
+it has one consequence nobody expects the first time.
+
+**A byte-for-byte assertion on a fragment built by `html` is an assertion about
+Prettier's line width.** Add a class name, and the formatter rewraps an attribute, and a
+test that has nothing to do with your change goes red on whitespace. The failure diff
+looks like a rendering bug.
+
+Compare with the whitespace collapsed, or — better, and what the template's own tests do —
+read the value out of the structure rather than out of the string. `escape.test.ts` says
+so at the point where it does the former, and `invoice-template.test.ts` is the latter.
+The same reasoning applies to any tag name Prettier embeds: `css`, `graphql`, `sql`.
+
 ## 7. Where a new feature goes
 
 The layout on disk today:
@@ -208,24 +315,40 @@ The layout on disk today:
 src/
 ├── branding.ts            product name, ids, paths, URLs. The only place they appear.
 ├── shared/                types + the IPC contract. Imported by all three processes.
-│   ├── ipc.ts             CofferApi — the contract
+│   ├── ipc.ts             CofferApi — the contract. Twelve groups.
 │   ├── dto.ts             the shapes that cross IPC
+│   ├── documents.ts       the five trade-document kinds, as data
+│   ├── receipts.ts        the four voucher kinds, as data
 │   └── scalars.ts         DecimalString, Timestamp, DateString
 ├── main/
 │   ├── index.ts           bootstrap, window, quit
-│   ├── companies/         registry, create/open/close/backup/restore
-│   ├── db/                connection, migration runner, migrations, Kysely typings
-│   ├── domain/            PURE. money/ and time/ so far.
+│   ├── books/             which database is open, and under which regime
+│   ├── companies/         registry, create/open/recover/close, backup/restore
+│   ├── db/                connection, migration runner, migrations/ (0001–0022),
+│   │                      schema.ts (20 tables), repos/ (one per aggregate)
+│   ├── domain/            PURE. money/ time/ ledger/ documents/ receipts/
+│   │                      inventory/ reports/
 │   ├── regimes/           types.ts + in-gst/ — the internationalisation seam
 │   ├── security/          argon2, DEK, vault, recovery codes, sealed box
+│   ├── services/          pdf/ and importers/{csv,xml,zoho,tally}/ — built,
+│   │                      tested, and not yet reachable over IPC
+│   ├── ledger/ parties/ items/ units/ documents/ receipts/ numbering/
+│   │   company-profile/ regime/    one service per IPC group
 │   └── ipc/               registry, boundary, validators, handlers/
 ├── preload/
 └── renderer/src/          React: components/, screens/, store/, lib/, styles/
 ```
 
-`ARCHITECTURE.md` §5 shows more directories than this — `domain/ledger/`,
-`db/repos/`, `services/`. Those arrive with Phase 1 and later. What is above is what
-exists.
+`ARCHITECTURE.md` §5 is the same tree with the reasoning attached, and it marks the three
+things that are still only planned: `main/app/`, `services/excel/` and
+`services/mailer/`. Backup is not among them — it lives in `companies/`, where the vault
+paths are.
+
+**`services/` is the one part of this tree you cannot reach by clicking.** `pdf/` renders
+an invoice to HTML and the four importers parse CSV and Tally XML; all of it is pure, all
+of it is tested against fixtures, and none of it has an IPC group or a caller outside
+`services/`. If you go looking for the screen that prints an invoice, there is not one
+yet.
 
 Decide where your change goes by asking what it is:
 

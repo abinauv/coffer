@@ -169,6 +169,13 @@ export async function issueDocument(
         },
         roundingPolicy: document.roundingPolicy,
         narration: document.narration,
+        /* `?? false` and `?? null` resolve the DTO's optionals into the domain's required
+         * fields, in the one place a `PostableDocument` is built from a stored row. The
+         * posting rule then has values it cannot forget to look for — a reverse-charge
+         * bill posts its tax twice and credits the supplier with the net (0020), and a
+         * blocked line costs its tax into the expense rather than into an asset (0021). */
+        isReverseCharge: document.isReverseCharge ?? false,
+        exportTaxPayment: document.exportTaxPayment ?? null,
         lines: document.lines.map(toDomainLine),
       }
 

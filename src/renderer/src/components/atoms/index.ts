@@ -7,6 +7,7 @@
 export { Button, IconButton, type ButtonSize, type ButtonVariant } from './Button'
 export { Icon, type IconName } from './Icon'
 export { Input } from './Input'
+export { useFieldMessage, type FieldMessage } from './FieldMessage'
 export { Dialog, type DialogSize } from './Dialog'
 export { Tooltip, type TooltipPlacement } from './Tooltip'
 export { Kbd } from './Kbd'

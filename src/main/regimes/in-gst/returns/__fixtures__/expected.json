@@ -1,0 +1,507 @@
+{
+  "$comment": "What November 2027 must produce, worked by hand from period.json. Every row is written out, not only every total: a total that ties is blind to a whole document dropped from a section and to two mistakes that cancel, which is a failure this project has already shipped. Nothing here is rounded except GSTR-3B's cash payable and the interest beside it -- and the two are rounded PER HEAD and then added, which is why 39,554 + 1,813 + 1,813 + 121 is 43,301 while the same figures added first and rounded after are 43,300.",
+
+  "gstr1": {
+    "b2b": {
+      "parties": [
+        {
+          "gstin": "29AAAAA0000A1ZY",
+          "partyName": "Bengaluru Systems",
+          "invoices": [
+            {
+              "documentId": "d2",
+              "documentNumber": "INV-1002",
+              "documentDate": "2027-11-09",
+              "documentValue": "29500.00",
+              "placeOfSupplyCode": "29",
+              "taxableValue": "25000.00",
+              "tax": { "igst": "4500.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" },
+              "items": [
+                {
+                  "ratePct": "18",
+                  "taxableValue": "25000.00",
+                  "tax": { "igst": "4500.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+                }
+              ],
+              "isReverseCharge": false,
+              "invoiceType": "regular"
+            }
+          ],
+          "taxableValue": "25000.00",
+          "tax": { "igst": "4500.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+        },
+        {
+          "gstin": "33AABCC1234E1ZG",
+          "partyName": "Anand Traders",
+          "invoices": [
+            {
+              "documentId": "d1",
+              "documentNumber": "INV-1001",
+              "documentDate": "2027-11-04",
+              "documentValue": "12325.00",
+              "placeOfSupplyCode": "33",
+              "taxableValue": "10500.00",
+              "tax": { "igst": "0.00", "cgst": "912.50", "sgst": "912.50", "cess": "0.00" },
+              "items": [
+                {
+                  "ratePct": "5",
+                  "taxableValue": "500.00",
+                  "tax": { "igst": "0.00", "cgst": "12.50", "sgst": "12.50", "cess": "0.00" }
+                },
+                {
+                  "ratePct": "18",
+                  "taxableValue": "10000.00",
+                  "tax": { "igst": "0.00", "cgst": "900.00", "sgst": "900.00", "cess": "0.00" }
+                }
+              ],
+              "isReverseCharge": false,
+              "invoiceType": "regular"
+            }
+          ],
+          "taxableValue": "10500.00",
+          "tax": { "igst": "0.00", "cgst": "912.50", "sgst": "912.50", "cess": "0.00" }
+        }
+      ],
+      "invoiceCount": 2,
+      "taxableValue": "35500.00",
+      "tax": { "igst": "4500.00", "cgst": "912.50", "sgst": "912.50", "cess": "0.00" }
+    },
+
+    "b2cl": {
+      "places": [
+        {
+          "placeOfSupplyCode": "32",
+          "invoices": [
+            {
+              "documentId": "d3",
+              "documentNumber": "INV-1003",
+              "documentDate": "2027-11-12",
+              "documentValue": "106200.00",
+              "placeOfSupplyCode": "32",
+              "taxableValue": "90000.00",
+              "tax": { "igst": "16200.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" },
+              "items": [
+                {
+                  "ratePct": "18",
+                  "taxableValue": "90000.00",
+                  "tax": { "igst": "16200.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+                }
+              ]
+            }
+          ],
+          "taxableValue": "90000.00",
+          "tax": { "igst": "16200.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+        }
+      ],
+      "invoiceCount": 1,
+      "taxableValue": "90000.00",
+      "tax": { "igst": "16200.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+    },
+
+    "b2cs": {
+      "rows": [
+        {
+          "placeOfSupplyCode": "29",
+          "supplyType": "inter",
+          "ratePct": "18",
+          "taxableValue": "40000.40",
+          "tax": { "igst": "7200.07", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+        },
+        {
+          "placeOfSupplyCode": "32",
+          "supplyType": "inter",
+          "ratePct": "18",
+          "taxableValue": "84745.76",
+          "tax": { "igst": "15254.24", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+        },
+        {
+          "placeOfSupplyCode": "33",
+          "supplyType": "intra",
+          "ratePct": "0",
+          "taxableValue": "2000.00",
+          "tax": { "igst": "0.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+        },
+        {
+          "placeOfSupplyCode": "33",
+          "supplyType": "intra",
+          "ratePct": "5",
+          "taxableValue": "120000.00",
+          "tax": { "igst": "0.00", "cgst": "3000.00", "sgst": "3000.00", "cess": "0.00" }
+        }
+      ],
+      "documentCount": 3,
+      "taxableValue": "246746.16",
+      "tax": { "igst": "22454.31", "cgst": "3000.00", "sgst": "3000.00", "cess": "0.00" }
+    },
+
+    "cdnr": {
+      "parties": [
+        {
+          "gstin": "33AABCC1234E1ZG",
+          "partyName": "Anand Traders",
+          "notes": [
+            {
+              "documentId": "d8",
+              "documentNumber": "CRN-2001",
+              "documentDate": "2027-11-22",
+              "documentValue": "5900.00",
+              "placeOfSupplyCode": "33",
+              "taxableValue": "5000.00",
+              "tax": { "igst": "0.00", "cgst": "450.00", "sgst": "450.00", "cess": "0.00" },
+              "items": [
+                {
+                  "ratePct": "18",
+                  "taxableValue": "5000.00",
+                  "tax": { "igst": "0.00", "cgst": "450.00", "sgst": "450.00", "cess": "0.00" }
+                }
+              ],
+              "noteType": "credit",
+              "originalNumber": "INV-1001",
+              "originalDate": "2027-11-04"
+            }
+          ],
+          "taxableValue": "5000.00",
+          "tax": { "igst": "0.00", "cgst": "450.00", "sgst": "450.00", "cess": "0.00" }
+        }
+      ],
+      "noteCount": 1,
+      "taxableValue": "5000.00",
+      "tax": { "igst": "0.00", "cgst": "450.00", "sgst": "450.00", "cess": "0.00" }
+    },
+
+    "cdnur": {
+      "notes": [
+        {
+          "documentId": "d13",
+          "documentNumber": "CRN-2002",
+          "documentDate": "2027-11-29",
+          "documentValue": "35400.00",
+          "placeOfSupplyCode": "32",
+          "taxableValue": "30000.00",
+          "tax": { "igst": "5400.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" },
+          "items": [
+            {
+              "ratePct": "18",
+              "taxableValue": "30000.00",
+              "tax": { "igst": "5400.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+            }
+          ],
+          "noteType": "credit",
+          "originalNumber": null,
+          "originalDate": null,
+          "urType": "B2CL"
+        }
+      ],
+      "noteCount": 1,
+      "taxableValue": "30000.00",
+      "tax": { "igst": "5400.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+    },
+
+    "exp": {
+      "groups": [
+        {
+          "taxPayment": "with-payment",
+          "invoices": [
+            {
+              "documentId": "d9",
+              "documentNumber": "EXP-3001",
+              "documentDate": "2027-11-25",
+              "documentValue": "70800.00",
+              "placeOfSupplyCode": null,
+              "taxableValue": "60000.00",
+              "tax": { "igst": "10800.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" },
+              "items": [
+                {
+                  "ratePct": "18",
+                  "taxableValue": "60000.00",
+                  "tax": { "igst": "10800.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+                }
+              ],
+              "shippingBillNumber": "7001234",
+              "shippingBillDate": "2027-11-26",
+              "portCode": "INMAA1"
+            }
+          ],
+          "taxableValue": "60000.00",
+          "tax": { "igst": "10800.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+        },
+        {
+          "taxPayment": "without-payment",
+          "invoices": [
+            {
+              "documentId": "d10",
+              "documentNumber": "EXP-3002",
+              "documentDate": "2027-11-27",
+              "documentValue": "15000.00",
+              "placeOfSupplyCode": null,
+              "taxableValue": "15000.00",
+              "tax": { "igst": "0.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" },
+              "items": [
+                {
+                  "ratePct": "0",
+                  "taxableValue": "15000.00",
+                  "tax": { "igst": "0.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+                }
+              ],
+              "shippingBillNumber": null,
+              "shippingBillDate": null,
+              "portCode": null
+            }
+          ],
+          "taxableValue": "15000.00",
+          "tax": { "igst": "0.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+        }
+      ],
+      "invoiceCount": 2,
+      "taxableValue": "75000.00",
+      "tax": { "igst": "10800.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+    },
+
+    "hsnRows": [
+      {
+        "classificationCode": "0401",
+        "uqc": "LTR",
+        "ratePct": "0",
+        "quantity": "20.000",
+        "taxableValue": "2000.00",
+        "tax": { "igst": "0.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+      },
+      {
+        "classificationCode": "1006",
+        "uqc": null,
+        "ratePct": "5",
+        "quantity": "100.000",
+        "taxableValue": "120000.00",
+        "tax": { "igst": "0.00", "cgst": "3000.00", "sgst": "3000.00", "cess": "0.00" }
+      },
+      {
+        "classificationCode": "6109",
+        "uqc": "NOS",
+        "ratePct": "0",
+        "quantity": "50.000",
+        "taxableValue": "15000.00",
+        "tax": { "igst": "0.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+      },
+      {
+        "classificationCode": "6109",
+        "uqc": "NOS",
+        "ratePct": "18",
+        "quantity": "200.000",
+        "taxableValue": "60000.00",
+        "tax": { "igst": "10800.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+      },
+      {
+        "classificationCode": "8415",
+        "uqc": "NOS",
+        "ratePct": "18",
+        "quantity": "2.000",
+        "taxableValue": "60000.00",
+        "tax": { "igst": "10800.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+      },
+      {
+        "classificationCode": "8471",
+        "uqc": "NOS",
+        "ratePct": "18",
+        "quantity": "2.000",
+        "taxableValue": "45000.40",
+        "tax": { "igst": "7200.07", "cgst": "450.00", "sgst": "450.00", "cess": "0.00" }
+      },
+      {
+        "classificationCode": "8517",
+        "uqc": "NOS",
+        "ratePct": "18",
+        "quantity": "5.000",
+        "taxableValue": "25000.00",
+        "tax": { "igst": "4500.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+      },
+      {
+        "classificationCode": "9403",
+        "uqc": "NOS",
+        "ratePct": "18",
+        "quantity": "4.000",
+        "taxableValue": "84745.76",
+        "tax": { "igst": "15254.24", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+      },
+      {
+        "classificationCode": "996511",
+        "uqc": "NA",
+        "ratePct": "5",
+        "quantity": "0.000",
+        "taxableValue": "500.00",
+        "tax": { "igst": "0.00", "cgst": "12.50", "sgst": "12.50", "cess": "0.00" }
+      }
+    ],
+
+    "hsnTotals": {
+      "taxableValue": "412246.16",
+      "tax": { "igst": "48554.31", "cgst": "3462.50", "sgst": "3462.50", "cess": "0.00" }
+    },
+
+    "docIssue": {
+      "rows": [
+        {
+          "natureOfDocument": "Credit note",
+          "seriesLabel": "Credit notes",
+          "fromNumber": "CRN-2001",
+          "toNumber": "CRN-2002",
+          "totalIssued": 2,
+          "cancelled": 0,
+          "netIssued": 2
+        },
+        {
+          "natureOfDocument": "Invoices for outward supply",
+          "seriesLabel": "Export invoices",
+          "fromNumber": "EXP-3001",
+          "toNumber": "EXP-3002",
+          "totalIssued": 2,
+          "cancelled": 0,
+          "netIssued": 2
+        },
+        {
+          "natureOfDocument": "Invoices for outward supply",
+          "seriesLabel": "Tax invoices",
+          "fromNumber": "INV-1001",
+          "toNumber": "INV-1007",
+          "totalIssued": 7,
+          "cancelled": 1,
+          "netIssued": 6
+        }
+      ],
+      "totalIssued": 11,
+      "cancelled": 1,
+      "netIssued": 10
+    },
+
+    "reported": {
+      "documentCount": 10,
+      "taxableValue": "482246.16",
+      "tax": { "igst": "59354.31", "cgst": "4362.50", "sgst": "4362.50", "cess": "0.00" }
+    },
+
+    "net": {
+      "taxableValue": "412246.16",
+      "tax": { "igst": "48554.31", "cgst": "3462.50", "sgst": "3462.50", "cess": "0.00" }
+    },
+
+    "issueCodes": [
+      "SCHEMA_UNVERIFIED",
+      "REVERSE_CHARGE_NOT_RECORDED",
+      "EXPORT_SHIPPING_BILL_MISSING",
+      "EXPORT_TAX_PAYMENT_ASSUMED",
+      "CORRECTED_DOCUMENT_UNNAMED",
+      "UQC_NOT_MAPPED"
+    ]
+  },
+
+  "gstr3b": {
+    "table31": {
+      "taxableOutward": {
+        "taxableValue": "335246.16",
+        "tax": { "igst": "37754.31", "cgst": "3462.50", "sgst": "3462.50", "cess": "0.00" }
+      },
+      "zeroRated": {
+        "taxableValue": "75000.00",
+        "tax": { "igst": "10800.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+      },
+      "nilRatedOrExempt": {
+        "taxableValue": "2000.00",
+        "tax": { "igst": "0.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+      },
+      "inwardReverseCharge": {
+        "taxableValue": "10000.00",
+        "tax": { "igst": "0.00", "cgst": "250.00", "sgst": "250.00", "cess": "0.00" }
+      },
+      "nonGstOutward": {
+        "taxableValue": "0.00",
+        "tax": { "igst": "0.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+      }
+    },
+
+    "table32": {
+      "toUnregistered": [
+        { "placeOfSupplyCode": "29", "taxableValue": "40000.40", "igst": "7200.07" },
+        { "placeOfSupplyCode": "32", "taxableValue": "144745.76", "igst": "26054.24" }
+      ],
+      "toCompositionDealers": [],
+      "toUinHolders": []
+    },
+
+    "table4": {
+      "available": {
+        "importOfGoods": { "igst": "0.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" },
+        "importOfServices": { "igst": "0.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" },
+        "inwardReverseCharge": {
+          "igst": "0.00",
+          "cgst": "250.00",
+          "sgst": "250.00",
+          "cess": "0.00"
+        },
+        "isd": { "igst": "0.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" },
+        "allOther": { "igst": "9000.00", "cgst": "1800.00", "sgst": "1800.00", "cess": "0.00" },
+        "total": { "igst": "9000.00", "cgst": "2050.00", "sgst": "2050.00", "cess": "0.00" }
+      },
+      "reversed": {
+        "rule42And43": { "igst": "0.00", "cgst": "150.00", "sgst": "150.00", "cess": "0.00" },
+        "others": { "igst": "0.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" },
+        "total": { "igst": "0.00", "cgst": "150.00", "sgst": "150.00", "cess": "0.00" }
+      },
+      "net": { "igst": "9000.00", "cgst": "1900.00", "sgst": "1900.00", "cess": "0.00" },
+      "ineligible": {
+        "section17_5": {
+          "igst": "0.00",
+          "cgst": "112000.00",
+          "sgst": "112000.00",
+          "cess": "0.00"
+        },
+        "others": { "igst": "0.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" }
+      }
+    },
+
+    "payment": {
+      "outwardLiability": {
+        "igst": "48554.31",
+        "cgst": "3462.50",
+        "sgst": "3462.50",
+        "cess": "0.00"
+      },
+      "reverseChargeLiability": {
+        "igst": "0.00",
+        "cgst": "250.00",
+        "sgst": "250.00",
+        "cess": "0.00"
+      },
+      "creditAvailable": {
+        "igst": "9000.00",
+        "cgst": "1900.00",
+        "sgst": "1900.00",
+        "cess": "0.00"
+      },
+      "creditUtilised": { "igst": "9000.00", "cgst": "1900.00", "sgst": "1900.00", "cess": "0.00" },
+      "creditCarriedForward": { "igst": "0.00", "cgst": "0.00", "sgst": "0.00", "cess": "0.00" },
+      "cashPayable": { "igst": "39554.31", "cgst": "1812.50", "sgst": "1812.50", "cess": "0.00" },
+      "cashPayableRounded": {
+        "igst": "39554.00",
+        "cgst": "1813.00",
+        "sgst": "1813.00",
+        "cess": "0.00"
+      },
+      "interestAndLateFeeRounded": {
+        "igst": "121.00",
+        "cgst": "0.00",
+        "sgst": "0.00",
+        "cess": "0.00"
+      },
+      "totalCashPayable": "43301.00"
+    },
+
+    "issueCodes": [
+      "SCHEMA_UNVERIFIED",
+      "REVERSE_CHARGE_NOT_RECORDED",
+      "ITC_ELIGIBILITY_NOT_RECORDED",
+      "FIGURE_NOT_DERIVABLE"
+    ],
+
+    "unrecordedReverseChargeCount": 10,
+    "unrecordedEligibilityCount": 2
+  }
+}

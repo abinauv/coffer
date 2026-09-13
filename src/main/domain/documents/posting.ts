@@ -102,6 +102,58 @@
  * across either is identical — which is the property worth testing.
  *
  * ---------------------------------------------------------------------------
+ * REVERSE CHARGE: TWO POSTINGS FROM ONE BILL, AND ONLY ON ONE SIDE
+ *
+ * Where the BUYER discharges the tax, the seller does not collect it. Two things follow
+ * and neither is symmetric between the sides.
+ *
+ * THE PARTY IS MOVED BY THE TOTAL LESS THE TAX. That is what the party actually owes or
+ * is owed: the supplier is paid the value of the goods, and the tax goes to the
+ * authority from the other end. Moving the control account by the grand total would put
+ * money on a statement that nobody is ever going to pay.
+ *
+ * ON THE PURCHASE SIDE THE TAX POSTS TWICE. This business is the recipient: it OWES the
+ * output tax and it MAY CLAIM the same figure as input credit. Both are true at once and
+ * both are real — one is a liability to the authority and the other is an asset
+ * recoverable from it — so the tax lands on both sides of the balance sheet and nets to
+ * nothing in profit, which is exactly what a reverse charge does. Posting only the credit
+ * would show a business reclaiming tax it never owed; posting only the liability would
+ * show one paying tax it never gets back.
+ *
+ * ON THE SALES SIDE IT POSTS NOTHING AT ALL. This business supplies, the customer
+ * discharges, and no figure on the document is this business's liability. The value still
+ * counts as turnover, which is why the value lines are unchanged.
+ *
+ * `REVERSE_CHARGE_LEVIES` is that pair of sentences as a total record over `TradeSide`,
+ * so a third side would not compile until somebody answered for it.
+ *
+ * ---------------------------------------------------------------------------
+ * INELIGIBLE INPUT TAX IS NOT AN ASSET, SO IT IS NOT POSTED AS ONE
+ *
+ * Input tax reaches the input tax account because it is RECOVERABLE — money owed back by
+ * the authority. Where credit is blocked it is not recoverable, and an account holding it
+ * is an asset the business will never realise. It is part of what the thing cost, so it
+ * posts to the LINE'S OWN VALUE ACCOUNT and is carried in the expense beside the goods.
+ *
+ * A LINE AT A TIME, WHICH IS THE WHOLE REASON THE COLUMN IS ON THE LINE. One bill can
+ * carry a laptop and a staff car; the credit is available on the first and blocked on the
+ * second; and they arrive on one piece of paper with one number. A document-level answer
+ * would have to be wrong about one of the two lines.
+ *
+ * A LINE THAT RECORDS NOTHING IS TREATED AS ELIGIBLE, and that is a decision rather than
+ * a default falling out of the types. It is what the books already assert — an ineligible
+ * purchase would have been costed into the expense rather than posted to input tax — and
+ * it is the only answer that leaves a document written before migration 0021 posting
+ * exactly as it did. It is the one conditional in `creditIsAvailable`, and it is written
+ * as one so that a reader can see where the assumption is.
+ *
+ * IT INTERACTS WITH REVERSE CHARGE AND THE INTERACTION IS THE RIGHT ONE. A blocked
+ * reverse-charge purchase still OWES the output tax — that is a liability to the
+ * authority and no eligibility rule touches it — and the input leg is costed into the
+ * expense instead of claimed. So the tax stops netting to nothing and becomes a real cost,
+ * which is precisely what a blocked credit means.
+ *
+ * ---------------------------------------------------------------------------
  * WHAT THIS FILE REFUSES TO DO
  *
  * It does not decide the tax. The document arrives carrying what the regime already
@@ -131,7 +183,9 @@ import type {
 } from '@main/domain/ledger'
 import { PostingError } from '@main/domain/ledger'
 
-import { documentTotals } from './totals'
+import type { ItcEligibility } from '@shared/dto'
+
+import { documentTotals, type DocumentTotals } from './totals'
 import {
   POSTING_KINDS,
   definitionOf,
@@ -204,6 +258,63 @@ const VALUE_ROLES: Readonly<Record<TradeSide, Readonly<Record<DocumentDirection,
 const CHARGE_ROLES: Readonly<Record<TradeSide, AccountRole>> = {
   sales: 'freight-outward',
   purchase: 'freight-inward',
+}
+
+/**
+ * Which tax legs a document raises when the BUYER discharges the tax, by side.
+ *
+ * A total record over `TradeSide` (CONVENTIONS §1.9), because the two sides are not
+ * mirror images and a conditional would make them look like one. On the purchase side
+ * this business is the recipient — it owes the output tax and may claim the input credit,
+ * two postings from one bill. On the sales side it is the supplier and owes nothing, so
+ * the list is empty and the tax lands nowhere.
+ */
+const REVERSE_CHARGE_LEVIES: Readonly<Record<TradeSide, readonly TaxLevy[]>> = {
+  sales: [],
+  purchase: ['input', 'output'],
+}
+
+/**
+ * Which side a tax leg lands on, from what the leg IS and which way the document faces.
+ *
+ * Input tax is an ASSET recoverable from the authority and output tax is a LIABILITY owed
+ * to it, so a charge increases each on its own side and a refund decreases it. Written as
+ * a total record over both unions rather than as "opposite the control account", which is
+ * the same answer for every ordinary document and stops being one under reverse charge:
+ * a bill under reverse charge carries BOTH legs, and they cannot both be opposite the
+ * same control line.
+ *
+ * That it reproduces the old rule exactly for the four ordinary treatments is the
+ * property worth testing, and the table in this file's header is that test.
+ */
+const TAX_IS_DEBIT: Readonly<Record<TaxLevy, Readonly<Record<DocumentDirection, boolean>>>> = {
+  input: { charge: true, refund: false },
+  output: { charge: false, refund: true },
+}
+
+/**
+ * Whether credit may be taken, as a total record over the union.
+ *
+ * The two ineligible members answer the same way HERE and are kept apart because a return
+ * reports them in different places — collapsing them into a boolean column would lose
+ * which of the two a figure was, and no query could recover it.
+ */
+const CREDIT_IS_AVAILABLE: Readonly<Record<ItcEligibility, boolean>> = {
+  eligible: true,
+  'ineligible-17-5': false,
+  'ineligible-other': false,
+}
+
+/**
+ * Whether this line's input tax is recoverable.
+ *
+ * THE NULL ARM IS THE ONE DECISION IN THIS FUNCTION and is written as a conditional on
+ * purpose, so that a reader can see exactly where the assumption is. A line that records
+ * nothing is treated as eligible: it is what the books already assert, and it is the only
+ * answer under which a document written before migration 0021 posts as it always did.
+ */
+function creditIsAvailable(eligibility: ItcEligibility | null): boolean {
+  return eligibility === null ? true : CREDIT_IS_AVAILABLE[eligibility]
 }
 
 /**
@@ -333,7 +444,6 @@ function toEntry(
   const totals = documentTotals(document)
   const { accounts } = context
   const values = new Buckets()
-  const tax = new Buckets()
 
   for (const line of document.lines) {
     values.add(valueAccountFor(line, definition, accounts), line.taxableAmount)
@@ -342,11 +452,36 @@ function toEntry(
   /*
    * Grouped by component code, not by code and rate. The account is a property of the
    * component — output CGST is one liability however many rates fed it.
+   *
+   * Kept per LEVY rather than in one bucket, because a bill under reverse charge raises
+   * both legs and they land on opposite sides of the entry. An ordinary document has one
+   * levy and one bucket, exactly as before.
    */
-  const levy = levyOf(definition.kind)
+  const taxByLevy = new Map<TaxLevy, Buckets>()
+  const bucketFor = (levy: TaxLevy): Buckets => {
+    const existing = taxByLevy.get(levy)
+    if (existing !== undefined) return existing
+    const created = new Buckets()
+    taxByLevy.set(levy, created)
+    return created
+  }
+
+  const levies = leviesOf(document, definition)
   for (const line of document.lines) {
     for (const component of line.taxes) {
-      tax.add(taxAccountFor(component.code, levy, accounts), component.amount)
+      for (const levy of levies) {
+        /*
+         * Blocked input tax is not recoverable, so it is not an asset — it is part of what
+         * the line cost, and it joins the line's own value bucket rather than reaching for
+         * a tax account. It lands on the same side the value does, always: input tax on a
+         * charge is a debit and so is the value, and both flip together on a refund.
+         */
+        if (levy === 'input' && !creditIsAvailable(line.itcEligibility)) {
+          values.add(valueAccountFor(line, definition, accounts), component.amount)
+          continue
+        }
+        bucketFor(levy).add(taxAccountFor(component.code, levy, accounts), component.amount)
+      }
     }
   }
 
@@ -366,14 +501,22 @@ function toEntry(
    * nothing is the correct posting. Whatever is left balances among itself, because the
    * total it was measured against is zero.
    */
-  if (!totals.grandTotal.isZero()) {
+  const controlAmount = controlAmountOf(document, totals)
+  if (!controlAmount.isZero()) {
     lines.push(
-      place(accountFor(definition, accounts), totals.grandTotal, controlDebit, document.partyId),
+      place(accountFor(definition, accounts), controlAmount, controlDebit, document.partyId),
     )
   }
 
-  for (const bucket of [...values.entries(), ...tax.entries()]) {
+  for (const bucket of values.entries()) {
     lines.push(place(bucket.account, bucket.amount, !controlDebit))
+  }
+
+  for (const [levy, buckets] of taxByLevy) {
+    const isDebit = TAX_IS_DEBIT[levy][definition.direction]
+    for (const bucket of buckets.entries()) {
+      lines.push(place(bucket.account, bucket.amount, isDebit))
+    }
   }
 
   /*
@@ -419,6 +562,60 @@ function place(
     credit: debits ? ZERO : magnitude,
     ...(partyId === undefined ? {} : { partyId }),
   }
+}
+
+/**
+ * Which tax legs this document raises.
+ *
+ * The ordinary answer is one: the levy the kind implies. Under reverse charge it is what
+ * `REVERSE_CHARGE_LEVIES` says for the side, which is two on the purchase side and none
+ * on the sales side.
+ *
+ * `levyOf` cannot be null for a kind with a rule — a rule exists exactly when a source
+ * type does — but the null arm is answered rather than asserted away, because a tax
+ * posted on the wrong side of the balance sheet is a figure that looks plausible in every
+ * report and `taxAccountFor` is where that sentence is already written.
+ */
+function leviesOf(
+  document: PostableDocument,
+  definition: PostingKindDefinition,
+): readonly TaxLevy[] {
+  if (document.isReverseCharge) {
+    return REVERSE_CHARGE_LEVIES[definition.side]
+  }
+
+  const levy = levyOf(definition.kind)
+  if (levy === null) {
+    /*
+     * Unreachable, and kept — it used to sit inside `taxAccountFor` and moved here when
+     * the levy became a list. `levyOf` answers null only for a kind with no source type,
+     * and a rule exists exactly when a source type does, so no document reaching this
+     * function can produce it. It stays for what the alternative would do: a tax posted on
+     * a side nobody chose is a figure that looks entirely plausible in every report.
+     */
+    throw new PostingError(
+      'ROLE_UNMAPPED',
+      `A ${definition.label.toLowerCase()} levies no tax, so its components have nowhere to go.`,
+      { kind: definition.kind },
+    )
+  }
+  return [levy]
+}
+
+/**
+ * What the party's control account moves by.
+ *
+ * The grand total in the ordinary case — it is what the document says at the bottom, and
+ * anything else makes the party's ledger disagree with the paper they are holding.
+ *
+ * UNDER REVERSE CHARGE IT IS THE GRAND TOTAL LESS THE TAX, on BOTH sides, and the
+ * symmetry here is real where the tax legs' was not. The party pays or is paid the value
+ * of the supply; the tax goes to the authority from the other end and never passes
+ * through this account. Taking the tax off the control line is what makes the entry
+ * balance once the tax has been posted to two accounts (purchase) or to none (sales).
+ */
+function controlAmountOf(document: PostableDocument, totals: DocumentTotals): Decimal {
+  return document.isReverseCharge ? totals.grandTotal.minus(totals.totalTax) : totals.grandTotal
 }
 
 /** The party control account this kind moves. */
@@ -468,17 +665,9 @@ function valueAccountFor(
  */
 function taxAccountFor(
   componentCode: string,
-  levy: TaxLevy | null,
+  levy: TaxLevy,
   accounts: AccountResolver,
 ): AccountRef {
-  if (levy === null) {
-    /* Unreachable for any kind with a rule, since a rule exists exactly when a
-     * `sourceType` does and `levyOf` answers null only for the kinds without one. Thrown
-     * rather than defaulted, because a tax posted on the wrong side of the balance sheet
-     * is a figure that looks entirely plausible in every report. */
-    throw new PostingError('ROLE_UNMAPPED', 'This document kind levies no tax.', { componentCode })
-  }
-
   const account = accounts.forTaxComponent(componentCode, levy)
   if (account === null) {
     throw new PostingError(

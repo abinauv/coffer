@@ -47,6 +47,39 @@ export interface ClassificationEntry {
   readonly defaultRatePct: DecimalString
 }
 
+/**
+ * The figures a RETURN is built against, as opposed to a supply.
+ *
+ * There is exactly one of them today and it is here rather than written into `gstr1.ts`
+ * because it has already changed once and will change again — which is the whole of
+ * §6.6's argument, and the same argument the rate slabs above make.
+ *
+ * IT LIVED IN `returns/pack.ts` FOR ONE BATCH, as its own `ReturnsPack` type with its own
+ * bundled value, and that file's header said plainly why: `compliance-pack.ts` was
+ * outside the GSTR batch's paths, so the threshold could not be put where it belonged.
+ * It echoed `BUNDLED_COMPLIANCE_PACK.packVersion` rather than versioning itself, so that
+ * "which rules am I running?" could not have two answers. That is now structural instead
+ * of conventional: there is one pack, so there is one version.
+ */
+export interface ReturnsValues {
+  /**
+   * The invoice value above which an inter-state supply to an unregistered person is
+   * reported invoice by invoice (B2CL) rather than aggregated (B2CS).
+   *
+   * Compared with STRICTLY GREATER THAN, and against the INVOICE value — taxable value
+   * plus tax plus round-off — not the taxable value. Both of those are decisions rather
+   * than readings; see `RETURN_DECISIONS`.
+   *
+   * B2CL was ₹2,50,000 for most of GST's life and the reduction to ₹1,00,000 is recent.
+   * The bundled value is the lower figure, and both are named in `note`, because a user
+   * filing for an earlier period needs the earlier one and a loaded pack is how they get
+   * it — the point of the pack is that neither number is baked into a binary.
+   */
+  readonly b2clInvoiceValueThreshold: DecimalString
+  /** Where the number came from, for the "which rules am I running?" screen. */
+  readonly note: string
+}
+
 export interface IndiaCompliancePack {
   /** Pack version, independent of the application version. */
   readonly packVersion: string
@@ -56,6 +89,8 @@ export interface IndiaCompliancePack {
   readonly source: string
   readonly rateSlabs: readonly GstRateSlab[]
   readonly classificationCodes: readonly ClassificationEntry[]
+  /** The figures a return is built against. See `ReturnsValues`. */
+  readonly returns: ReturnsValues
 }
 
 function hsn(
@@ -85,6 +120,13 @@ export const BUNDLED_COMPLIANCE_PACK: IndiaCompliancePack = {
   packVersion: '2026.04.0',
   effectiveFrom: '2026-04-01',
   source: 'Bundled seed data. Replaced by a loaded compliance pack once one is installed.',
+
+  returns: {
+    b2clInvoiceValueThreshold: '100000.00',
+    note:
+      'B2CL threshold of ₹1,00,000. It was ₹2,50,000 until the reduction; a return for a ' +
+      'period before that wants a pack carrying the older figure rather than a code change.',
+  },
 
   rateSlabs: [
     { ratePct: '0', label: 'Nil', note: 'Exempt, nil-rated and zero-rated supplies.' },

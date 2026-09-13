@@ -26,6 +26,13 @@ import { trialBalance } from './balances'
 import { SMALL_BUSINESS_CHART } from './chart-template'
 import { isRepoError, type RepoError, type RepoErrorCode } from './errors'
 import { createSeries, defaultSeriesFor, previewNumber } from './numbering'
+import { createUnit, listUnits } from './units'
+import {
+  DEFAULT_WAREHOUSE_CODE,
+  createWarehouse,
+  defaultWarehouseId,
+  listWarehouses,
+} from './stock'
 import { NUMBERED_KINDS } from '@main/domain/documents'
 
 const KEY = new Uint8Array(DATABASE_KEY_BYTES).fill(0x11)
@@ -211,6 +218,93 @@ describe('setUpBooks', () => {
      * second series beside it, which would have been a decision taken back. */
     expect(result.seriesCreated).toBe(NUMBERED_KINDS.length - 1)
     expect((await defaultSeriesFor(db, 'sales-invoice'))?.label).toBe('Export')
+  })
+
+  /*
+   * THE SAME BUG AS THE SERIES, ONE TABLE OVER. `stock_ledger.warehouse_id` is NOT NULL,
+   * so a company file with no warehouse can record no stock movement at all —
+   * `seedDefaultWarehouse` existed, idempotent and correct, and nothing called it. This
+   * asserts the seeding; `companies/service.test.ts` asserts that a file the application
+   * created can actually move stock, which is the assertion that would have caught it.
+   */
+  it('leaves a company somewhere to keep stock', async () => {
+    const result = await setUpBooks(db, { rule: aprilToMarch })
+
+    expect(result.warehousesCreated).toBe(1)
+    expect((await listWarehouses(db)).map((warehouse) => warehouse.code)).toEqual([
+      DEFAULT_WAREHOUSE_CODE,
+    ])
+
+    /* Through the resolver a movement actually uses, not through the list: `recordMovement`
+     * asks `defaultWarehouseId` when a caller names none, and it is that call which
+     * answered `WAREHOUSE_NOT_CONFIGURED` on every file the application had ever made. */
+    await expect(defaultWarehouseId(db)).resolves.toBe((await listWarehouses(db))[0]?.id)
+  })
+
+  it('leaves a warehouse somebody has already created alone', async () => {
+    await createWarehouse(db, { code: 'KOCHI', name: 'Kochi godown' })
+    const result = await setUpBooks(db, { rule: aprilToMarch })
+
+    /* Nought, and no `Main store` beside theirs. A single-location business that named
+     * its one location has said where stock goes, and a seed is not a decision to retake. */
+    expect(result.warehousesCreated).toBe(0)
+    expect((await listWarehouses(db)).map((warehouse) => warehouse.code)).toEqual(['KOCHI'])
+  })
+
+  /*
+   * AND EMPTIER STILL BEFORE THIS: nothing had ever written a unit, so the first invoice
+   * line in a new company had nothing to be measured in. `units/service.test.ts` pinned
+   * the absence deliberately.
+   */
+  it('seeds the units a quantity is counted in', async () => {
+    const result = await setUpBooks(db, { rule: aprilToMarch })
+
+    const units = await listUnits(db)
+    expect(result.unitsCreated).toBe(units.length)
+    expect(units.map((unit) => unit.code)).toEqual([
+      'BOX',
+      'KGS',
+      'LTR',
+      'MTR',
+      'NOS',
+      'PCS',
+      'PRS',
+      'SET',
+    ])
+  })
+
+  /*
+   * BY VALUE, PER UNIT, because the two fields are the whole judgement in the seed and a
+   * length assertion cannot see either of them. `decimalPlaces` of nought is what refuses
+   * half a box; `regimeCode` is India's UQC, and `LTR` carries null on purpose — the
+   * volume codes this build can vouch for are KLR and MLT, and a wrong UQC fails at the
+   * portal weeks later under a code somebody will believe was checked.
+   */
+  it('gives each seeded unit its own scale and its UQC, or admits it has none', async () => {
+    await setUpBooks(db, { rule: aprilToMarch })
+    const units = await listUnits(db)
+    const by = (code: string) => units.find((unit) => unit.code === code)
+
+    expect(by('NOS')).toMatchObject({ name: 'Numbers', decimalPlaces: 0, regimeCode: 'NOS' })
+    expect(by('BOX')).toMatchObject({ decimalPlaces: 0, regimeCode: 'BOX' })
+    expect(by('PRS')).toMatchObject({ decimalPlaces: 0, regimeCode: 'PRS' })
+    expect(by('KGS')).toMatchObject({ decimalPlaces: 3, regimeCode: 'KGS' })
+    expect(by('MTR')).toMatchObject({ decimalPlaces: 3, regimeCode: 'MTR' })
+    expect(by('LTR')).toMatchObject({ decimalPlaces: 3, regimeCode: null })
+  })
+
+  it('leaves a unit code somebody has already taken alone', async () => {
+    await createUnit(db, { code: 'KGS', name: 'Kilos', decimalPlaces: 2 })
+    const result = await setUpBooks(db, { rule: aprilToMarch })
+
+    /* Seven, not eight, and the surviving row is theirs — including the scale they
+     * chose, which a seed that overwrote would have silently widened. */
+    expect(result.unitsCreated).toBe(7)
+    expect(await listUnits(db)).toHaveLength(8)
+    expect((await listUnits(db)).find((unit) => unit.code === 'KGS')).toMatchObject({
+      name: 'Kilos',
+      decimalPlaces: 2,
+    })
   })
 
   it('refuses a company that already has a chart', async () => {

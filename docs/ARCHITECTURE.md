@@ -29,8 +29,8 @@ These define the product. A change here is a change of product, not of implement
 
 ## 3. Stack
 
-Versions are the current release as of the Phase 0 build. Pin exact versions in
-`package.json`; upgrade deliberately, not incidentally.
+Versions are what `package.json` pins today. Pin exact versions there; upgrade
+deliberately, not incidentally.
 
 | Layer         | Choice                                       | Version | Why                                                                                                                                                                                               |
 | ------------- | -------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -45,7 +45,7 @@ Versions are the current release as of the Phase 0 build. Pin exact versions in
 | Money         | `decimal.js`                                 | 10.x    | Arbitrary precision. See §7.                                                                                                                                                                      |
 | Hashing       | `@node-rs/argon2`                            | 2.x     | Argon2id for the passphrase.                                                                                                                                                                      |
 | Crypto        | `libsodium-wrappers`                         | 0.8.x   | Sealed-box recovery.                                                                                                                                                                              |
-| Excel         | ExcelJS                                      | 4.x     |                                                                                                                                                                                                   |
+| Excel         | ExcelJS                                      | 4.x     | Declared and not yet imported anywhere — see §5 on `services/excel/`.                                                                                                                             |
 | Packaging     | electron-builder                             | 26.x    | NSIS, dmg, AppImage + deb.                                                                                                                                                                        |
 
 **Deliberately absent:** no ORM, no state-management library in main, no CSS framework
@@ -56,7 +56,7 @@ in the renderer beyond tokens, no cloud SDKs, no telemetry.
 ```
 ┌─────────────────────────────────────────────────────────┐
 │ main                  privileged. owns the database,    │
-│                       filesystem, crypto, PDF, Excel.   │
+│                       filesystem, crypto, rendering.    │
 │                       All business logic lives here.    │
 └───────────────────────────┬─────────────────────────────┘
                             │  typed IPC — group:method
@@ -77,42 +77,59 @@ than adding numbers in the browser.
 
 ## 5. Module layout
 
+Entries marked **`planned`** do not exist on disk. Everything else does.
+
 ```
 src/
+├── branding.ts         product name, ids, paths, URLs. The only place they appear.
 ├── main/
-│   ├── app/            bootstrap, window lifecycle, menu, auto-update
-│   ├── companies/      company registry, create/open/close/backup
+│   ├── index.ts        bootstrap, window lifecycle, quit
+│   ├── app/            planned — the above, split out of index.ts, plus menu
+│   │                   and auto-update
+│   ├── books/          the open-company seam every service below shares
+│   ├── companies/      registry, create/open/recover/close/rename/forget,
+│   │                   passphrase change, AND BACKUP — archive.ts and backup.ts
 │   ├── db/
 │   │   ├── connection.ts      SQLCipher open + key application
 │   │   ├── migrate.ts         numbered migration runner
-│   │   ├── migrations/        0001_… never edited after merge
-│   │   ├── schema.ts          Kysely table typings
+│   │   ├── migrations/        0001_…0022_ — never edited after merge
+│   │   ├── schema.ts          Kysely table typings — 20 tables
 │   │   └── repos/             one module per aggregate
 │   ├── domain/         PURE. No I/O, no db, no electron imports.
 │   │   ├── money/             decimal helpers, rounding policy
+│   │   ├── time/              fiscal years, periods
 │   │   ├── ledger/            posting engine, balance invariants
 │   │   ├── documents/         document → journal entry rules
 │   │   ├── receipts/          money in and out, and what it settles
-│   │   ├── inventory/         valuation strategies
-│   │   └── time/              fiscal years, periods
+│   │   ├── inventory/         valuation strategies, the stock card
+│   │   └── reports/           ageing buckets, statement trees, running balances
 │   ├── regimes/        the internationalisation seam — see §6
 │   │   ├── types.ts           TaxRegime interface
-│   │   └── in-gst/            India GST implementation
+│   │   └── in-gst/            India GST implementation, with returns/ beneath it
 │   ├── security/       argon2, vault, DEK, recovery codes, sealed box
-│   ├── books/          the open-company seam every service below shares
 │   ├── ledger/         ─┐
-│   ├── parties/         │ one service per IPC group. THE ONLY LAYER THAT MAY
-│   ├── documents/       │ ASK A REGIME — see §6.2 and src/main/documents.
-│   ├── company-profile/─┘
+│   ├── parties/         │
+│   ├── items/           │ one service per IPC group. THE ONLY LAYER THAT MAY
+│   ├── units/           │ ASK A REGIME — see §6.2 and src/main/documents.
+│   ├── documents/       │
+│   ├── receipts/        │ `system` and `reports` have no folder here: the first
+│   ├── numbering/       │ is Electron calls behind ipc/electron.ts, the second
+│   ├── company-profile/─┘ reads db/repos/reports.ts and writes nothing.
 │   ├── regime/         the open company's regime, DESCRIBED for the screens.
 │   │                   Singular — regimes/ above is the adapters themselves.
-│   ├── services/       pdf, excel, backup, mailer, importers
+│   ├── services/
+│   │   ├── pdf/               invoice print model + HTML template. The
+│   │   │                      printToPDF call itself is not written yet.
+│   │   ├── importers/         csv/, xml/, zoho/, tally/
+│   │   ├── excel/             planned — return workbooks and register exports
+│   │   └── mailer/            planned
 │   └── ipc/            handlers, registered by channel name
 ├── preload/
 ├── renderer/src/
-│   ├── components/     atoms, shell
-│   ├── screens/        one folder per screen
+│   ├── components/     atoms, shell, command-palette, toast
+│   ├── screens/        welcome/ and workspace/, plus their components/ and lib/
 │   ├── store/
+│   ├── lib/            routing, theme, toasts, the API proxy, formatting
 │   └── styles/         design tokens
 └── shared/             types + the IPC contract. Imported by all three.
 ```
@@ -133,10 +150,34 @@ need all three. What stayed in `domain/receipts` is the control account each one
 what an entry records it as — an `AccountRole` and a `SourceDocumentType`, neither of
 which a screen can use.
 
-**This is the target layout, not an inventory.** As of the end of Phase 0, `main/app/`,
-`db/repos/`, `domain/ledger/`, `domain/documents/`, `domain/inventory/` and `services/`
-do not exist yet — they arrive with Phase 1 and later. What is on disk today is listed in
-[`getting-started.md`](./getting-started.md) §7.
+**This is the target layout, and most of it is now an inventory.** The distinction is
+still worth keeping. Three entries are marked `planned`, and each is telling you
+something; two more things about the tree are worth saying out loud because a reader will
+otherwise infer the opposite.
+
+**`main/app/` does not exist.** Bootstrap and the window are in `src/main/index.ts`, which
+is where they went when there was one of each; there is no application menu and no update
+check at all, though `electron-updater` is a declared dependency waiting for one. The
+folder is where all of it belongs once there is more than one window and a menu with items
+in it. Until then, splitting it would be four files that import each other in a line.
+
+**`services/excel/` and `services/mailer/` do not exist.** ExcelJS is a declared
+dependency with no importer anywhere in `src/` — the return builders in
+`regimes/in-gst/returns/` produce TypeScript values and stop there, because a workbook
+whose column layout has never been through a filing cycle is a file somebody would
+upload. §6.6 is the reason that is not a small omission.
+
+**Backup is in `companies/`, not in `services/`.** Earlier revisions of this section put
+it under `services/`, and that was wrong rather than early: a backup archive holds the
+database _and its vault_, so it is written by the layer that knows where both files are
+and how they are named — `companies/archive.ts` writes the zip and `companies/backup.ts`
+composes the manifest. A `services/backup` would need the registry, the paths and the
+checkpoint, which is `companies/` again with an import in front of it. See §6.3.
+
+**`services/` is built and not yet reachable.** `pdf/` and all four importers are pure
+library code with no IPC group behind them and no caller outside `services/`; the tree
+above says where they are, not what a user can run. `getting-started.md` §7 says the same
+thing from the "where does my change go" end.
 
 **`domain/` is pure.** It imports nothing from `db`, `electron`, or `node:fs`. This is
 what makes the money and ledger logic testable against golden fixtures, and it is the
@@ -259,8 +300,26 @@ user their own passphrase leaves them no fallback at all.
 Every stock movement writes to the stock ledger **and** posts to the general ledger, so
 inventory value on the balance sheet always reconciles with the stock register.
 
+Both halves are now built: migration `0019` is the register and `0022` is the entry each
+movement posts as, with a trigger refusing a movement that moved money and named none.
+`db/repos/stock-reconciliation.test.ts` is the sentence above as a test, asserting the
+figures on both sides as at every date rather than only that the two agree — an
+invariant that holds by construction cannot see a movement that failed to post at all,
+because both sides would then be short by the same amount.
+
+The stock ledger stores **no running balance**. A back-dated receipt re-averages the pool
+and therefore changes what every issue after it cost, so a stored balance cannot be
+frozen the way a due date can; the card is folded from the movements every time it is
+asked for. The consequence is recorded rather than hidden: recording a back-dated
+movement changes the cost of a sale that has already posted, and the answer is a
+valuation adjustment dated at the movement it restates — a second entry, never an edit to
+the first.
+
 v1 ships moving weighted average. FIFO and batch/expiry are a later strategy behind the
-same `ValuationStrategy` interface — needed for pharma and food, nobody else.
+same `ValuationStrategy` interface — needed for pharma and food, nobody else. The
+interface was written against all three so that the two that do not exist yet cannot
+force it to be rewritten: `layers`, `slices` and the `identifiesLayers` / `tracksBatches`
+capability flags are there for them, and moving average is the one-layer case.
 
 ### 6.5 Three platforms from the start
 
@@ -268,11 +327,14 @@ Windows (NSIS), macOS (dmg, x64 + arm64), Linux (AppImage + deb). Both native mo
 need prebuilds for all three in CI.
 
 **Builds are unsigned for now.** Windows shows a SmartScreen warning and macOS
-quarantines the download; the README tells users how to proceed, and every release
-publishes SHA-256 checksums for every artefact so the download is at least verifiable.
-`.github/workflows/release.yml` generates `SHA256SUMS.txt` from the artefacts actually
-attached, via `scripts/checksums.mjs`, and puts the verification commands in the release
-notes. Revisit certificates when the project has traction.
+quarantines the download; the README says exactly which buttons to press on each, and
+every release publishes SHA-256 checksums for every artefact so the download is at least
+verifiable. `.github/workflows/release.yml` generates `SHA256SUMS.txt` from the artefacts
+actually attached, via `scripts/checksums.mjs`, and puts the verification commands in the
+release notes. `CSC_IDENTITY_AUTO_DISCOVERY: false` is set on the build matrix so a
+signing identity sitting in a runner keychain cannot be picked up by accident — unsigned
+is a decision, and an accidentally-signed artefact is one nobody could reproduce locally.
+Revisit certificates when the project has traction.
 
 ### 6.6 Compliance as a versioned pack
 
@@ -280,6 +342,18 @@ GST rates, HSN/SAC lists, return schemas and validation rules ship as a data pac
 its own version, loadable without a new binary. Rules change on government timelines,
 not release timelines — and an offline tool that silently runs stale rules loses the
 trust that is the entire reason someone chose it.
+
+**The same rule applies to a shape nobody has checked, and it is why the return builders
+say so on their own output.** `regimes/in-gst/returns/` turns a period's documents into
+GSTR-1 and GSTR-3B, and the arithmetic is pinned to the paisa against hand-worked
+fixtures. The _shape_ — field names, nesting, which figure belongs in which box — was
+written from the published description of the returns and has never been validated
+against GSTN's own JSON schema or been through a filing cycle. So every artefact carries
+a `SCHEMA_UNVERIFIED` issue and a notice in its own body, and a screen cannot render one
+as a finished return without repeating it. Three things would clear it, in order: the
+published schema checked into the pack with a validator run over the output, one real
+filing cycle with the portal's validation report kept beside it, and the document named
+against each per-rule decision.
 
 ## 7. Money
 
@@ -302,21 +376,29 @@ IPC.
 | Key handling | A DEK wrapped by the passphrase-derived key; the DEK never touches disk unwrapped                                                                                                                                                   |
 | Recovery     | Five single-use recovery codes, generated at setup. No escrow — see §6.3.1                                                                                                                                                          |
 | Passphrase   | Strength shown live; a weak one is warned about explicitly but never blocked. `SECURITY.md` treats allowing weak _without warning_ as a vulnerability — refusing outright is not the remedy, since nobody can reset it for the user |
-| Secrets      | SMTP app passwords go to OS secure storage, never the database                                                                                                                                                                      |
-| Renderer     | `contextIsolation: true`, `nodeIntegration: false`, no remote module                                                                                                                                                                |
-| Audit        | Append-only activity log for business actions                                                                                                                                                                                       |
+| Secrets      | SMTP app passwords will go to OS secure storage, never the database. There is no mailer yet and nothing calls `safeStorage`                                                                                                         |
+| Renderer     | `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, no remote module                                                                                                                                               |
+| Audit        | The ledger is the audit trail: entries and stock movements are append-only, enforced by triggers, and a correction is a reversal. A separate activity log for non-posting actions does not exist                                    |
 
 ## 9. Testing
 
-| Level          | Tool                      | Covers                                                                   |
-| -------------- | ------------------------- | ------------------------------------------------------------------------ |
-| Unit           | Vitest                    | `domain/` and `regimes/` — pure, fast, the bulk of the suite             |
-| Golden fixture | Vitest                    | Money math, tax splits, amount-in-words, posting rules                   |
-| Repository     | Vitest + in-memory SQLite | Migrations and repos                                                     |
-| Integration    | Vitest                    | Document → journal posting, end to end in main                           |
-| E2E            | Playwright                | Critical paths only: unlock, create company, issue invoice, close period |
+| Level          | Tool                      | Covers                                                                                                                     |
+| -------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Unit           | Vitest                    | `domain/` and `regimes/` — pure, fast, the bulk of the suite                                                               |
+| Golden fixture | Vitest                    | Money math, tax splits, amount-in-words, posting rules                                                                     |
+| Repository     | Vitest + in-memory SQLite | Migrations and repos                                                                                                       |
+| Integration    | Vitest                    | Document → journal posting, and stock register against balance sheet                                                       |
+| Screen         | Vitest + happy-dom        | Every screen, through the real API proxy — see `CONVENTIONS.md` §6                                                         |
+| Mutation       | `npm run mutate`          | Recorded campaigns under `scripts/mutations/`, each with a control and a canary                                            |
+| E2E            | Playwright                | **Not yet.** No Playwright dependency and no spec — planned for unlock, create a company, issue an invoice, close a period |
 
-The accounting-equation test is not optional and is never skipped.
+The accounting-equation test is not optional and is never skipped. Neither is
+`db/repos/stock-reconciliation.test.ts`, which is §6.4's promise written as figures.
+
+**A passing test is not evidence until it has failed.** Coverage thresholds are enforced
+on `domain/`, `regimes/` and `security/` only, and they measure whether a line ran rather
+than whether anything would have noticed it changing. `CONVENTIONS.md` §6 is the harness
+and the ten ways it has silently reported a run that never started.
 
 ## 10. Licence
 

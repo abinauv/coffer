@@ -56,11 +56,13 @@ import {
   toQuantityString,
   toRateString,
 } from '@main/domain/money'
-import { documentTotals, type DocumentLine } from '@main/domain/documents'
+import { definitionOf, documentTotals, type DocumentLine } from '@main/domain/documents'
 import type {
   CreateTaxedDocumentInput,
   Document,
   DocumentLineDto,
+  ExportTaxPayment,
+  ItcEligibility,
   TaxedLineInput,
   DocumentLineTaxDto,
   DocumentStatusDto,
@@ -69,6 +71,7 @@ import type {
   ListDocumentsInput,
   UpdateTaxedDocumentInput,
 } from '@shared/dto'
+import { isDocumentKind } from '@shared/documents'
 
 import type { CofferDb } from '../kysely'
 import { RepoError, repoErrorFrom } from './errors'
@@ -167,13 +170,30 @@ export async function listDocuments(
   }))
 }
 
-/** One document, with its lines and everything they add up to. */
+/**
+ * One document, with its lines and everything they add up to.
+ *
+ * THE SELF-JOIN IS THE CREDIT NOTE'S LEGAL REFERENCE. A GST credit note must name the
+ * invoice it corrects by NUMBER AND DATE, and `original_document_id` is an id — so
+ * without this join the print model's corrected-document block could be filled by nobody
+ * and the field on it was decoration. LEFT, because most documents correct nothing, and
+ * because the original may be a draft with no number yet.
+ *
+ * JOINED RATHER THAN STORED. A copy of the original's number in this row would be a
+ * column that can disagree with the row it copied, and the original is editable while it
+ * is a draft — the number and the date are the ORIGINAL's facts and stay its own.
+ */
 export async function getDocument(db: CofferDb, id: string): Promise<Document | null> {
   const row = await db
     .selectFrom('documents')
     .innerJoin('parties', 'parties.id', 'documents.party_id')
+    .leftJoin('documents as original', 'original.id', 'documents.original_document_id')
     .selectAll('documents')
-    .select('parties.name as party_name')
+    .select([
+      'parties.name as party_name',
+      'original.number as original_number',
+      'original.document_date as original_date',
+    ])
     .where('documents.id', '=', id)
     .executeTakeFirst()
   if (row === undefined) return null
@@ -199,6 +219,10 @@ export async function getDocument(db: CofferDb, id: string): Promise<Document | 
     narration: row.narration,
     entryId: row.entry_id,
     originalDocumentId: row.original_document_id,
+    originalDocumentNumber: row.original_number,
+    originalDocumentDate: row.original_date,
+    exportTaxPayment: row.export_tax_payment as ExportTaxPayment | null,
+    isReverseCharge: row.is_reverse_charge === 1,
     lines,
     totals,
     grandTotal: totals.grandTotal,
@@ -225,6 +249,7 @@ export async function createDocument(
 ): Promise<Document> {
   const id = randomUUID()
   const lines = normaliseLines(input.lines ?? [])
+  assertEligibilityIsInward(input.kind, lines)
 
   await assertPartiesActive(db, [input.partyId])
 
@@ -252,6 +277,12 @@ export async function createDocument(
            * again in TypeScript: a second copy of "same party, issued, opposite
            * direction" is a rule that goes stale the day the first one changes. */
           original_document_id: input.originalDocumentId ?? null,
+          export_tax_payment: input.exportTaxPayment ?? null,
+          /* `?? false` here and nowhere else. The column is NOT NULL and the domain's
+           * `TradeDocument.isReverseCharge` is a plain boolean, so the absence a DTO is
+           * allowed to carry is resolved once, at this boundary (CONVENTIONS §1.9's
+           * corollary: one place for one default). */
+          is_reverse_charge: (input.isReverseCharge ?? false) ? 1 : 0,
           created_at: now,
           updated_at: now,
           issued_at: null,
@@ -286,6 +317,9 @@ export async function updateDocument(
     await assertPartiesActive(db, [input.partyId])
   }
   const lines = input.lines === undefined ? null : normaliseLines(input.lines)
+  if (lines !== null) {
+    assertEligibilityIsInward(existing.kind, lines)
+  }
 
   await db
     .transaction()
@@ -309,6 +343,12 @@ export async function updateDocument(
        * 0013's freeze trigger holds after that. */
       if (input.originalDocumentId !== undefined) {
         update['original_document_id'] = input.originalDocumentId
+      }
+      if (input.exportTaxPayment !== undefined) {
+        update['export_tax_payment'] = input.exportTaxPayment
+      }
+      if (input.isReverseCharge !== undefined) {
+        update['is_reverse_charge'] = input.isReverseCharge ? 1 : 0
       }
 
       await trx.updateTable('documents').set(update).where('id', '=', input.id).execute()
@@ -346,12 +386,16 @@ interface DocumentRow {
   id: string
   status: string
   number: string | null
+  /* Read here as well as in `getDocument` because a rule about a LINE can depend on which
+   * side of the trade the document is on — see `assertEligibilityIsInward`. A caller may
+   * not change the kind of a draft, so the stored one is the one the new lines belong to. */
+  kind: string
 }
 
 async function requireDocument(db: CofferDb, id: string): Promise<DocumentRow> {
   const row = await db
     .selectFrom('documents')
-    .select(['id', 'status', 'number'])
+    .select(['id', 'status', 'number', 'kind'])
     .where('id', '=', id)
     .executeTakeFirst()
   if (row === undefined) {
@@ -465,6 +509,49 @@ function normaliseLines(lines: readonly TaxedLineInput[]): NormalisedLine[] {
   })
 }
 
+/**
+ * Refuse a credit eligibility on a line of a document that gives no credit.
+ *
+ * Whether input tax may be reclaimed is a fact about an INWARD supply. A sales invoice
+ * line carrying one is not wrong by a paisa; it is a field filled in about the wrong side
+ * of the trade, and a return that later grew to read eligibility from both sides would
+ * find a value there and believe it.
+ *
+ * IT IS THE REPOSITORY'S AND NOT A TRIGGER'S, and 0021's header argues why: the rule
+ * needs the list of purchase-side kinds, which lives in `@shared/documents` and which a
+ * migration cannot import. 0013 does pay that price in SQL for its correction map,
+ * because breaking that rule corrupts a report; breaking this one reaches no figure and
+ * no box, because a return reads the column only from inward documents.
+ *
+ * AN UNKNOWN KIND IS LET THROUGH HERE. `kind` crosses as a string and 0008's CHECK is
+ * what refuses one this build does not know — refusing it a second time with a message
+ * about credit eligibility would name the wrong problem.
+ */
+function assertEligibilityIsInward(kind: string, lines: readonly NormalisedLine[]): void {
+  if (!isDocumentKind(kind)) return
+  const definition = definitionOf(kind)
+  if (definition.side === 'purchase') return
+
+  /*
+   * COUNTED RATHER THAN FOUND. `.find` would say "the first of several" while reading as
+   * "the one" (CONVENTIONS §6), and here the count is the useful half anyway: a user who
+   * pasted an eligibility onto every line wants to be told it is on every line, not sent
+   * back to line 1 six times.
+   */
+  const offending = lines.filter((line) => line.input.itcEligibility != null)
+  const first = offending[0]
+  if (first === undefined) return
+
+  throw new RepoError(
+    'ITC_ELIGIBILITY_NOT_INWARD',
+    `${String(offending.length)} line(s) of this ${definition.label.toLowerCase()} say ` +
+      'whether input tax may be reclaimed, starting at line ' +
+      `${String(first.lineNumber)}. A sale gives no credit to reclaim — credit ` +
+      'eligibility belongs on a purchase bill or a debit note.',
+    { kind, lineNumber: first.lineNumber, lines: offending.length },
+  )
+}
+
 async function writeLines(
   trx: CofferDb,
   documentId: string,
@@ -489,6 +576,7 @@ async function writeLines(
         classification_code: trimmedOrNull(line.input.classificationCode),
         is_charge: line.input.isCharge === true ? 1 : 0,
         account_id: line.input.accountId ?? null,
+        itc_eligibility: line.input.itcEligibility ?? null,
       })
       .execute()
 
@@ -559,6 +647,7 @@ async function linesFor(
       classificationCode: row.classification_code,
       isCharge: row.is_charge === 1,
       accountId: row.account_id,
+      itcEligibility: row.itc_eligibility as ItcEligibility | null,
       taxes: taxesByLine.get(row.id) ?? [],
     })
     byDocument.set(row.document_id, list)
@@ -615,6 +704,10 @@ export function toDomainLine(line: DocumentLineDto): DocumentLine {
     classificationCode: line.classificationCode,
     isCharge: line.isCharge,
     accountId: line.accountId,
+    /* `?? null` resolves the DTO's optional into the domain's required nullable, once.
+     * The posting rule then has a value it cannot forget to look for, and `null` is a
+     * state it has to answer for rather than a field it may leave off. */
+    itcEligibility: line.itcEligibility ?? null,
     taxes: line.taxes.map((component) => ({
       code: component.code,
       label: component.label,

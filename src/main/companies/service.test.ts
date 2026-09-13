@@ -21,7 +21,10 @@ import { DbError } from '../db/errors'
 import { createQueryBuilder } from '../db/kysely'
 import { listAccounts } from '../db/repos/accounts'
 import { trialBalance } from '../db/repos/balances'
+import { createItem } from '../db/repos/items'
 import { postManualEntry } from '../db/repos/journal'
+import { recordMovement, setItemStockTracking } from '../db/repos/stock'
+import { listUnits } from '../db/repos/units'
 import { type Argon2Params, MIN_MEMORY_COST, SecurityError } from '../security'
 import { readBackup } from './backup'
 import { CompanyError } from './errors'
@@ -293,6 +296,67 @@ describe('create sets up the books', () => {
     })
 
     expect((await trialBalance(db)).balanced).toBe(true)
+  })
+
+  /*
+   * THE TEST THAT WOULD HAVE CAUGHT THE 0012 BUG, WRITTEN FOR THE TWO THAT FOLLOWED IT.
+   *
+   * `stock_ledger.warehouse_id` is NOT NULL and nothing called `seedDefaultWarehouse`, so
+   * no file the application had ever made could record a single stock movement — the
+   * `SERIES_NOT_CONFIGURED` failure exactly, one table over. Nothing in the suite could
+   * see it, because every test in `stock.test.ts` creates its own warehouse first, in the
+   * same way every issuing test creates its own series first.
+   *
+   * SO IT GOES THROUGH THE APPLICATION AND NOT THROUGH A FIXTURE, end to end: a real
+   * company file made by `create`, an item measured in a unit NOBODY IN THIS TEST
+   * CREATED, and a movement that names NO WAREHOUSE. Both of those absences are the
+   * assertion. `unitCode` reaches `requireActiveUnit`, which refuses a code these books
+   * do not have; the missing `warehouseId` reaches `defaultWarehouseId`, which refuses
+   * books with nowhere to keep stock. Either seed missing and this fails by name.
+   */
+  it('leaves a company that can record a stock movement, which needs a warehouse and a unit', async () => {
+    const now = await fixture()
+    await createCompany(now)
+    const db = createQueryBuilder(now.service.requireDatabase())
+
+    const item = await createItem(db, {
+      name: 'Ball bearing 6203',
+      kind: 'goods',
+      unitCode: 'NOS',
+      isPurchased: true,
+    })
+    expect(item.unitCode).toBe('NOS')
+
+    await setItemStockTracking(db, { itemId: item.id, isStockTracked: true })
+
+    const movement = await recordMovement(db, {
+      itemId: item.id,
+      kind: 'receipt',
+      date: new Date().toISOString().slice(0, 10),
+      quantity: '10.000',
+      cost: '2500.00',
+      sourceType: 'stock-adjustment',
+    })
+
+    /* The figures, not merely that it did not throw: a movement that recorded nothing
+     * would satisfy an assertion about the absence of an error. */
+    expect(movement.after).toMatchObject({ quantity: '10.000', value: '2500.00' })
+    expect(movement.closing.unitCost).toBe('250.000000')
+  })
+
+  /*
+   * And the units on their own, because the movement above would still pass if `NOS` were
+   * the only unit seeded. A business's first invoice line has to have something to be
+   * measured in, and there is no screen that would have told them the list was empty.
+   */
+  it('leaves a company with units to measure things in', async () => {
+    const now = await fixture()
+    await createCompany(now)
+    const db = createQueryBuilder(now.service.requireDatabase())
+
+    const units = await listUnits(db)
+    expect(units.map((unit) => unit.code)).toContain('KGS')
+    expect(units.length).toBeGreaterThan(1)
   })
 
   it('records which regime the books were set up under', async () => {

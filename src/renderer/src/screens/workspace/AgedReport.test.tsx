@@ -74,6 +74,7 @@ function report(over: Partial<Report> = {}): Report {
     totals: {
       buckets: ['0.00', '0.00', '118000.00', '0.00'],
       onAccount: '0.00',
+      overdue: '118000.00',
       total: '118000.00',
     },
     controlBalance: '118000.00',
@@ -223,6 +224,7 @@ describe('the columns', () => {
           totals: {
             buckets: ['0.00', '0.00', '0.00', '0.00'],
             onAccount: '5000.00',
+            overdue: '0.00',
             total: '-5000.00',
           },
           controlBalance: '-5000.00',
@@ -345,6 +347,7 @@ describe('a line with no party', () => {
     totals: {
       buckets: ['0.00', '2000.00', '118000.00', '0.00'],
       onAccount: '0.00',
+      overdue: '120000.00',
       total: '120000.00',
     },
     controlBalance: '120000.00',
@@ -528,7 +531,12 @@ describe('a party opened up', () => {
 describe('an empty report', () => {
   const nothing = report({
     parties: [],
-    totals: { buckets: ['0.00', '0.00', '0.00', '0.00'], onAccount: '0.00', total: '0.00' },
+    totals: {
+      buckets: ['0.00', '0.00', '0.00', '0.00'],
+      onAccount: '0.00',
+      overdue: '0.00',
+      total: '0.00',
+    },
     controlBalance: '0.00',
   })
 

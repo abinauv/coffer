@@ -43,6 +43,95 @@ type UnitRow = {
  */
 const DEFAULT_DECIMAL_PLACES = 3
 
+// ---- Seeding ---------------------------------------------------------------
+
+/*
+ * THE STARTER SET, AND WHY A FILE THAT ARGUES AGAINST FIXED LISTS HAS ONE.
+ *
+ * Nothing below restricts anybody. `BUNDLE` and `TIN` are as real as `KGS` and the header
+ * of this file spends a paragraph saying so — the reference project's silent rewrite to
+ * `Nos` is a bug this codebase exists partly not to repeat. A SEED IS NOT A LIST: these
+ * eight rows are ordinary units a business may rename, archive or delete, and the only
+ * thing that makes them special is that they are there on the first day.
+ *
+ * WHAT THE ABSENCE COST. `setUpBooks` seeded a chart, two fiscal years and nine numbering
+ * series and NOT ONE UNIT, so a fresh company had an empty `units_of_measure` table;
+ * `units/service.test.ts` pinned that fact on purpose so whoever fixed it would be told.
+ * It is the shape of 0012's `SERIES_NOT_CONFIGURED` one table over — a file that looks
+ * finished, where the first invoice line has nothing to be measured in.
+ *
+ * THE CODES ARE THE UQC's OWN, WHICH IS THE WHOLE JUDGEMENT HERE. `regime_code` is
+ * India's Unit Quantity Code, the closed set a GSTR-1 is filed against, and the column
+ * exists because a business measuring in `BAGS` must keep saying `BAGS` on its paperwork
+ * while filing `BAG`. A seed does not have to create that gap: picking codes that ARE
+ * UQCs means the invoice and the return say the same word, and a business that wants its
+ * own word creates it and maps it.
+ *
+ * WHERE `regimeCode` IS NULL IT IS AN ADMISSION AND NOT AN OVERSIGHT. Nothing in this
+ * build has ever written that column, and a wrong UQC is worse than an absent one — it
+ * fails at the portal weeks later under a code somebody will believe was checked. `LTR`
+ * is seeded as a unit because businesses sell in litres and left unmapped because the
+ * volume codes I can vouch for are `KLR` and `MLT`; the filing layer maps it when it can
+ * say so from the pack rather than from memory.
+ *
+ * DECIMAL PLACES ARE THE UNIT'S OWN ARGUMENT, not the column's. Nought on the counted
+ * ones — half a box is not a quantity and an invoice line for one cannot be picked — and
+ * three, the storage scale, on the measured ones, where 2.5 metres is the ordinary case.
+ */
+interface StarterUnit {
+  readonly code: string
+  readonly name: string
+  readonly decimalPlaces: number
+  /** India's UQC, where this file can vouch for it. Null is "not yet mapped". */
+  readonly regimeCode: string | null
+}
+
+const STARTER_UNITS: readonly StarterUnit[] = [
+  { code: 'NOS', name: 'Numbers', decimalPlaces: 0, regimeCode: 'NOS' },
+  { code: 'PCS', name: 'Pieces', decimalPlaces: 0, regimeCode: 'PCS' },
+  { code: 'SET', name: 'Sets', decimalPlaces: 0, regimeCode: 'SET' },
+  { code: 'PRS', name: 'Pairs', decimalPlaces: 0, regimeCode: 'PRS' },
+  { code: 'BOX', name: 'Boxes', decimalPlaces: 0, regimeCode: 'BOX' },
+  { code: 'KGS', name: 'Kilograms', decimalPlaces: 3, regimeCode: 'KGS' },
+  { code: 'MTR', name: 'Metres', decimalPlaces: 3, regimeCode: 'MTR' },
+  { code: 'LTR', name: 'Litres', decimalPlaces: 3, regimeCode: null },
+]
+
+/**
+ * Give a new company something to measure in. Called from `setUpBooks`, in its
+ * transaction.
+ *
+ * `seedDefaultSeries`'s shape exactly, including the return — the number created, which
+ * is zero on a file that already has every one of them. Idempotent, and a code somebody
+ * has already taken is skipped rather than overwritten: a business that renamed `NOS` to
+ * something of their own keeps their decision.
+ *
+ * `createUnit` rather than direct inserts, so the normalisation, the default and the
+ * clash check are the ones the rest of the application is held to. A seeding path with
+ * its own inserts is a second way to make a unit, and it is the one that would still be
+ * writing a lower-case code after somebody changed the rule.
+ */
+export async function seedStarterUnits(db: CofferDb): Promise<number> {
+  let created = 0
+  for (const unit of STARTER_UNITS) {
+    const existing = await db
+      .selectFrom('units_of_measure')
+      .select('code')
+      .where('code', '=', unit.code)
+      .executeTakeFirst()
+    if (existing !== undefined) continue
+
+    await createUnit(db, {
+      code: unit.code,
+      name: unit.name,
+      decimalPlaces: unit.decimalPlaces,
+      regimeCode: unit.regimeCode,
+    })
+    created += 1
+  }
+  return created
+}
+
 // ---- Reading ---------------------------------------------------------------
 
 /**

@@ -339,6 +339,72 @@ describe('ageItems', () => {
     ])
     expect(ageing.totals.onAccount.toFixed(2)).toBe('90.00')
     expect(ageing.totals.total.toFixed(2)).toBe('1150.00')
+
+    /* 200 + 40. NOT 1150 less the first column, which would be 150 — the credit has been
+     * taken off `total` and a customer's own money is not an early payment of a late
+     * invoice. And not the sum of every column but the first either, which would be the
+     * same number here by coincidence and a different one the moment a column table put
+     * something not-yet-due anywhere but position nought. */
+    expect(ageing.totals.overdue.toFixed(2)).toBe('240.00')
+  })
+
+  /*
+   * THE DAY IT FALLS DUE IS NOT LATE, and this is the assertion that separates `overdue`
+   * from "everything with a date behind it". An invoice on 30-day terms is not in default
+   * on the thirtieth day, and `>= 0` here would put every invoice due today into the
+   * figure a dashboard leads with.
+   *
+   * Three items, one day apart, and only the oldest is late.
+   */
+  it('counts what fell due before the date, and not what falls due on it', () => {
+    const ageing = ageItems(AGE_BUCKETS, '2026-06-30', [
+      /* Due tomorrow: not yet due at all. */
+      item({ partyId: 'a', amount: D('500.00'), dueDate: '2026-07-01' }),
+      /* Due today: nought days over, and not late. */
+      item({ partyId: 'a', amount: D('300.00'), dueDate: '2026-06-30' }),
+      /* Due yesterday: one day over, and the only figure that counts. */
+      item({ partyId: 'a', amount: D('70.00'), dueDate: '2026-06-29' }),
+    ])
+
+    expect(ageing.totals.overdue.toFixed(2)).toBe('70.00')
+    expect(ageing.parties[0]?.overdue.toFixed(2)).toBe('70.00')
+    expect(ageing.totals.total.toFixed(2)).toBe('870.00')
+  })
+
+  /*
+   * A CREDIT IS NEVER OVERDUE however old it is, which is the header's rule read through
+   * this figure. A credit note raised three hundred days ago has an enormous
+   * `daysOverdue` and nobody owes it — a dashboard leading with a figure that included it
+   * would report a customer's own money as a debt in default.
+   */
+  it('leaves what stands to a party credit out of it, however old', () => {
+    const ageing = ageItems(AGE_BUCKETS, '2026-06-30', [
+      item({ partyId: 'a', amount: D('-900.00'), dueDate: '2025-09-03' }),
+      item({ partyId: 'a', amount: D('100.00'), dueDate: '2026-05-01' }),
+    ])
+
+    expect(ageing.totals.onAccount.toFixed(2)).toBe('900.00')
+    expect(ageing.totals.overdue.toFixed(2)).toBe('100.00')
+    expect(ageing.totals.total.toFixed(2)).toBe('-800.00')
+  })
+
+  /*
+   * SUMMED FROM THE PARTY ROWS, like every other figure at the foot. Two parties, so a
+   * foot folded from one of them — or from the items a second time — is visible.
+   */
+  it('adds the parties overdue figures up rather than folding the items again', () => {
+    const ageing = ageItems(AGE_BUCKETS, '2026-06-30', [
+      item({ partyId: 'a', amount: D('60.00'), dueDate: '2026-06-01' }),
+      item({ partyId: 'b', amount: D('25.00'), dueDate: '2026-01-01' }),
+      item({ partyId: 'b', amount: D('15.00'), dueDate: '2026-08-01' }),
+    ])
+
+    const overdueBy = new Map(
+      ageing.parties.map((party) => [party.partyId, party.overdue.toFixed(2)]),
+    )
+    expect(overdueBy.get('a')).toBe('60.00')
+    expect(overdueBy.get('b')).toBe('25.00')
+    expect(ageing.totals.overdue.toFixed(2)).toBe('85.00')
   })
 
   /* Every party row's columns are the table's own length, so a screen can draw a header

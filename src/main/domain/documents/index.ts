@@ -65,3 +65,5 @@ export { documentTotals, lineTax, lineTotal, type DocumentTotals, type Summable 
 export { dueDateFor } from './terms'
 
 export { controlRoleFor, postingRuleFor, salesInvoiceRule, type PostableDocument } from './posting'
+
+export { MOVEMENT_KINDS, movementKindFor, movesStock } from './movement'

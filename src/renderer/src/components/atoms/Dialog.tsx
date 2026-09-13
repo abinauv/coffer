@@ -76,6 +76,33 @@ export function Dialog({
       }}
     >
       <div className="dialog__panel">
+        {/*
+         * A CHROMELESS DIALOG STILL HAS TO BE NAMED. `aria-labelledby` is set from the
+         * title above, and until 0016 the element it pointed at was rendered only inside
+         * the header — so `<Dialog title="…" isChrome={false}>` had an accessible name of
+         * `""` and a screen reader announced an unnamed dialog. A dangling reference is
+         * worse than none, which is the failure `CommandPalette` argues about for
+         * `aria-controls`; the palette is chromeless AND untitled, so nobody has hit it.
+         *
+         * Hidden rather than swapped for `aria-label`: `Input`, `Select` and `Sidebar`
+         * all keep the real element and hide it, and one mechanism across both chrome
+         * states is one that cannot drift. The description gets the same treatment for
+         * the same reason — `aria-describedby` dangles identically.
+         */}
+        {!isChrome && (
+          <>
+            {title !== undefined && (
+              <h2 id={titleId} className="visually-hidden">
+                {title}
+              </h2>
+            )}
+            {description !== undefined && (
+              <p id={descriptionId} className="visually-hidden">
+                {description}
+              </p>
+            )}
+          </>
+        )}
         {isChrome && (
           <header className="dialog__header">
             <div className="dialog__heading">

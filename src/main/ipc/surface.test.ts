@@ -17,8 +17,11 @@ describe('API_SURFACE', () => {
       'companies',
       'ledger',
       'parties',
+      'items',
+      'units',
       'documents',
       'receipts',
+      'numbering',
       'companyProfile',
       'regime',
       'reports',
@@ -79,6 +82,49 @@ describe('API_SURFACE', () => {
 
   it('lists the parties methods', () => {
     expect(apiMethods('parties')).toEqual(['list', 'get', 'create', 'update', 'archive', 'delete'])
+  })
+
+  it('lists the items methods', () => {
+    expect(apiMethods('items')).toEqual(['list', 'get', 'create', 'update', 'archive', 'delete'])
+  })
+
+  /* The same six as items, and they are not the same six: `get`, `archive` and `delete`
+   * take a unit's CODE where an item's take an id. A group of its own is what makes that
+   * sayable — see the `units` group in src/shared/ipc.ts. */
+  it('lists the units methods', () => {
+    expect(apiMethods('units')).toEqual(['list', 'get', 'create', 'update', 'archive', 'delete'])
+  })
+
+  it('lists the numbering methods', () => {
+    expect(apiMethods('numbering')).toEqual([
+      'list',
+      'get',
+      'create',
+      'update',
+      'archive',
+      'delete',
+      'preview',
+      'seedDefaults',
+    ])
+  })
+
+  /*
+   * A number is spent by issuing a document or recording a receipt, inside the same
+   * transaction that posts the entry, and it is never given back — a released number is a
+   * gap in a series that rule 46(b) requires to be consecutive. A channel that handed one
+   * out would let a settings screen put a hole in the books by being opened.
+   *
+   * Asserted beside the presence of `preview`, which is the read-only half that a screen
+   * IS given: the absence of a name nothing renders is true of every group in the product
+   * (CONVENTIONS §6), so the pair is what makes this test say something.
+   */
+  it('offers no way to spend a number from a settings screen', () => {
+    const methods: readonly string[] = apiMethods('numbering')
+
+    expect(methods).not.toContain('allocate')
+    expect(methods).not.toContain('allocateNumber')
+    expect(methods).not.toContain('nextNumber')
+    expect(methods).toContain('preview')
   })
 
   /*

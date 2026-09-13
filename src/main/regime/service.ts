@@ -70,6 +70,8 @@ export function describeRegime(regime: TaxRegime): RegimeDescription {
       levy: component.levy,
     })),
 
+    registrationLabel: regime.registrationLabel,
+
     classification: {
       code: regime.classification.code,
       label: regime.classification.label,

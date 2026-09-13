@@ -29,7 +29,7 @@ const AGED: AgedReport = {
   accountName: 'Accounts Receivable',
   buckets: [{ label: 'Not yet due', fromDays: null, toDays: 0 }],
   parties: [],
-  totals: { buckets: ['0.00'], onAccount: '0.00', total: '0.00' },
+  totals: { buckets: ['0.00'], onAccount: '0.00', overdue: '0.00', total: '0.00' },
   controlBalance: '0.00',
   ties: true,
 }

@@ -1,0 +1,147 @@
+{
+  "why": "Real-shaped statement exports, held as JSON strings rather than TypeScript template literals ON PURPOSE. A CRLF written literally inside a template literal is at the mercy of the editor, of prettier and of git's autocrlf, so the fixture that exists to prove CRLF handling would be the first thing rewritten to LF -- silently, and it would still pass. JSON's \r\n escapes survive every one of them. Every date here is in 2027 or 2028, so no value can coincide with the real clock: a fixture whose value happens to match today tests nothing about where the value came from.",
+  "statements": {
+    "hdfcLike": {
+      "why": "A retail bank statement with separate Withdrawal and Deposit columns, CRLF line endings, a trailing newline, Indian digit grouping quoted because it contains commas, and 0.00 written in the unused side of the pair. The rows are in the order 4th, 2nd, 13th of November -- NOT date order -- so a mapper that sorted, grouped or de-duplicated on the way through would disagree with the expected list.",
+      "dateFormat": "DD/MM/YYYY",
+      "csv": "Date,Narration,Chq./Ref.No.,Value Dt,Withdrawal Amt.,Deposit Amt.,Closing Balance\r\n04/11/2027,UPI-RAVI KUMAR-9876543210,UPI/331500123456,04/11/2027,0.00,\"1,23,456.78\",\"4,56,789.12\"\r\n02/11/2027,NEFT DR-HDFC0000123-ACME SUPPLIES,N331500987654,02/11/2027,\"25,000.00\",0.00,\"3,33,332.34\"\r\n13/11/2027,ATM WDL SELF,000000,13/11/2027,500.00,0.00,\"3,32,832.34\"\r\n",
+      "expected": [
+        {
+          "line": 2,
+          "rowNumber": 1,
+          "date": "2027-11-04",
+          "narration": "UPI-RAVI KUMAR-9876543210",
+          "reference": "UPI/331500123456",
+          "amount": "123456.78",
+          "side": "credit"
+        },
+        {
+          "line": 3,
+          "rowNumber": 2,
+          "date": "2027-11-02",
+          "narration": "NEFT DR-HDFC0000123-ACME SUPPLIES",
+          "reference": "N331500987654",
+          "amount": "-25000.00",
+          "side": "debit"
+        },
+        {
+          "line": 4,
+          "rowNumber": 3,
+          "date": "2027-11-13",
+          "narration": "ATM WDL SELF",
+          "reference": "000000",
+          "amount": "-500.00",
+          "side": "debit"
+        }
+      ]
+    },
+    "nasty": {
+      "why": "Everything at once, which is what a real awkward file looks like: a UTF-8 byte order mark on the first heading, headings with stray leading and trailing spaces and inconsistent case, a three-line address inside one quoted narration, a doubled quote, commas inside quoted values, Indian grouping, a parenthesised negative, a rupee symbol, an empty optional reference, LF endings and NO trailing newline. The dates run 23rd, 7th, 19th of December -- again not in order.",
+      "dateFormat": "DD/MM/YYYY",
+      "csv": "﻿ Txn Date ,  NARRATION  ,Ref No,AMOUNT (INR)\n23/12/2027,\"ACME SUPPLIES PVT LTD\nUNIT 4, PHASE II\nBENGALURU\",INV/2027/0091,\"(1,23,456.78)\"\n07/12/2027,\"RAVI \"\"BUNTY\"\" KUMAR, PROP.\",UPI/336100777,\"₹ 2,500.00\"\n19/12/2027,\"REFUND, ORDER 1123\",,\"1,00,000.00\"",
+      "expected": [
+        {
+          "line": 2,
+          "rowNumber": 1,
+          "date": "2027-12-23",
+          "narration": "ACME SUPPLIES PVT LTD\nUNIT 4, PHASE II\nBENGALURU",
+          "reference": "INV/2027/0091",
+          "amount": "-123456.78"
+        },
+        {
+          "line": 5,
+          "rowNumber": 2,
+          "date": "2027-12-07",
+          "narration": "RAVI \"BUNTY\" KUMAR, PROP.",
+          "reference": "UPI/336100777",
+          "amount": "2500.00"
+        },
+        {
+          "line": 6,
+          "rowNumber": 3,
+          "date": "2027-12-19",
+          "narration": "REFUND, ORDER 1123",
+          "reference": null,
+          "amount": "100000.00"
+        }
+      ]
+    },
+    "ragged": {
+      "why": "A file that is broken in five different ways at once, to prove the errors are COLLECTED and not thrown one at a time: a trailing comma in the heading row leaves an unnamed column, one row is two fields short, one is one field long, there is a blank line in the middle, one date is the 32nd of March and one amount has two decimal points. Two rows are perfectly good and must still come through.",
+      "dateFormat": "DD/MM/YYYY",
+      "csv": "Date,Description,Amount,\n01/03/2028,Opening,1000.00,\n02/03/2028,Short row\n03/03/2028,Too long,25.00,,extra\n\n05/03/2028,Regular,50.00,\n32/03/2028,Impossible day,75.00,\n06/03/2028,Bad amount,12.3.4,\n",
+      "expected": [
+        {
+          "line": 2,
+          "rowNumber": 1,
+          "date": "2028-03-01",
+          "narration": "Opening",
+          "amount": "1000.00"
+        },
+        {
+          "line": 6,
+          "rowNumber": 4,
+          "date": "2028-03-05",
+          "narration": "Regular",
+          "amount": "50.00"
+        }
+      ],
+      "expectedIssues": [
+        {
+          "code": "UNNAMED_COLUMN",
+          "severity": "warning",
+          "columnNumber": 4
+        },
+        {
+          "code": "RAGGED_ROW",
+          "severity": "error",
+          "line": 3,
+          "rowNumber": 2
+        },
+        {
+          "code": "RAGGED_ROW",
+          "severity": "error",
+          "line": 4,
+          "rowNumber": 3
+        },
+        {
+          "code": "INVALID_DATE",
+          "severity": "error",
+          "line": 7,
+          "rowNumber": 5,
+          "columnNumber": 1
+        },
+        {
+          "code": "INVALID_AMOUNT",
+          "severity": "error",
+          "line": 8,
+          "rowNumber": 6,
+          "columnNumber": 3
+        }
+      ]
+    },
+    "ambiguousDates": {
+      "why": "Every day of the month is twelve or less, so the column is self-consistent as DD/MM AND as MM/DD and the two readings give different months. This is the file the survey must refuse to resolve.",
+      "csv": "Date,Amount\n05/04/2028,100.00\n06/07/2028,200.00\n",
+      "expected": []
+    },
+    "europeanAmounts": {
+      "why": "An export that uses the comma as its decimal point. Read as grouping it would be a thousand times too large, and would look entirely plausible, so it has to be refused by name rather than coerced.",
+      "dateFormat": "DD/MM/YYYY",
+      "csv": "Date,Amount\n04/11/2027,\"1.234,56\"\n",
+      "expected": []
+    },
+    "headerOnly": {
+      "why": "A statement for a period with no transactions. Header, no rows, no errors.",
+      "dateFormat": "DD/MM/YYYY",
+      "csv": "Date,Narration,Amount\n",
+      "expected": []
+    },
+    "empty": {
+      "why": "A zero-byte download. No header, no rows, and nothing thrown.",
+      "dateFormat": "DD/MM/YYYY",
+      "csv": "",
+      "expected": []
+    }
+  }
+}

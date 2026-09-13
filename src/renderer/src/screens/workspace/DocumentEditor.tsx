@@ -42,13 +42,38 @@
  * to refund rather than a negative; and the button reaches the refund editor, which
  * exists.
  *
- * WHAT IT STILL DOES NOT SHOW is money offset against another document rather than paid.
- * That is 0015-2's table and this panel grows a second list when it lands — the figures
- * above it are already right, because `allocated` is a sum over rows and an offset is one
- * more row.
+ * AND WHAT WAS OFFSET RATHER THAN PAID IS SHOWN TOO, AS OF 0016. A credit note set
+ * against an invoice moves no money and settles it just the same, so until this landed an
+ * invoice reduced by one showed a smaller outstanding with nothing on the page to explain
+ * it. `allocated` and `offset` arrive as two figures and are printed as two rows above two
+ * lists: "who paid this" and "what did we credit against it" are different questions, and
+ * a screen that added them together would answer neither.
+ *
+ * A LINE NAMES THE ITEM IT IS, AS OF 0017, AND THAT IS NOT ONLY A NEW COLUMN. `itemId`,
+ * `unitCode`, `isCharge` and `accountId` were on the contract from the start, validated by
+ * the handler, stored by the repository and honoured by the posting rule — and this screen
+ * held none of them. So every line was free text, the item master had no consumer at all,
+ * and OPENING A SAVED DOCUMENT AND PRESSING SAVE WROTE BACK LINES WITH ALL FOUR STRIPPED
+ * OFF. Nothing on screen changed when it happened. That was the bug; the pickers are what
+ * make the fields reachable now that they survive a round trip.
+ *
+ * AND A LINE IS A COPY OF AN ITEM, NEVER A REFERENCE TO ONE. Picking one fills the
+ * description, the unit, the rate, the classification and — on a sale — the price, and the
+ * line owns those figures from that instant: `dto.ts` is explicit that a line stores its
+ * own, so that repricing an item next year cannot rewrite an invoice already issued. Which
+ * settles the question the picker raises: after somebody edits the description, is it still
+ * that item? It is. The id is what the line IS and the text is what was PRINTED, and only
+ * clearing the picker says it was never that item.
+ *
+ * THE PANEL THAT EDITS THE MATCH LIVES ON THE REFUND DOCUMENT, AND ONLY THERE. A credit
+ * note is a pool of money drawn down by refunds and offsets, which is exactly a receipt's
+ * shape — so it gets the receipt editor's allocation table, and the invoice at the other
+ * end shows the result read-only. Letting either end own the set would mean two screens
+ * replacing overlapping sets, and the last one saved would silently drop the other's rows
+ * (`SetOffsetsInput`). `Offsets` below is the picker; `Settlement` draws the list.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { JSX } from 'react'
 import { Badge, Button, Input, Select } from '@renderer/components/atoms'
 import { callApi } from '@renderer/lib/api'
@@ -56,17 +81,29 @@ import { makeRoute } from '@renderer/lib/routing'
 import { registerScreens, type ScreenContext, type ScreenDefinition } from '@renderer/lib/screens'
 import { useNumberFormat, useRegime } from '@renderer/store/regime'
 import { useToasts } from '@renderer/store/toasts'
-import { correctsKind, definitionOf, DOCUMENT_KINDS, type DocumentKind } from '@shared/documents'
+import {
+  correctsKind,
+  definitionOf,
+  DOCUMENT_KINDS,
+  opposite,
+  postingKindOn,
+  type DocumentKind,
+} from '@shared/documents'
 import { receiptDefinitionOf, settledBy, type ReceiptKind } from '@shared/receipts'
 import type {
+  Account,
   AppError,
   Document,
   DocumentLineInput,
   DocumentSettlement,
   DocumentSummary,
+  ItemSummary,
+  OpenDocument,
   PartySummary,
   RegimeDescription,
+  UnitOfMeasure,
 } from '@shared/dto'
+import { CheckboxField } from '../components/CheckboxField'
 import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
 import { ScreenFrame } from '../components/ScreenFrame'
@@ -87,14 +124,24 @@ import {
   canDelete,
   canEdit,
   canIssue,
+  clearItem,
   isBlankDraft,
+  itemSideFor,
   lineDraftOf,
+  lineFromItem,
   linesFrom,
+  postableAccounts,
   readyLines,
   stateSentence,
   toLineInput,
   type LineDraft,
 } from '../lib/document-editor'
+import { canOffset, isOffsetEditable, offsetsLabel, toOffsetInputs } from '../lib/offset-view'
+/* The two halves of a receipt's allocation panel that are not about receipts. An offset
+ * row is an allocation row with a document where the voucher was, so the shapes are the
+ * same shapes — `DocumentOffsetDto` satisfies what `draftAllocations` reads, and
+ * `settleInFull` copies the figure main sent rather than working one out. */
+import { draftAllocations, settleInFull } from '../lib/receipt-view'
 
 export function DocumentEditor({
   kind,
@@ -123,9 +170,41 @@ export function DocumentEditor({
    * covering for it.
    */
   const settlesWith = settledBy(kind)
+  /*
+   * THE KIND AT THE OTHER END OF AN OFFSET, which is never this one.
+   *
+   * A charge document's offsets are refund documents and a refund document's are charges,
+   * so one lookup answers for both ends and there is no branch to type backwards — see
+   * `opposite`, which exists because this is its second spelling. It names the rows in the
+   * settlement panel: the credit notes listed under an invoice, and the invoices a credit
+   * note's own figure was taken by.
+   *
+   * `offsetsLabel` CANNOT ANSWER THIS AND IS NOT MEANT TO. It reads a REFUND kind and
+   * names what that kind settles, which is the picker's heading on a credit note; asked
+   * about an invoice it refuses, because an invoice settles nothing.
+   */
+  const offsetEndKind = postingKindOn(definition.side, opposite(definition.direction))
 
   const [document, setDocument] = useState<Document | null>(null)
   const [parties, setParties] = useState<PartySummary[]>([])
+  /*
+   * The three master lists a LINE is picked from, read once beside the parties.
+   *
+   * READ EVEN WHEN THE DOCUMENT CANNOT BE EDITED, and that is the point of loading them
+   * here rather than behind `isEditable`. An issued invoice still has to show WHICH item
+   * each line was, and a picker whose options never arrived would draw a stored item as a
+   * blank field — the `<select>` failure this project keeps writing down: the option is
+   * missing, so the control falls back to the first one and reads as though a choice had
+   * been made.
+   *
+   * EMPTY IS A NORMAL ANSWER FOR ALL THREE, not a failure to load. `setUpBooks` seeds no
+   * units at all, so a company opened for the first time has none, and a business that has
+   * not built an item master yet enters free text — which is what every line was until
+   * 0017 and stays entirely legal.
+   */
+  const [items, setItems] = useState<ItemSummary[]>([])
+  const [units, setUnits] = useState<UnitOfMeasure[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
   const [error, setError] = useState<AppError | null>(null)
   const [isBusy, setBusy] = useState(false)
   const [isReading, setReading] = useState(documentId !== null)
@@ -154,9 +233,32 @@ export function DocumentEditor({
    * that has posted — a draft has made no movement, so there is nothing to be against. */
   const [settlement, setSettlement] = useState<DocumentSettlement | null>(null)
 
+  /* The charges this refund document may be set against, and the amounts the panel holds
+   * for them. Keyed by document for the reason the receipt editor's are: 0016's UNIQUE
+   * means one row per charge, so there is nothing to add and nothing to remove.
+   *
+   * NULL UNTIL ASKED, and that is not the same as an empty list. "They have nothing
+   * outstanding" is a sentence this panel says out loud; saying it while the answer is
+   * still in flight would be telling the user something nobody has looked up yet. */
+  const [openCharges, setOpenCharges] = useState<OpenDocument[] | null>(null)
+  const [offsetDrafts, setOffsetDrafts] = useState<Record<string, string>>({})
+
   const load = useCallback(async () => {
-    const people = await callApi((api) => api.parties.list({ role: partyRoleFor(definition.side) }))
+    /* The item list is asked for THIS SIDE — what is sold on a sales document, what is
+     * bought on a purchase one. An item is very often both, so this narrows the picker
+     * rather than saying what the item is (`itemSideFor`). Archived items and archived
+     * units are left out by both defaults, which is what a picker wants. */
+    const [people, catalogue, measures, chart] = await Promise.all([
+      callApi((api) => api.parties.list({ role: partyRoleFor(definition.side) })),
+      callApi((api) => api.items.list({ side: itemSideFor(definition.side) })),
+      callApi((api) => api.units.list()),
+      callApi((api) => api.ledger.listAccounts()),
+    ])
     if (people.ok) setParties(people.data)
+    if (catalogue.ok) setItems(catalogue.data)
+    if (measures.ok) setUnits(measures.data)
+    /* Never a group, never an archived one — see `postableAccounts`. */
+    if (chart.ok) setAccounts([...postableAccounts(chart.data)])
 
     if (documentId === null) {
       setReading(false)
@@ -274,19 +376,100 @@ export function DocumentEditor({
     }
   }, [settledId, documentStatus])
 
+  /*
+   * WHAT THIS REFUND DOCUMENT MAY BE SET AGAINST.
+   *
+   * Asked for only where the save would be accepted — `isOffsetEditable` — because a
+   * picker on a draft or a cancelled note is a list of choices main refuses one by one,
+   * and `openForOffset` itself refuses a charge document by name: a sales invoice settles
+   * nothing, it is what gets settled.
+   *
+   * RE-READ WHENEVER THE SETTLEMENT MOVES, and that is the half worth reading twice.
+   * `documents.offset` answers with the new settlement, so adopting it is enough to make
+   * the FIGURES right — and every OUTSTANDING in this picker is a figure about a different
+   * document, which settling one of them has just changed. A panel that adopted the answer
+   * and left the rows alone would show what each invoice had left before the save.
+   *
+   * The drafts are seeded from `settlement.offsets` rather than kept, for the same reason
+   * every other panel on this screen takes main's answer as the truth.
+   */
+  const offsetId = document !== null && isOffsetEditable(kind, document.status) ? document.id : null
+
+  useEffect(() => {
+    let current = true
+    if (offsetId === null || settlement === null) {
+      setOpenCharges(null)
+      setOffsetDrafts({})
+      return
+    }
+
+    void callApi((api) => api.documents.openForOffset(offsetId)).then((result) => {
+      if (!current) return
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      setOpenCharges(result.data)
+      setOffsetDrafts(draftAllocations(result.data, settlement.offsets))
+    })
+
+    return () => {
+      current = false
+    }
+  }, [offsetId, settlement])
+
   const touch = useCallback((change: () => void) => {
     setDirty(true)
     change()
   }, [])
 
+  /*
+   * GENERIC IN THE FIELD, because one field on a row is not a string. `isCharge` is a
+   * checkbox and a `value: string` signature would have it arriving as `'true'` — a
+   * string the repository would store as truthy for ever, including the string `'false'`.
+   * Written this way the compiler pairs each field with its own type at every call site.
+   */
   const setLine = useCallback(
-    (key: string, field: keyof LineDraft, value: string) =>
+    <K extends keyof LineDraft>(key: string, field: K, value: LineDraft[K]) =>
       touch(() =>
         setLines((current) =>
           current.map((line) => (line.key === key ? { ...line, [field]: value } : line)),
         ),
       ),
     [touch],
+  )
+
+  /* Looked up by id rather than searched. `.find` over a list is how "the one that
+   * matches" quietly becomes "whichever is listed first" (CONVENTIONS §1.9), and a picker
+   * is exactly where that would go unnoticed — the wrong item would still have a name. */
+  const itemsById = useMemo(() => new Map(items.map((item) => [item.id, item] as const)), [items])
+
+  /*
+   * Choosing the item a line is, and filling the line in from it.
+   *
+   * SEEDED, NOT REFERENCED. `lineFromItem` copies the item's defaults into the boxes and
+   * the line owns them from that moment: nothing re-reads the item on save, so repricing
+   * it next year cannot rewrite what this invoice said (`dto.ts`, Units and items).
+   *
+   * WHICH MEANS EDITING THE TEXT DOES NOT UNPICK THE ITEM. The id is what the line IS and
+   * the description is what was PRINTED, and a business that types "Ball bearing 6203 —
+   * as agreed on the phone" over an item's name has changed the printing, not the goods.
+   * Clearing the picker is the one thing that says it was never that item, and it leaves
+   * every box exactly as it stands (`clearItem`).
+   */
+  const chooseItem = useCallback(
+    (key: string, itemId: string) => {
+      const item = itemsById.get(itemId)
+      touch(() =>
+        setLines((current) =>
+          current.map((line) => {
+            if (line.key !== key) return line
+            return item === undefined ? clearItem(line) : lineFromItem(line, item, definition.side)
+          }),
+        ),
+      )
+    },
+    [definition.side, itemsById, touch],
   )
 
   /*
@@ -437,6 +620,51 @@ export function DocumentEditor({
     navigate(makeRoute('workspace', registerScreenId(kind)))
   }, [document, kind, navigate, show])
 
+  const setOffsetAmount = useCallback(
+    (chargeDocumentId: string, value: string) =>
+      setOffsetDrafts((current) => ({ ...current, [chargeDocumentId]: value })),
+    [],
+  )
+
+  /*
+   * Save what this refund document settles: THE WHOLE SET, never a patch.
+   *
+   * An empty list is a legitimate save rather than a no-op — it takes every offset off and
+   * puts the credit back on account, which is the only way back from a match somebody
+   * regrets. So the button is not gated on a row being filled in.
+   *
+   * IT DOES NOT MARK THE DOCUMENT DIRTY EITHER. Nothing here edits the document: an offset
+   * moves no money, writes no entry and changes no total, so a totals panel that called
+   * itself stale because somebody matched an invoice would be saying something untrue.
+   * What the save does move is the settlement, which it adopts.
+   */
+  const saveOffsets = useCallback(async () => {
+    if (document === null) return
+    setBusy(true)
+    setError(null)
+
+    const result = await callApi((api) =>
+      api.documents.offset({
+        refundDocumentId: document.id,
+        offsets: toOffsetInputs(offsetDrafts),
+      }),
+    )
+    setBusy(false)
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+
+    setSettlement(result.data)
+    show({
+      tone: 'success',
+      title: 'Saved',
+      body:
+        `Nothing moved in the ledger — this only says which ` +
+        `${offsetsLabel(kind).toLowerCase()} this ${label} settles.`,
+    })
+  }, [document, kind, label, offsetDrafts, show])
+
   if (isReading) {
     return (
       <ScreenFrame isInset width="list" title={definition.label}>
@@ -573,8 +801,12 @@ export function DocumentEditor({
         <Lines
           lines={lines}
           rates={regime?.taxRates ?? []}
+          items={items}
+          units={units}
+          accounts={accounts}
           isEditable={isEditable}
           onChange={setLine}
+          onChooseItem={chooseItem}
           onAdd={() => touch(() => setLines((current) => [...current, blankLine()]))}
           onRemove={(key) =>
             touch(() =>
@@ -588,11 +820,26 @@ export function DocumentEditor({
 
         {document !== null && <Totals document={document} isStale={isDirty} format={format} />}
 
+        {offsetId !== null && openCharges !== null && (
+          <Offsets
+            charges={openCharges}
+            kind={kind}
+            label={label}
+            values={offsetDrafts}
+            format={format}
+            isBusy={isBusy}
+            onChange={setOffsetAmount}
+            onSave={() => void saveOffsets()}
+          />
+        )}
+
         {settlement !== null && settlesWith !== null && (
           <Settlement
             settlement={settlement}
             label={label}
             settlesWith={settlesWith}
+            offsetEndKind={offsetEndKind}
+            isOffsetEdited={canOffset(kind)}
             format={format}
             onRecordMoney={() =>
               navigate(
@@ -668,15 +915,150 @@ function Corrects({
   )
 }
 
+// ---- What a credit or debit note settles ------------------------------------
+
+/**
+ * The charges this refund document may be set against, and how much of each it settles.
+ *
+ * A RECEIPT'S ALLOCATION TABLE, BECAUSE A CREDIT NOTE IS A RECEIPT'S SHAPE. It is a pool
+ * of money drawn down by refunds and by offsets, so what a user does with it is what they
+ * do with a receipt: say which of the party's charges it pays, and by how much. The rows
+ * are the documents themselves — 0016's UNIQUE allows one offset per pair, so there is one
+ * line per charge and no way to add or remove one.
+ *
+ * NOTHING HERE ADDS UP MONEY. "Settle in full" copies `outstanding`, which main computed
+ * against the ledger; the renderer does not sum the boxes to show what is left of the note
+ * (CONVENTIONS §1.7) — the panel below shows what came back from the last save instead.
+ *
+ * THE FIRST COLUMN IS READ OFF THE KIND TABLE, through `offsetsLabel`. A debit note
+ * settles purchase bills, and calling one an invoice here would be the first place a user
+ * learned the wrong word for their own paperwork — which is the mistake `settlesLabel` was
+ * written to prevent on the voucher screens and this is the same mistake.
+ */
+function Offsets({
+  charges,
+  kind,
+  label,
+  values,
+  format,
+  isBusy,
+  onChange,
+  onSave,
+}: {
+  charges: readonly OpenDocument[]
+  /** This document's own kind, which is a refund kind: the panel is drawn behind
+   * `isOffsetEditable`, and `offsetsLabel` refuses anything else by name. */
+  kind: DocumentKind
+  label: string
+  values: Readonly<Record<string, string>>
+  format: Parameters<typeof formatAmount>[1]
+  isBusy: boolean
+  onChange: (chargeDocumentId: string, value: string) => void
+  onSave: () => void
+}): JSX.Element {
+  const charged = offsetsLabel(kind)
+
+  if (charges.length === 0) {
+    return (
+      <Notice tone="info" title={`There is nothing of theirs to set this ${label} against`}>
+        <p>
+          Their open {charged.toLowerCase()} appear here, oldest first. Until one exists, the{' '}
+          {label} stays on account — which is an ordinary thing for a business to hold, not an
+          unfinished job.
+        </p>
+      </Notice>
+    )
+  }
+
+  return (
+    <div className="stack stack--tight">
+      <table className="ledger-table ledger-table--figures">
+        <thead>
+          <tr>
+            <th scope="col">{charged}</th>
+            <th scope="col">Date</th>
+            <th scope="col" className="ledger-table__figure">
+              Total
+            </th>
+            <th scope="col" className="ledger-table__figure">
+              Outstanding
+            </th>
+            <th scope="col" className="ledger-table__figure">
+              Set against it
+            </th>
+            <th scope="col">
+              <span className="visually-hidden">Actions</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {charges.map((charge) => (
+            <tr key={charge.id} className="ledger-table__row">
+              <td className="ledger-table__code">{charge.number}</td>
+              <td className="ledger-table__code">{charge.date}</td>
+              <td className="ledger-table__figure">{formatAmount(charge.grandTotal, format)}</td>
+              <td className="ledger-table__figure">{formatAmount(charge.outstanding, format)}</td>
+              <td className="ledger-table__figure">
+                <Input
+                  label={`Set against ${charge.number}`}
+                  isLabelHidden
+                  value={values[charge.id] ?? ''}
+                  placeholder="0.00"
+                  onChange={(event) => onChange(charge.id, event.target.value)}
+                />
+              </td>
+              <td>
+                {/* A COPY of what main sent, never a sum — see `settleInFull`. */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onChange(charge.id, settleInFull(charge))}
+                >
+                  Settle in full
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* THE WHOLE SET CROSSES, and an empty one is a real answer: it takes every offset
+          off and puts the credit back on account. So this is never disabled for want of a
+          row — clearing the last line and saving is the way back. */}
+      <div className="toolbar">
+        <Button variant="primary" disabled={isBusy} onClick={onSave}>
+          Save what this {label} settles
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 // ---- What has been paid against it ------------------------------------------
 
 /**
- * What is outstanding, and the receipts that settled the rest.
+ * What is outstanding, what settled the rest, and where each part of it came from.
  *
  * NOT A FIGURE ON THE DOCUMENT. It is the movement this document made on the party's
- * account less what has been receipted against it — read from main, never derived here.
- * A cancelled document comes back at nothing because its entry was reversed, which is why
- * this panel needs no special case for one.
+ * account less what has been receipted and less what has been offset against it — read
+ * from main, never derived here. A cancelled document comes back at nothing because its
+ * entry was reversed, which is why this panel needs no special case for one.
+ *
+ * TWO FIGURES AND TWO LISTS RATHER THAN ONE OF EACH. `allocated` and `offset` subtract
+ * identically, which is the arithmetic saying they are the same kind of thing; they are
+ * shown apart because "who paid this" and "what did we credit against it" are different
+ * questions, and only one of them has a bank statement behind it.
+ *
+ * "LESS", AND THE FIGURE KEEPS THE SIGN IT ARRIVED WITH (CONVENTIONS §1.7). Both of those
+ * figures are taken OFF the movement to reach the outstanding beside them, and main sends
+ * both as positive quantities. The heading carries the subtraction; negating a copy here
+ * would be the renderer doing arithmetic, and a screen that flips a sign in one place and
+ * not another ends up showing the same credit positive in one cell and negative in the
+ * next.
+ *
+ * THE OFFSETS LIST IS DRAWN ONLY AT THE CHARGE END. At the refund end the same rows are
+ * already on screen with a box beside each, in the panel that edits them — `isOffsetEdited`
+ * is that panel saying so, so the two can never both draw.
  *
  * The button carries the party and this document into the voucher editor, and carries no
  * AMOUNT: what moved is a fact about a bank statement, and a screen that guessed it would
@@ -686,17 +1068,24 @@ function Settlement({
   settlement,
   label,
   settlesWith,
+  offsetEndKind,
+  isOffsetEdited,
   format,
   onRecordMoney,
 }: {
   settlement: DocumentSettlement
   label: string
   settlesWith: ReceiptKind
+  /** The kind at the other end of an offset — a refund kind here, a charge one there. */
+  offsetEndKind: DocumentKind
+  /** Whether the panel above owns these offsets, which is where the picker lives. */
+  isOffsetEdited: boolean
   format: Parameters<typeof formatAmount>[1]
   onRecordMoney: () => void
 }): JSX.Element {
   const isSettled = settlement.outstanding === '0.00'
   const voucher = receiptDefinitionOf(settlesWith).label.toLowerCase()
+  const otherEnd = definitionOf(offsetEndKind).pluralLabel.toLowerCase()
 
   return (
     <div className="stack stack--tight">
@@ -705,6 +1094,10 @@ function Settlement({
           <tr>
             <td>Settled against this {label}</td>
             <td className="ledger-table__figure">{formatAmount(settlement.allocated, format)}</td>
+          </tr>
+          <tr>
+            <td>Less {otherEnd} set against it</td>
+            <td className="ledger-table__figure">{formatAmount(settlement.offset, format)}</td>
           </tr>
           <tr>
             <td>Outstanding</td>
@@ -730,6 +1123,35 @@ function Settlement({
                 <td className="ledger-table__code">{receipt.number}</td>
                 <td className="ledger-table__code">{receipt.date}</td>
                 <td className="ledger-table__figure">{formatAmount(receipt.amount, format)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {/*
+       * The documents that settled the rest of it, beside the money that settled the
+       * first part. The heading is read off the kind table through `offsetEndKind` —
+       * writing "Credit note" here would have a purchase bill's panel calling a debit note
+       * a credit note, which is what `settlesLabel` was written to prevent next door.
+       */}
+      {!isOffsetEdited && settlement.offsets.length > 0 && (
+        <table className="ledger-table ledger-table--figures">
+          <thead>
+            <tr>
+              <th scope="col">{definitionOf(offsetEndKind).label}</th>
+              <th scope="col">Date</th>
+              <th scope="col" className="ledger-table__figure">
+                Set against this {label}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {settlement.offsets.map((offset) => (
+              <tr key={offset.offsetId} className="ledger-table__row">
+                <td className="ledger-table__code">{offset.documentNumber}</td>
+                <td className="ledger-table__code">{offset.documentDate}</td>
+                <td className="ledger-table__figure">{formatAmount(offset.amount, format)}</td>
               </tr>
             ))}
           </tbody>
@@ -788,32 +1210,77 @@ function PlaceOfSupply({
 
 // ---- The lines --------------------------------------------------------------
 
+/*
+ * The grid, and the four columns 0017 added to it.
+ *
+ * WHAT A LINE IS, AND WHAT IT SAYS. The first column names the ITEM — the master record
+ * the line came from — and the middle columns are what was printed. They are not the same
+ * fact and the screen keeps them apart on purpose: picking an item fills the description,
+ * the unit, the rate, the classification and (on a sale) the price, and from that instant
+ * the line owns its copies. Editing any of them leaves the line the same item. A line with
+ * no item at all is free text and is as valid as it was before this column existed.
+ *
+ * WHERE IT POSTS IS THE LAST COLUMN, and it is deliberately the last one. Two controls,
+ * both about the same question:
+ *
+ *   the charge box    freight, packing or insurance — `freight-outward` on a sale,
+ *                     `freight-inward` on a purchase, and taxed like anything else
+ *   the account       a named account, which beats both defaults
+ *
+ * Most lines want neither, which is why they sit past the figures rather than among them.
+ * But the account override is the only way an expense reaches its own account on a
+ * purchase bill, and without it that document cannot record what a small business
+ * actually buys — so it is on the row, not behind a preference.
+ *
+ * A STORED CHOICE THE LIST NO LONGER OFFERS GETS AN OPTION OF ITS OWN. An item archived
+ * after an invoice was issued is not in `items.list`, and a `<select>` whose value matches
+ * no option silently displays the FIRST one — so the invoice would name a different item
+ * than the one it was made of, convincingly. The extra option is what makes the control
+ * show what is actually stored.
+ */
+
 function Lines({
   lines,
   rates,
+  items,
+  units,
+  accounts,
   isEditable,
   onChange,
+  onChooseItem,
   onAdd,
   onRemove,
 }: {
   lines: readonly LineDraft[]
   rates: RegimeDescription['taxRates']
+  items: readonly ItemSummary[]
+  units: readonly UnitOfMeasure[]
+  /** Already narrowed to what a line may post to — see `postableAccounts`. */
+  accounts: readonly Account[]
   isEditable: boolean
-  onChange: (key: string, field: keyof LineDraft, value: string) => void
+  onChange: <K extends keyof LineDraft>(key: string, field: K, value: LineDraft[K]) => void
+  onChooseItem: (key: string, itemId: string) => void
   onAdd: () => void
   onRemove: (key: string) => void
 }): JSX.Element {
+  const listedItems = useMemo(() => new Set(items.map((item) => item.id)), [items])
+  const listedUnits = useMemo(() => new Set(units.map((unit) => unit.code)), [units])
+  const listedAccounts = useMemo(() => new Set(accounts.map((account) => account.id)), [accounts])
+
   return (
     <div className="stack">
       <table className="ledger-table ledger-table--figures">
         <thead>
           <tr>
+            <th scope="col">Item</th>
             <th scope="col">Description</th>
             <th scope="col">HSN / SAC</th>
             <th scope="col">Quantity</th>
+            <th scope="col">Unit</th>
             <th scope="col">Unit price</th>
             <th scope="col">Discount</th>
             <th scope="col">Tax rate</th>
+            <th scope="col">Posts to</th>
             <th scope="col">
               <span className="visually-hidden">Actions</span>
             </th>
@@ -822,6 +1289,32 @@ function Lines({
         <tbody>
           {lines.map((line, index) => (
             <tr key={line.key} className="ledger-table__row">
+              <td>
+                {/*
+                 * THE PICKER SEEDS AND THEN LETS GO. `onChooseItem` fills the row from the
+                 * item's own defaults; nothing here re-reads it afterwards, and nothing
+                 * else on the row writes to `itemId`. So editing the description next door
+                 * does not unpick the item, and clearing this does not empty the
+                 * description — see `lineFromItem` and `clearItem`.
+                 */}
+                <Select
+                  label={`Item, line ${String(index + 1)}`}
+                  isLabelHidden
+                  value={line.itemId}
+                  disabled={!isEditable}
+                  onChange={(event) => onChooseItem(line.key, event.target.value)}
+                >
+                  <option value="">None — type the line yourself</option>
+                  {items.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.code === null ? item.name : `${item.code} — ${item.name}`}
+                    </option>
+                  ))}
+                  {line.itemId !== '' && !listedItems.has(line.itemId) && (
+                    <option value={line.itemId}>An item that is no longer listed</option>
+                  )}
+                </Select>
+              </td>
               <td>
                 <Input
                   label={`Description, line ${String(index + 1)}`}
@@ -848,6 +1341,32 @@ function Lines({
                   disabled={!isEditable}
                   onChange={(event) => onChange(line.key, 'quantity', event.target.value)}
                 />
+              </td>
+              <td>
+                {/*
+                 * NO UNIT IS A COMPLETE LINE, and an empty list is a first-run company
+                 * rather than a broken control — `setUpBooks` seeds none at all. So the
+                 * empty option is not a placeholder waiting to be replaced: it is an
+                 * answer, and it is the answer every line has until somebody sets units
+                 * up. The note under the table says where they come from.
+                 */}
+                <Select
+                  label={`Unit, line ${String(index + 1)}`}
+                  isLabelHidden
+                  value={line.unitCode}
+                  disabled={!isEditable}
+                  onChange={(event) => onChange(line.key, 'unitCode', event.target.value)}
+                >
+                  <option value="">No unit</option>
+                  {units.map((unit) => (
+                    <option key={unit.code} value={unit.code}>
+                      {unit.code} — {unit.name}
+                    </option>
+                  ))}
+                  {line.unitCode !== '' && !listedUnits.has(line.unitCode) && (
+                    <option value={line.unitCode}>{line.unitCode}</option>
+                  )}
+                </Select>
               </td>
               <td>
                 <Input
@@ -886,6 +1405,44 @@ function Lines({
                 />
               </td>
               <td>
+                {/*
+                 * THE USER'S WORDS, NOT THE FIELD'S. `isCharge` is what the column is
+                 * called in the contract; what a person is looking at is the freight line
+                 * on a bill. It says nothing about whether the line is taxed — a charge
+                 * that should not be taxed carries a rate of nil, which is a decision on
+                 * the row where anybody can see it (regimes/in-gst/tax.ts).
+                 *
+                 * The line number is on the label and not on screen, so twenty rows are
+                 * twenty distinct controls to a screen reader and one column to everyone
+                 * else.
+                 */}
+                <CheckboxField
+                  isChecked={line.isCharge}
+                  isDisabled={!isEditable}
+                  onChange={(isChecked) => onChange(line.key, 'isCharge', isChecked)}
+                >
+                  Freight or packing
+                  <span className="visually-hidden">, line {String(index + 1)}</span>
+                </CheckboxField>
+                <Select
+                  label={`Account, line ${String(index + 1)}`}
+                  isLabelHidden
+                  value={line.accountId}
+                  disabled={!isEditable}
+                  onChange={(event) => onChange(line.key, 'accountId', event.target.value)}
+                >
+                  <option value="">Wherever this line normally posts</option>
+                  {accounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.code} — {account.name}
+                    </option>
+                  ))}
+                  {line.accountId !== '' && !listedAccounts.has(line.accountId) && (
+                    <option value={line.accountId}>An account that is no longer listed</option>
+                  )}
+                </Select>
+              </td>
+              <td>
                 {isEditable && (
                   <Button variant="ghost" size="sm" onClick={() => onRemove(line.key)}>
                     Remove
@@ -904,6 +1461,25 @@ function Lines({
           </option>
         ))}
       </datalist>
+
+      {/*
+       * SAID ONCE, UNDER THE TABLE, RATHER THAN UNDER EVERY ROW. A hint on a control in a
+       * grid is the same sentence twenty times over; both of these are about a column.
+       *
+       * The units one is drawn only where it is true, and it is true on a company's first
+       * day: no unit is seeded anywhere, so an empty picker is what everybody starts with
+       * and it must not read as a list that failed to load.
+       */}
+      {units.length === 0 && (
+        <p className="prose prose--muted">
+          No units are set up yet, and a line needs none — a quantity can be counted in nothing.
+          Units, in the sidebar, is where they come from.
+        </p>
+      )}
+      <p className="prose prose--muted">
+        Each line posts where this kind of document normally sends it. Name an account on a line to
+        send that one somewhere else — which is how a bill records an expense.
+      </p>
 
       {isEditable && (
         <div className="toolbar">

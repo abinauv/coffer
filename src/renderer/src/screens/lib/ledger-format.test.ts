@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { NumberFormat } from '@shared/dto'
+import type { BadgeTone } from '@renderer/components/atoms'
+import type { NumberFormat, PeriodStatus } from '@shared/dto'
 import {
   accountTypeLabel,
   accountTypeRank,
@@ -188,10 +189,39 @@ describe('the ledger vocabulary', () => {
   })
 
   it('names the three period states, and does not call a lock a warning', () => {
-    expect(periodStatusLabel('open')).toBe('Open')
-    expect(periodStatusLabel('locked')).toBe('Locked')
-    expect(periodStatusTone('open')).toBe('positive')
-    expect(periodStatusTone('closed')).toBe('neutral')
-    expect(periodStatusTone('locked')).toBe('info')
+    /*
+     * THIS TEST PINNED `'info'` UNTIL 0016 AND `'info'` WAS NEVER A TONE — `.badge--info`
+     * has no rule in atoms.css, so the assertion enshrined an unstyled pill as correct.
+     * It is a Record now for two reasons: the value type makes the compiler refuse a
+     * tone the atom does not have, which is the recurrence this is guarding against, and
+     * the key type makes a fourth period state stop this file compiling until somebody
+     * says how it reads.
+     */
+    const expected: Record<PeriodStatus, { label: string; tone: BadgeTone }> = {
+      open: { label: 'Open', tone: 'positive' },
+      closed: { label: 'Closed', tone: 'neutral' },
+      locked: { label: 'Locked', tone: 'neutral' },
+    }
+
+    for (const [status, { label, tone }] of Object.entries(expected)) {
+      expect(periodStatusLabel(status), status).toBe(label)
+      expect(periodStatusTone(status), status).toBe(tone)
+    }
+
+    /* Closed and locked share the quiet tone deliberately, so the WORD is the only
+     * thing separating them — assert that the words do differ, or the badge says the
+     * same thing about two states a user must be able to tell apart. */
+    expect(new Set(Object.values(expected).map((each) => each.label)).size).toBe(3)
+    /* And that the tone is not one constant: an open period reads differently from a
+     * shut one, which is the only distinction the colour is carrying. */
+    expect(periodStatusTone('open')).not.toBe(periodStatusTone('closed'))
+  })
+
+  it('answers a status it has never heard of with a tone the badge actually has', () => {
+    /* The parameter is `string`, so a period state from a migration this build predates
+     * reaches here. Quiet rather than absent: an unknown tone renders an unstyled pill,
+     * which is the failure the `'info'` bug shipped. */
+    expect(periodStatusTone('sealed')).toBe('neutral')
+    expect(periodStatusLabel('sealed')).toBe('sealed')
   })
 })

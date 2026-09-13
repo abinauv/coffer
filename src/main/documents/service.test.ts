@@ -28,6 +28,8 @@ import { PartiesService } from '../parties/service'
 import { createQueryBuilder } from '../db/kysely'
 import { generateFiscalYear } from '../db/repos/periods'
 import { createSeries } from '../db/repos/numbering'
+import { getEntry } from '../db/repos/journal'
+import { D } from '@main/domain/money'
 import { type Argon2Params, MIN_MEMORY_COST } from '../security'
 import { DocumentsService } from './service'
 
@@ -129,6 +131,29 @@ afterEach(async () => {
     await rm(directory, { recursive: true, force: true, maxRetries: 5 }).catch(() => undefined)
   }
 })
+
+/**
+ * The refusal itself, not only its code.
+ *
+ * Where a rule lives in one layer only, `details` is what proves that layer answered —
+ * and where it lives in two, it is the one thing that can tell them apart, because both
+ * report the same code by design (CONVENTIONS §6).
+ */
+async function failureOf(
+  run: () => Promise<unknown>,
+): Promise<{ code: string; message: string; details: Record<string, unknown> }> {
+  try {
+    await run()
+  } catch (error) {
+    const thrown = error as { code?: unknown; message?: unknown; details?: unknown }
+    return {
+      code: typeof thrown.code === 'string' ? thrown.code : `unexpected: ${String(error)}`,
+      message: typeof thrown.message === 'string' ? thrown.message : '',
+      details: (thrown.details ?? {}) as Record<string, unknown>,
+    }
+  }
+  throw new Error('Expected the action to fail, and it did not.')
+}
 
 async function codeOf(run: () => Promise<unknown>): Promise<string> {
   try {
@@ -649,5 +674,365 @@ describe('offsets, through the service', () => {
   it('refuses a document these books do not have', async () => {
     const parts = await ready()
     expect(await codeOf(() => parts.documents.settlement('nobody'))).toBe('DOCUMENT_NOT_FOUND')
+  })
+})
+
+// ---- The one fact about a supply the regime cannot work out -----------------
+
+/**
+ * A company in Tamil Nadu with a customer outside India, and a vendor at home.
+ *
+ * The overseas customer is what makes a supply an export, which is the REGIME's answer
+ * (`placeOfSupply().isExport`) and not this file's — an export treatment is refused on
+ * everything else, and the refusal is the only rule in this service with no floor under
+ * it.
+ */
+async function tradingAbroad() {
+  const base = await fixture()
+  const overseas = (
+    await base.parties.create({
+      name: 'Gulf Bearings FZE',
+      countryCode: 'ae',
+      isCustomer: true,
+    })
+  ).id
+  const vendor = (
+    await base.parties.create({
+      name: 'Coimbatore Forgings',
+      countryCode: 'in',
+      isVendor: true,
+      jurisdictionCode: '33',
+    })
+  ).id
+  return { ...base, overseas, vendor }
+}
+
+describe('an export, with tax paid and under an undertaking', () => {
+  /*
+   * THE SAME SUPPLY TWICE. Same goods, same customer, same day, same rate — the treatment
+   * is the only difference, which is what a test comparing two answers needs.
+   */
+  it('charges integrated tax when the tax is paid on the export', async () => {
+    const { documents, overseas } = await tradingAbroad()
+
+    const document = await documents.create(
+      draft({ partyId: overseas, exportTaxPayment: 'with-payment' }),
+    )
+
+    expect(componentsOf(document).map((tax) => [tax.code, tax.amount])).toEqual([
+      ['IGST', '180.00'],
+    ])
+    expect(document.totals.totalTax).toBe('180.00')
+    expect(document.exportTaxPayment).toBe('with-payment')
+  })
+
+  /*
+   * THE RATE SURVIVES AND THE TAX DOES NOT. Before this column an LUT export could not be
+   * represented at all: the only way to a nil figure was a rate of zero, which is a
+   * NIL-RATED supply — inside the tax, with its input credit reversed rather than
+   * refunded. The line below still says 18%.
+   */
+  it('charges nothing under an undertaking, and keeps the rate on the line', async () => {
+    const { documents, overseas } = await tradingAbroad()
+
+    const document = await documents.create(
+      draft({ partyId: overseas, exportTaxPayment: 'without-payment' }),
+    )
+
+    expect(componentsOf(document).map((tax) => [tax.code, tax.amount])).toEqual([['IGST', '0.00']])
+    expect(document.totals.totalTax).toBe('0.00')
+    expect(document.lines[0]?.ratePct).toBe('18.000')
+    expect(document.exportTaxPayment).toBe('without-payment')
+  })
+
+  /*
+   * SWITCHING THE TREATMENT RE-ASKS THE REGIME, and it is the least obvious of the five
+   * things that do: no line, party, date or place has changed, and the tax on every line
+   * moves. Left out, an exporter who gave an undertaking after drafting would keep an
+   * invoice carrying tax nobody ever charged.
+   */
+  it('re-taxes the whole document when the treatment changes on a draft', async () => {
+    const { documents, overseas } = await tradingAbroad()
+
+    const drafted = await documents.create(
+      draft({ partyId: overseas, exportTaxPayment: 'with-payment' }),
+    )
+    expect(drafted.totals.totalTax).toBe('180.00')
+
+    const changed = await documents.update({
+      id: drafted.id,
+      exportTaxPayment: 'without-payment',
+    })
+
+    expect(changed.totals.totalTax).toBe('0.00')
+    expect(changed.lines[0]?.ratePct).toBe('18.000')
+  })
+
+  it('keeps the treatment when something else on the draft changes', async () => {
+    const { documents, overseas } = await tradingAbroad()
+
+    const drafted = await documents.create(
+      draft({ partyId: overseas, exportTaxPayment: 'without-payment' }),
+    )
+    const edited = await documents.update({
+      id: drafted.id,
+      lines: [line({ unitPrice: '750.00' })],
+    })
+
+    expect(edited.exportTaxPayment).toBe('without-payment')
+    expect(edited.totals.taxableValue).toBe('1500.00')
+    expect(edited.totals.totalTax).toBe('0.00')
+  })
+
+  /*
+   * REFUSED ON A DOMESTIC SUPPLY RATHER THAN CLEARED. A value dropped in silence is a
+   * decision lost without anybody being told it was made — and it is the only thing this
+   * service refuses that no trigger can, because which supplies leave the country is the
+   * regime's answer and `db/` may not ask a regime.
+   */
+  it('refuses an export treatment on a supply that does not leave the country', async () => {
+    const { documents, local, interstate } = await tradingAbroad()
+
+    expect(
+      await codeOf(() =>
+        documents.create(draft({ partyId: local, exportTaxPayment: 'without-payment' })),
+      ),
+    ).toBe('EXPORT_TAX_PAYMENT_INVALID')
+    expect(
+      await codeOf(() =>
+        documents.create(draft({ partyId: interstate, exportTaxPayment: 'with-payment' })),
+      ),
+    ).toBe('EXPORT_TAX_PAYMENT_INVALID')
+  })
+
+  /*
+   * AND NOT THE OTHER DIRECTION. An export that says nothing is ordinary — a business that
+   * has not been asked the question yet must still be able to raise the invoice — and the
+   * RETURN is what says the flavour had to be inferred, rather than the editor blocking.
+   */
+  it('does not insist that an export say which it was', async () => {
+    const { documents, overseas } = await tradingAbroad()
+
+    const document = await documents.create(draft({ partyId: overseas }))
+
+    expect(document.exportTaxPayment).toBeNull()
+    expect(document.totals.totalTax).toBe('180.00')
+  })
+
+  it('refuses it on a document that moves to a domestic customer', async () => {
+    const { documents, overseas, local } = await tradingAbroad()
+
+    const drafted = await documents.create(
+      draft({ partyId: overseas, exportTaxPayment: 'without-payment' }),
+    )
+
+    expect(await codeOf(() => documents.update({ id: drafted.id, partyId: local }))).toBe(
+      'EXPORT_TAX_PAYMENT_INVALID',
+    )
+  })
+})
+
+describe('whether credit may be taken, on the line', () => {
+  it('stores it on a purchase bill, line by line', async () => {
+    const { documents, vendor } = await tradingAbroad()
+
+    const bill = await documents.create(
+      draft({
+        kind: 'purchase-bill',
+        partyId: vendor,
+        lines: [
+          line({ description: 'Laptop', itcEligibility: 'eligible' }),
+          line({ description: 'Staff car', itcEligibility: 'ineligible-17-5' }),
+        ],
+      }),
+    )
+
+    expect(bill.lines.map((each) => [each.description, each.itcEligibility])).toEqual([
+      ['Laptop', 'eligible'],
+      ['Staff car', 'ineligible-17-5'],
+    ])
+  })
+
+  /* Absent stays absent: a return resolves it to eligible and COUNTS the resolution, which
+   * it cannot do if the repository has already decided on the user's behalf. */
+  it('leaves a line that says nothing saying nothing', async () => {
+    const { documents, vendor } = await tradingAbroad()
+
+    const bill = await documents.create(draft({ kind: 'purchase-bill', partyId: vendor }))
+
+    expect(bill.lines[0]?.itcEligibility).toBeNull()
+  })
+
+  /*
+   * ASSERTED ON `details` AS WELL AS ON THE CODE. The database does not hold this rule at
+   * all — 0021's header argues why: it needs the list of purchase-side kinds, which lives
+   * in `@shared/documents` and which a migration cannot import — so the repository is the
+   * only layer that speaks, and what it says is the useful half. A user who pasted an
+   * eligibility onto every line is told it is on every line rather than sent back to line
+   * one six times.
+   */
+  it('refuses it on a sale, which gives no credit to reclaim, and says which lines', async () => {
+    const { documents, local } = await tradingAbroad()
+
+    const failure = await failureOf(() =>
+      documents.create(
+        draft({
+          partyId: local,
+          lines: [
+            line({ description: 'A thing' }),
+            line({ description: 'Another', itcEligibility: 'ineligible-other' }),
+            line({ description: 'A third', itcEligibility: 'eligible' }),
+          ],
+        }),
+      ),
+    )
+
+    expect(failure.code).toBe('ITC_ELIGIBILITY_NOT_INWARD')
+    expect(failure.details).toMatchObject({ lineNumber: 2, lines: 2 })
+    expect(failure.message).toContain('2 line(s)')
+  })
+
+  /* Carried through an edit that re-asks the regime. `update` replaces the whole set, so a
+   * mapper that dropped the field would silently un-block every line on a party change. */
+  it('survives an edit that re-taxes the document', async () => {
+    const { documents, vendor } = await tradingAbroad()
+
+    const bill = await documents.create(
+      draft({
+        kind: 'purchase-bill',
+        partyId: vendor,
+        lines: [line({ itcEligibility: 'ineligible-17-5' })],
+      }),
+    )
+    const edited = await documents.update({ id: bill.id, date: '2026-04-20' })
+
+    expect(edited.lines[0]?.itcEligibility).toBe('ineligible-17-5')
+  })
+})
+
+describe('whether the buyer discharges the tax', () => {
+  it('records it, and leaves it off by default', async () => {
+    const { documents, vendor } = await tradingAbroad()
+
+    const ordinary = await documents.create(draft({ kind: 'purchase-bill', partyId: vendor }))
+    const reverse = await documents.create(
+      draft({ kind: 'purchase-bill', partyId: vendor, isReverseCharge: true }),
+    )
+
+    expect(ordinary.isReverseCharge).toBe(false)
+    expect(reverse.isReverseCharge).toBe(true)
+  })
+
+  /*
+   * IT DOES NOT MOVE THE TAX ON THE DOCUMENT. What the supply attracts is unchanged; who
+   * owes it is a posting question, and the entry is where the two legs appear. A service
+   * that re-asked the regime on this flag would be answering a question the regime was
+   * never asked.
+   */
+  it('changes nothing about what the document says the tax is', async () => {
+    const { documents, vendor } = await tradingAbroad()
+
+    const ordinary = await documents.create(draft({ kind: 'purchase-bill', partyId: vendor }))
+    const reverse = await documents.create(
+      draft({ kind: 'purchase-bill', partyId: vendor, isReverseCharge: true }),
+    )
+
+    expect(reverse.totals.totalTax).toBe(ordinary.totals.totalTax)
+    expect(componentsOf(reverse)).toEqual(componentsOf(ordinary))
+  })
+})
+
+/*
+ * ===========================================================================
+ * THE FIELD REACHES THE ENTRY, NOT ONLY THE ROW
+ * ===========================================================================
+ *
+ * Every test above reads what was STORED. This one reads what was POSTED, and it exists
+ * because a mutation showed the difference: `toDomainLine` mapping `itcEligibility` to
+ * null unconditionally left every assertion above passing, because the DTO comes off the
+ * table and the domain shape is built separately. The column, the DTO and the posting rule
+ * were each tested and the JOIN between the last two was not.
+ */
+describe('a blocked line, from the screen to the journal entry', () => {
+  async function readyToBuy(): Promise<Fixture & { vendor: string }> {
+    const parts = await tradingAbroad()
+    const connection = parts.companies.currentDatabase()!
+    const db = createQueryBuilder(connection)
+    await generateFiscalYear(db, { rule: aprilToMarch, startYear: 2026 }).catch(() => undefined)
+    await createSeries(db, {
+      kind: 'purchase-bill',
+      label: 'Purchases',
+      prefix: 'BILL',
+      separator: '/',
+      includeFiscalYear: true,
+      width: 4,
+      resetOn: 'fiscal-year',
+    })
+    return parts
+  }
+
+  /** The signed movement on one account code, read out of the posted entry. */
+  async function postedOn(parts: Fixture, entryId: string, code: string): Promise<string> {
+    const db = createQueryBuilder(parts.companies.currentDatabase()!)
+    const entry = await getEntry(db, entryId)
+    expect(entry, 'the document said it posted and the entry is not there').not.toBeNull()
+    return entry!.lines
+      .filter((line) => line.accountCode === code)
+      .reduce((running, line) => running.plus(D(line.debit)).minus(D(line.credit)), D('0'))
+      .toString()
+  }
+
+  it('costs a blocked line’s tax into the expense and claims the eligible one', async () => {
+    const parts = await readyToBuy()
+    const bill = await parts.documents.create(
+      draft({
+        kind: 'purchase-bill',
+        partyId: parts.vendor,
+        lines: [
+          line({ description: 'Laptop', itcEligibility: 'eligible' }),
+          line({ description: 'Staff car', itcEligibility: 'ineligible-17-5' }),
+        ],
+      }),
+    )
+    const issued = await parts.documents.issue({ id: bill.id })
+    expect(issued.entryId).not.toBeNull()
+
+    /* Two lines of 1,000 at 18% intra-state: 90 of CGST each. One is reclaimable and one
+     * is not, so 90 reaches the input tax asset and 90 is carried in Purchases beside the
+     * goods — 1,000 + 1,000 + 90 + 90. */
+    expect(await postedOn(parts, issued.entryId!, '1510')).toBe('90')
+    expect(await postedOn(parts, issued.entryId!, '1520')).toBe('90')
+    expect(await postedOn(parts, issued.entryId!, '5100')).toBe('2180')
+    expect(await postedOn(parts, issued.entryId!, '2100')).toBe('-2360')
+  })
+
+  it('claims both when neither line says anything, which is what the books already assert', async () => {
+    const parts = await readyToBuy()
+    const bill = await parts.documents.create(
+      draft({
+        kind: 'purchase-bill',
+        partyId: parts.vendor,
+        lines: [line({ description: 'Laptop' }), line({ description: 'Bearings' })],
+      }),
+    )
+    const issued = await parts.documents.issue({ id: bill.id })
+
+    expect(await postedOn(parts, issued.entryId!, '1510')).toBe('180')
+    expect(await postedOn(parts, issued.entryId!, '5100')).toBe('2000')
+  })
+
+  /* And the other half of 0020, posted rather than stored: the supplier is credited with
+   * the net, the tax is owed AND claimed, and the two tax legs net to nothing. */
+  it('owes and claims the tax on a reverse-charge bill, and pays the supplier the net', async () => {
+    const parts = await readyToBuy()
+    const bill = await parts.documents.create(
+      draft({ kind: 'purchase-bill', partyId: parts.vendor, isReverseCharge: true }),
+    )
+    const issued = await parts.documents.issue({ id: bill.id })
+
+    expect(await postedOn(parts, issued.entryId!, '1510')).toBe('90')
+    expect(await postedOn(parts, issued.entryId!, '2210')).toBe('-90')
+    expect(await postedOn(parts, issued.entryId!, '5100')).toBe('1000')
+    expect(await postedOn(parts, issued.entryId!, '2100')).toBe('-1000')
   })
 })

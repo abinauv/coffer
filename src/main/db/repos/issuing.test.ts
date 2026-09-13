@@ -1306,6 +1306,52 @@ describe('a correction naming the document it corrects', () => {
     expect((await getDocument(db, id))?.originalDocumentId).toBe(invoice)
   })
 
+  /*
+   * THE NUMBER AND THE DATE, WHICH ARE THE LEGAL REFERENCE. Section 34 read with rule 53
+   * requires a credit note to name the invoice it corrects, and what it names is that
+   * invoice's NUMBER AND DATE — an id is a fact about this database and appears on no
+   * document. Only the id crossed the wire until the integration gate, so the printed
+   * credit note carried a block the mapper could only ever leave empty.
+   *
+   * JOINED, NOT COPIED. Read off the original's own row, so the assertion is against what
+   * that row says rather than against a column somebody remembered to keep in step.
+   */
+  it('carries the corrected document number and date, not merely its id', async () => {
+    const original = await getDocument(db, invoice)
+    const id = await drafted({ kind: 'credit-note', originalDocumentId: invoice })
+
+    const note = await getDocument(db, id)
+    expect(note?.originalDocumentNumber).toBe(original?.number)
+    expect(note?.originalDocumentDate).toBe(original?.date)
+    /* By value as well, so a join that returned the CORRECTION's own number and date —
+     * which is what a self-join gets wrong — is visible. The note has no number at all
+     * while it is a draft, and its date is today rather than the invoice's. */
+    expect(note?.originalDocumentNumber).toBe('INV/2026-27/0001')
+    expect(note?.number).toBeNull()
+  })
+
+  it('leaves both null where nothing is corrected', async () => {
+    const id = await drafted({ kind: 'credit-note' })
+
+    const note = await getDocument(db, id)
+    expect(note?.originalDocumentNumber).toBeNull()
+    expect(note?.originalDocumentDate).toBeNull()
+  })
+
+  /* The pair moves with the link, so a re-pointed draft names the invoice it now
+   * corrects rather than the one it used to. A stored copy is what would not. */
+  it('follows the link when a draft correction is re-pointed', async () => {
+    const second = await drafted({ date: '2026-05-20' })
+    await issueDocument(db, { id: second }, NOW)
+    const id = await drafted({ kind: 'credit-note', originalDocumentId: invoice })
+
+    await updateDocument(db, { id, originalDocumentId: second }, LATER)
+
+    const note = await getDocument(db, id)
+    expect(note?.originalDocumentNumber).toBe('INV/2026-27/0002')
+    expect(note?.originalDocumentDate).toBe('2026-05-20')
+  })
+
   it('lets a credit note carry no original at all', async () => {
     const id = await drafted({ kind: 'credit-note' })
 

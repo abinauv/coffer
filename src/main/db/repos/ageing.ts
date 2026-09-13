@@ -231,6 +231,7 @@ export async function agedReport(db: CofferDb, options: AgedReportOptions): Prom
     totals: {
       buckets: ageing.totals.buckets.map(toMoneyString),
       onAccount: toMoneyString(ageing.totals.onAccount),
+      overdue: toMoneyString(ageing.totals.overdue),
       total: toMoneyString(ageing.totals.total),
     },
     controlBalance: toMoneyString(controlBalance),

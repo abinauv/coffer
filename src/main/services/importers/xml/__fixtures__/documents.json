@@ -1,0 +1,298 @@
+{
+  "why": "Golden XML documents, held as JSON strings rather than TypeScript template literals ON PURPOSE. A literal CRLF inside a template literal is at the mercy of the editor, of prettier and of git's autocrlf, so the fixture that exists to prove CRLF handling would be the first thing silently rewritten to LF -- and it would still pass. A byte order mark and a NUL fare worse: both are invisible in a diff. JSON escapes survive every one of them. Every date here is in 2027, so no value can coincide with the real clock.",
+  "documents": {
+    "tallyLike": {
+      "why": "The shape the importer will actually meet: ENVELOPE / BODY / IMPORTDATA / REQUESTDATA with repeated TALLYMESSAGE children, CRLF endings, a trailing newline, and entity references in both an element and an attribute. The messages run VOUCHER (13 Nov), LEDGER, VOUCHER (2 Nov) -- NOT in date order and NOT grouped by kind, so a walk that sorted, grouped or de-duplicated on the way through would disagree with the expected list. The third narration is indented across three lines and holds a double space that has to survive.",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<ENVELOPE>\r\n <HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER>\r\n <BODY>\r\n  <IMPORTDATA>\r\n   <REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME></REQUESTDESC>\r\n   <REQUESTDATA>\r\n    <TALLYMESSAGE>\r\n     <VOUCHER VCHTYPE=\"Sales\" ACTION=\"Create\" DATE=\"20271113\">\r\n      <NARRATION>Freight   charges &amp; packing</NARRATION>\r\n      <AMOUNT>-1234.50</AMOUNT>\r\n     </VOUCHER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <LEDGER NAME=\"Acme &quot;Bunty&quot; Supplies\" ACTION=\"Create\">\r\n      <PARENT>Sundry Creditors</PARENT>\r\n     </LEDGER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <VOUCHER VCHTYPE=\"Purchase\" ACTION=\"Create\" DATE=\"20271102\">\r\n      <NARRATION>\r\n   Two  inner  spaces\r\n      </NARRATION>\r\n      <AMOUNT>25000.00</AMOUNT>\r\n     </VOUCHER>\r\n    </TALLYMESSAGE>\r\n   </REQUESTDATA>\r\n  </IMPORTDATA>\r\n </BODY>\r\n</ENVELOPE>\r\n",
+      "expected": [
+        {
+          "ordinal": 1,
+          "path": ["ENVELOPE", "BODY", "IMPORTDATA", "REQUESTDATA"],
+          "child": "VOUCHER",
+          "attributes": {
+            "VCHTYPE": "Sales",
+            "ACTION": "Create",
+            "DATE": "20271113"
+          },
+          "fields": {
+            "NARRATION": "Freight   charges & packing",
+            "AMOUNT": "-1234.50"
+          },
+          "collapsedNarration": "Freight charges & packing"
+        },
+        {
+          "ordinal": 2,
+          "path": ["ENVELOPE", "BODY", "IMPORTDATA", "REQUESTDATA"],
+          "child": "LEDGER",
+          "attributes": {
+            "NAME": "Acme \"Bunty\" Supplies",
+            "ACTION": "Create"
+          },
+          "fields": {
+            "PARENT": "Sundry Creditors"
+          },
+          "collapsedNarration": null
+        },
+        {
+          "ordinal": 3,
+          "path": ["ENVELOPE", "BODY", "IMPORTDATA", "REQUESTDATA"],
+          "child": "VOUCHER",
+          "attributes": {
+            "VCHTYPE": "Purchase",
+            "ACTION": "Create",
+            "DATE": "20271102"
+          },
+          "fields": {
+            "NARRATION": "\n   Two  inner  spaces\n      ",
+            "AMOUNT": "25000.00"
+          },
+          "collapsedNarration": "Two inner spaces"
+        }
+      ]
+    },
+    "nasty": {
+      "why": "Everything awkward at once. A UTF-8 byte order mark; a declaration naming an encoding that cannot be vouched for; a comment containing a double hyphen; a CDATA section that carries a literal ]]> by splitting it across two sections; decimal, hexadecimal and named references including an astral character; mixed content; meaningful internal spacing; CRLF, a lone CR and an LF in one element beside a &#xD; that has to survive normalisation; a tab in both an attribute and an element; text split by a comment and a CDATA section that has to coalesce into one node; nesting seven deep; and attributes in the order zeta then alpha, each carrying the other quote style, so that a reader which sorted or mixed up the quoting would disagree.",
+      "xml": "﻿<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>\r\n<!-- a comment -- with a double hyphen in it, which XML forbids and this reader allows -->\r\n<R zeta=\"single 'quotes' inside double\" alpha='double \"quotes\" inside single'>\r\n  <BRACKETS><![CDATA[a]]]]><![CDATA[>b]]></BRACKETS>\r\n  <REFS>&#38;&#x26;&amp;|&#x1F600;|&lt;&gt;&apos;&quot;</REFS>\r\n  <MIXED>before <B>bold</B> after</MIXED>\r\n  <SPACED>   two   inner   spaces   </SPACED>\r\n  <ENDINGS>one\r\ntwo\rthree\nfour&#xD;five</ENDINGS>\r\n  <TABBED note=\"a\tb\">a\tb</TABBED>\r\n  <SPLIT>one<!--x-->two<![CDATA[three]]>four</SPLIT>\r\n  <DEEP><L1><L2><L3><L4><L5>bottom</L5></L4></L3></L2></L1></DEEP>\r\n  <EMPTY/>\r\n  <?tally  keep this verbatim ?>\r\n</R>",
+      "expected": {
+        "hadByteOrderMark": true,
+        "declaration": {
+          "version": "1.0",
+          "encoding": "ISO-8859-1"
+        },
+        "issues": [
+          {
+            "code": "ENCODING_UNVERIFIED",
+            "severity": "warning",
+            "value": "ISO-8859-1"
+          }
+        ],
+        "rootName": "R",
+        "attributeOrder": ["zeta", "alpha"],
+        "attributes": {
+          "zeta": "single 'quotes' inside double",
+          "alpha": "double \"quotes\" inside single"
+        },
+        "brackets": "a]]>b",
+        "refs": "&&&|😀|<>'\"",
+        "refsLength": 11,
+        "mixed": "before bold after",
+        "spaced": "   two   inner   spaces   ",
+        "spacedCollapsed": "two inner spaces",
+        "endings": "one\ntwo\nthree\nfour\rfive",
+        "tabbedAttribute": "a b",
+        "tabbedText": "a\tb",
+        "split": "onetwothreefour",
+        "splitChildCount": 1,
+        "deepestName": "L5",
+        "deepestDepth": 7,
+        "emptyChildren": 0,
+        "instruction": {
+          "target": "tally",
+          "data": "keep this verbatim "
+        },
+        "commentText": " a comment -- with a double hyphen in it, which XML forbids and this reader allows "
+      }
+    }
+  },
+  "refusals": {
+    "why": "One document per named refusal, each paired with the line and column it has to report. They are held here rather than inline so that the promise \"an import failure says where\" is one table somebody can read, and so that a message moving does not quietly take a position with it. The positions were read off a running parser, not reasoned out.",
+    "cases": [
+      {
+        "name": "doctype, which is where XXE and billion-laughs both arrive",
+        "xml": "<!DOCTYPE lolz [<!ENTITY lol \"lol\">]><lolz>&lol;</lolz>",
+        "code": "XML_DOCTYPE_FORBIDDEN",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "name": "a lower-case doctype is still a doctype",
+        "xml": "<!doctype A><A/>",
+        "code": "XML_DOCTYPE_FORBIDDEN",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "name": "an entity declaration outside a doctype",
+        "xml": "<!ENTITY lol \"lol\"><A/>",
+        "code": "XML_INVALID_MARKUP",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "name": "an element opened and never closed, reported where it OPENED",
+        "xml": "<ENVELOPE>\r\n  <BODY>\r\n    <VOUCHER>\r\n",
+        "code": "XML_UNCLOSED_ELEMENT",
+        "line": 3,
+        "column": 5
+      },
+      {
+        "name": "a close tag naming the wrong element",
+        "xml": "<A>\r\n<B>x</A>\r\n</B>",
+        "code": "XML_MISMATCHED_TAG",
+        "line": 2,
+        "column": 5
+      },
+      {
+        "name": "a close tag with nothing open",
+        "xml": "<A/>\n</B>",
+        "code": "XML_UNEXPECTED_CLOSE_TAG",
+        "line": 2,
+        "column": 1
+      },
+      {
+        "name": "a stray less-than in text",
+        "xml": "<A>\nprofit < loss\n</A>",
+        "code": "XML_INVALID_NAME",
+        "line": 2,
+        "column": 8
+      },
+      {
+        "name": "a stray ampersand in text",
+        "xml": "<A>\nSmith & Sons\n</A>",
+        "code": "XML_INVALID_REFERENCE",
+        "line": 2,
+        "column": 7
+      },
+      {
+        "name": "a named entity XML does not define",
+        "xml": "<A>\nSmith&nbsp;Sons\n</A>",
+        "code": "XML_UNKNOWN_ENTITY",
+        "line": 2,
+        "column": 6
+      },
+      {
+        "name": "a truncated file, cut inside an attribute value",
+        "xml": "<ENVELOPE>\n  <VOUCHER DATE=\"2027",
+        "code": "XML_UNTERMINATED_TAG",
+        "line": 2,
+        "column": 12
+      },
+      {
+        "name": "a truncated file, cut inside a tag name",
+        "xml": "<ENVELOPE>\n  <VOUC",
+        "code": "XML_UNTERMINATED_TAG",
+        "line": 2,
+        "column": 3
+      },
+      {
+        "name": "an attribute value with no quotation marks",
+        "xml": "<A>\n  <B date=20271104/>\n</A>",
+        "code": "XML_ATTRIBUTE_UNQUOTED",
+        "line": 2,
+        "column": 11
+      },
+      {
+        "name": "an attribute with no value at all",
+        "xml": "<A>\n  <B checked/>\n</A>",
+        "code": "XML_ATTRIBUTE_MALFORMED",
+        "line": 2,
+        "column": 6
+      },
+      {
+        "name": "two attributes with no space between them",
+        "xml": "<A x=\"1\"y=\"2\"/>",
+        "code": "XML_ATTRIBUTE_MALFORMED",
+        "line": 1,
+        "column": 9
+      },
+      {
+        "name": "the same attribute twice",
+        "xml": "<A x=\"1\" x=\"2\"/>",
+        "code": "XML_DUPLICATE_ATTRIBUTE",
+        "line": 1,
+        "column": 10
+      },
+      {
+        "name": "a second outermost element",
+        "xml": "<A/>\n<B/>",
+        "code": "XML_MULTIPLE_ROOTS",
+        "line": 2,
+        "column": 1
+      },
+      {
+        "name": "text outside the outermost element",
+        "xml": "junk\n<A/>",
+        "code": "XML_CONTENT_OUTSIDE_ROOT",
+        "line": 1,
+        "column": 1
+      },
+      {
+        "name": "no element at all",
+        "xml": "<!-- nothing but a comment -->\n",
+        "code": "XML_NO_ROOT",
+        "line": 2,
+        "column": 1
+      },
+      {
+        "name": "a comment with no closing marker",
+        "xml": "<A>\n  <!-- and then the file stops\n</A>",
+        "code": "XML_UNTERMINATED_COMMENT",
+        "line": 2,
+        "column": 3
+      },
+      {
+        "name": "a CDATA section with no closing marker",
+        "xml": "<A>\n  <![CDATA[and then the file stops\n</A>",
+        "code": "XML_UNTERMINATED_CDATA",
+        "line": 2,
+        "column": 3
+      },
+      {
+        "name": "a UTF-16 export read as UTF-8, caught at its second character",
+        "xml": "<\u0000?\u0000x\u0000m\u0000l\u0000 \u0000v\u0000e\u0000r\u0000s\u0000i\u0000o\u0000n\u0000=\u0000\"\u00001\u0000.\u00000\u0000\"\u0000 \u0000e\u0000n\u0000c\u0000o\u0000d\u0000i\u0000n\u0000g\u0000=\u0000\"\u0000U\u0000T\u0000F\u0000-\u00001\u00006\u0000\"\u0000?\u0000>\u0000<\u0000E\u0000N\u0000V\u0000E\u0000L\u0000O\u0000P\u0000E\u0000>\u0000<\u0000A\u0000>\u0000x\u0000<\u0000/\u0000A\u0000>\u0000<\u0000/\u0000E\u0000N\u0000V\u0000E\u0000L\u0000O\u0000P\u0000E\u0000>\u0000",
+        "code": "XML_INVALID_CHARACTER",
+        "line": 1,
+        "column": 2
+      },
+      {
+        "name": "a NUL somewhere in the middle",
+        "xml": "<A>ledger\u0000name</A>",
+        "code": "XML_INVALID_CHARACTER",
+        "line": 1,
+        "column": 10
+      },
+      {
+        "name": "a reference to one half of a surrogate pair",
+        "xml": "<A>&#xD83D;&#xDE00;</A>",
+        "code": "XML_INVALID_CHARACTER_REFERENCE",
+        "line": 1,
+        "column": 4
+      },
+      {
+        "name": "a reference to a control character",
+        "xml": "<A>&#0;</A>",
+        "code": "XML_INVALID_CHARACTER_REFERENCE",
+        "line": 1,
+        "column": 4
+      },
+      {
+        "name": "a reference to a number above the highest code point",
+        "xml": "<A>&#99999999999999999999;</A>",
+        "code": "XML_INVALID_CHARACTER_REFERENCE",
+        "line": 1,
+        "column": 4
+      },
+      {
+        "name": "a hexadecimal reference spelled with a capital X",
+        "xml": "<A>&#X26;</A>",
+        "code": "XML_INVALID_REFERENCE",
+        "line": 1,
+        "column": 4
+      },
+      {
+        "name": "an XML declaration that is not at the start",
+        "xml": "\n<?xml version=\"1.0\"?>\n<A/>",
+        "code": "XML_DECLARATION_MISPLACED",
+        "line": 2,
+        "column": 1
+      },
+      {
+        "name": "the reserved target spelled in capitals",
+        "xml": "<?XML version=\"1.0\"?><A/>",
+        "code": "XML_RESERVED_TARGET",
+        "line": 1,
+        "column": 1
+      }
+    ]
+  }
+}

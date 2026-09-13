@@ -293,6 +293,33 @@ export interface ItemsTable {
    */
   sales_account_id: string | null
   purchase_account_id: string | null
+  /**
+   * Whether this item keeps a quantity balance (0017).
+   *
+   * ORTHOGONAL TO `kind`, which classifies for filing. Plenty of goods are not stocked —
+   * consumables, and anything raised as a charge — and a service never can be, which is a
+   * CHECK rather than a repository rule because a service carrying stock puts a figure on
+   * the valuation report that the general ledger never received. See the migration.
+   *
+   * OPTIONAL ON INSERT, because the column defaults to 0: every item in every file that
+   * predates 0017 keeps no balance, and a caller inserting an item may leave it out.
+   *
+   * `Generated<SqlBool>` says both halves at once: it is `NOT NULL DEFAULT 0`, so no row
+   * ever holds nothing and every INSERT may leave it out. It was spelled
+   * `SqlBool | undefined` while `repos/items.ts` typed its row as the identity map
+   * `{ [K in keyof ItemsTable]: ItemsTable[K] }` — that map holds only while no column is
+   * a Kysely `ColumnType`, so a `Generated` here stopped a file that batch did not own
+   * from compiling. That row is `Selectable<ItemsTable>` now and the shim is gone.
+   */
+  is_stock_tracked: Generated<SqlBool>
+  /**
+   * Quantity, 3dp. When what is on hand falls below it, Phase 4.2's report says so.
+   *
+   * Null is the ordinary case, and it is refused outright on an item that keeps no
+   * balance — such an item has nothing on hand, so it would sit below every level ever
+   * set, forever.
+   */
+  reorder_level: DecimalString | null
   is_archived: SqlBool
   created_at: Timestamp
   updated_at: Timestamp
@@ -416,6 +443,30 @@ export interface DocumentsTable {
    * which is the whole argument for the column existing.
    */
   due_date: DateString | null
+  /**
+   * Whether a zero-rated supply left with tax paid on it, or under an undertaking (0020).
+   *
+   * An `ExportTaxPayment`, NULL on a domestic supply. NOT A REPORTING FLAG: a supply
+   * under an undertaking carries its RATE and NO TAX, and the only other way to produce a
+   * nil figure is to set the line's rate to zero — which makes it a nil-rated supply
+   * instead, reverses the credit position on its inputs, and leaves every total adding up.
+   * `computeTax` reads it, and only where the place of supply is an export.
+   *
+   * No constraint ties it to the place of supply, and 0020's header argues why: the
+   * company's own country is a mutable single row that can be empty, and hardcoding one
+   * would put a regime in `db/`.
+   */
+  export_tax_payment: string | null
+  /**
+   * Whether the BUYER discharges the tax rather than this business (0020).
+   *
+   * `NOT NULL DEFAULT 0` — every document either is under reverse charge or is not, and
+   * forward charge is the honest default, because a document wrongly marked reverse
+   * charge invents a cash liability that no credit may discharge. Not confined by kind:
+   * an outward supply under it carries a value and no liability, and an inward one makes
+   * this business liable for the output tax AND entitled to the input credit.
+   */
+  is_reverse_charge: SqlBool
   created_at: Timestamp
   updated_at: Timestamp
   /** When it was issued, and when it was cancelled. Null until each happens. */
@@ -463,6 +514,19 @@ export interface DocumentLinesTable {
   is_charge: SqlBool
   /** Overrides the account the kind implies. Null for the usual case. */
   account_id: string | null
+  /**
+   * Whether credit may be taken on this line, and if not, why not (0021).
+   *
+   * An `ItcEligibility`, NULL where nothing has been recorded. ON THE LINE BECAUSE ONE
+   * BILL CAN CARRY A LAPTOP AND A STAFF CAR — and because the posting rule needs it here:
+   * an ineligible line's tax is not recoverable, so it is not an asset, and it posts to
+   * the line's own value account rather than to the input tax account.
+   *
+   * NULL is a fourth state and not one of the three. A return resolves it to `eligible`
+   * and counts the resolution as an issue; 0021 declines to backfill it for exactly that
+   * reason — a backfilled assumption is indistinguishable from a decision.
+   */
+  itc_eligibility: string | null
 }
 
 /**
@@ -607,6 +671,109 @@ export interface DocumentOffsetsTable {
   created_at: Timestamp
 }
 
+// ---- Warehouses (0018) ----------------------------------------------------
+
+/**
+ * Where stock is kept.
+ *
+ * A SURROGATE ID, where `units_of_measure` has none. A unit's code is its identity
+ * because it prints on an invoice line; a warehouse's code is an internal handle that
+ * nothing prints, so it is a label and it may be changed. Both `code` and `name` are
+ * unique ignoring case — a repository comparing either one case-sensitively against those
+ * indexes finds nothing and then trips the index instead, which is a bug this project has
+ * already shipped.
+ */
+export interface WarehousesTable {
+  id: string
+  /** An internal handle: 'MAIN', 'WH-2'. Unique ignoring case, and changeable. */
+  code: string
+  /** What the people who work there call it. Unique ignoring case. */
+  name: string
+  /** Free text, or null. Never '' — the migration refuses a blank one. */
+  description: string | null
+  /** An archived warehouse keeps its history and takes nothing new. */
+  is_archived: SqlBool
+  created_at: Timestamp
+  updated_at: Timestamp
+}
+
+// ---- The stock ledger (0019) ----------------------------------------------
+
+/**
+ * One stock movement: what moved, when, of what, and where.
+ *
+ * THE COLUMNS THAT ARE NOT HERE ARE THE DESIGN. There is no `balance_quantity` and no
+ * `balance_value`, and no derived cost on an outward row. This table holds a
+ * `StockMovement` from domain/inventory and nothing a valuation produces, so the running
+ * figures on a stock card are `runStockCard`'s output every time it is asked for
+ * (invariant 7). Migration 0019's header is the argument, and the part of it that settles
+ * the question is that `checkMovement` REFUSES an outward movement carrying a cost — a
+ * column holding one could not be read back into the shape the strategy takes.
+ *
+ * Rows are append-only: 0019 installs triggers that abort any UPDATE or DELETE. A
+ * correction is another movement, the way a correction to the journal is a reversing
+ * entry — and here the reason is sharper, because editing a movement changes what every
+ * later movement cost while the entries those costs posted as cannot be edited to match.
+ */
+export interface StockLedgerTable {
+  id: string
+  /** References items(id). A trigger refuses an item that keeps no balance. */
+  item_id: string
+  warehouse_id: string
+  /** A `StockMovementKind`. Constrained by a CHECK naming the seven, as data. */
+  kind: string
+  /** The date the movement is valued as of. Decides its place in the card, not "now". */
+  movement_date: DateString
+  /**
+   * Position in this (item, warehouse) register, unique within it.
+   *
+   * The tiebreak WITHIN a date, never the order itself: a back-dated movement gets the
+   * highest sequence and the earliest date. A duplicate makes `runStockCard` refuse the
+   * whole set rather than reorder two rows, which is why it is a unique index.
+   */
+  sequence: number
+  /** Quantity, 3dp. Non-negative — the direction is on the kind (invariant 3). */
+  quantity: DecimalString
+  /**
+   * Money, 2dp. Required on an inward movement and NULL on an outward one — invariant 4,
+   * enforced as a biconditional CHECK.
+   *
+   * An inward movement STATES what the goods cost, because a purchase bill line already
+   * fixed that figure and there is nowhere else for it to come from. An outward movement
+   * is VALUED by the strategy; letting it carry a cost would let a caller price a sale at
+   * whatever it liked.
+   */
+  cost: DecimalString | null
+  /**
+   * A `SourceDocumentType` — `journal_entries`'s column, meaning the same thing.
+   *
+   * NOT DERIVABLE FROM `kind` AND NOT DERIVING IT. One `stock-adjustment` document raises
+   * both `adjustment-in` and `adjustment-out`; one `credit-note` raises `sales-return`
+   * here and something else in the ledger. Two facts, two columns, no rule between them.
+   */
+  source_type: string
+  /** Primary key in the source document's own table. Null for an opening entry. */
+  source_id: string | null
+  /** The number a human would quote, denormalised so a card is not a lookup per row. */
+  source_number: string | null
+  narration: string | null
+  created_at: Timestamp
+  /**
+   * The journal entry this movement posted as (0022).
+   *
+   * ARCHITECTURE §6.4's other half: every movement writes here AND posts, in one
+   * transaction, so inventory on the balance sheet always reconciles with the register.
+   * `stock_ledger_posted` refuses a row that names none.
+   *
+   * NOT A CACHED FIGURE, and the distinction is 0019's own. That migration refuses to
+   * store a running balance because a back-dated movement CHANGES it; an entry id is the
+   * identity of an immutable row and cannot drift. Nullable only because SQLite requires
+   * an added `REFERENCES` column to default to NULL, and because rows written before 0022
+   * have none — a set that is empty in every file that exists.
+   */
+  entry_id: string | null
+}
+
 export interface Database {
   app_metadata: AppMetadataTable
   accounts: AccountsTable
@@ -626,6 +793,8 @@ export interface Database {
   receipts: ReceiptsTable
   receipt_allocations: ReceiptAllocationsTable
   document_offsets: DocumentOffsetsTable
+  warehouses: WarehousesTable
+  stock_ledger: StockLedgerTable
 }
 
 export type { Generated }

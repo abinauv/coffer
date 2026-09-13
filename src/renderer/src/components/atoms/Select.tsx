@@ -14,6 +14,7 @@
 
 import { useId } from 'react'
 import type { JSX, ReactNode, Ref, SelectHTMLAttributes } from 'react'
+import { useFieldMessage } from './FieldMessage'
 
 interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'className'> {
   label: string
@@ -40,8 +41,7 @@ export function Select({
 }: SelectProps): JSX.Element {
   const generatedId = useId()
   const selectId = id ?? generatedId
-  const messageId = `${selectId}-message`
-  const message = error ?? hint
+  const { describedBy, invalid, message } = useFieldMessage({ id: selectId, hint, error })
 
   return (
     <div className={['field', className ?? ''].filter(Boolean).join(' ')}>
@@ -51,22 +51,13 @@ export function Select({
       <select
         id={selectId}
         className="field__control"
-        aria-invalid={error === undefined ? undefined : true}
-        aria-describedby={message === undefined ? undefined : messageId}
+        aria-invalid={invalid}
+        aria-describedby={describedBy}
         {...rest}
       >
         {children}
       </select>
-      {message !== undefined && (
-        <p
-          id={messageId}
-          className={error === undefined ? 'field__hint' : 'field__error'}
-          /* Only a validation failure interrupts; a static hint does not. */
-          role={error === undefined ? undefined : 'alert'}
-        >
-          {message}
-        </p>
-      )}
+      {message}
     </div>
   )
 }

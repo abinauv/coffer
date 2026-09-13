@@ -116,6 +116,17 @@ const BY_KIND: ReadonlyMap<ReceiptKind, ReceiptKindDefinition> = new Map(
 )
 
 /**
+ * Whether a string is a voucher kind this build knows.
+ *
+ * `isDocumentKind`'s twin, and it is needed for the same reason and in the same places:
+ * a report or a dashboard holds a `kind` as a `string`, has to decide which of the two
+ * tables it belongs to, and must not cast. See the note beside `isDocumentKind`.
+ */
+export function isReceiptKind(value: string): value is ReceiptKind {
+  return RECEIPT_KINDS.some((definition) => definition.kind === value)
+}
+
+/**
  * The definition for a kind.
  *
  * Throws rather than returning null, for the reason `definitionOf` in `./documents` does:

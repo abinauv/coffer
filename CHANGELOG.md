@@ -11,9 +11,34 @@ documents you have already issued.
 
 ## [Unreleased]
 
-Phase 0: the foundations. There is no ledger and no document yet — this is the file
-format, the crypto, the arithmetic and the machinery everything else is built on. No
-release has been made, so everything below is new.
+**The first alpha.** No release has been made, so everything below is new — this is one
+section covering the whole of the work so far rather than a diff against something people
+are running.
+
+What it comes to, for somebody deciding whether to open it: **you can keep a real set of
+books in Coffer.** Create a company, and it arrives with a chart of accounts, a fiscal
+year of periods, numbering series for all nine numbered kinds and a warehouse. Raise
+quotations, sales invoices, credit notes, purchase bills and debit notes; issue them,
+which numbers them and posts them in one transaction; record receipts, payments and
+refunds both ways, and say which documents they settle; set a credit note against the
+invoice it settles. Read a trial balance, a balance sheet, a profit and loss, a day book,
+an account ledger and an aged report on either side — none of which is stored, all of
+which are summed from the journal when asked. Keep stock per item and warehouse, valued at
+moving weighted average, where every movement that moved money also posts, so inventory on
+the balance sheet ties to the register as at every date. Close a period, close a year, and
+back the whole thing up into one archive that holds the database and the keys that open
+it.
+
+Three things are built and **not reachable from the app**, and they are listed here as
+what they are rather than left to be discovered: an invoice renderer (`services/pdf/`),
+four import readers for CSV, Tally XML and Zoho Books (`services/importers/`), and GSTR-1
+and GSTR-3B generation (`regimes/in-gst/returns/`). The last of those carries a
+`SCHEMA_UNVERIFIED` notice on every artefact it produces: the arithmetic is pinned to the
+paisa against hand-worked fixtures, and the shape has never been validated against GSTN's
+own schema or been through a filing cycle.
+
+Builds are unsigned. There is no telemetry, no account and no network call in any core
+path.
 
 ### Added
 
@@ -201,9 +226,9 @@ release has been made, so everything below is new.
 
 #### The ledger contract
 
-No ledger yet — this is the contract Phase 1 is built against, landed on its own so that
-work on the chart of accounts, the periods and the posting engine cannot disagree about
-what an entry is.
+The contract the ledger was built against, landed before any of it so that work on the
+chart of accounts, the periods and the posting engine could not disagree about what an
+entry is.
 
 - **[accounting]** The five invariants (`main/domain/ledger/types.ts`): every entry
   balances; the ledger holds only posted entries, with no draft state and no status
@@ -365,8 +390,9 @@ Taxes`, input tax as an asset under `Taxes Recoverable`. Netting them into one w
 
 #### The document contract
 
-The shapes and rules Phase 2 is built against. Types and pure functions only — no table
-exists yet, and migrations `0005`–`0009` are reserved for the ones that will.
+The shapes and rules the document tables were built against, landed first for the same
+reason the ledger contract was: types and pure functions only, with the migrations that
+would implement them reserved rather than written.
 
 - **[accounting]** A document is a draft until it is issued, and frozen afterwards. An
   issued tax invoice is corrected by a credit note, never by an edit: the customer holds
@@ -607,22 +633,11 @@ them going red.
   beside it returns its problems, because a user who typed a journal wants every bad line
   at once; a posting rule returns an `EntryDraft` and has no half-built entry to hand back.
 
-### Fixed
-
-- **[accounting]** A fiscal year that broke exactly even could not be closed. The
-  retained-earnings line came out as debit `0.00` and credit `0.00` — a both-zero line,
-  which invariant 5 refuses — so the close failed with `AMBIGUOUS_LINE`, an error nothing
-  on that screen could act on. The cause is that **`isPositive()` is true for zero in
-  decimal.js**, because zero carries a positive sign. A year that nets to nothing now
-  writes no profit line at all, which is the honest entry: the closing lines already
-  balance among themselves. Found by auditing every `isPositive()` in the codebase after
-  the same trap made a test in the posting rule fail.
-
 #### The document itself (migration `0008`)
 
 `documents`, `document_lines`, `document_line_taxes` — one table for all five kinds, and
-the draft side of a document's life. Issuing and cancelling come next; they are one
-transaction spanning the numbering counter, the posting rule and the ledger.
+the draft side of a document's life. Issuing and cancelling are the next section: they are
+one transaction spanning the numbering counter, the posting rule and the ledger.
 
 - **[accounting]** Rule 1, as triggers: a document is frozen the moment it leaves draft,
   and so are its lines. A line has no status of its own and never will — a document and
@@ -662,12 +677,446 @@ transaction spanning the numbering counter, the posting rule and the ledger.
 - A draft may be created empty and filled in. The rule that matters is that an empty
   document cannot be **issued**, which is about the transition rather than the row.
 
-### Fixed
+#### Issuing and cancelling (migrations `0009`, `0010`)
 
-- `TaxRegime` rate helpers documented themselves as two decimal places. The scale has been
-  three since Phase 0 — 0.125% is half of India's 0.25% slab — and only the comments were
-  wrong, but a reader trusting them would have built the two-place column the scale exists
-  to prevent.
+- **[accounting]** `issueDocument` — one transaction spanning the numbering counter, the
+  posting rule and the ledger. The number is allocated and advanced in a single statement
+  inside it, so two invoices issued at the same instant cannot take the same number.
+- **[accounting]** An issued document's **narration** is frozen, and `0009` exists because
+  building the issue path turned something `0008` had documented as deliberate into a
+  contradiction. Narration is what goes on the journal entry, and a posted entry is
+  immutable — so a narration that could still be edited is a document that can be made to
+  print something its own day book entry does not say, with nothing recording when the two
+  parted company. `series_id` joins it, with less argument needed: the number was already
+  frozen and the series that produced it was not.
+- **[accounting]** `0010` corrects a CHECK that was stricter than the rule it enforced. A
+  quotation is **issued** without **posting** — every kind is issued, only the kinds with a
+  source type are also posted — and `0008`'s constraint made a quotation unable to leave
+  draft, which meant it could never be numbered. The non-posting kinds are enumerated in
+  SQL because a CHECK cannot import a union, and a test asserts the list agrees with
+  `postsToLedger` for every kind the domain knows.
+- **[accounting]** Cancelling reverses the entry and keeps the number. A cancelled
+  document's outstanding therefore reaches zero with no code making it, because the
+  reversal is a second entry on the same account.
+- A table rebuild in SQLite has a trap the runner now guards: `defer_foreign_keys` is on
+  inside the migration transaction and `foreign_key_check` runs before the commit, without
+  which `0010` would have silently deleted every document line in the file.
+
+#### Who these books belong to (migration `0011`)
+
+- `company_profile` — the name a tax authority knows, the registration, the jurisdiction,
+  the address. At most one row, pinned by `CHECK (id = 'company')`.
+- **Identity, not preferences.** The reference project kept a single-row `settings` table
+  that grew into the profile plus invoice defaults plus the mail configuration, and every
+  new field became a migration that rewrote it. The distinction is not the row count: it is
+  that the reference table had no subject.
+- **It can legitimately be empty**, and no row is seeded. A migration cannot invent a
+  company's legal name, so every read answers null until somebody enters one, and books
+  with no profile still keep a chart, periods, parties, drafts and a ledger.
+- **[accounting]** What it is needed for is tax. `computeTax` takes a supplier and a
+  customer and decides CGST+SGST against IGST from whether their jurisdictions match;
+  `0005` gave Coffer the customer, and there was nowhere to put the supplier.
+
+#### Receipts, payments, and what they settle (migration `0012`)
+
+- **[accounting]** `receipts` and `receipt_allocations`. A receipt is **posted the moment
+  it exists** — `number` and `entry_id` are both NOT NULL, where a document's are both
+  nullable. A document has a draft stage because an invoice is built up before it means
+  anything; a receipt records money that has already moved. The state `0008` needs a CHECK
+  to forbid is one this table cannot represent, and `status` has two values, not three.
+- **[accounting]** **An allocation is a matching record and not a posting.** Both the
+  invoice's debit and the receipt's credit already carry the party's id, so the control
+  account is right the instant the receipt posts, whether or not anybody has said which
+  invoice it pays. Which is why an allocation may be rewritten while a posted entry may
+  not — and why the row carries no date and no narration, because giving it either would
+  invite reporting on it as though money moved when the matching was done.
+- **[accounting]** Nothing derivable is stored, again: no `allocated`, no `is_settled`, no
+  `paid` status, and nothing added to `documents`. What follows is the identity
+  `party control balance = SUM(document outstanding) - SUM(receipt unallocated)`, which is
+  what makes it impossible for an aged report and the balance sheet to disagree — provided
+  the report shows the money on account rather than dropping it.
+- **[accounting]** Four triggers, chosen by one test: does breaking the rule corrupt a
+  report silently, or produce something a reader can see? The worst is
+  `receipt_allocations_same_party` — an allocation across two parties takes A's outstanding
+  down because B paid, and the control account still totals, the trial balance still ties,
+  and both statements are quietly wrong from that day on.
+- **[accounting]** Cancelling a **receipt** deletes its allocations; cancelling a
+  **document** with allocations against it is refused. The asymmetry is the point:
+  cancelling a receipt un-does money, and the invoices it was matched to correctly become
+  unpaid again, while cancelling a document leaves money that still exists and still
+  belongs to the party, and detaching it silently would create on-account money nobody
+  decided to create.
+- `numbering_series` is rebuilt rather than given a private counter table for receipts.
+  `numbering_counters` is the one place in this codebase that can hand the same number to
+  two records, and a second copy of it is that failure written twice.
+- **There is no `method` column**, and it was considered. The account already says cash or
+  bank; what a user needs is the reference — a cheque number, a UTR, a UPI reference — as
+  free text, because it is somebody else's format. A closed list in a CHECK is a table
+  rebuild on the day somebody's payment app is not on it.
+- A missing numbering series was found here as a real bug and not a hypothesis: nothing
+  seeded one, `defaultSeriesFor` answered null for every kind, and issuing any document
+  from the app failed against a company file while every test passed — because every test
+  created its own series first. `setUpBooks` seeds them now.
+
+#### What a note corrects, and when an invoice falls due (`0013`, `0014`)
+
+- **[accounting]** `documents.original_document_id` — the invoice a credit note corrects.
+  Nothing in the ledger reads it and nothing could: a note that names its invoice and one
+  that does not post identically, because a return adjusts accounts rather than documents.
+  It is for GSTR-1 table 9B and for the person reading the paper, and it cannot be
+  reconstructed later — two invoices to one customer in one month for one amount are
+  ordinary, and nothing in the figures says which one a note undid.
+- **[accounting]** It is **optional**, which is the part that looks wrong. One credit note
+  against several invoices has been legal since the 2019 amendment to section 34 — the
+  post-sale discount a distributor settles at the end of a quarter is exactly that — and a
+  NOT NULL column would refuse a document the law permits.
+- One `EXISTS` proves the link points at a document that could actually have been corrected
+  by this one: same party, issued, same side of the trade facing the other way. A sales
+  invoice carrying a link is refused by the same expression with no separate check, and so
+  is a self-reference, because a document cannot be two kinds at once.
+- **[accounting]** `documents.due_date`, stamped at issue. The derived version needs no
+  column — `parties.payment_terms_days` has existed since `0005` — and that is the version
+  this migration exists to refuse. Terms are a fact about a party _today_; the date an
+  invoice fell due is a fact about _that invoice_. Under the derived version, moving one
+  customer from 30 days to 15 silently re-ages every invoice they have ever had, including
+  ones in closed periods and on reports already printed, signed and sent to a bank.
+- **[accounting]** The rule is a **biconditional** — a due date is present exactly where a
+  kind that charges on terms has left draft. A one-way rule leaves the dangerous direction
+  legal: an issued invoice with no due date reads to an aged report as a document that is
+  never late, so it sits in the newest bucket forever and every total still ties.
+- `0014` is the first migration to **backfill** rather than leave a column null, and it
+  backfills with the derived value it has just argued against. For documents issued before
+  it, the stamp does not exist and cannot be recovered; the party's current terms are the
+  best available reconstruction and are exactly right for every file whose terms have not
+  changed. What it buys is that the invariant holds for every row, old and new, so the
+  report can read the column instead of defending against a null.
+
+#### Refunds, and setting a credit note against an invoice (`0015`, `0016`)
+
+- **[accounting]** Two more voucher kinds: a **refund** is sales-side, moves money out and
+  touches receivables; a **refund received** is its purchase-side mirror. Direction
+  disagrees with side on half the table now, and the control account follows neither, which
+  is what `controlRole` is for.
+- **[accounting]** `0015` writes a trigger `0012` considered and declined, and the reversal
+  is the interesting half. `0012` argued a wrong pairing was never silent, because with one
+  voucher per side it was always cross-account and two control accounts visibly stopped
+  agreeing. A refund is on the **same** side as a receipt and moves the **same** control
+  account — so a refund allocated to a sales invoice is same party, same side, same
+  account, and the only thing wrong is the direction. Nothing looks odd anywhere except an
+  aged report saying it does not tie, without being able to say why.
+- **[accounting]** `document_offsets` (`0016`) — which invoice a credit note settles. It is
+  `receipt_allocations` again **with money at neither end**: an allocation matches two
+  movements on one control account that point opposite ways, and that sentence never
+  mentioned money. Until this table, an aged report showed the invoice in `Over 90 days`
+  and the credit note on account beside it, with nothing that could match them.
+- **[accounting]** It is not a column on `documents`, because a note may be set against
+  three invoices and an invoice may take credit from two notes — and because one column
+  holds no **amount**, which is the whole of what a partial offset is.
+- **[accounting]** And it is not `0013`'s link, which already points the right way. That
+  records what a note **corrects**, is frozen at issue because a filed return names it, and
+  there is one of it. This records what a note **settles**, which is decided afterwards and
+  changed as often as the parties agree. A note raised for a short delivery in April may
+  perfectly well be set against November's invoice. The two coexist with no rule tying them
+  together, deliberately.
+- **The set of offsets belongs to the refund end and only to it**, which is why the invoice
+  shows them read-only. If either end could replace an overlapping set, the last screen to
+  save would silently drop the other's rows.
+- Offsetting posts nothing, so it deliberately has **no period check**: saying in July
+  which invoice an April credit note settles changes no figure in April, and refusing it
+  would be this layer inventing a rule the ledger does not have.
+
+#### Outstanding and ageing
+
+- **[accounting]** What a document has outstanding is its movement on the party's control
+  account, in the document's own facing, less what has been allocated to it from vouchers
+  and less what has been offset against it from documents. The movement is read off the
+  lines that **name the party**, never off a role: a business that repointed that role would
+  otherwise find every invoice raised before the change reporting an outstanding of
+  nothing, with the report agreeing with itself at zero.
+- **[accounting]** There is no `status = 'issued'` filter anywhere in that file and there
+  must not be one. A cancelled document's entry is fetched together with the reversal that
+  names it, so it comes to zero by arithmetic. A filter is a thing somebody forgets.
+- **[accounting]** An aged report is **one control account, decomposed** — not a list of
+  unpaid invoices, which is the version that is easy to write and ties to nothing. Its
+  items are invoices, credit notes, receipts with money spare, and the opening balance
+  somebody typed on the day they adopted Coffer; lines naming no party are grouped under
+  "not attributed", never dropped, because dropping them is the one thing that could make
+  the foot disagree with the account.
+- **[accounting]** A credit never ages. The sign decides the treatment before any date is
+  looked at — bucketing credits by date would produce one figure reading as both a problem
+  and its own solution.
+- **[accounting]** "As at a date" means three things, and each is a separate mistake
+  avoided. A movement counts when its **entry** is dated on or before the date, so an
+  invoice cancelled in July was outstanding on 30 June. A match counts only when **both
+  ends** were in the books by the date — one end alone gives a page showing an invoice
+  nobody had yet raised as part paid. And the control balance is summed over the same lines
+  with the same filter, by the same function the balance sheet uses.
+- **[accounting]** `Not yet due` closes at day 0, and that number is load-bearing: writing
+  −1 would move every invoice into the first overdue column on its due date, a day early on
+  every statement sent. The bucket table is checked at module load for gaps and overlaps —
+  a gap loses a figure in silence, and an overlap is worse, because the figure appears
+  twice, the row total is right, and both columns are wrong.
+- **[accounting]** Every report carries `ties`, and a test asserts the **items** as well.
+  See below: a report that checks itself with a total cannot see an error that appears twice
+  with opposite signs.
+
+#### Stock (`0017`, `0018`, `0019`, `0022`)
+
+- **[accounting]** A perpetual stock register: one row per movement, per item, per
+  warehouse, valued at moving weighted average. Seven movement kinds — opening, receipt,
+  issue, purchase return, sales return, adjustment in, adjustment out — with the direction
+  on the kind and never on the sign of a quantity.
+- **[accounting]** `items.is_stock_tracked` is **orthogonal to `kind`**, and the whole of
+  `0017` is the argument for why. `kind` classifies for filing: goods carry an HSN, a
+  service carries a SAC. Plenty of goods are not stocked — a workshop's cleaning materials,
+  drill bits and packing tape are goods with an HSN that nobody intends to count — and
+  under `kind` alone every one becomes an item that must be received before it can be
+  issued. A service may not be stock-tracked, and that is a CHECK rather than a repository
+  rule because a CHECK answers both directions at once: the rule nobody writes is the one
+  refusing a stock-tracked item turned **into** a service.
+- **[accounting]** `warehouses` (`0018`) has a surrogate id where a unit has none. A unit's
+  code is its identity because it prints on an invoice line; a warehouse's code is an
+  internal handle that nothing prints, so it may be changed. Both code and name are unique
+  ignoring case, and the repository compares `COLLATE NOCASE` — a case-sensitive comparison
+  against a NOCASE index finds nothing and then trips the index, which is a bug this project
+  has already shipped.
+- **[accounting]** **No running balance is stored**, and `0019`'s header is the argument.
+  The convention against stored balances carves out exactly this shape for a due date —
+  stamp it and freeze it — and freezing is not available here: a running balance frozen
+  before a back-dated receipt is simply wrong the moment it lands, because the quantity on
+  hand really did change. Under moving average a back-dated receipt re-averages the pool, so
+  it changes what every issue after it cost.
+- **[accounting]** And the argument that ends it: **a stored outward value is a value the
+  domain refuses to take back.** An outward movement is valued by the strategy and may not
+  carry a cost — `checkMovement` answers `COST_NOT_PERMITTED` — so a row storing what an
+  issue cost could not be read back into a `StockMovement` without stripping the figure off
+  again. The table stores a movement and nothing a valuation produces.
+- **[accounting]** What that costs is stated rather than glossed: every read of a card or of
+  stock on hand is a fold over that register's movements, every time. And because an outward
+  value is derived at read time, recording a back-dated receipt **changes the cost of a sale
+  that has already posted**. The register moves and the ledger cannot, so the answer is a
+  valuation adjustment dated at the movement it restates — a second entry, the same shape as
+  a reversal, never an edit to the first.
+- **[accounting]** Value cannot exist without quantity; quantity can exist without value.
+  The asymmetry is deliberate — a free sample taken in at nil and an item written down to
+  nothing are both ordinary — and the illegal state is a running total rather than a row, so
+  it is refused in the domain where somebody can still fix it. Negative stock is **refused,
+  not priced**: valuing it at the last average strands a negative the next receipt silently
+  absorbs, and valuing it at nil flatters gross profit until somebody happens to look.
+- **[accounting]** `stock_ledger.entry_id` (`0022`) is the other half of the promise that
+  inventory on the balance sheet reconciles with the register: every movement writes and
+  posts, in one transaction. The trigger states only the half the row can prove — an inward
+  movement whose stated cost is not zero must name an entry — because an outward movement's
+  value is not in the table to test, and the repository states the other half with the
+  strategy's figure in hand. A movement that moved nothing names no entry and is not a hole:
+  an entry of two zero lines is refused by the ledger anyway.
+- **[accounting]** A sales return comes back at the cost it left at, not today's average.
+  The cost of a sale is a fact about the day of the sale, and re-valuing it would let the
+  passing of time change the gross profit on a sale already made.
+- **[accounting]** `db/repos/stock-reconciliation.test.ts` is the invariant as figures, as
+  at every date, item by item and account by account — not merely that the two sides agree.
+  An invariant that holds by construction cannot see a movement that failed to post at all,
+  because both sides would then be short by the same amount and the comparison would still
+  be true.
+- A stock movement's kind is not a source document type. One stock-adjustment document
+  raises `adjustment-in` for a stock-take surplus and `adjustment-out` for shrinkage; one
+  credit note raises a sales return here and something else in the ledger. Two facts, two
+  columns, no rule between them.
+- The valuation interface was written against the two strategies that do **not** exist yet.
+  FIFO and batch are named in the closed union so that a file written by a later build is
+  recognisably a later build rather than an unknown string, and `layers`, `slices` and the
+  capability flags are there for them. An interface shaped around the method that needs
+  least state is an interface the method that needs most will rewrite.
+
+#### How a supply is taxed (`0020`, `0021`)
+
+- **[accounting]** `documents.export_tax_payment` — whether a zero-rated supply left with
+  tax paid on it or under an undertaking. **It is not a reporting flag.** A supply that
+  leaves the country is inter-state, so the full rate arrives as one integrated component;
+  that is right for an export on which tax is paid and refunded, and wrong for one made
+  under an undertaking, where no tax is charged at all. The only other way to reach a nil
+  figure was to set the line's rate to zero — and a rate with no tax is **zero-rated**, with
+  the credit on its inputs refundable, while a rate _of_ zero is **nil-rated**, with that
+  credit reversed. Every total on the return adds up either way.
+- **[accounting]** `documents.is_reverse_charge` — whether the buyer discharges the tax
+  rather than this business. `NOT NULL DEFAULT 0`, and the default is an assertion: forward
+  charge is the honest one, because a document wrongly marked reverse charge invents a cash
+  liability that no credit may discharge. Not confined by kind — an outward supply under it
+  carries a value and no liability, and an inward one makes this business liable for the
+  output tax **and** entitled to the input credit.
+- **[accounting]** `document_lines.itc_eligibility` (`0021`) — whether credit may be taken,
+  and if not, why not. **On the line, because one bill can carry a laptop and a staff car**,
+  and because the posting rule needs it there: an ineligible line's tax is not recoverable,
+  so it is not an asset and posts to the line's own value account. The two ineligible
+  members are kept apart because a return reports blocked and un-availed credit in different
+  places and the money is identical.
+- **[accounting]** NULL is a fourth state and not one of the three, and `0021` declines to
+  backfill for that reason. `eligible` happens to be what the books already assert, but
+  writing it into every existing row would make an inference indistinguishable from a
+  decision — and would leave the return nothing to raise an issue about.
+- `0020` had to rewrite the document freeze and `0021` did not, which is the pair's lesson.
+  The document freeze **enumerates** its columns, so a column added afterwards is not frozen
+  until the list is rewritten — measured: the update goes straight through. The line freeze
+  names no columns at all, because a line is frozen against its parent's status, so a column
+  added to `document_lines` is frozen the moment it exists.
+
+#### GST returns, provisionally
+
+- **[accounting]** GSTR-1 — B2B, B2CL, B2CS, CDNR, CDNUR, EXP, HSN and DOC_ISSUE — and
+  GSTR-3B, including tables 3.1, 3.2, 4 and the payment table with credit utilisation.
+  Built as pure folds over a period's documents: no I/O, no clock, no database.
+- **STRUCTURALLY COMPLETE, SCHEMA-UNVERIFIED, and it says so on its own output.** The
+  arithmetic is tested to the paisa against fixtures worked by hand. The shape — field
+  names, nesting, which figure belongs in which box — was written from the published
+  description of the returns and has never been checked against GSTN's own JSON schema nor
+  been through a filing cycle. Every artefact carries a `SCHEMA_UNVERIFIED` issue and a
+  notice in its own body, so a screen cannot render one as finished without repeating it.
+  This is `ARCHITECTURE.md` §6.6 applied to a shape rather than to a rate.
+- Fourteen decisions are recorded by name — that the B2CL threshold is strictly greater,
+  that UTGST files in the state tax column, that IGST credit is spent before any other and
+  its remainder goes to CGST before SGST, that GSTR-1 rounds nowhere and GSTR-3B rounds only
+  the cash payable — and a test asserts the list of ids is exactly the list of tests pinning
+  them, so it cannot become a page of comments nobody maintains.
+- Nine gaps are recorded the same way, ordered by how much is wrong without each. Three more
+  were **deleted** when `0020` and `0021` landed, and the deletion is the point: a list of
+  what is still owed that carries things already delivered stops being read.
+- **[accounting]** A document that does not belong in the period, or is on the wrong side,
+  or names a tax component this build does not know, is a **refusal** rather than a dropped
+  row. Dropping it would be the failure this project has already shipped once — a filter
+  that silently removed data while every total still tied.
+
+#### Printing an invoice — the half that can be tested
+
+- An invoice print model and an HTML template: header, party blocks, lines, the tax summary
+  grouped by component and rate, totals, amount in words, and the triplicate set. Rule 48
+  wants each copy marked on its face, and a transporter stopped at a check post is expected
+  to be carrying the duplicate.
+- **The template computes nothing.** No total is summed, no line extended, no sign flipped.
+  A test hands it a model whose totals deliberately disagree with its own lines and asserts
+  that what prints is the model's total.
+- **Escaping is inverted so it cannot be forgotten.** An `html` tagged template escapes
+  every interpolated value, and putting markup in requires saying `raw(...)` out loud —
+  which happens exactly twice in the template, both on constants declared beside it. A bare
+  `escapeHtml` helper would put the decision at every one of the sixty-odd interpolation
+  sites, which means the batch that adds one more is the batch that ships a broken party
+  name and, the first time one of these is shown in a window, a script-injection route.
+  Five characters are escaped rather than three, because values go into attributes and an
+  unescaped quote there is the whole injection in one character.
+- Dates print the month as a word, so `09 Feb 2027` cannot be read as the 2nd of September,
+  and no locale is consulted. The grouping is a required parameter with no default, because
+  the default was the lakh/crore grouping and it was silently wrong for everyone outside
+  India.
+- **`printToPDF` and its IPC channel are not written.** This is the half that can be pinned
+  against a fixture without an Electron window in the room; there is no PDF button in the
+  app.
+
+#### Reading somebody else's books in
+
+- Four readers, all pure — none opens a file, imports `electron`, reads a clock or writes
+  anything. The caller supplies the text and owns the file dialog.
+- **CSV**, RFC 4180, for bank statements. Quoting is transport, not meaning: `""` and a bare
+  empty field are the same value, because otherwise the meaning of a file would depend on
+  which tool wrote it. A **ragged row is reported and never padded** — a short row is either
+  a trailing empty column omitted (harmless) or a delimiter inside an unquoted value that
+  ate a column boundary (catastrophic, every field after it shifted one place left), and
+  padding silently picks the harmless reading for both. A BOM is stripped once, at position
+  zero, because Excel writes one, banks export from Excel, and it lands at the front of the
+  first heading and nowhere else — which reads exactly like a mapping bug in the first
+  column.
+- **A date format is an argument, never an inference.** If the importer guesses and is
+  wrong, it does not fail: it produces a full year of transactions, every one misdated,
+  every total correct and every reconciliation tying at the foot — surfacing months later as
+  a return filed against the wrong period. Two-digit years are `20YY` fixed rather than a
+  sliding window, because a window that moves with the clock makes the same file import as
+  different dates depending on when it is imported.
+- **XML**, for Tally exports, and its security is a property of what is not implemented. A
+  `<!DOCTYPE` is refused **by name**, with a line and a column, never skipped — that is
+  where XXE and billion-laughs both arrive, and skipping one silently invites the caller to
+  assume it was handled. Nothing resolves a SYSTEM or PUBLIC identifier, so there is no code
+  path that opens a file or a URL. No document can declare an entity, so the only ones that
+  expand are the five XML defines, each to one character from a constant. Four caps — depth,
+  element count, text length, attributes per element — are on by default, and the scanner is
+  iterative so a deep document cannot overflow the stack before a cap is reached.
+- Attribute records are backed by `Object.create(null)` and the entity table is a `Map`,
+  because an attribute name comes from the file and the file therefore chooses the key.
+  Measured: `__proto__` written into a plain object typed `Record<string, string>` silently
+  vanishes, and reading it back returns `Object.prototype` — an object where the type says
+  string.
+- **Tally.** Masters and vouchers, in either file order, one pass. A ledger's role is its
+  **parent chain, never its name** — `Kumar & Co` is a customer, a supplier or a rent
+  account depending only on where it hangs — and the walk carries a visited set, because a
+  group whose parent is itself is a state Tally's own data entry permits and a walker
+  without one does not report it, it hangs. Cancelled and optional vouchers are skipped and
+  reported, because importing a voided invoice produces totals that are wrong in a way that
+  reconciles against the file they came from. An unbalanced voucher is refused with the
+  difference named rather than plugged.
+- **Zoho Books**, one CSV per entity, eight entities, with the entity named by the caller
+  rather than guessed from the filename — a file read as the wrong entity produces a
+  plausible batch of nonsense rather than an error.
+- **An import is a proposal, not a write.** Nothing in either importer allocates an id or
+  touches a database, and **nothing invents an account**: an unresolved name is an error that
+  blocks the write, never a silent new account and never a silent trip to Suspense. A party
+  named on a transaction _is_ staged, and the distinction is deliberate — inventing an
+  account decides where money lands, which is a judgement nobody made; recording a party
+  records a name the file already contains.
+- Neither reader is reachable from the app yet: there is no import screen and no IPC group.
+- Both name their own column and element mappings as a **best-effort default rather than a
+  schema**, because neither was written with a sample export to check against. Every field
+  is overridable, unclaimed columns are reported, and the headings actually seen are
+  recorded on the batch.
+
+#### The app itself
+
+- Thirty-eight registered screens across twenty-one files, discovered by a glob rather than
+  a hand-written list, so adding one is a single `registerScreens` call and the sidebar
+  entry, the route and a "Go to…" command all follow.
+- **Overview** — a dashboard replacing the placeholder that had promised accounts, invoices
+  and reports "in the next phase". All of it shipped, so the notice had become a lie printed
+  on the one screen every session starts on. Receivables and payables as at today, what is
+  overdue worst-first across both sides, unissued drafts, recent documents and vouchers, the
+  file and vault paths, how many recovery codes are left, and back up / change passphrase /
+  close. Seven independent reads, none of which can take the screen down; an empty company
+  reads as a beginning rather than as nothing, with a three-step checklist.
+- Registers and editors for all five document kinds and all four voucher kinds; customers,
+  vendors and the unfiltered party list; items; units; the chart of accounts; numbering
+  series; business details; and the six reports.
+- **[accounting]** Not one figure on any screen is worked out in the renderer. Where a
+  figure would have to be computed to exist, the page does without it: the document editor
+  shows the last saved totals marked stale rather than adding up a line as you type, and
+  "settle in full" copies main's outstanding rather than summing anything.
+- **A register has no page total**, because a sum across rows is the total of a _page_ — a
+  number that changes when you press Next and means nothing in either position. And a
+  register cannot say a document is overdue, because a document does not know what has been
+  paid against it; the aged report can, and does.
+- **Nothing can reset a numbering counter**, and the repository has no function to call even
+  if a screen wanted one. The rule is said in words on the screen so that its absence reads
+  as a decision rather than as a missing feature. `numbering.seedDefaults` is the repair
+  path for a company file made before `0012` or `0015`, which would otherwise be unable to
+  issue anything.
+- Recovery codes are shown once, and the confirmation is not a checkbox: Coffer names one of
+  the five and asks for it back. There is no Back, no Skip and no Escape past that screen,
+  because the company is already open in main and "later" is not on offer.
+- Four unlock failures get four different screens rather than one "wrong passphrase" —
+  invalid passphrase, missing database, missing vault, and keys that belong to a different
+  file.
+- A command palette (Ctrl/Cmd+K) over every screen and every action, a three-way theme
+  control because "follow the system" is a real preference and not the absence of one, a
+  title bar correct in four different window-chrome modes, and toasts that pause their
+  countdown while you are reaching for the action button.
+
+#### The mutation harness
+
+- `npm run mutate` and `scripts/mutations/`: break a rule on purpose, run the tests, put it
+  back, and check that something failed. Coverage says a line ran; this says a test would
+  have noticed it changing. Every batch so far has found a rule nothing was testing.
+- A campaign is a definitions file rather than a claim, so the run is attached to the
+  statement. Every campaign carries a **control** that changes nothing and a **canary** that
+  must die, anchored on something a test pins by value.
+- It has its own tests (`npm run test:scripts`), which is the same argument one level up: a
+  tool that reports on your tests needs its own. `CONVENTIONS.md` §6 lists the ten distinct
+  ways this harness printed a full page of confident and entirely fictional results in a
+  single day — the common symptom being that **a run that never started is
+  indistinguishable from a run that caught nothing**.
 
 #### Documentation
 
@@ -675,15 +1124,63 @@ transaction spanning the numbering counter, the posting rule and the ledger.
   security for users, a good-first-issues list, and an index tying them together.
 - Contributor, security and community documentation; issue and pull-request templates;
   CODEOWNERS.
+- The README covers what Coffer does today rather than what it will do, where releases
+  will appear, how to check a SHA-256, and — the step nobody writes down — which buttons
+  get you past Windows SmartScreen and macOS Gatekeeper on an unsigned build.
+
+### Fixed
+
+Nothing has been released, so these are bugs found and corrected before anyone could have
+been running them. They are recorded because each one was a wrong answer that agreed with
+everything around it, which is the shape this project spends its constraints on.
+
+- **[accounting]** **An aged report reported nonsense rows under a correct total.** A
+  refund of 400 against a credit note of 1,180 reported the note at −1,580 and a fully
+  settled voucher at +800. `ageing.ts` took an allocation off a document and put it back on
+  a receipt, and the comment beside it argued the asymmetry correctly — a document's
+  movement was positive and a receipt's negative — so it was the right pair of signs for
+  the wrong reason. `0015`'s two new kinds broke it. **Both figures came off a report that
+  still said `ties: true`**, because a match is applied at two ends and two equal and
+  opposite errors cancel at the foot. A tie is a statement about the arithmetic between the
+  rows, not about the rows. It is one function now: a match opposes the end it is on,
+  whether that end is a document or a voucher.
+- **[accounting]** A fiscal year that broke exactly even could not be closed. The
+  retained-earnings line came out as debit `0.00` and credit `0.00` — a both-zero line,
+  which invariant 5 refuses — so the close failed with `AMBIGUOUS_LINE`, an error nothing
+  on that screen could act on. The cause is that **`isPositive()` is true for zero in
+  decimal.js**, because zero carries a positive sign. A year that nets to nothing now
+  writes no profit line at all, which is the honest entry: the closing lines already
+  balance among themselves. Found by auditing every `isPositive()` in the codebase after
+  the same trap made a test in the posting rule fail.
+- **[accounting]** A statement dropped a row when its subtree **totalled** zero rather than
+  when nothing had been posted to it. A group holding +2,000 of petty cash and −2,000 of
+  bank vanished from the balance sheet — four thousand rupees the reader has to be able to
+  see — and the sheet still balanced.
+- **26 tests were each asserting a different constraint from the one they named.** Measured:
+  a `BEFORE INSERT` trigger pre-empts every CHECK on the row, and the most recently created
+  trigger fires first — so adding a trigger to a table changes which rule an existing bad
+  write reports. Each test was fixed to reach the guard it names, and the behaviour is
+  written down in `docs/data-model.md` with the other five things SQLite does that its
+  documentation does not lead you to expect.
+- `repoErrorFrom` did not map every code a trigger raises, and no test failed. `0007` raised
+  `SERIES_IN_USE` from three triggers and nothing mapped it, because the repository's own
+  check answers first on every path except the one the mapping exists for. The test now
+  **reads the migrations** rather than a list somebody remembered to update.
+- `TaxRegime` rate helpers documented themselves as two decimal places. The scale has been
+  three from the start — 0.125% is half of India's 0.25% slab — and only the comments were
+  wrong, but a reader trusting them would have built the two-place column the scale exists
+  to prevent.
 
 ### Changed
 
-Nothing has been released, so these correct decisions made earlier in Phase 0 rather
-than changing behaviour anyone has seen.
+Nothing has been released, so these correct decisions made earlier rather than changing
+behaviour anyone has seen.
 
 - **[accounting]** The rate storage scale is 3dp, not 2dp. Half of India's 0.25% slab is
   0.125%, and at two places an invoice would print CGST at 0.13% — a rate the tax was
-  never computed from. No stored rate column exists yet, so nothing is migrated.
+  never computed from. Decided before any rate column existed, so `items.tax_rate_pct`,
+  `document_lines.rate_pct` and `document_line_taxes.rate_pct` were all written at three
+  places and nothing had to be migrated.
 - ESLint's purity rule for `domain/` now anchors its patterns to the start of an import
   specifier. Unanchored, the entry for Node's legacy `domain` module also matched
   `@main/domain/money`, so the first cross-module import inside `domain/` was reported

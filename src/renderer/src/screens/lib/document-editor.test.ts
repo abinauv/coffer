@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { DOCUMENT_KINDS, type DocumentKind } from '@shared/documents'
-import type { Document, DocumentLineDto } from '@shared/dto'
+import type { Account, Document, DocumentLineDto, ItemSummary } from '@shared/dto'
 import {
   blankLine,
   canCancel,
   canDelete,
   canEdit,
   canIssue,
+  clearItem,
   isBlankDraft,
   isLineReady,
+  itemSideFor,
   lineDraftOf,
+  lineFromItem,
   linesFrom,
+  postableAccounts,
   readyLines,
   stateSentence,
   toLineInput,
@@ -21,6 +25,45 @@ const KINDS: readonly DocumentKind[] = DOCUMENT_KINDS.map((definition) => defini
 
 function draft(over: Partial<LineDraft> = {}): LineDraft {
   return { ...blankLine(), description: 'Ball bearing 6203', unitPrice: '500.00', ...over }
+}
+
+/** An item as `items.list` sends one. Every default filled in, so a test can null one. */
+function item(over: Partial<ItemSummary> = {}): ItemSummary {
+  return {
+    id: 'item-2',
+    code: 'SEAL-25',
+    name: 'Oil seal 25x40',
+    kind: 'goods',
+    unitCode: 'KGS',
+    classificationCode: '4016',
+    taxRatePct: '12.000',
+    salePrice: '90.00',
+    purchasePrice: null,
+    salesAccountId: null,
+    purchaseAccountId: null,
+    isSold: true,
+    isPurchased: true,
+    isCharge: false,
+    isArchived: false,
+    ...over,
+  }
+}
+
+function account(over: Partial<Account> = {}): Account {
+  return {
+    id: 'acc-1',
+    code: '5210',
+    name: 'Courier and Postage',
+    type: 'expense',
+    normalBalance: 'debit',
+    parentId: null,
+    isGroup: false,
+    isArchived: false,
+    description: null,
+    depth: 2,
+    roles: [],
+    ...over,
+  }
 }
 
 describe('toLineInput', () => {
@@ -72,6 +115,63 @@ describe('toLineInput', () => {
   it('sends a missing classification as null rather than as a blank string', () => {
     expect(toLineInput(draft({ classificationCode: '' })).classificationCode).toBeNull()
     expect(toLineInput(draft({ classificationCode: ' 8471 ' })).classificationCode).toBe('8471')
+  })
+
+  /*
+   * THE HALF THAT WAS MISSING UNTIL 0017, AND THE REASON THIS BATCH EXISTS. `itemId`,
+   * `unitCode`, `isCharge` and `accountId` have been on `DocumentLineInput` since the
+   * contract was written and this function did not send any of them, so a document opened
+   * and saved came back with its lines unlinked from the item master.
+   */
+  it('sends the item the line was picked from', () => {
+    expect(toLineInput(draft({ itemId: 'item-2' })).itemId).toBe('item-2')
+  })
+
+  it('sends the unit a quantity is counted in', () => {
+    expect(toLineInput(draft({ unitCode: 'KGS' })).unitCode).toBe('KGS')
+  })
+
+  /* What sends the line to `freight-outward` or `freight-inward` instead of to sales or
+   * purchases (posting.ts). Absent is not "unknown" — the repository writes
+   * `isCharge === true ? 1 : 0`, so absent IS false and there is no third state. */
+  it('marks a charge line, and says nothing at all about an ordinary one', () => {
+    expect(toLineInput(draft({ isCharge: true })).isCharge).toBe(true)
+    expect(toLineInput(draft({ isCharge: false }))).not.toHaveProperty('isCharge')
+  })
+
+  /* An account named on the line beats the role default — `valueAccountFor` looks here
+   * first. It is what makes an expense on a purchase bill reachable at all. */
+  it('sends an account named on the line', () => {
+    expect(toLineInput(draft({ accountId: 'acc-courier' })).accountId).toBe('acc-courier')
+  })
+
+  /*
+   * NOTHING PICKED SENDS NOTHING, which is the pair to the four above. Absent and null are
+   * the same thing at this boundary — the handler's `optional` reads null as absent — and
+   * a save replaces every line, so there is no stored value an omission could fail to
+   * clear. A free-text line's input is byte for byte what it was before this batch.
+   */
+  it('leaves out every picked field the user picked nothing for', () => {
+    const input = toLineInput(draft())
+
+    expect(input).not.toHaveProperty('itemId')
+    expect(input).not.toHaveProperty('unitCode')
+    expect(input).not.toHaveProperty('isCharge')
+    expect(input).not.toHaveProperty('accountId')
+  })
+
+  /* And all four together, because a line is sent as one thing. */
+  it('sends all four of them at once when all four were chosen', () => {
+    const input = toLineInput(
+      draft({ itemId: 'item-2', unitCode: 'KGS', isCharge: true, accountId: 'acc-courier' }),
+    )
+
+    expect(input).toMatchObject({
+      itemId: 'item-2',
+      unitCode: 'KGS',
+      isCharge: true,
+      accountId: 'acc-courier',
+    })
   })
 })
 
@@ -134,6 +234,208 @@ describe('blankLine and lineDraftOf', () => {
     expect(row.ratePct).toBe('18.000')
     /* An absent classification is an empty box, not the word null. */
     expect(row.classificationCode).toBe('')
+  })
+
+  /*
+   * THE DROP, AT THE LEVEL WHERE IT HAPPENED. This function read six of a stored line's
+   * ten fields, so the four it skipped were gone the moment a document was opened — and
+   * `toLineInput` could not send back what the form had never been given. The editor's own
+   * test asserts the same thing across the IPC boundary; this one names the function.
+   */
+  it('reads the item, the unit, the charge flag and the account off a stored line', () => {
+    const stored: DocumentLineDto = {
+      id: 'line-1',
+      lineNumber: 1,
+      itemId: 'item-2',
+      description: 'Oil seal 25x40',
+      quantity: '2.000',
+      unitCode: 'KGS',
+      unitPrice: '90.00',
+      discount: '0.00',
+      taxableAmount: '180.00',
+      ratePct: '12.000',
+      classificationCode: '4016',
+      isCharge: true,
+      accountId: 'acc-courier',
+      taxes: [],
+    }
+
+    expect(lineDraftOf(stored)).toMatchObject({
+      itemId: 'item-2',
+      unitCode: 'KGS',
+      isCharge: true,
+      accountId: 'acc-courier',
+    })
+  })
+
+  /* And a nil in any of them is an empty picker rather than the word null, for the reason
+   * the classification is: `''` is what a `<select>`'s empty option carries. */
+  it('reads a line that picked nothing as empty pickers, not as nulls', () => {
+    const stored: DocumentLineDto = {
+      id: 'line-1',
+      lineNumber: 1,
+      itemId: null,
+      description: 'Ball bearing 6203',
+      quantity: '2.000',
+      unitCode: null,
+      unitPrice: '500.00',
+      discount: '0.00',
+      taxableAmount: '1000.00',
+      ratePct: '18.000',
+      classificationCode: null,
+      isCharge: false,
+      accountId: null,
+      taxes: [],
+    }
+
+    expect(lineDraftOf(stored)).toMatchObject({ itemId: '', unitCode: '', accountId: '' })
+  })
+
+  it('starts a new row picking nothing at all', () => {
+    expect(blankLine()).toMatchObject({
+      itemId: '',
+      unitCode: '',
+      isCharge: false,
+      accountId: '',
+    })
+  })
+})
+
+describe('itemSideFor', () => {
+  /* A total record over the two sides (CONVENTIONS §1.9), so a third side would not
+   * compile rather than silently taking whichever branch was written last. */
+  it('asks for what is sold on a sale and what is bought on a purchase', () => {
+    expect(itemSideFor('sales')).toBe('sold')
+    expect(itemSideFor('purchase')).toBe('purchased')
+  })
+})
+
+describe('lineFromItem', () => {
+  /*
+   * A COPY, NOT A REFERENCE — which `dto.ts` states twice and this proves once. Every
+   * field on an item is a DEFAULT for a line, so the picker fills the boxes and lets go:
+   * the line stores its own description, price and rate, and repricing the item next year
+   * cannot rewrite an invoice already issued.
+   */
+  it('fills the line from the item and keeps the item as what the line is', () => {
+    const filled = lineFromItem(blankLine(), item(), 'sales')
+
+    expect(filled).toMatchObject({
+      itemId: 'item-2',
+      description: 'Oil seal 25x40',
+      unitCode: 'KGS',
+      unitPrice: '90.00',
+      ratePct: '12.000',
+      classificationCode: '4016',
+      isCharge: false,
+    })
+  })
+
+  /* THE POINT OF THE COPY. Editing what was printed does not change what the line IS. */
+  it('is still that item after the description is rewritten', () => {
+    const filled = lineFromItem(blankLine(), item(), 'sales')
+    const edited = { ...filled, description: 'Oil seal, as agreed on the phone' }
+
+    expect(toLineInput(edited).itemId).toBe('item-2')
+    expect(toLineInput(edited).description).toBe('Oil seal, as agreed on the phone')
+  })
+
+  /* An item that IS freight brings its own flag, which is what sends the line to the
+   * freight account rather than to sales. */
+  it('takes the charge flag from the item', () => {
+    expect(lineFromItem(blankLine(), item({ isCharge: true }), 'sales').isCharge).toBe(true)
+  })
+
+  /*
+   * A NULL ON THE ITEM IS A STATEMENT AND CLEARS THE BOX. "This one has no unit" is an
+   * answer, and leaving the previous item's unit behind would put a figure on a tax
+   * document that belongs to something else — the specific way a second pick lies.
+   */
+  it('clears what the item says it has none of', () => {
+    const seeded = lineFromItem(blankLine(), item(), 'sales')
+    const second = lineFromItem(
+      seeded,
+      item({ id: 'item-3', unitCode: null, classificationCode: null, taxRatePct: null }),
+      'sales',
+    )
+
+    expect(second).toMatchObject({ unitCode: '', classificationCode: '', ratePct: '' })
+  })
+
+  /*
+   * THE PRICE IS THE ONE ASYMMETRY, AND IT IS DELIBERATE. `ItemSummary` — what a picker is
+   * fed — carries a sale price and no purchase price, and that is the better answer
+   * anyway: a line on a purchase bill costs what the supplier BILLED, and offering a
+   * stored standard cost there puts a figure on screen that agrees with nobody's paper.
+   */
+  it('takes the sale price on a sale and leaves a bill price alone', () => {
+    const typed = { ...blankLine(), unitPrice: '84.50' }
+
+    expect(lineFromItem(typed, item(), 'sales').unitPrice).toBe('90.00')
+    expect(lineFromItem(typed, item(), 'purchase').unitPrice).toBe('84.50')
+  })
+
+  /* An item with no standard price states nothing about one either, so a price already
+   * typed survives being told which item it was. */
+  it('keeps a typed price when the item has no standard one', () => {
+    const typed = { ...blankLine(), unitPrice: '84.50' }
+
+    expect(lineFromItem(typed, item({ salePrice: null }), 'sales').unitPrice).toBe('84.50')
+  })
+
+  /* The quantity and the discount are facts about THIS supply. An item has no opinion
+   * about how many were sold or what was knocked off. */
+  it('never touches the quantity or the discount', () => {
+    const typed = { ...blankLine(), quantity: '12', discount: '50.00' }
+    const filled = lineFromItem(typed, item(), 'sales')
+
+    expect(filled.quantity).toBe('12')
+    expect(filled.discount).toBe('50.00')
+  })
+
+  /* The row keeps its key, or React swaps two rows' contents under the user. */
+  it('keeps the row it filled in', () => {
+    const row = blankLine()
+
+    expect(lineFromItem(row, item(), 'sales').key).toBe(row.key)
+  })
+})
+
+describe('clearItem', () => {
+  /*
+   * TAKING THE LINK OFF IS NOT AN UNDO. What was seeded became the line's own text the
+   * moment it landed — that is what "a copy, not a reference" means — so saying it was
+   * never that item must not take the user's description and price with it.
+   */
+  it('stops being an item without emptying what was printed', () => {
+    const filled = lineFromItem(blankLine(), item(), 'sales')
+    const cleared = clearItem(filled)
+
+    expect(cleared.itemId).toBe('')
+    expect(cleared).toMatchObject({
+      description: 'Oil seal 25x40',
+      unitPrice: '90.00',
+      unitCode: 'KGS',
+      ratePct: '12.000',
+      classificationCode: '4016',
+    })
+  })
+})
+
+describe('postableAccounts', () => {
+  /*
+   * NEVER A GROUP. A group totals its children and accepts no posting of its own, so
+   * offering one is offering a save main refuses. The fixture lists the group FIRST, so a
+   * filter that was deleted would leave it as the option a `<select>` falls back to.
+   */
+  it('offers neither a group nor an archived account', () => {
+    const chart = [
+      account({ id: 'acc-group', code: '5000', name: 'Direct Expenses', isGroup: true }),
+      account({ id: 'acc-old', code: '5900', name: 'Closed Expense', isArchived: true }),
+      account({ id: 'acc-courier' }),
+    ]
+
+    expect(postableAccounts(chart).map((row) => row.id)).toEqual(['acc-courier'])
   })
 })
 
@@ -292,6 +594,19 @@ describe('isBlankDraft', () => {
   it('ignores the quantity, which starts filled in', () => {
     expect(isBlankDraft([{ ...blankLine(), quantity: '3' }])).toBe(true)
   })
+
+  /*
+   * PICKING IS TYPING. Choosing an item fills the description and was covered already, but
+   * a unit, a charge box and an account are each a decision somebody made with an empty
+   * description beside it — and the line copy this guards would have overwritten all three
+   * without noticing.
+   */
+  it('is false when a row has picked something, even with nothing typed', () => {
+    expect(isBlankDraft([{ ...blankLine(), itemId: 'item-2' }])).toBe(false)
+    expect(isBlankDraft([{ ...blankLine(), unitCode: 'KGS' }])).toBe(false)
+    expect(isBlankDraft([{ ...blankLine(), isCharge: true }])).toBe(false)
+    expect(isBlankDraft([{ ...blankLine(), accountId: 'acc-courier' }])).toBe(false)
+  })
 })
 
 describe('linesFrom', () => {
@@ -336,6 +651,34 @@ describe('linesFrom', () => {
     })
     expect(line).not.toHaveProperty('taxableAmount')
     expect(line).not.toHaveProperty('taxes')
+  })
+
+  /*
+   * AND THE PICKED FIELDS COME WITH THEM. Goods coming back are the same item measured in
+   * the same unit, and freight being credited reverses out of the account it went into —
+   * `CHARGE_ROLES` is keyed by side alone for exactly that reason (posting.ts). A copy
+   * that dropped them would put a credit note's lines on different accounts than the
+   * invoice they undo.
+   */
+  it('carries the item, the unit, the charge flag and the account across', () => {
+    const picked = {
+      lines: [
+        {
+          ...original.lines[0],
+          itemId: 'item-2',
+          unitCode: 'KGS',
+          isCharge: true,
+          accountId: 'acc-courier',
+        },
+      ],
+    } as unknown as Document
+
+    expect(linesFrom(picked)[0]).toMatchObject({
+      itemId: 'item-2',
+      unitCode: 'KGS',
+      isCharge: true,
+      accountId: 'acc-courier',
+    })
   })
 
   /* A document with no lines is not a reason to hand back an empty table nobody can type

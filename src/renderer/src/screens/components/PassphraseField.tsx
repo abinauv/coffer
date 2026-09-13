@@ -15,6 +15,7 @@
 
 import { useId, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
+import { useFieldMessage } from '@renderer/components/atoms'
 
 interface PassphraseFieldProps {
   label: string
@@ -45,9 +46,8 @@ export function PassphraseField({
   children,
 }: PassphraseFieldProps): JSX.Element {
   const inputId = useId()
-  const messageId = `${inputId}-message`
   const [isRevealed, setRevealed] = useState(false)
-  const message = error ?? hint
+  const { describedBy, invalid, message } = useFieldMessage({ id: inputId, hint, error })
 
   return (
     <div className="field passphrase-field">
@@ -68,8 +68,8 @@ export function PassphraseField({
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
-          aria-invalid={error === undefined ? undefined : true}
-          aria-describedby={message === undefined ? undefined : messageId}
+          aria-invalid={invalid}
+          aria-describedby={describedBy}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && onSubmit) {
@@ -90,15 +90,7 @@ export function PassphraseField({
           {isRevealed ? 'Hide' : 'Show'}
         </button>
       </div>
-      {message !== undefined && (
-        <p
-          id={messageId}
-          className={error === undefined ? 'field__hint' : 'field__error'}
-          role={error === undefined ? undefined : 'alert'}
-        >
-          {message}
-        </p>
-      )}
+      {message}
       {children}
     </div>
   )

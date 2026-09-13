@@ -446,6 +446,26 @@ export interface ItemSummary {
   taxRatePct: DecimalString | null
   /** Money, 2dp. Null when nothing standard has been agreed. */
   salePrice: DecimalString | null
+  /**
+   * Money, 2dp. Null when nothing standard has been agreed.
+   *
+   * ON THE SUMMARY AND NOT ONLY ON THE RECORD, because a picker is where a purchase line
+   * is priced. A screen holding a list of items and no purchase price has to fetch each
+   * item singly to fill in a bill, or leave the user to type a price they already agreed.
+   */
+  purchasePrice: DecimalString | null
+  /**
+   * Where this item's value posts, overriding the account its document kind implies.
+   *
+   * ON THE SUMMARY FOR THE SAME REASON, AND IT IS WHAT MAKES EXPENSE ENTRY ORDINARY. An
+   * item called "Courier charges" that already knows its account means a user picks the
+   * item and is done — the per-line account override exists for the exception, and a
+   * screen that cannot see this field has to make everybody use the exception.
+   *
+   * Null is not "unknown": it means "whatever the kind implies", which is the usual case.
+   */
+  salesAccountId: string | null
+  purchaseAccountId: string | null
   isSold: boolean
   isPurchased: boolean
   /** Freight, packing, insurance — taxable, but not sales revenue. */
@@ -456,10 +476,26 @@ export interface ItemSummary {
 /** The whole record, for an editor. */
 export interface Item extends ItemSummary {
   description: string | null
-  purchasePrice: DecimalString | null
-  /** Overrides the account the document kind implies. Null for the usual case. */
-  salesAccountId: string | null
-  purchaseAccountId: string | null
+  /**
+   * Whether this item keeps a quantity balance.
+   *
+   * ORTHOGONAL TO `kind` (migration 0017): plenty of goods are not stocked — consumables,
+   * and anything raised as a charge — and a service never can be. The stock batch
+   * withheld this from the DTO deliberately, on the grounds that a field no repository
+   * writes looks as though it works; `createItem` and `updateItem` write it now, through
+   * the same `setItemStockTracking` a stock screen calls, so there is one set of rules
+   * and not two.
+   */
+  isStockTracked: boolean
+  /**
+   * Quantity, 3dp. When what is on hand falls to it, the re-order report says so.
+   *
+   * Null on anything that keeps no balance, and CLEARED rather than kept when a register
+   * is switched off — an item with nothing on hand is below every level ever set, so it
+   * would sit on the re-order report forever telling somebody to buy something they do
+   * not count. 0017's CHECK is the floor under that.
+   */
+  reorderLevel: DecimalString | null
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -479,6 +515,10 @@ export interface CreateItemInput {
   isCharge?: boolean
   salesAccountId?: string | null
   purchaseAccountId?: string | null
+  /** Whether it keeps a quantity balance. Goods only — a service holds none (0017). */
+  isStockTracked?: boolean
+  /** Quantity, 3dp. Cleared, not stored, on an item that keeps no balance. */
+  reorderLevel?: DecimalString | null
 }
 
 /** Absent means "leave it"; `null` means "clear it". As `UpdatePartyInput`. */
@@ -515,6 +555,50 @@ export interface ArchiveItemInput {
 
 export type DocumentStatusDto = 'draft' | 'issued' | 'cancelled'
 
+/*
+ * ---------------------------------------------------------------------------
+ * THREE FACTS ABOUT HOW A SUPPLY IS TAXED, WHICH ARE NOT THE TAX
+ *
+ * The tax itself is `DocumentLineTaxDto` — what the regime answered. These three are
+ * INPUTS to that answer and to the return that reports it, they are decisions a person
+ * makes about the supply, and no regime can derive any of them from the figures.
+ *
+ * They live in `shared/` rather than in a regime because the shapes are not India's.
+ * "Did this leave the country with tax paid or under an undertaking", "does the buyer
+ * discharge the tax instead of the seller", and "may credit be taken on this line" are
+ * questions every value-added tax asks; only the paperwork differs. Naming them here is
+ * what lets `TaxComputationInput`, the stored document and the GST return all speak of
+ * one fact rather than three that agree by inspection (CONVENTIONS §1.6 draws the line
+ * at a regime's vocabulary — `LUT`, `section 17(5)` and `GSTR-3B` are on the far side of
+ * it and appear nowhere below).
+ */
+
+/**
+ * Whether a zero-rated supply left with tax paid on it, or under an undertaking.
+ *
+ * NOT A REPORTING FLAG. A supply under an undertaking carries its RATE and NO TAX, which
+ * is a different thing from a nil-rated supply carrying a rate of zero — the first is
+ * zero-rated and its input credit is refundable, the second is exempt and it is not.
+ * There is no way to represent the first without this field: setting the line rate to
+ * zero produces the second, and the two file into different boxes.
+ *
+ * Null on a domestic supply, where the question does not arise.
+ */
+export type ExportTaxPayment = 'with-payment' | 'without-payment'
+
+/**
+ * Whether credit may be taken on an inward line, and if not, why not.
+ *
+ * ON THE LINE, NOT THE DOCUMENT. One bill can carry a laptop and a staff car, and the
+ * credit is available on one and blocked on the other. A document-level field would make
+ * a user split the bill in two to record a fact about one line of it.
+ *
+ * The two ineligible members are kept apart because a return reports them in different
+ * places: credit blocked by the statute's own list, and credit not taken for any other
+ * reason. Collapsing them would lose which of the two a figure is.
+ */
+export type ItcEligibility = 'eligible' | 'ineligible-17-5' | 'ineligible-other'
+
 /** What the regime answered for one line, per component. Stored as given. */
 export interface DocumentLineTaxDto {
   code: string
@@ -540,6 +624,16 @@ export interface DocumentLineDto {
   classificationCode: string | null
   isCharge: boolean
   accountId: string | null
+  /**
+   * Whether credit may be taken on this line. Null means nothing was recorded.
+   *
+   * OPTIONAL ON THE WAY OUT AND REQUIRED IN THE DOMAIN, which is deliberate rather than
+   * lax: `DocumentLine` in `main/domain/documents` takes it as `ItcEligibility | null`
+   * with no `?`, so the posting rule cannot forget it and the repository resolves the
+   * absence exactly once, at the boundary. A `?` here is what lets a caller written
+   * before migration 0021 still compile.
+   */
+  itcEligibility?: ItcEligibility | null
   taxes: readonly DocumentLineTaxDto[]
 }
 
@@ -598,6 +692,40 @@ export interface Document extends DocumentSummary {
    * legal since 2019, so there is not always a single original to name.
    */
   originalDocumentId: string | null
+  /**
+   * That document's number and date, denormalised as `partyName` is.
+   *
+   * A GST CREDIT NOTE IS REQUIRED TO REFERENCE THE INVOICE IT CORRECTS — section 34 read
+   * with rule 53, and the reference is the original's number and date, not its id. Until
+   * these fields existed only the id crossed the wire, so the print model's
+   * `PrintCorrectedDocument` could be filled by nobody: the field was on the model, the
+   * template rendered it correctly, and the mapper could only ever supply `undefined`.
+   *
+   * NULL IN THREE DIFFERENT SENSES, and the reader does not have to tell them apart:
+   * nothing is corrected, the original is still a draft and so has no number yet, or the
+   * link was cleared. A screen that has one shows it and one that has none does not.
+   *
+   * DENORMALISED AND NOT STORED (CONVENTIONS §1.3). The repository joins the original row
+   * on the way out; nothing writes a copy of a number that the original may still change
+   * while it is a draft.
+   */
+  originalDocumentNumber: string | null
+  originalDocumentDate: DateString | null
+  /**
+   * Whether a zero-rated supply went out with tax paid or under an undertaking.
+   *
+   * Null on a domestic supply, and refused on one — the question only arises where the
+   * supply leaves the country, and which supplies do is the regime's answer rather than
+   * this layer's (see `DocumentsService`).
+   */
+  exportTaxPayment?: ExportTaxPayment | null
+  /**
+   * Whether the buyer discharges the tax on this supply rather than the seller.
+   *
+   * Always known once migration 0020 has run — the column is `NOT NULL DEFAULT 0`. The
+   * `?` is for a caller written before it, exactly as on `DocumentLineDto`.
+   */
+  isReverseCharge?: boolean
   lines: readonly DocumentLineDto[]
   totals: DocumentTotalsDto
   createdAt: Timestamp
@@ -644,6 +772,8 @@ export interface TaxedLineInput {
   classificationCode?: string | null
   isCharge?: boolean
   accountId?: string | null
+  /** Whether credit may be taken on this line. Absent records nothing. */
+  itcEligibility?: ItcEligibility | null
   taxes?: readonly DocumentLineTaxDto[]
 }
 
@@ -659,6 +789,10 @@ export interface CreateTaxedDocumentInput {
   narration?: string
   /** The document this one corrects. Only a credit note or a debit note may carry it. */
   originalDocumentId?: string | null
+  /** Whether a zero-rated supply went out with tax paid or under an undertaking. */
+  exportTaxPayment?: ExportTaxPayment | null
+  /** Whether the buyer discharges the tax. Absent is forward charge. */
+  isReverseCharge?: boolean
   lines?: readonly TaxedLineInput[]
 }
 
@@ -680,6 +814,10 @@ export interface UpdateTaxedDocumentInput {
   narration?: string
   /** The document this one corrects. Only a credit note or a debit note may carry it. */
   originalDocumentId?: string | null
+  /** Whether a zero-rated supply went out with tax paid or under an undertaking. */
+  exportTaxPayment?: ExportTaxPayment | null
+  /** Whether the buyer discharges the tax. Absent is forward charge. */
+  isReverseCharge?: boolean
   lines?: readonly TaxedLineInput[]
 }
 
@@ -709,6 +847,14 @@ export interface DocumentLineInput {
   /** Freight, packing, insurance. Taxable by default — see `TaxableLine.isCharge`. */
   isCharge?: boolean
   accountId?: string | null
+  /**
+   * Whether credit may be taken on this line, where the user has said.
+   *
+   * A DECISION AND NOT A FIGURE, which is why a screen may send it while it may not send
+   * a tax amount: whether a staff car is a staff car is not something the regime can
+   * work out from the money.
+   */
+  itcEligibility?: ItcEligibility | null
 }
 
 /**
@@ -734,6 +880,16 @@ export interface CreateDocumentInput {
   narration?: string
   /** The document this one corrects. Only a credit note or a debit note may carry it. */
   originalDocumentId?: string | null
+  /**
+   * Whether a zero-rated supply went out with tax paid or under an undertaking.
+   *
+   * REFUSED ON A DOMESTIC SUPPLY rather than ignored. Whether a supply leaves the country
+   * is the regime's answer, so the service is what refuses it — and it refuses rather
+   * than clearing it, because a value silently dropped is a decision silently lost.
+   */
+  exportTaxPayment?: ExportTaxPayment | null
+  /** Whether the buyer discharges the tax rather than this business. */
+  isReverseCharge?: boolean
   lines?: readonly DocumentLineInput[]
 }
 
@@ -755,6 +911,16 @@ export interface UpdateDocumentInput {
   narration?: string
   /** The document this one corrects. Only a credit note or a debit note may carry it. */
   originalDocumentId?: string | null
+  /**
+   * Whether a zero-rated supply went out with tax paid or under an undertaking.
+   *
+   * REFUSED ON A DOMESTIC SUPPLY rather than ignored. Whether a supply leaves the country
+   * is the regime's answer, so the service is what refuses it — and it refuses rather
+   * than clearing it, because a value silently dropped is a decision silently lost.
+   */
+  exportTaxPayment?: ExportTaxPayment | null
+  /** Whether the buyer discharges the tax rather than this business. */
+  isReverseCharge?: boolean
   lines?: readonly DocumentLineInput[]
 }
 
@@ -1140,6 +1306,16 @@ export interface RegimeDescription {
   jurisdictions: JurisdictionOption[]
   taxRates: TaxRateOption[]
   taxComponents: TaxComponentOption[]
+  /**
+   * What a registration number is called here: 'GSTIN / UIN' in India.
+   *
+   * The same shape as `classification.label` and on the description for the same reason.
+   * A screen and a printed invoice both have to put a word above the number, and neither
+   * may choose it: writing 'GSTIN' outside `regimes/in-gst/` breaks CONVENTIONS §1.6, and
+   * a neutral 'Registration no.' is what the PDF mapper printed for want of this field —
+   * correct for nobody in particular and wrong for the only regime that ships.
+   */
+  registrationLabel: string
   classification: ClassificationSchemeInfo
 }
 
@@ -1412,6 +1588,20 @@ export interface AgedPartyRow {
 export interface AgedReportTotals {
   buckets: DecimalString[]
   onAccount: DecimalString
+  /**
+   * Everything past due — the figure a dashboard leads with.
+   *
+   * ON THE REPORT BECAUSE THE RENDERER MAY NOT ADD IT UP. "Every bucket but the first" is
+   * one addition away in a screen and it is still money arithmetic (CONVENTIONS §1.7),
+   * and the dashboard refused to do it, correctly. Main sums it from the party rows
+   * against the same test `isOverdue` makes of a single item — a positive amount more
+   * than nought days past its due date — so the total and the badges agree by
+   * construction rather than by inspection.
+   *
+   * It is NOT `total` less the not-yet-due column: `total` has what stands to the party's
+   * credit taken off it, and a credit is not an early payment of a late invoice.
+   */
+  overdue: DecimalString
   total: DecimalString
 }
 
@@ -1743,4 +1933,318 @@ export interface OpenDocumentsInput {
    * line for is simply missing from the list it offers.
    */
   exceptReceiptId?: string
+}
+
+// ---- Warehouses and the stock ledger (0017-0019) ---------------------------
+
+/*
+ * Phase 4.1's shapes. Every figure is a decimal string, as everywhere else: quantity 3dp,
+ * money 2dp, and a unit cost at SIX places, which is neither.
+ *
+ * A UNIT COST IS NOT MONEY AND IS NEVER AN INPUT. It is `value / quantity`, computed for
+ * a column and fed back into nothing — see domain/inventory/cost.ts, which measures what
+ * happens when it is held as state instead. It travels here so a screen can print it, and
+ * a screen that multiplied by it would get an answer out by a paisa on the sort of
+ * figures a stock card carries.
+ *
+ * NOTHING HERE CARRIES A STORED RUNNING BALANCE OFF THE DATABASE. `StockCardRow.balance`
+ * is the fold's answer, recomputed when the card is asked for; migration 0019 has no
+ * column behind it.
+ *
+ * A KIND CROSSES AS A STRING, as a document's does. `StockMovementKind` lives in
+ * `main/domain/inventory` and the renderer cannot import `@main/*`; a second copy of the
+ * union here is the shape this codebase has deleted four times, and the answer when
+ * screens need the table is a shared module like `shared/documents.ts`, not a duplicate.
+ */
+
+/** Where stock is kept. */
+export interface Warehouse {
+  id: string
+  /** An internal handle: 'MAIN', 'WH-2'. Unique ignoring case. */
+  code: string
+  name: string
+  description: string | null
+  isArchived: boolean
+}
+
+export interface CreateWarehouseInput {
+  code: string
+  name: string
+  description?: string | null
+}
+
+/** Absent means "leave it"; `null` clears a nullable field. As `UpdateItemInput`. */
+export interface UpdateWarehouseInput {
+  id: string
+  /** A warehouse's code is a label, not its identity, so unlike a unit's it may change. */
+  code?: string
+  name?: string
+  description?: string | null
+  isArchived?: boolean
+}
+
+export interface ListWarehousesInput {
+  includeArchived?: boolean
+}
+
+/**
+ * Turn an item's stock register on or off.
+ *
+ * Separate from `UpdateItemInput` rather than folded into it, and that is a batch
+ * boundary rather than a design claim: `repos/items.ts` belongs to another phase, and a
+ * field on `UpdateItemInput` that no repository wrote would look as though it worked.
+ */
+export interface SetItemStockTrackingInput {
+  itemId: string
+  isStockTracked: boolean
+  /** Quantity, 3dp. Refused on an item that keeps no balance. Null clears it. */
+  reorderLevel?: DecimalString | null
+}
+
+/** An item's stock settings. */
+export interface ItemStockSettings {
+  itemId: string
+  isStockTracked: boolean
+  reorderLevel: DecimalString | null
+}
+
+/** What a register holds at one moment: the pair of record, and the column derived from it. */
+export interface StockBalance {
+  /** Quantity, 3dp. */
+  quantity: DecimalString
+  /** Money, 2dp — the carrying value, and what the balance sheet reconciles against. */
+  value: DecimalString
+  /**
+   * Money per unit, at six places. A REPORTED COLUMN and never an input.
+   *
+   * Zero when nothing is on hand: an item that has run down to nothing has no average
+   * cost, and the next receipt sets a fresh one rather than carrying the stale one.
+   */
+  unitCost: DecimalString
+}
+
+/**
+ * One movement, as a caller states it.
+ *
+ * `cost` is required on an inward kind and refused on an outward one — the register
+ * values what leaves, and a caller that could price a sale would be pricing it against
+ * nothing. `kind` says which way stock went; the quantity is always non-negative.
+ */
+export interface RecordStockMovementInput {
+  itemId: string
+  /** Absent means the only warehouse there is. Refused when there is more than one. */
+  warehouseId?: string
+  /** A `StockMovementKind`: 'receipt', 'issue', 'adjustment-in', … */
+  kind: string
+  /** The date it is valued as of, which is not "now". */
+  date: DateString
+  /** Quantity, 3dp, non-negative. Zero is legal — freight carries a cost and no goods. */
+  quantity: DecimalString
+  /** Money, 2dp. Required on an inward movement, refused on an outward one. */
+  cost?: DecimalString | null
+  /** A `SourceDocumentType`. Not derivable from `kind`, and not deriving it. */
+  sourceType: string
+  sourceId?: string | null
+  sourceNumber?: string | null
+  narration?: string | null
+}
+
+/**
+ * What a back-dated movement did to entries that were already posted.
+ *
+ * A receipt dated into last week re-averages the pool, so every issue after it in card
+ * order cost something different from what its own entry says — and that entry is
+ * immutable (ledger invariant 3). The difference is posted as a NEW entry per affected
+ * date, and this is what those entries were.
+ *
+ * Empty in the ordinary case, which is every movement recorded in date order.
+ */
+export interface StockRevaluation {
+  /** The entry that restated the cost of movements already in the books. */
+  entryId: string
+  /** The date it posted as of — the date of the movements it restates, not today. */
+  date: DateString
+  /**
+   * Money, 2dp, SIGNED TO ADD to the stock account. Negative when the re-average made
+   * what had already gone out cost more, which is the ordinary direction for a
+   * back-dated receipt at a higher price.
+   */
+  stockAmount: DecimalString
+  /** How many already-posted movements changed cost on that date. */
+  movements: number
+}
+
+/** What recording a movement did. */
+export interface RecordedStockMovement {
+  movementId: string
+  itemId: string
+  warehouseId: string
+  kind: string
+  date: DateString
+  sequence: number
+  /**
+   * The journal entry this movement posted as, or null when it moved no money.
+   *
+   * ARCHITECTURE §6.4 in one field: a movement writes to the stock register AND to the
+   * general ledger, in one transaction. NULL is not a gap in that — it is a movement that
+   * moved nothing to post, which is an ordinary fact (a free sample taken in at nil, or
+   * an issue out of a pool worth nothing). Ledger invariant 5 refuses an entry of two
+   * zero lines, so there is no entry for such a movement to name and nothing for the
+   * balance sheet to be missing.
+   */
+  entryId: string | null
+  /** What this movement moved, as money at 2dp. Non-negative; the direction is the kind. */
+  cost: DecimalString
+  /**
+   * The register immediately after this movement IN CARD ORDER.
+   *
+   * Not the same as `closing` once something has been back-dated, and the difference is
+   * the point rather than an artefact: a movement dated into last month is followed by
+   * every movement of this one, so what it left behind and what the item holds now are
+   * two different figures. A posting rule needs the first; a screen saying "on hand"
+   * needs the second.
+   */
+  after: StockBalance
+  /** The register after every movement it holds, whatever their dates. */
+  closing: StockBalance
+  /**
+   * What this movement did to costs already posted, one entry per affected date.
+   *
+   * Empty unless the movement was back-dated. `after` and `closing` differing is the
+   * SYMPTOM a screen can show; this is the list of corrections that were actually made,
+   * and a caller that wants to tell a user "your March cost of sales has moved" reads it
+   * rather than inferring it from the two balances.
+   */
+  revaluations: readonly StockRevaluation[]
+}
+
+/** One line of a stock card. */
+export interface StockCardRow {
+  movementId: string
+  sequence: number
+  date: DateString
+  /** A `StockMovementKind`. */
+  kind: string
+  /** What a stock card calls the kind, e.g. 'Purchase return'. */
+  label: string
+  /** Which way it went: 'in' or 'out'. Read off the kind, never off a sign. */
+  direction: string
+  /** Quantity, 3dp, non-negative. */
+  quantity: DecimalString
+  /** The cost an inward movement STATED. Null on an outward movement, which states none. */
+  statedCost: DecimalString | null
+  /**
+   * What the movement moved in money, at 2dp — stated for an inward movement, worked out
+   * by the strategy for an outward one.
+   *
+   * For an outward movement this is what posts to cost of goods sold, and it is reported
+   * separately from anything on the document that raised it: a purchase return credits
+   * the supplier at the price paid and takes the stock out at the average, and the
+   * difference between the two is a price variance.
+   */
+  cost: DecimalString
+  /** What the register held after this row. Recomputed, never read from a column. */
+  balance: StockBalance
+  /**
+   * The entry this movement posted as, for the drill-through.
+   *
+   * Null ONLY for a row written before migration 0022, which added the column and the
+   * trigger that refuses a movement with no entry. No shipped build wrote one — 0019 and
+   * 0022 are the same phase — so this is nullable for the shape of the column rather than
+   * for a state anybody has.
+   */
+  entryId: string | null
+  sourceType: string
+  sourceId: string | null
+  sourceNumber: string | null
+  narration: string | null
+}
+
+/**
+ * An item's movements in one warehouse, in date-then-sequence order, each carrying what
+ * the register looked like after it.
+ *
+ * FOLDED EVERY TIME. A back-dated receipt re-averages the pool, so it changes what every
+ * issue after it cost — a stored running average would be wrong from the moment a
+ * delivery note arrived a week late, and the row nobody rewrote is the one nobody
+ * notices.
+ */
+export interface StockCard {
+  itemId: string
+  warehouseId: string
+  /** A `ValuationMethod` — 'moving-average' in this build. */
+  method: string
+  /** The window asked for. Null at either end means "from the beginning" / "to the end". */
+  from: DateString | null
+  to: DateString | null
+  /**
+   * What the register held before the first row.
+   *
+   * For a card drawn from a date this is the state as at the day before it — folded from
+   * every earlier movement, never an empty state. "As at a date" is a filter on the
+   * register, not on the rows that happen to be shown (CONVENTIONS §1.8).
+   */
+  opening: StockBalance
+  rows: readonly StockCardRow[]
+  /** The last row's state, never a second sum over the rows. */
+  closing: StockBalance
+  quantityIn: DecimalString
+  quantityOut: DecimalString
+  costIn: DecimalString
+  costOut: DecimalString
+  /**
+   * The first movement the card could not value, and why. Null when it is complete.
+   *
+   * `rows` then holds everything before it, so a reader sees exactly how far the register
+   * got — which is what they need in order to find the movement that is missing. A card
+   * carrying one of these still ties at its own foot, and that is precisely why it says
+   * so rather than leaving a reader to notice.
+   */
+  problem: AppError | null
+}
+
+export interface StockCardInput {
+  itemId: string
+  /** Absent means the only warehouse there is. */
+  warehouseId?: string
+  /** Inclusive. The card still opens with everything before it. */
+  from?: DateString
+  /** Inclusive. */
+  to?: DateString
+}
+
+/** What one item holds, in one place or in total. */
+export interface StockOnHandRow {
+  itemId: string
+  itemName: string
+  itemCode: string | null
+  unitCode: string | null
+  /** Null on the roll-up across every warehouse. */
+  warehouseId: string | null
+  warehouseCode: string | null
+  warehouseName: string | null
+  quantity: DecimalString
+  value: DecimalString
+  unitCost: DecimalString
+  /** Quantity, 3dp. Null when none is set. */
+  reorderLevel: DecimalString | null
+  /** Whether what is on hand has fallen to or below the level. False when none is set. */
+  isBelowReorderLevel: boolean
+  /**
+   * Why this figure is not the whole story, where the register could not be folded in
+   * full. Null in the ordinary case.
+   *
+   * A row carrying one is stock as at the last movement that could be valued, not stock
+   * as at the date asked for — which a total would never reveal on its own.
+   */
+  problem: AppError | null
+}
+
+export interface StockOnHandInput {
+  itemId?: string
+  warehouseId?: string
+  /** Counts movements dated on or before it. A filter on the register (CONVENTIONS §1.8). */
+  asAt?: DateString
+  /** Include items and places holding nothing. Off by default. */
+  includeEmpty?: boolean
 }

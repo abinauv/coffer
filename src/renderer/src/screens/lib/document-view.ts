@@ -19,7 +19,7 @@
  */
 
 import type { BadgeTone } from '@renderer/components/atoms'
-import type { ScreenNav } from '@renderer/lib/screens'
+import type { NavGroupId, ScreenNav } from '@renderer/lib/screens'
 import { definitionOf, type DocumentKind, type TradeSide } from '@shared/documents'
 import type { DocumentStatusDto } from '@shared/dto'
 
@@ -84,12 +84,60 @@ export function registerNav(kind: DocumentKind): ScreenNav {
   return {
     label: definition.pluralLabel,
     icon: 'ledger',
-    group: definition.side === 'sales' ? 'sales' : 'purchases',
+    group: SIDE_WORDS[definition.side].navGroup,
     order: NAV_ORDER[kind],
   }
 }
 
 // ---- What a party is called on each side ------------------------------------
+
+/*
+ * ONE TOTAL RECORD OVER `TradeSide`, WHERE THERE WERE FIVE TERNARIES.
+ *
+ * `side === 'sales' ? x : y` is correct for exactly as long as the union has two members,
+ * and stops being the same thing the moment it has three: a record does not compile until
+ * the new member is answered for, and a conditional silently gives it whatever the last
+ * branch said (CONVENTIONS §1.9). This codebase has measured that twice —
+ * `receiptPostingRuleFor` posted a customer's refund onto accounts payable, and nothing in
+ * the suite pointed at it.
+ *
+ * `TradeSide` is a closed two-member union today and there is no third side of a trade in
+ * sight, so the risk here is smaller than it was there. What makes it worth writing out
+ * anyway is that FIVE separate conditionals over one union were five places to get the
+ * order of the two arms wrong, in a file where getting it wrong means calling a vendor a
+ * customer. One row per side puts every word a side carries on one line, where a
+ * transposition is visible by reading.
+ */
+interface SideWords {
+  /** The role to ask `parties.list` for. */
+  role: 'customer' | 'vendor'
+  /** What the field is labelled. The user's word, not the schema's. */
+  label: string
+  /** What their own number for the document is called. */
+  referenceLabel: string
+  /** The hint under it. See `partyReferenceHint`. */
+  referenceHint: string
+  /** Which sidebar group this side's registers sit in. */
+  navGroup: NavGroupId
+}
+
+const SIDE_WORDS: Readonly<Record<TradeSide, SideWords>> = {
+  sales: {
+    role: 'customer',
+    label: 'Customer',
+    referenceLabel: 'Their reference',
+    referenceHint: 'A purchase order number, or whatever they asked you to quote.',
+    navGroup: 'sales',
+  },
+  purchase: {
+    role: 'vendor',
+    label: 'Vendor',
+    referenceLabel: 'Their invoice number',
+    referenceHint:
+      "The number on the supplier's own bill. It is what a return is matched against, so it is worth typing.",
+    navGroup: 'purchases',
+  },
+}
 
 /**
  * The role to ask `parties.list` for.
@@ -99,17 +147,17 @@ export function registerNav(kind: DocumentKind): ScreenNav {
  * describing what the party IS.
  */
 export function partyRoleFor(side: TradeSide): 'customer' | 'vendor' {
-  return side === 'sales' ? 'customer' : 'vendor'
+  return SIDE_WORDS[side].role
 }
 
 /** What the field is labelled. The user's word, not the schema's. */
 export function partyLabel(side: TradeSide): string {
-  return side === 'sales' ? 'Customer' : 'Vendor'
+  return SIDE_WORDS[side].label
 }
 
 /** What their own number for the document is called, which differs by side. */
 export function partyReferenceLabel(side: TradeSide): string {
-  return side === 'sales' ? 'Their reference' : 'Their invoice number'
+  return SIDE_WORDS[side].referenceLabel
 }
 
 /**
@@ -120,9 +168,7 @@ export function partyReferenceLabel(side: TradeSide): string {
  * against what the supplier filed, which is discovered a year later by somebody else.
  */
 export function partyReferenceHint(side: TradeSide): string {
-  return side === 'sales'
-    ? 'A purchase order number, or whatever they asked you to quote.'
-    : "The number on the supplier's own bill. It is what a return is matched against, so it is worth typing."
+  return SIDE_WORDS[side].referenceHint
 }
 
 // ---- What each register says ------------------------------------------------
@@ -192,9 +238,11 @@ export function statusLabel(status: string): string {
  * accent goes on the draft — the only row on the page with something still to do.
  *
  * Typed as `BadgeTone` rather than as a union written out here, so a tone the atom does
- * not have cannot be returned. `periodStatusTone` next door returns `'info'`, which is
- * not one — it has no caller yet, and it will not compile against a `Badge` when it gets
- * one.
+ * not have cannot be returned. `periodStatusTone` next door was written the other way and
+ * returned `'info'`, which is not a tone the atom has and has no rule in `atoms.css` — it
+ * would have rendered an unstyled pill for whoever called it first, and its own test
+ * pinned the wrong answer as correct. Both are fixed; the typing is what stops it
+ * recurring, which is why it is worth stating here rather than only there.
  */
 export function statusTone(status: string): BadgeTone {
   if (status === 'issued') return 'positive'

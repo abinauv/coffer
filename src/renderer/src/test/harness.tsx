@@ -16,19 +16,29 @@
  * ordinary error notice and the test would fail on some unrelated assertion about
  * missing content. So misses are recorded as well as thrown, and `setup.ts` fails the
  * test on any that were left behind, naming the channel.
+ *
+ * WHAT THE PROVIDERS ARE, AND WHY THE LIST GREW. `Providers` nests what `App.tsx` nests,
+ * in the same order and for the same reasons — the company above navigation because the
+ * area is derived from it, the regime above the shell because a screen that draws money
+ * may not render before the rules that say how it is written. It had neither
+ * `CompanyProvider` nor `NavigationProvider` until the integration gate, so any test
+ * needing either wrote its own stack; six did.
  */
 
 import { render, type RenderResult } from '@testing-library/react'
+import { useEffect } from 'react'
 import type { JSX, ReactNode } from 'react'
 import { ToastViewport } from '@renderer/components/toast/ToastViewport'
 import { makeRoute, type Route } from '@renderer/lib/routing'
 import type { ScreenContext } from '@renderer/lib/screens'
 import { CommandProvider } from '@renderer/store/commands'
+import { CompanyProvider, useCompany } from '@renderer/store/company'
+import { NavigationProvider } from '@renderer/store/navigation'
 import { PlatformProvider } from '@renderer/store/platform'
 import { RegimeProvider } from '@renderer/store/regime'
 import { ThemeProvider } from '@renderer/store/theme'
 import { ToastProvider } from '@renderer/store/toasts'
-import type { AppInfo, RegimeDescription, Result } from '@shared/dto'
+import type { AppInfo, CompanySummary, RegimeDescription, Result } from '@shared/dto'
 import { createApiProxy, type CofferApi } from '@shared/ipc'
 
 // ---- The bridge ------------------------------------------------------------
@@ -83,6 +93,7 @@ function ok<T>(data: T): Promise<Result<T>> {
 export const DEFAULT_REGIME: RegimeDescription = {
   id: 'in',
   label: 'India — GST',
+  registrationLabel: 'GSTIN / UIN',
   numberFormat: {
     groupSizes: [3, 2],
     decimalSeparator: '.',
@@ -106,6 +117,33 @@ export const DEFAULT_REGIME: RegimeDescription = {
   ],
   classification: { code: 'HSN', label: 'HSN / SAC', validLengths: [4, 6, 8] },
 }
+
+/*
+ * The company a screen test opens when it does not name one of its own.
+ *
+ * SIX FILES HAD A COPY OF THIS AND A COPY OF THE COMPONENT THAT ADOPTS IT — AppShell,
+ * Sidebar, TitleBar, ScreenHost, Overview and the regime store's own test — because the
+ * harness supplied every provider a screen expects EXCEPT the one the shell's structure
+ * is derived from. Six `Opener`s calling `adopt` in a `useEffect` is six chances for one
+ * of them to drift, and drift here does not fail: a company that never opens renders the
+ * welcome layout, and a test about the workspace then asserts against a screen it was not
+ * looking at.
+ *
+ * A summary and not a boolean, because `TitleBar` prints the display name and a test
+ * about what the frame says has to be able to change it.
+ */
+export const DEFAULT_COMPANY: CompanySummary = {
+  id: 'acme',
+  displayName: 'Acme Pvt Ltd',
+  filePath: '/books/acme.coffer',
+  vaultPath: '/books/acme.coffer.vault',
+  lastOpenedAt: null,
+  createdAt: '2026-08-14T09:30:00.000Z',
+  availability: 'ok',
+}
+
+/** Unspent recovery codes a test gets unless it says otherwise. Three: some, not none. */
+export const DEFAULT_RECOVERY_CODES_REMAINING = 3
 
 function defaultStub(): BridgeStub {
   return {
@@ -201,23 +239,56 @@ export function testRoute(screenId: string, params: Record<string, string> = {})
  * `localStorage`, calls `matchMedia` and installs the keydown listener, and a screen
  * test is the only place any of that runs together.
  */
+/*
+ * Opens a company on mount, through the same `adopt` the welcome screens call.
+ *
+ * THE REAL PROVIDER DRIVEN THE REAL WAY, not a context value handed in. `CompanyProvider`
+ * has no initial-value prop and should not grow one for tests: what `NavigationProvider`
+ * and `OpenCompanyRegime` react to is the TRANSITION from closed to open, and a provider
+ * that started open would skip the effect the application always runs.
+ */
+function OpenCompany({
+  company,
+  recoveryCodesRemaining,
+}: {
+  company: CompanySummary | null
+  recoveryCodesRemaining: number
+}): JSX.Element {
+  const { adopt } = useCompany()
+  useEffect(() => {
+    if (company !== null) adopt({ company, recoveryCodesRemaining })
+  }, [company, recoveryCodesRemaining, adopt])
+  return <></>
+}
+
 function Providers({
   regime,
+  company,
+  recoveryCodesRemaining,
+  toastViewport,
   children,
 }: {
   regime: RegimeDescription | null
+  company: CompanySummary | null
+  recoveryCodesRemaining: number
+  toastViewport: boolean
   children: ReactNode
 }): JSX.Element {
   return (
     <ThemeProvider>
       <PlatformProvider>
         <ToastProvider>
-          <RegimeProvider value={regime}>
-            <CommandProvider>
-              {children}
-              <ToastViewport />
-            </CommandProvider>
-          </RegimeProvider>
+          <CompanyProvider>
+            <OpenCompany company={company} recoveryCodesRemaining={recoveryCodesRemaining} />
+            <RegimeProvider value={regime}>
+              <NavigationProvider>
+                <CommandProvider>
+                  {children}
+                  {toastViewport && <ToastViewport />}
+                </CommandProvider>
+              </NavigationProvider>
+            </RegimeProvider>
+          </CompanyProvider>
         </ToastProvider>
       </PlatformProvider>
     </ThemeProvider>
@@ -234,6 +305,29 @@ export interface RenderScreenOptions {
    * is the contract `useNumberFormat` states, and a test may assert it.
    */
   regime?: RegimeDescription | null
+  /**
+   * The company that is open, adopted on mount. NONE unless given.
+   *
+   * Absent is the honest default and not an oversight: most screens never ask, and a
+   * harness that opened one for everybody would make "the workspace is only reachable
+   * with books unlocked" untestable. Pass `DEFAULT_COMPANY` for the ordinary case, or a
+   * summary of your own where the test is about what the frame says.
+   */
+  company?: CompanySummary | null
+  /** Unspent recovery codes on it. Meaningless with no company; three unless given. */
+  recoveryCodesRemaining?: number
+  /**
+   * Whether the harness draws the toast viewport. It does, unless told not to.
+   *
+   * OFF FOR THE FRAME, WHICH DRAWS ITS OWN. `AppShell` renders a `ToastViewport`, so a
+   * second one here would put two landmarks named `Notifications` on the page — and
+   * `getByRole('region', { name: 'Notifications' })` then fails on the ambiguity rather
+   * than on anything a reader would call a bug. A screen renders none of its own, which
+   * is why the default is to supply one: without it `show({ … })` succeeds and puts
+   * nothing on screen, and a test could assert that a save worked while the user was
+   * never told.
+   */
+  toastViewport?: boolean
 }
 
 export interface RenderedScreen extends RenderResult {
@@ -244,6 +338,15 @@ export interface RenderedScreen extends RenderResult {
 export function renderScreen(ui: ReactNode, options: RenderScreenOptions = {}): RenderedScreen {
   const bridge = installBridge(options.bridge)
   const regime = options.regime === undefined ? DEFAULT_REGIME : options.regime
-  const result = render(<Providers regime={regime}>{ui}</Providers>)
+  const result = render(
+    <Providers
+      regime={regime}
+      company={options.company ?? null}
+      recoveryCodesRemaining={options.recoveryCodesRemaining ?? DEFAULT_RECOVERY_CODES_REMAINING}
+      toastViewport={options.toastViewport ?? true}
+    >
+      {ui}
+    </Providers>,
+  )
   return Object.assign(result, { bridge })
 }

@@ -178,6 +178,7 @@ describe('what it draws', () => {
       regime: {
         id: 'pt',
         label: 'Portugal — IVA',
+        registrationLabel: 'NIF',
         numberFormat: {
           groupSizes: [3],
           decimalSeparator: ',',

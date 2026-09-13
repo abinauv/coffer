@@ -294,6 +294,199 @@ describe('creating an item', () => {
   })
 })
 
+/*
+ * ---------------------------------------------------------------------------
+ * WHETHER AN ITEM KEEPS A QUANTITY BALANCE (0017)
+ *
+ * The stock batch put `is_stock_tracked` and `reorder_level` on the table and DELIBERATELY
+ * withheld them from `CreateItemInput` and `UpdateItemInput`, on the stated grounds that a
+ * field no repository writes looks as though it works. Both ends are wired now, and what
+ * these tests are about is that there is still only ONE set of rules: this file delegates
+ * to `setItemStockTracking`, which owns them, rather than writing the two columns itself.
+ */
+describe('whether an item keeps a stock balance', () => {
+  it('keeps none unless the caller says otherwise', async () => {
+    const item = await sold('Packing tape')
+
+    expect(item.isStockTracked).toBe(false)
+    expect(item.reorderLevel).toBeNull()
+  })
+
+  it('takes both on the way in, and gives both back', async () => {
+    const item = await sold('Ball bearing 6203', {
+      isStockTracked: true,
+      reorderLevel: '25.000',
+    })
+
+    expect(item.isStockTracked).toBe(true)
+    expect(item.reorderLevel).toBe('25.000')
+
+    /* Read back through a second call, so the assertion is about the ROW rather than
+     * about what `createItem` happened to return. A DTO field the insert never wrote
+     * would still come back correctly from the object that was handed in. */
+    expect((await getItem(db, item.id))?.isStockTracked).toBe(true)
+    expect((await getItem(db, item.id))?.reorderLevel).toBe('25.000')
+  })
+
+  /* Delegated, not reimplemented: the sentence and the `details` are the stock
+   * repository's, and a second copy of this rule on this path is what the delegation
+   * exists to prevent. */
+  it('refuses a service that would keep a balance, naming it', async () => {
+    const failure = await failureOf(() =>
+      createItem(db, {
+        name: 'Machining',
+        kind: 'service',
+        isSold: true,
+        isStockTracked: true,
+      }),
+    )
+
+    expect(failure.code).toBe('ITEM_NOT_STOCKABLE')
+    expect(failure.details).toMatchObject({ name: 'Machining', kind: 'service' })
+  })
+
+  /*
+   * AND IT LEAVES NOTHING BEHIND. The refusal above happens on a SECOND statement, after
+   * the row is already in the table — so without the transaction the caller is told the
+   * create failed and finds the item in their list, which is 0012's half-made company one
+   * table down.
+   */
+  it('writes no item at all when the stock settings are refused', async () => {
+    await failureOf(() =>
+      createItem(db, { name: 'Machining', kind: 'service', isSold: true, isStockTracked: true }),
+    )
+
+    expect(await listItems(db, { includeArchived: true })).toEqual([])
+  })
+
+  /* A level on an item that keeps no balance is CLEARED and not stored — such an item has
+   * nothing on hand, so it sits below every level ever set and would be on the re-order
+   * report forever. 0017's CHECK is the floor; `setItemStockTracking` is the decision. */
+  it('drops a reorder level given to an item that keeps no balance', async () => {
+    const item = await sold('Packing tape', { reorderLevel: '25.000' })
+
+    expect(item.isStockTracked).toBe(false)
+    expect(item.reorderLevel).toBeNull()
+  })
+
+  it('turns a register on and off through an update', async () => {
+    const item = await sold('Ball bearing 6203')
+
+    const tracked = await updateItem(db, {
+      id: item.id,
+      isStockTracked: true,
+      reorderLevel: '10.000',
+    })
+    expect(tracked).toMatchObject({ isStockTracked: true, reorderLevel: '10.000' })
+
+    const untracked = await updateItem(db, { id: item.id, isStockTracked: false })
+    /* The level goes with the register, for the reason above. */
+    expect(untracked).toMatchObject({ isStockTracked: false, reorderLevel: null })
+  })
+
+  it('changes the level without re-deciding the register', async () => {
+    const item = await sold('Ball bearing 6203', { isStockTracked: true, reorderLevel: '10.000' })
+
+    const changed = await updateItem(db, { id: item.id, reorderLevel: '40.000' })
+
+    expect(changed).toMatchObject({ isStockTracked: true, reorderLevel: '40.000' })
+  })
+
+  it('leaves both alone on an edit that mentions neither', async () => {
+    const item = await sold('Ball bearing 6203', { isStockTracked: true, reorderLevel: '10.000' })
+
+    const renamed = await updateItem(db, { id: item.id, name: 'Ball bearing 6204' })
+
+    expect(renamed).toMatchObject({ isStockTracked: true, reorderLevel: '10.000' })
+  })
+
+  /*
+   * THE DIRECTION NOBODY WRITES, WHICH IS 0017'S OWN PHRASE FOR IT. A rule about services
+   * and stock gets written on the path that turns the REGISTER on, because that is the
+   * path somebody is thinking about; `updateItem` can also change `kind`, and turning a
+   * stock-tracked item INTO a service reaches the same forbidden state from the side
+   * nobody was watching.
+   *
+   * BOTH LAYERS ANSWER, and only one of them can say which item. The CHECK is re-evaluated
+   * on every write to the row and is the floor — 0017's own test writes straight at the
+   * table to reach it — and the repository decides BEFORE the write so the sentence has
+   * the item's name in it. `details` is what tells the two apart (CONVENTIONS §6).
+   */
+  it('refuses turning a stock-tracked item into a service, and names it', async () => {
+    const item = await sold('Ball bearing 6203', { isStockTracked: true })
+
+    const failure = await failureOf(() => updateItem(db, { id: item.id, kind: 'service' }))
+
+    expect(failure.code).toBe('ITEM_NOT_STOCKABLE')
+    expect(failure.details).toMatchObject({ id: item.id, name: 'Ball bearing 6203' })
+    expect(failure.message).toContain('Ball bearing 6203')
+    /* And it wrote nothing: the kind is unchanged, so the refusal is not a report on a
+     * row that has already been half changed. */
+    expect((await getItem(db, item.id))?.kind).toBe('goods')
+  })
+
+  /* Both at once is the ordinary way out of that state, and it is allowed: the register
+   * is switched off in the same call that reclassifies the item. */
+  it('takes the register off and the kind across in one edit', async () => {
+    const item = await sold('Ball bearing 6203', { isStockTracked: true })
+
+    const changed = await updateItem(db, {
+      id: item.id,
+      kind: 'service',
+      isStockTracked: false,
+    })
+
+    expect(changed).toMatchObject({ kind: 'service', isStockTracked: false })
+  })
+})
+
+/*
+ * ---------------------------------------------------------------------------
+ * WHAT A PICKER GETS
+ *
+ * `listItems` returns `ItemSummary`, and two batches asked for these three fields on it.
+ * The purchase price is what prices a bill line; the two account ids are what make expense
+ * entry ORDINARY — an item called "Courier charges" that already knows its account means a
+ * user never reaches for the per-line override.
+ */
+describe('the summary a picker is drawn from', () => {
+  it('carries the purchase price and both posting accounts', async () => {
+    const account = await revenueAccount()
+    await createItem(db, {
+      name: 'Courier charges',
+      kind: 'service',
+      isPurchased: true,
+      isCharge: true,
+      purchasePrice: '250.00',
+      purchaseAccountId: account.id,
+    })
+
+    const [summary] = await listItems(db)
+
+    /* By value, and the two account fields are asserted apart: an item with one override
+     * set and the other null is the case a mapping that wrote the same id into both would
+     * pass. */
+    expect(summary).toMatchObject({
+      name: 'Courier charges',
+      purchasePrice: '250.00',
+      purchaseAccountId: account.id,
+      salesAccountId: null,
+    })
+  })
+
+  it('says null where nothing has been agreed or chosen', async () => {
+    await sold('Ball bearing 6203')
+
+    expect(await listItems(db)).toEqual([
+      expect.objectContaining({
+        purchasePrice: null,
+        salesAccountId: null,
+        purchaseAccountId: null,
+      }),
+    ])
+  })
+})
+
 describe('names and codes are unique, ignoring case', () => {
   it('refuses a name another item already holds', async () => {
     await sold('Ball bearing 6203')

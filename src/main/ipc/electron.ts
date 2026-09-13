@@ -20,11 +20,14 @@ import type { SystemEnvironment } from './handlers/system'
 import type { CompanyService } from './handlers/companies'
 import type { CompanyProfileService } from './handlers/company-profile'
 import type { DocumentsService } from './handlers/documents'
+import type { ItemsService } from './handlers/items'
 import type { LedgerService } from './handlers/ledger'
+import type { NumberingService } from './handlers/numbering'
 import type { PartiesService } from './handlers/parties'
 import type { ReceiptsService } from './handlers/receipts'
 import type { RegimeService } from './handlers/regime'
 import type { ReportService } from './handlers/reports'
+import type { UnitsService } from './handlers/units'
 import { type IpcDependencies, registerIpcHandlers } from './index'
 import type { HandlerRegistry, IpcLogger, IpcTransport } from './registry'
 
@@ -172,6 +175,12 @@ export interface ElectronIpcOptions {
   ledger: LedgerService
   /** The parties service from src/main/parties — customers and vendors. */
   parties: PartiesService
+  /** The items service from src/main/items — what goes on a document line. */
+  items: ItemsService
+  /** The units service from src/main/units — what a quantity is counted in. */
+  units: UnitsService
+  /** The numbering service from src/main/numbering — how a document's number is built. */
+  numbering: NumberingService
   /** The company profile service from src/main/company-profile — who the books are for. */
   companyProfile: CompanyProfileService
   /** The documents service from src/main/documents — where the regime is asked for tax. */
@@ -195,6 +204,9 @@ export function createElectronIpcDependencies(options: ElectronIpcOptions): IpcD
     companies: options.companies,
     ledger: options.ledger,
     parties: options.parties,
+    items: options.items,
+    units: options.units,
+    numbering: options.numbering,
     companyProfile: options.companyProfile,
     documents: options.documents,
     receipts: options.receipts,

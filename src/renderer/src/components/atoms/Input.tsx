@@ -1,5 +1,6 @@
 import { useId } from 'react'
 import type { InputHTMLAttributes, JSX, Ref } from 'react'
+import { useFieldMessage } from './FieldMessage'
 import { Icon, type IconName } from './Icon'
 
 interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'className'> {
@@ -27,8 +28,7 @@ export function Input({
 }: InputProps): JSX.Element {
   const generatedId = useId()
   const inputId = id ?? generatedId
-  const messageId = `${inputId}-message`
-  const message = error ?? hint
+  const { describedBy, invalid, message } = useFieldMessage({ id: inputId, hint, error })
 
   return (
     <div className={['field', className ?? ''].filter(Boolean).join(' ')}>
@@ -44,21 +44,12 @@ export function Input({
         <input
           id={inputId}
           className="field__input"
-          aria-invalid={error === undefined ? undefined : true}
-          aria-describedby={message === undefined ? undefined : messageId}
+          aria-invalid={invalid}
+          aria-describedby={describedBy}
           {...rest}
         />
       </div>
-      {message !== undefined && (
-        <p
-          id={messageId}
-          className={error === undefined ? 'field__hint' : 'field__error'}
-          /* Only a validation failure interrupts; a static hint does not. */
-          role={error === undefined ? undefined : 'alert'}
-        >
-          {message}
-        </p>
-      )}
+      {message}
     </div>
   )
 }

@@ -1,0 +1,366 @@
+{
+  "$comment": "One state, one movement, one answer. The cases that break naive implementations, and every refusal the module can produce, each reachable by handing the function the bad state directly rather than by hoping the data can reach it (CONVENTIONS §6). `state` is built as a moving-average file unless `layers` is given, in which case it is used verbatim — that is how a state the strategy could never have produced gets in front of the code that guards against it.",
+  "cases": [
+    {
+      "name": "issuing one thousandth more than is on hand",
+      "state": { "quantity": "10.000", "value": "1000.00" },
+      "movement": { "kind": "issue", "quantity": "10.001" },
+      "expected": { "ok": false, "code": "INSUFFICIENT_STOCK" },
+      "why": "negative stock is refused, not priced. One thousandth over is the input that this condition and nothing else excludes"
+    },
+    {
+      "name": "issuing exactly what is on hand",
+      "state": { "quantity": "10.000", "value": "1000.00" },
+      "movement": { "kind": "issue", "quantity": "10.000" },
+      "expected": {
+        "ok": true,
+        "cost": "1000.00",
+        "quantity": "0.000",
+        "value": "0.00",
+        "unitCost": "0.000000"
+      },
+      "why": "the boundary is inclusive, and the whole value leaves. A greater-than-or-equal refusal would fail here"
+    },
+    {
+      "name": "issuing one thousandth less than is on hand",
+      "state": { "quantity": "10.000", "value": "1000.00" },
+      "movement": { "kind": "issue", "quantity": "9.999" },
+      "expected": {
+        "ok": true,
+        "cost": "999.90",
+        "quantity": "0.001",
+        "value": "0.10",
+        "unitCost": "100.000000"
+      },
+      "why": "1000.00 x 9.999 / 10.000 is exactly 999.90, and a thousandth of a unit still carries ten paise"
+    },
+    {
+      "name": "issuing from an item holding nothing",
+      "state": { "quantity": "0.000", "value": "0.00" },
+      "movement": { "kind": "issue", "quantity": "1.000" },
+      "expected": { "ok": false, "code": "INSUFFICIENT_STOCK" },
+      "why": "there is nothing to take out and no average to take it at"
+    },
+    {
+      "name": "issuing nothing from an item holding nothing",
+      "state": { "quantity": "0.000", "value": "0.00" },
+      "movement": { "kind": "issue", "quantity": "0.000" },
+      "expected": {
+        "ok": true,
+        "cost": "0.00",
+        "quantity": "0.000",
+        "value": "0.00",
+        "unitCost": "0.000000"
+      },
+      "why": "0 out of 0 is the division this module must never perform. It is legal and it costs nothing"
+    },
+    {
+      "name": "a receipt onto an empty item sets a fresh average",
+      "state": { "quantity": "0.000", "value": "0.00" },
+      "movement": { "kind": "receipt", "quantity": "5.000", "cost": "200.00" },
+      "expected": {
+        "ok": true,
+        "cost": "200.00",
+        "quantity": "5.000",
+        "value": "200.00",
+        "unitCost": "40.000000"
+      },
+      "why": "nothing on hand means nothing to average against"
+    },
+    {
+      "name": "a receipt of nothing at no cost changes nothing",
+      "state": { "quantity": "7.000", "value": "1000.00" },
+      "movement": { "kind": "receipt", "quantity": "0.000", "cost": "0.00" },
+      "expected": {
+        "ok": true,
+        "cost": "0.00",
+        "quantity": "7.000",
+        "value": "1000.00",
+        "unitCost": "142.857143"
+      },
+      "why": "the average is untouched, and 1000.00 over 7.000 is the recurring case the unit-cost scale exists for"
+    },
+    {
+      "name": "freight capitalised onto stock on hand",
+      "state": { "quantity": "7.000", "value": "1000.00" },
+      "movement": { "kind": "receipt", "quantity": "0.000", "cost": "140.00" },
+      "expected": {
+        "ok": true,
+        "cost": "140.00",
+        "quantity": "7.000",
+        "value": "1140.00",
+        "unitCost": "162.857143"
+      },
+      "why": "a real inward movement with no quantity: the average rises without a unit arriving"
+    },
+    {
+      "name": "a cost with no quantity to carry it",
+      "state": { "quantity": "0.000", "value": "0.00" },
+      "movement": { "kind": "receipt", "quantity": "0.000", "cost": "140.00" },
+      "expected": { "ok": false, "code": "COST_WITHOUT_QUANTITY" },
+      "why": "the same movement onto an EMPTY item would leave value against nothing on hand — invariant 6, refused while somebody can still fix it"
+    },
+    {
+      "name": "a free sample lowers the average",
+      "state": { "quantity": "10.000", "value": "1000.00" },
+      "movement": { "kind": "receipt", "quantity": "5.000", "cost": "0.00" },
+      "expected": {
+        "ok": true,
+        "cost": "0.00",
+        "quantity": "15.000",
+        "value": "1000.00",
+        "unitCost": "66.666667"
+      },
+      "why": "a zero cost is a real receipt. 100.00 a unit becomes 66.666667"
+    },
+    {
+      "name": "stock worth nothing is still stock",
+      "state": { "quantity": "15.000", "value": "0.00" },
+      "movement": { "kind": "issue", "quantity": "5.000" },
+      "expected": {
+        "ok": true,
+        "cost": "0.00",
+        "quantity": "10.000",
+        "value": "0.00",
+        "unitCost": "0.000000"
+      },
+      "why": "quantity without value is ordinary and must be VALUED, not refused. This is the half of invariant 6 that is legal"
+    },
+    {
+      "name": "value with nothing to hold it",
+      "state": { "quantity": "0.000", "value": "250.00" },
+      "movement": { "kind": "receipt", "quantity": "1.000", "cost": "100.00" },
+      "expected": { "ok": false, "code": "VALUE_WITHOUT_QUANTITY" },
+      "why": "the mirror of the case above, and the one that is NOT legal: no movement here can produce it, so the register and the ledger have diverged"
+    },
+    {
+      "name": "a negative quantity on hand",
+      "state": { "quantity": "-1.000", "value": "100.00" },
+      "movement": { "kind": "issue", "quantity": "0.000" },
+      "expected": { "ok": false, "code": "NEGATIVE_QUANTITY_ON_HAND" },
+      "why": "the value is fine and the quantity is not; this condition alone excludes it"
+    },
+    {
+      "name": "a negative value on hand",
+      "state": { "quantity": "1.000", "value": "-100.00" },
+      "movement": { "kind": "issue", "quantity": "0.000" },
+      "expected": { "ok": false, "code": "NEGATIVE_VALUE_ON_HAND" },
+      "why": "the quantity is fine and the value is not; the other half of the same pair"
+    },
+    {
+      "name": "layers that do not add up in quantity",
+      "state": {
+        "quantity": "10.000",
+        "value": "1000.00",
+        "layers": [{ "key": "pooled", "quantity": "9.000", "value": "1000.00" }]
+      },
+      "movement": { "kind": "issue", "quantity": "1.000" },
+      "expected": { "ok": false, "code": "LAYERS_DISAGREE" },
+      "why": "the aggregate and the breakdown are both stored precisely so this can be false and be said out loud"
+    },
+    {
+      "name": "layers that do not add up in value",
+      "state": {
+        "quantity": "10.000",
+        "value": "1000.00",
+        "layers": [{ "key": "pooled", "quantity": "10.000", "value": "900.00" }]
+      },
+      "movement": { "kind": "issue", "quantity": "1.000" },
+      "expected": { "ok": false, "code": "LAYERS_DISAGREE" },
+      "why": "the quantity check alone would pass this, which is why there are two"
+    },
+    {
+      "name": "a layer holding a negative quantity behind a positive total",
+      "state": {
+        "quantity": "10.000",
+        "value": "1000.00",
+        "layers": [
+          { "key": "a", "quantity": "11.000", "value": "500.00" },
+          { "key": "b", "quantity": "-1.000", "value": "500.00" }
+        ]
+      },
+      "movement": { "kind": "issue", "quantity": "1.000" },
+      "expected": { "ok": false, "code": "NEGATIVE_QUANTITY_ON_HAND" },
+      "why": "the aggregate is positive and adds up, so only a per-layer check can see it. This is the row the FIFO strategy will produce if it consumes a layer twice"
+    },
+    {
+      "name": "a layer valued below nothing behind a positive total",
+      "state": {
+        "quantity": "10.000",
+        "value": "1000.00",
+        "layers": [
+          { "key": "a", "quantity": "5.000", "value": "1100.00" },
+          { "key": "b", "quantity": "5.000", "value": "-100.00" }
+        ]
+      },
+      "movement": { "kind": "issue", "quantity": "1.000" },
+      "expected": { "ok": false, "code": "NEGATIVE_VALUE_ON_HAND" },
+      "why": "and the value half of it"
+    },
+    {
+      "name": "a movement carrying a negative quantity",
+      "state": { "quantity": "10.000", "value": "1000.00" },
+      "movement": { "kind": "receipt", "quantity": "-1.000", "cost": "100.00" },
+      "expected": { "ok": false, "code": "NEGATIVE_QUANTITY" },
+      "why": "invariant 3: which way the stock went is on the kind, and a minus sign is a second answer to a question already answered"
+    },
+    {
+      "name": "a movement carrying a negative cost",
+      "state": { "quantity": "10.000", "value": "1000.00" },
+      "movement": { "kind": "receipt", "quantity": "1.000", "cost": "-100.00" },
+      "expected": { "ok": false, "code": "NEGATIVE_COST" },
+      "why": "a credit is a movement the other way, not a receipt with a minus in it"
+    },
+    {
+      "name": "an inward movement with no cost",
+      "state": { "quantity": "10.000", "value": "1000.00" },
+      "movement": { "kind": "receipt", "quantity": "1.000" },
+      "expected": { "ok": false, "code": "COST_REQUIRED" },
+      "why": "invariant 4. Without this refusal `statedCostOf` would value the goods at nothing"
+    },
+    {
+      "name": "an outward movement carrying a cost",
+      "state": { "quantity": "10.000", "value": "1000.00" },
+      "movement": { "kind": "issue", "quantity": "1.000", "cost": "500.00" },
+      "expected": { "ok": false, "code": "COST_NOT_PERMITTED" },
+      "why": "the other half of invariant 4: a caller that could price its own sale could make the register and the ledger disagree at will"
+    },
+    {
+      "name": "a quantity carrying a fourth decimal place",
+      "state": { "quantity": "10.000", "value": "1000.00" },
+      "movement": { "kind": "receipt", "quantity": "1.0001", "cost": "100.00" },
+      "expected": { "ok": false, "code": "SCALE_EXCEEDED" },
+      "why": "rejected rather than rounded, so the card recomputed from the stored rows equals the card computed when they were written"
+    },
+    {
+      "name": "a cost carrying a third decimal place",
+      "state": { "quantity": "10.000", "value": "1000.00" },
+      "movement": { "kind": "receipt", "quantity": "1.000", "cost": "100.001" },
+      "expected": { "ok": false, "code": "SCALE_EXCEEDED" },
+      "why": "and the money scale, which the quantity check alone would let through"
+    },
+    {
+      "name": "a state whose quantity carries a fourth decimal place",
+      "state": { "quantity": "10.0001", "value": "1000.00" },
+      "movement": { "kind": "issue", "quantity": "0.000" },
+      "expected": { "ok": false, "code": "SCALE_EXCEEDED" },
+      "why": "the same rule on the way in from a table, not only on a movement"
+    },
+    {
+      "name": "a state whose value carries a third decimal place",
+      "state": { "quantity": "10.000", "value": "1000.001" },
+      "movement": { "kind": "issue", "quantity": "0.000" },
+      "expected": { "ok": false, "code": "SCALE_EXCEEDED" },
+      "why": "and its money half"
+    },
+    {
+      "name": "a movement naming a layer this item does not hold",
+      "state": { "quantity": "10.000", "value": "1000.00" },
+      "movement": { "kind": "issue", "quantity": "1.000", "layerKey": "batch-7" },
+      "expected": { "ok": false, "code": "LAYER_NOT_FOUND" },
+      "why": "moving average holds one pool. A movement aimed at a layer it does not have is refused rather than pooled anyway"
+    },
+    {
+      "name": "a movement naming the pool itself",
+      "state": { "quantity": "10.000", "value": "1000.00" },
+      "movement": { "kind": "issue", "quantity": "1.000", "layerKey": "pooled" },
+      "expected": {
+        "ok": true,
+        "cost": "100.00",
+        "quantity": "9.000",
+        "value": "900.00",
+        "unitCost": "100.000000"
+      },
+      "why": "a movement replayed from a stock ledger row carries the layer it hit, and the pool is a layer it can legitimately name"
+    },
+    {
+      "name": "a movement carrying a batch number",
+      "state": { "quantity": "10.000", "value": "1000.00" },
+      "movement": {
+        "kind": "receipt",
+        "quantity": "1.000",
+        "cost": "100.00",
+        "batch": { "code": "B-2291", "expiresOn": "2027-01-31" }
+      },
+      "expected": { "ok": false, "code": "BATCH_NOT_SUPPORTED" },
+      "why": "a batch number recorded against a pool is a number nothing can ever act on. Refused rather than accepted and dropped"
+    },
+    {
+      "name": "a movement dated on a day that does not exist",
+      "state": { "quantity": "10.000", "value": "1000.00" },
+      "movement": {
+        "kind": "receipt",
+        "quantity": "1.000",
+        "cost": "100.00",
+        "date": "2026-04-31"
+      },
+      "expected": { "ok": false, "code": "INVALID_DATE" },
+      "why": "April has thirty days. The card is folded in date order, so a movement with no real date has no place in it"
+    },
+    {
+      "name": "a purchase return leaves at the average",
+      "state": { "quantity": "10.000", "value": "1000.00" },
+      "movement": { "kind": "purchase-return", "quantity": "4.000" },
+      "expected": {
+        "ok": true,
+        "cost": "400.00",
+        "quantity": "6.000",
+        "value": "600.00",
+        "unitCost": "100.000000"
+      },
+      "why": "the pool has no memory of what was paid for these particular units. The supplier is credited at the price on the debit note; the difference is a variance for the posting rule"
+    },
+    {
+      "name": "a sales return comes back at the cost it left at, not today's average",
+      "state": { "quantity": "10.000", "value": "2000.00" },
+      "movement": { "kind": "sales-return", "quantity": "5.000", "cost": "500.00" },
+      "expected": {
+        "ok": true,
+        "cost": "500.00",
+        "quantity": "15.000",
+        "value": "2500.00",
+        "unitCost": "166.666667"
+      },
+      "why": "the average on hand is 200.00 and the goods sold at 100.00. Taking them back at 200.00 would credit cost of goods sold with 500.00 more than was ever charged to it"
+    },
+    {
+      "name": "an adjustment out is valued like any other outward movement",
+      "state": { "quantity": "10.000", "value": "1000.00" },
+      "movement": { "kind": "adjustment-out", "quantity": "2.000" },
+      "expected": {
+        "ok": true,
+        "cost": "200.00",
+        "quantity": "8.000",
+        "value": "800.00",
+        "unitCost": "100.000000"
+      },
+      "why": "shrinkage leaves at the average, and the average does not move"
+    },
+    {
+      "name": "an adjustment in states its cost",
+      "state": { "quantity": "10.000", "value": "1000.00" },
+      "movement": { "kind": "adjustment-in", "quantity": "2.000", "cost": "250.00" },
+      "expected": {
+        "ok": true,
+        "cost": "250.00",
+        "quantity": "12.000",
+        "value": "1250.00",
+        "unitCost": "104.166667"
+      },
+      "why": "a stock-take surplus brought in above the average lifts it, exactly as a receipt would"
+    },
+    {
+      "name": "opening stock states its cost",
+      "state": { "quantity": "0.000", "value": "0.00" },
+      "movement": { "kind": "opening", "quantity": "100.000", "cost": "2500.00" },
+      "expected": {
+        "ok": true,
+        "cost": "2500.00",
+        "quantity": "100.000",
+        "value": "2500.00",
+        "unitCost": "25.000000"
+      },
+      "why": "an opening balance is a movement like any other, so a card can be replayed from nothing"
+    }
+  ]
+}

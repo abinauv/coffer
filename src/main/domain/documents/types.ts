@@ -75,6 +75,7 @@
 
 import type { Decimal } from '@main/domain/money'
 import type { SourceDocumentType } from '@main/domain/ledger'
+import type { ExportTaxPayment, ItcEligibility } from '@shared/dto'
 import {
   definitionOf,
   DOCUMENT_KINDS,
@@ -380,6 +381,20 @@ export interface DocumentLine {
    * a choice about this line and roles are a company-wide mapping.
    */
   accountId: string | null
+  /**
+   * Whether input tax on this line may be reclaimed. Null where nothing was recorded.
+   *
+   * ON THE LINE AND NOT ON THE DOCUMENT, because one bill can carry a laptop and a staff
+   * car. It is read by the posting rule and by nothing else in this module: an ineligible
+   * line's tax is not recoverable, so it is not an asset, and it posts to the line's own
+   * value account instead of to the input tax account. See `taxAccountForLine`.
+   *
+   * REQUIRED HERE AND OPTIONAL IN THE DTO, and the asymmetry is the point. `db/` resolves
+   * the absence once, at the boundary, so the posting rule is handed a value it cannot
+   * forget to look for — and `null` is a state it must answer for rather than a field it
+   * may leave off.
+   */
+  itcEligibility: ItcEligibility | null
   /** What the regime returned for this line. Empty for an exempt or nil-rated line. */
   taxes: readonly DocumentLineTax[]
 }
@@ -416,6 +431,33 @@ export interface TradeDocument {
   roundingPolicy: RoundingPolicy
   /** Free text that prints, and that becomes the journal entry's narration. */
   narration: string
+  /**
+   * Whether the BUYER discharges the tax on this supply rather than the seller.
+   *
+   * TWO POSTINGS FROM ONE BILL, on the purchase side. The recipient of a reverse-charge
+   * supply owes the output tax to the authority AND may claim the same figure as input
+   * credit, so the tax lands on both sides of the balance sheet and the supplier is
+   * credited with only the net. On the sales side it is the mirror and it is not
+   * symmetric: this business supplies, the customer discharges, and no tax posts here at
+   * all. `posting.ts` reads it; `documentTotals` deliberately does not — what the document
+   * SAYS the tax is does not change, only who owes it.
+   *
+   * A BOOLEAN AND NOT A NULLABLE ONE. Every supply either is under reverse charge or is
+   * not; there is no third state for a posting rule to have an opinion about. The column
+   * is `NOT NULL DEFAULT 0` (0020) and the DTO's `?` is resolved at the repository
+   * boundary, in one place.
+   */
+  isReverseCharge: boolean
+  /**
+   * Whether a zero-rated supply left with tax paid on it, or under an undertaking.
+   *
+   * Null on a domestic supply. CARRIED HERE AND READ BY NOTHING IN THIS MODULE, which is
+   * deliberate: the tax it decides was decided by the regime when the document was
+   * drafted and is already on the lines (rule 4). It is on `TradeDocument` because a
+   * return needs it off the same object the posting rule takes, and putting it anywhere
+   * else would mean two shapes of "a document" for two readers.
+   */
+  exportTaxPayment: ExportTaxPayment | null
   lines: readonly DocumentLine[]
 }
 

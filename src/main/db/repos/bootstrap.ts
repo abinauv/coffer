@@ -1,8 +1,9 @@
 /*
  * Setting up a new company's books.
  *
- * The chart of accounts, the first fiscal periods and a numbering series per kind, in ONE
- * transaction. All of it or none of it, and this is the whole reason the file exists.
+ * The chart of accounts, the first fiscal periods, a numbering series per kind, the units
+ * a quantity is counted in and somewhere to keep stock, in ONE transaction. All of it or
+ * none of it, and this is the whole reason the file exists.
  *
  * A company with accounts and no periods looks finished and is not: every posting fails
  * with `NO_PERIOD`, and the user is left with a chart of accounts they cannot use and no
@@ -24,6 +25,22 @@
  * the way the app builds one and asking it what series it had; every test passed
  * throughout, because a test that issues something creates its own series first.
  *
+ * THE WAREHOUSE AND THE UNITS JOINED AT THE INTEGRATION GATE, AND IT WAS THE SAME BUG
+ * TWICE MORE. `stock_ledger.warehouse_id` is NOT NULL, so a company file with no
+ * warehouse can record no stock movement at all — structurally identical to the
+ * paragraph above, and `seedDefaultWarehouse` was written idempotent and left uncalled
+ * because the batch that wrote it did not own this file. `units_of_measure` was emptier
+ * still: nothing had ever seeded a unit, so the first invoice line in a new company had
+ * nothing to be measured in, and `units/service.test.ts` pinned that on purpose so that
+ * whoever fixed it would be told.
+ *
+ * That is now three times this file has looked finished and refused something. The
+ * pattern is worth naming: A TABLE WHOSE FOREIGN KEY IS NOT NULL AND WHOSE ROWS NOTHING
+ * CREATES IS A FEATURE THAT CANNOT BE REACHED, and no test that builds its own fixture
+ * can see it — every stock test makes a warehouse first, exactly as every issuing test
+ * makes a series first. The test that catches it is the one that builds a company the
+ * way the application builds one and then asks it to do the thing.
+ *
  * The fiscal-year rule arrives from the tax regime, as everywhere else. Nothing here
  * knows that India runs April to March.
  */
@@ -41,6 +58,8 @@ import type { CofferDb } from '../kysely'
 import { seedDefaultSeries } from './numbering'
 import { generateFiscalYearWithin } from './periods'
 import { seedChartWithin } from './seed-chart'
+import { seedDefaultWarehouse } from './stock'
+import { seedStarterUnits } from './units'
 import type { ChartTemplate, TemplateAccount } from './chart-template'
 
 export interface SetUpBooksOptions {
@@ -74,6 +93,10 @@ export interface SetUpBooksResult {
   periodsCreated: number
   /** One per numbered kind, unless the books already had one. */
   seriesCreated: number
+  /** The starter units, unless a code was already taken. */
+  unitsCreated: number
+  /** One, unless these books already had somewhere to keep stock. */
+  warehousesCreated: number
 }
 
 /**
@@ -110,6 +133,8 @@ export async function setUpBooks(
     }
 
     const seriesCreated = await seedDefaultSeries(trx)
+    const unitsCreated = await seedStarterUnits(trx)
+    const warehousesCreated = await seedDefaultWarehouse(trx)
 
     return {
       accountsCreated: chart.accountsCreated,
@@ -117,6 +142,8 @@ export async function setUpBooks(
       fiscalYears,
       periodsCreated,
       seriesCreated,
+      unitsCreated,
+      warehousesCreated,
     }
   })
 }

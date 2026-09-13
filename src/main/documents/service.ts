@@ -32,6 +32,28 @@
  * IGST with its own arithmetic.
  *
  * ---------------------------------------------------------------------------
+ * AND THE ONE FACT ABOUT THE SUPPLY THAT THE REGIME CANNOT WORK OUT
+ *
+ * `exportTaxPayment` says whether a supply that leaves the country carries tax or went
+ * out under an undertaking. Nothing on the document implies it — the goods, the customer
+ * and the rate are identical either way — so it travels with the lines to `computeTax`
+ * rather than being derived from anything.
+ *
+ * IT IS REFUSED ON A SUPPLY THAT IS NOT AN EXPORT, and this service is the only layer
+ * that can refuse it. Which supplies leave the country is `placeOfSupply().isExport`,
+ * which is the regime's answer; `db/` may not ask a regime (CONVENTIONS §1.6) and a
+ * migration may not name one, so neither a repository nor a trigger can hold this rule.
+ * It is refused rather than quietly cleared, because a value dropped in silence is a
+ * decision lost without anybody being told it was made.
+ *
+ * WHAT IT COSTS IS THAT THE RULE HAS NO FLOOR UNDER IT, which is worth saying out loud
+ * rather than glossing: a write that went straight at `documents` could put an export
+ * treatment on a domestic invoice. What that buys the writer is nothing — `computeTax`
+ * checks the place of supply itself before it zeroes anything, so the stray value cannot
+ * change a figure. The refusal is about the decision being recorded where somebody will
+ * later read it.
+ *
+ * ---------------------------------------------------------------------------
  * WITHOUT A COMPANY PROFILE THERE IS NO SUPPLIER, AND NO TAX
  *
  * `computeTax` takes both sides of the supply. With no profile there is no supplier — not
@@ -65,6 +87,7 @@ import type {
   DocumentLineTaxDto,
   DocumentSettlement,
   DocumentSummary,
+  ExportTaxPayment,
   IssueDocumentInput,
   ListDocumentsInput,
   OpenDocument,
@@ -124,7 +147,14 @@ export class DocumentsService {
 
   async create(input: CreateDocumentInput): Promise<Document> {
     const db = this.books.db()
-    const taxed = await this.tax(db, input.date, input.partyId, input, input.lines ?? [])
+    const taxed = await this.tax(
+      db,
+      input.date,
+      input.partyId,
+      input,
+      input.lines ?? [],
+      input.exportTaxPayment ?? null,
+    )
 
     return createDocument(
       db,
@@ -159,12 +189,20 @@ export class DocumentsService {
     const existing = await this.require(db, input.id)
     const lines = input.lines ?? existing.lines.map(asPricedLine)
     const partyId = input.partyId ?? existing.partyId
+    /* Absent means "leave it", which for this field means the document's own — and the
+     * document's own has to reach `computeTax` on every re-ask, or an edit to a line
+     * would silently put the tax back on an export made under an undertaking. */
+    const exportTaxPayment =
+      input.exportTaxPayment === undefined
+        ? (existing.exportTaxPayment ?? null)
+        : input.exportTaxPayment
     const taxed = await this.tax(
       db,
       input.date ?? existing.date,
       partyId,
       placeAsked(input, existing, partyId !== existing.partyId),
       lines,
+      exportTaxPayment,
     )
 
     return updateDocument(
@@ -208,11 +246,14 @@ export class DocumentsService {
     partyId: string,
     place: PlaceOverride,
     lines: readonly DocumentLineInput[],
+    exportTaxPayment: ExportTaxPayment | null,
   ): Promise<{ placeOfSupply: StoredPlaceOfSupply; lines: TaxedLineInput[] }> {
     const regime = this.books.regime()
     const supplier = await this.supplier(db)
     const customer = await this.customer(db, partyId)
     const placeOfSupply = regime.placeOfSupply(supplier, relocated(customer, place))
+
+    assertExportTreatmentFits(placeOfSupply.isExport, exportTaxPayment)
 
     const priced = lines.map((line, index) => ({
       line,
@@ -247,6 +288,7 @@ export class DocumentsService {
       placeOfSupply,
       lines: taxable,
       date,
+      exportTaxPayment,
     })
 
     const byLine = new Map(computed.lines.map((result) => [result.lineId, result]))
@@ -261,6 +303,10 @@ export class DocumentsService {
         taxableAmount: entry.taxableAmount,
         taxes: taxesOf(byLine.get(entry.lineId)?.components ?? []),
       })),
+      /* `...entry.line` carries `itcEligibility` through untouched. It is an input to the
+       * POSTING rule and not to the tax — a blocked credit does not change what the
+       * supplier charged, only where this business puts it — so the regime is never asked
+       * about it and never told. */
     }
   }
 
@@ -416,7 +462,36 @@ function changesTheTax(input: UpdateDocumentInput): boolean {
     input.partyId !== undefined ||
     input.date !== undefined ||
     input.placeOfSupplyJurisdiction !== undefined ||
-    input.placeOfSupplyCountry !== undefined
+    input.placeOfSupplyCountry !== undefined ||
+    /* The fifth, and it is the least obvious of the lot: switching an export between
+     * "with payment" and "under an undertaking" changes the tax on every line without
+     * touching a line, a party, a date or a place. Left out, an exporter who gave an LUT
+     * after drafting would keep a document carrying IGST that nobody ever charged. */
+    input.exportTaxPayment !== undefined
+  )
+}
+
+/**
+ * Refuse an export treatment on a supply that did not leave the country.
+ *
+ * BOTH DIRECTIONS ARE NOT SYMMETRIC AND ONLY ONE IS A RULE. Stating a treatment on a
+ * domestic supply is a decision recorded against the wrong document and is refused.
+ * Leaving it off an export is NOT refused: a business that has not been asked the
+ * question yet should still be able to raise the invoice, and the return says so out loud
+ * rather than the editor blocking on it — `resolveExport` infers the flavour from whether
+ * tax was charged and reports the inference as an issue every time it makes one.
+ */
+function assertExportTreatmentFits(
+  isExport: boolean,
+  exportTaxPayment: ExportTaxPayment | null,
+): void {
+  if (exportTaxPayment === null || isExport) return
+
+  throw new RepoError(
+    'EXPORT_TAX_PAYMENT_INVALID',
+    'This supply does not leave the country, so it cannot be marked as an export with or ' +
+      'without payment of tax. Change the place of supply, or clear the export treatment.',
+    { exportTaxPayment },
   )
 }
 
@@ -506,5 +581,8 @@ function asPricedLine(line: Document['lines'][number]): DocumentLineInput {
     classificationCode: line.classificationCode,
     isCharge: line.isCharge,
     accountId: line.accountId,
+    /* Carried back, or an edit that re-asks the regime would strip the credit eligibility
+     * off every line it did not touch — `update` replaces the whole set. */
+    itcEligibility: line.itcEligibility ?? null,
   }
 }

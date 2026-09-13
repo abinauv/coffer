@@ -4,8 +4,8 @@
 > This is the user-facing companion to [`SECURITY.md`](../SECURITY.md), which is about
 > reporting vulnerabilities.
 >
-> Coffer is pre-alpha. There is no release to download yet. §4 describes what to do when
-> there is.
+> Coffer is alpha and nothing has been released, so there is no download yet. §4 describes
+> what to do when there is.
 
 ---
 
@@ -217,6 +217,12 @@ difference is not a mismatch.
 
 **If they do not match, do not run the installer.** Download it again, and if it still
 does not match, open an issue.
+
+**And when they do match, you still have a dialog to get past.** Windows SmartScreen and
+macOS Gatekeeper both assume you have not checked anything, and neither offers an obvious
+way through. [The README](../README.md#getting-past-the-os-warning) names the buttons on
+each platform. Do that step only after the checksum has matched: it is what removes the
+warning, not what makes the file safe.
 
 ## 5. Backing up
 

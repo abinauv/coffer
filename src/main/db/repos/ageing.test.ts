@@ -645,6 +645,32 @@ describe('the foot of the report and the control account', () => {
     expect(aged.ties).toBe(true)
   })
 
+  /*
+   * WHAT IS PAST DUE, AND IT IS NEITHER THE TOTAL NOR ANY COLUMN. The dashboard leads
+   * with this figure and refused to compute it, correctly — "everything past due" is a
+   * sum over columns and a renderer does not add money up (CONVENTIONS §1.7).
+   *
+   * THE FIXTURE MAKES ALL FOUR FIGURES DIFFERENT, on purpose. One invoice forty-six days
+   * late, one not due for another three weeks, and a receipt on account: `overdue` is
+   * 1,180, `total` is 1,960, `onAccount` is 400 and no single column is any of them. A
+   * fixture with one invoice would let `overdue` be a copy of `total`, of the third
+   * column, or of the row, and no assertion could tell which.
+   */
+  it('carries what is past due, which is neither the total nor a column', async () => {
+    await issued({ date: '2026-04-15' })
+    await issued({ date: '2026-06-20' })
+    await createReceipt(db, receiptInput({ amount: '400.00' }), NOW)
+
+    const aged = await report()
+
+    expect(aged.totals.overdue).toBe('1180.00')
+    /* Not the total — that has the not-yet-due invoice in it and the credit taken off. */
+    expect(aged.totals.total).toBe('1960.00')
+    expect(aged.totals.onAccount).toBe('400.00')
+    expect(aged.totals.buckets).toEqual(['1180.00', '0.00', '1180.00', '0.00', '0.00'])
+    expect(aged.ties).toBe(true)
+  })
+
   it('keeps two parties apart and totals both', async () => {
     const second = (
       await createParty(db, { name: 'Anand Traders', countryCode: 'in', isCustomer: true })

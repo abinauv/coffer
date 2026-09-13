@@ -20,12 +20,15 @@ import {
   createCompanyProfileHandlers,
 } from './handlers/company-profile'
 import { type DocumentsService, createDocumentsHandlers } from './handlers/documents'
+import { type ItemsService, createItemsHandlers } from './handlers/items'
 import { type LedgerService, createLedgerHandlers } from './handlers/ledger'
+import { type NumberingService, createNumberingHandlers } from './handlers/numbering'
 import { type PartiesService, createPartiesHandlers } from './handlers/parties'
 import { type ReceiptsService, createReceiptsHandlers } from './handlers/receipts'
 import { type RegimeService, createRegimeHandlers } from './handlers/regime'
 import { type ReportService, createReportHandlers } from './handlers/reports'
 import { type SystemEnvironment, createSystemHandlers } from './handlers/system'
+import { type UnitsService, createUnitsHandlers } from './handlers/units'
 import { type PathAllowlist, createPathAllowlist } from './path-access'
 import { HandlerRegistrationError, HandlerRegistry } from './registry'
 import type { IpcLogger, IpcTransport } from './registry'
@@ -35,12 +38,15 @@ export type { ErrorMapper } from './errors'
 export type { CompanyService } from './handlers/companies'
 export type { CompanyProfileService } from './handlers/company-profile'
 export type { DocumentsService } from './handlers/documents'
+export type { ItemsService } from './handlers/items'
 export type { LedgerService } from './handlers/ledger'
+export type { NumberingService } from './handlers/numbering'
 export type { PartiesService } from './handlers/parties'
 export type { ReceiptsService } from './handlers/receipts'
 export type { RegimeService } from './handlers/regime'
 export type { ReportService } from './handlers/reports'
 export type { SystemEnvironment } from './handlers/system'
+export type { UnitsService } from './handlers/units'
 export type { IpcLogger, IpcTransport } from './registry'
 export { HandlerRegistrationError, HandlerRegistry } from './registry'
 
@@ -70,6 +76,32 @@ export interface IpcDependencies {
    * registration number is real.
    */
   parties: PartiesService
+  /**
+   * THE INJECTION POINT for src/main/items.
+   *
+   * A service of its own rather than another face of `documents`, and the reason is the
+   * same one that keeps `parties` separate: an item is a master record, not a posting.
+   * It needs the regime for the reason `parties` does — to say whether a classification
+   * code is real — and it is the only other place a regime is asked above a repository.
+   */
+  items: ItemsService
+  /**
+   * THE INJECTION POINT for src/main/units.
+   *
+   * Separate from `items` because a unit is its own aggregate with its own key: a CODE,
+   * not an id. One service per group (ARCHITECTURE §5) is what stops that difference
+   * being buried in an argument name on somebody else's service.
+   */
+  units: UnitsService
+  /**
+   * THE INJECTION POINT for src/main/numbering.
+   *
+   * Not a face of `documents`, though it is documents that spend the numbers: a series
+   * numbers receipts and payments too, and a service holding both would be the settings
+   * screen and the issuing path in one object — one of which may spend a number and one
+   * of which may never.
+   */
+  numbering: NumberingService
   /**
    * THE INJECTION POINT for src/main/documents.
    *
@@ -151,8 +183,11 @@ export function registerIpcHandlers(dependencies: IpcDependencies): HandlerRegis
   registry.registerGroup('companies', createCompaniesHandlers(dependencies.companies, allowlist))
   registry.registerGroup('ledger', createLedgerHandlers(dependencies.ledger))
   registry.registerGroup('parties', createPartiesHandlers(dependencies.parties))
+  registry.registerGroup('items', createItemsHandlers(dependencies.items))
+  registry.registerGroup('units', createUnitsHandlers(dependencies.units))
   registry.registerGroup('documents', createDocumentsHandlers(dependencies.documents))
   registry.registerGroup('receipts', createReceiptsHandlers(dependencies.receipts))
+  registry.registerGroup('numbering', createNumberingHandlers(dependencies.numbering))
   registry.registerGroup(
     'companyProfile',
     createCompanyProfileHandlers(dependencies.companyProfile),

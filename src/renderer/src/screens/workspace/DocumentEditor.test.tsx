@@ -22,23 +22,36 @@
  * And the four verbs reach the states they are allowed to. A button offered on a document
  * that would refuse it is worse than a button that is not offered.
  *
+ * AND THE FOURTH, ADDED IN 0017: WHAT A STORED LINE KEEPS WHEN NOBODY TOUCHES IT. The
+ * item, the unit, the charge flag and the account were stored, drawn nowhere and sent
+ * nowhere, so opening a document and pressing Save wrote back lines with all four stripped
+ * off and nothing on screen changed. Those tests assert on WHAT CROSSED THE BOUNDARY for
+ * the reason this file keeps repeating: a picker whose value matches no option falls back
+ * to the first one, so a control can read perfectly while the state behind it is empty —
+ * and here the state behind it did not exist at all.
+ *
  * WHAT IS OUTSTANDING IS ASKED FOR SEPARATELY, and the tests at the foot of this file say
  * why that is the right shape: it is a fact about the ledger rather than a field on the
  * document, so a draft is never asked about at all, and a cancelled invoice comes back at
  * nothing without the screen knowing anything about reversals.
  */
 
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type {
+  Account,
   Document,
   DocumentLineDto,
+  DocumentOffsetDto,
   DocumentSummary,
   DocumentSettlement,
   DocumentStatusDto,
+  ItemSummary,
+  OpenDocument,
   PartySummary,
   Result,
+  UnitOfMeasure,
 } from '@shared/dto'
 import { DOCUMENT_KINDS } from '@shared/documents'
 import { renderScreen, screenContext, testRoute, type BridgeStub } from '../../test/harness'
@@ -63,6 +76,102 @@ const CUSTOMERS: PartySummary[] = [
     city: 'Bengaluru',
     isArchived: false,
   } as PartySummary,
+]
+
+/*
+ * The three master lists a line is picked from.
+ *
+ * ORDERED TO DISAGREE WITH EVERY EXPECTED ANSWER, which is the only reason they are in
+ * this order. The item every test picks is the SECOND one, the unit is the SECOND one and
+ * the account is the THIRD — so "picking an item fills the description" cannot pass
+ * against a screen that always takes row one, and a `<select>` falling back to its first
+ * option cannot look like a choice. `Ball bearing 6203` is first on purpose too: it is
+ * what the stored document already says, so a picker that did nothing at all would leave
+ * the assertions reading correctly.
+ */
+const ITEMS: ItemSummary[] = [
+  {
+    id: 'item-1',
+    code: 'BRG-6203',
+    name: 'Ball bearing 6203',
+    kind: 'goods',
+    unitCode: 'NOS',
+    classificationCode: '8482',
+    taxRatePct: '18.000',
+    salePrice: '500.00',
+    purchasePrice: null,
+    salesAccountId: null,
+    purchaseAccountId: null,
+    isSold: true,
+    isPurchased: true,
+    isCharge: false,
+    isArchived: false,
+  },
+  {
+    id: 'item-2',
+    code: 'SEAL-25',
+    name: 'Oil seal 25x40',
+    kind: 'goods',
+    unitCode: 'KGS',
+    classificationCode: '4016',
+    taxRatePct: '12.000',
+    salePrice: '90.00',
+    purchasePrice: null,
+    salesAccountId: null,
+    purchaseAccountId: null,
+    isSold: true,
+    isPurchased: true,
+    isCharge: false,
+    isArchived: false,
+  },
+  /* An item that IS a charge — freight, sold by the consignment. */
+  {
+    id: 'item-3',
+    code: null,
+    name: 'Freight',
+    kind: 'service',
+    unitCode: null,
+    classificationCode: '9965',
+    taxRatePct: '5.000',
+    salePrice: null,
+    purchasePrice: null,
+    salesAccountId: null,
+    purchaseAccountId: null,
+    isSold: true,
+    isPurchased: true,
+    isCharge: true,
+    isArchived: false,
+  },
+]
+
+const UNITS: UnitOfMeasure[] = [
+  { code: 'NOS', name: 'Numbers', decimalPlaces: 0, regimeCode: 'NOS', isArchived: false },
+  { code: 'KGS', name: 'Kilograms', decimalPlaces: 3, regimeCode: 'KGS', isArchived: false },
+]
+
+function chartAccount(over: Partial<Account> = {}): Account {
+  return {
+    id: 'acc-sales',
+    code: '4000',
+    name: 'Sales',
+    type: 'income',
+    normalBalance: 'credit',
+    parentId: null,
+    isGroup: false,
+    isArchived: false,
+    description: null,
+    depth: 1,
+    roles: [],
+    ...over,
+  }
+}
+
+/* A group first and an archived account last, so both filters have something to catch. */
+const ACCOUNTS: Account[] = [
+  chartAccount({ id: 'acc-group', code: '5000', name: 'Direct Expenses', isGroup: true }),
+  chartAccount(),
+  chartAccount({ id: 'acc-courier', code: '5210', name: 'Courier and Postage', type: 'expense' }),
+  chartAccount({ id: 'acc-old', code: '5900', name: 'Closed Expense', isArchived: true }),
 ]
 
 function line(over: Partial<DocumentLineDto> = {}): DocumentLineDto {
@@ -98,6 +207,8 @@ function document(over: Partial<Document> = {}): Document {
     grandTotal: '1180.00',
     seriesId: null,
     originalDocumentId: null,
+    originalDocumentNumber: null,
+    originalDocumentDate: null,
     partyReference: null,
     placeOfSupplyJurisdiction: '33',
     placeOfSupplyCountry: 'in',
@@ -139,15 +250,71 @@ function settlement(over: Partial<DocumentSettlement> = {}): DocumentSettlement 
   }
 }
 
+/** One of the charge documents a credit note's picker offers, as main lists it. */
+function openInvoice(over: Partial<OpenDocument> = {}): OpenDocument {
+  return {
+    id: 'inv-1',
+    kind: 'sales-invoice',
+    number: 'INV/2026-27/0001',
+    date: '2026-04-15',
+    grandTotal: '1180.00',
+    outstanding: '1180.00',
+    ...over,
+  }
+}
+
+/** One credit note set against one invoice, as either end's settlement reports it. */
+function offsetRow(over: Partial<DocumentOffsetDto> = {}): DocumentOffsetDto {
+  return {
+    offsetId: 'off-1',
+    documentId: 'crn-1',
+    documentKind: 'credit-note',
+    documentNumber: 'CRN/2026-27/0001',
+    documentDate: '2026-04-20',
+    amount: '300.00',
+    ...over,
+  }
+}
+
+/**
+ * The master lists behind the line pickers. Every test gets them; a test ABOUT one passes
+ * its own — `{ units: [] }` is a company on its first day, which seeds no units at all.
+ */
+interface Masters {
+  items?: ItemSummary[]
+  units?: UnitOfMeasure[]
+  accounts?: Account[]
+}
+
 /** A bridge that serves one document and echoes a chosen answer back from every write. */
 function bridgeFor(
   stored: Document | null,
   answer: Document = document(),
   settled: DocumentSettlement = settlement(),
+  open: OpenDocument[] = [],
+  masters: Masters = {},
 ): BridgeStub {
   return {
     parties: {
       list: () => Promise.resolve<Result<PartySummary[]>>({ ok: true, data: CUSTOMERS }),
+    },
+    /*
+     * THE THREE LISTS A LINE IS PICKED FROM, ANSWERED HERE FOR THE REASON `openForOffset`
+     * IS. The harness fails a test by name on any channel nothing answers, so the moment
+     * the grid grew an item column every test in this file would have failed on a missing
+     * stub, for a reason that had nothing to do with what it was asserting.
+     */
+    items: {
+      list: () =>
+        Promise.resolve<Result<ItemSummary[]>>({ ok: true, data: masters.items ?? ITEMS }),
+    },
+    units: {
+      list: () =>
+        Promise.resolve<Result<UnitOfMeasure[]>>({ ok: true, data: masters.units ?? UNITS }),
+    },
+    ledger: {
+      listAccounts: () =>
+        Promise.resolve<Result<Account[]>>({ ok: true, data: masters.accounts ?? ACCOUNTS }),
     },
     documents: {
       /* `settlement` is asked for any document that has posted. A draft never reaches it,
@@ -155,6 +322,20 @@ function bridgeFor(
        * group rather than on `receipts` since 0016, when what settles a document stopped
        * being only money. */
       settlement: () => Promise.resolve<Result<DocumentSettlement>>({ ok: true, data: settled }),
+      /*
+       * THE OFFSET PICKER IS ANSWERED HERE RATHER THAN IN THE CREDIT NOTE SECTION, and
+       * that is not tidiness. The harness fails a test by name on any channel nothing
+       * answers, so the moment the panel started asking for this, every test that renders
+       * an ISSUED credit or debit note failed on a missing stub — for a reason that had
+       * nothing to do with what it was asserting. A default that answers with an empty
+       * list keeps those tests about their own subject; the tests that are about the
+       * picker pass `open`.
+       */
+      openForOffset: () => Promise.resolve<Result<OpenDocument[]>>({ ok: true, data: open }),
+      /* `offset` answers with the note's whole settlement, which is what the panel
+       * adopts. The default echoes the same one back; a test about adopting it sends a
+       * different one. */
+      offset: () => Promise.resolve<Result<DocumentSettlement>>({ ok: true, data: settled }),
       get: () => Promise.resolve<Result<Document | null>>({ ok: true, data: stored }),
       create: () => Promise.resolve<Result<Document>>({ ok: true, data: answer }),
       update: () => Promise.resolve<Result<Document>>({ ok: true, data: answer }),
@@ -329,6 +510,414 @@ describe('what a line sends', () => {
   })
 })
 
+/** The cell one of a line's controls sits in. Scoped to the CELL, never to the row. */
+const cellOf = (control: HTMLElement): HTMLElement => control.closest('td') as HTMLElement
+
+/** The lines of the last save, as they crossed the bridge. */
+const linesSentTo = (
+  bridge: { lastCallTo(channel: string): { args: readonly unknown[] } | undefined },
+  channel: string,
+): Record<string, unknown>[] => sentTo(bridge, channel)?.['lines'] as Record<string, unknown>[]
+
+describe('what a stored line keeps when nothing is touched', () => {
+  /*
+   * THE TEST THIS BATCH EXISTS FOR, AND IT FAILED AGAINST THE CODE BEFORE IT.
+   *
+   * `itemId`, `unitCode`, `isCharge` and `accountId` were on `DocumentLineInput` from the
+   * start, validated by the handler, stored by the repository and honoured by the posting
+   * rule — and `LineDraft` carried none of them. So opening a saved document and pressing
+   * Save wrote back lines with the item stripped off, the unit gone and any account
+   * override discarded, and the screen looked identical before and after. That is data
+   * loss with nothing on screen to notice it by, which is why it is asserted at the
+   * BOUNDARY rather than on the picker: a control can read correctly while the state
+   * behind it is empty, and here the state behind it did not exist at all.
+   */
+  it('keeps the item a stored line names', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document({ lines: [line({ itemId: 'item-2' })] })),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
+    expect(linesSentTo(bridge, 'documents:update')[0]?.['itemId']).toBe('item-2')
+  })
+
+  it('keeps the unit a stored line was counted in', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document({ lines: [line({ unitCode: 'KGS' })] })),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
+    expect(linesSentTo(bridge, 'documents:update')[0]?.['unitCode']).toBe('KGS')
+  })
+
+  /* A charge line that came back as an ordinary one would move freight out of
+   * `freight-outward` and into sales, and a dropped override would move a bought service
+   * out of its own expense account and into purchases. Neither shows on the document. */
+  it('keeps a charge line a charge, and the account it was pointed at', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document({ lines: [line({ isCharge: true, accountId: 'acc-courier' })] })),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
+    expect(linesSentTo(bridge, 'documents:update')[0]).toMatchObject({
+      isCharge: true,
+      accountId: 'acc-courier',
+    })
+  })
+
+  /* And a line that picked nothing still says nothing, which is what keeps free text
+   * exactly as legal as it was before any of this existed. */
+  it('says nothing about an item, a unit or an account on a free-text line', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
+    const sent = linesSentTo(bridge, 'documents:update')[0]
+    expect(sent).not.toHaveProperty('itemId')
+    expect(sent).not.toHaveProperty('unitCode')
+    expect(sent).not.toHaveProperty('isCharge')
+    expect(sent).not.toHaveProperty('accountId')
+  })
+})
+
+describe('the item a line is', () => {
+  /* Only what this side deals in. An item is very often both bought and sold, so this
+   * narrows the picker rather than saying what the item is. */
+  it('asks for the items this side sells', async () => {
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    await waitFor(() => expect(bridge.callsTo('items:list')).toHaveLength(1))
+    expect(sentTo(bridge, 'items:list')?.['side']).toBe('sold')
+  })
+
+  it('offers what main listed, above an option for a line that is no item at all', async () => {
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    const picker = await screen.findByLabelText('Item, line 1')
+    const offered = within(cellOf(picker))
+      .getAllByRole('option')
+      .map((option) => option.textContent)
+
+    expect(offered).toEqual([
+      'None — type the line yourself',
+      'BRG-6203 — Ball bearing 6203',
+      'SEAL-25 — Oil seal 25x40',
+      'Freight',
+    ])
+  })
+
+  /*
+   * WHAT CROSSED THE BOUNDARY, not what the picker reads. A `<select>` shows its first
+   * option when its value matches none, so a screen that recorded nothing at all would
+   * still LOOK as though an item had been chosen — and the item picked here is the second
+   * in the list precisely so that "it took row one" cannot pass.
+   */
+  it('fills the line from the item that was picked, and sends its id', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
+    await user.selectOptions(screen.getByLabelText('Item, line 1'), 'item-2')
+
+    /* The boxes first, because a user edits them from here — and then what actually
+     * crossed, because the two are different claims and only the second one is safe. */
+    expect(screen.getByLabelText('Item, line 1')).toHaveValue('item-2')
+    expect(screen.getByLabelText('Description, line 1')).toHaveValue('Oil seal 25x40')
+    expect(screen.getByLabelText('Unit, line 1')).toHaveValue('KGS')
+    expect(screen.getByLabelText('Unit price, line 1')).toHaveValue('90.00')
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
+    expect(linesSentTo(bridge, 'documents:update')[0]).toMatchObject({
+      itemId: 'item-2',
+      description: 'Oil seal 25x40',
+      unitCode: 'KGS',
+      unitPrice: '90.00',
+      ratePct: '12.000',
+      classificationCode: '4016',
+    })
+  })
+
+  /*
+   * THE DECISION, WRITTEN DOWN. A line is a COPY of an item and not a reference to one —
+   * `dto.ts` says a line stores its own description, price and rate so that repricing an
+   * item later cannot rewrite history. So the id is what the line IS and the description
+   * is what was PRINTED, and typing over the printing does not make it another item.
+   */
+  it('is still that item after the description is rewritten', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
+    await user.selectOptions(screen.getByLabelText('Item, line 1'), 'item-2')
+    const description = screen.getByLabelText('Description, line 1')
+    await user.clear(description)
+    await user.type(description, 'Oil seal, as agreed on the phone')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
+    expect(linesSentTo(bridge, 'documents:update')[0]).toMatchObject({
+      itemId: 'item-2',
+      description: 'Oil seal, as agreed on the phone',
+    })
+  })
+
+  /*
+   * An item that IS freight brings the flag with it, so the commonest charge line on a
+   * document needs nobody to remember the box. It also has no standard price — and an item
+   * that states no price states nothing about one, so the figure already in the box stays
+   * where it is rather than being cleared out from under somebody.
+   */
+  it('takes the charge flag from an item that is freight, and asks no price of it', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
+    await user.selectOptions(screen.getByLabelText('Item, line 1'), 'item-3')
+    expect(screen.getByLabelText('Unit price, line 1')).toHaveValue('500.00')
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
+    expect(linesSentTo(bridge, 'documents:update')[0]).toMatchObject({
+      itemId: 'item-3',
+      description: 'Freight',
+      isCharge: true,
+      unitPrice: '500.00',
+    })
+  })
+
+  /* The inverse, and it is not an undo: what was seeded became the line's own text the
+   * moment it landed, so unpicking must not empty the line somebody is looking at. */
+  it('stops being an item without emptying what was printed', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document({ lines: [line({ itemId: 'item-2' })] })),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
+    await user.selectOptions(screen.getByLabelText('Item, line 1'), '')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
+    const sent = linesSentTo(bridge, 'documents:update')[0]
+    expect(sent).not.toHaveProperty('itemId')
+    expect(sent?.['description']).toBe('Ball bearing 6203')
+  })
+
+  /*
+   * AN ARCHIVED ITEM IS NOT IN THE PICKER AND IS STILL ON THE INVOICE. `items.list` leaves
+   * archived items out, so without an option of its own the control would fall back to
+   * displaying the FIRST item in the list — an issued invoice naming goods it was never
+   * made of, convincingly and with nothing to notice it by.
+   */
+  it('shows an item the list no longer offers rather than the first one it does', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document({ lines: [line({ itemId: 'item-archived' })] })),
+    })
+
+    const picker = await screen.findByLabelText('Item, line 1')
+    await waitFor(() => expect(picker).toHaveValue('item-archived'))
+    expect(
+      within(cellOf(picker)).getByRole('option', { name: 'An item that is no longer listed' }),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
+    expect(linesSentTo(bridge, 'documents:update')[0]?.['itemId']).toBe('item-archived')
+  })
+})
+
+describe('the unit a quantity is counted in', () => {
+  it('offers the units main listed, and none as an answer of its own', async () => {
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    const picker = await screen.findByLabelText('Unit, line 1')
+    const offered = within(cellOf(picker))
+      .getAllByRole('option')
+      .map((option) => option.textContent)
+
+    expect(offered).toEqual(['No unit', 'NOS — Numbers', 'KGS — Kilograms'])
+  })
+
+  it('sends the unit that was chosen', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
+    await user.selectOptions(screen.getByLabelText('Unit, line 1'), 'KGS')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
+    expect(linesSentTo(bridge, 'documents:update')[0]?.['unitCode']).toBe('KGS')
+  })
+
+  /*
+   * NO UNITS IS THE FIRST-RUN STATE, NOT A BROKEN CONTROL. `setUpBooks` seeds none at all,
+   * so every company starts here — and a picker with one option must read as "a line needs
+   * none" rather than as a list that failed to arrive.
+   */
+  it('says so when the books have no units, and leaves the picker usable', async () => {
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document(), document(), settlement(), [], { units: [] }),
+    })
+
+    const picker = await screen.findByLabelText('Unit, line 1')
+    expect(picker).toBeEnabled()
+    expect(within(cellOf(picker)).getAllByRole('option')).toHaveLength(1)
+    expect(screen.getByText(/No units are set up yet/)).toBeInTheDocument()
+  })
+
+  /* And the sentence is not said where it is untrue — which is a real absence, because
+   * the same string renders in the test above. */
+  it('says nothing about setting units up once there are some', async () => {
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    await screen.findByLabelText('Unit, line 1')
+    expect(screen.queryByText(/No units are set up yet/)).toBeNull()
+  })
+
+  /* A line with no unit is a complete line, and always was. */
+  it('sends a line with no unit at all, and sends it', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document(), document(), settlement(), [], { units: [] }),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
+    const sent = linesSentTo(bridge, 'documents:update')
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).not.toHaveProperty('unitCode')
+  })
+})
+
+describe('a charge line', () => {
+  /*
+   * THE USER'S WORDS. `isCharge` is the field; freight and packing are what somebody is
+   * looking at. The posting rule sends a line carrying it to `freight-outward` on a sale
+   * and `freight-inward` on a purchase — which is not a mirror of one treatment, because
+   * carriage a supplier charges is part of what the goods cost and outward freight is a
+   * selling cost being recovered.
+   */
+  it('marks freight as a charge rather than as goods sold', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
+    await user.click(screen.getByLabelText('Freight or packing, line 1'))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
+    expect(linesSentTo(bridge, 'documents:update')[0]?.['isCharge']).toBe(true)
+  })
+
+  it('shows a stored charge line as one', async () => {
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document({ lines: [line({ isCharge: true })] })),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Freight or packing, line 1')).toBeChecked())
+  })
+})
+
+describe('the account a line posts to', () => {
+  /*
+   * NEVER A GROUP. A group totals its children and accepts no posting of its own, so
+   * offering one offers a save main refuses. The archived one is out for the ordinary
+   * reason. Both are in the fixture, and the group is FIRST — so a missing filter would
+   * leave it as the option the control falls back to.
+   */
+  it('offers only the accounts a line may post to', async () => {
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    const picker = await screen.findByLabelText('Account, line 1')
+    const offered = within(cellOf(picker))
+      .getAllByRole('option')
+      .map((option) => option.textContent)
+
+    expect(offered).toEqual([
+      'Wherever this line normally posts',
+      '4000 — Sales',
+      '5210 — Courier and Postage',
+    ])
+  })
+
+  /*
+   * WHAT MAKES AN EXPENSE ENTRY POSSIBLE AT ALL. Without this, every line of a purchase
+   * bill posts to Purchases, and the courier bill a business actually receives has nowhere
+   * to go. `valueAccountFor` reads the line's own account before it reads the role.
+   */
+  it('sends the account a line was pointed at', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
+    await user.selectOptions(screen.getByLabelText('Account, line 1'), 'acc-courier')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
+    expect(linesSentTo(bridge, 'documents:update')[0]?.['accountId']).toBe('acc-courier')
+  })
+
+  /* An account archived after the document was issued is not in the list and is still
+   * where that line posted — the same fallback trap as an archived item. */
+  it('shows an account the list no longer offers rather than the first one it does', async () => {
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document({ lines: [line({ accountId: 'acc-old' })] })),
+    })
+
+    const picker = await screen.findByLabelText('Account, line 1')
+    await waitFor(() => expect(picker).toHaveValue('acc-old'))
+    expect(
+      within(cellOf(picker)).getByRole('option', { name: 'An account that is no longer listed' }),
+    ).toBeInTheDocument()
+  })
+})
+
 describe('creating one', () => {
   it('will not create without a customer, a date and a line', async () => {
     renderScreen(<DocumentEditor {...creating()} kind="sales-invoice" />, {
@@ -336,6 +925,41 @@ describe('creating one', () => {
     })
 
     expect(await screen.findByRole('button', { name: 'Create draft' })).toBeDisabled()
+  })
+
+  /*
+   * ONE FIELD AT A TIME, ASSERTING AFTER EACH — because a button that goes from disabled
+   * to enabled somewhere in a block of four actions is a button no assertion has watched.
+   * What this proves is that the item picker fills in enough of a line to SEND it: the
+   * description and the price arrive together from the item, and neither was typed.
+   */
+  it('fills a new line from an item, one field at a time', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...creating()} kind="sales-invoice" />, {
+      bridge: bridgeFor(null, document({ id: 'doc-9' })),
+    })
+
+    const create = await screen.findByRole('button', { name: 'Create draft' })
+    expect(create).toBeDisabled()
+
+    await user.selectOptions(screen.getByLabelText('Customer'), 'party-1')
+    expect(create).toBeDisabled()
+
+    await user.type(screen.getByLabelText('Date'), '2026-04-15')
+    expect(create).toBeDisabled()
+
+    await user.selectOptions(screen.getByLabelText('Item, line 1'), 'item-2')
+    expect(create).toBeEnabled()
+
+    await user.click(create)
+    await waitFor(() => expect(bridge.callsTo('documents:create')).toHaveLength(1))
+    expect(linesSentTo(bridge, 'documents:create')[0]).toMatchObject({
+      itemId: 'item-2',
+      description: 'Oil seal 25x40',
+      quantity: '1',
+      unitPrice: '90.00',
+      unitCode: 'KGS',
+    })
   })
 
   it('creates a sales invoice and moves to it', async () => {
@@ -687,6 +1311,180 @@ describe('what has been received against it', () => {
   })
 })
 
+/*
+ * WHAT WAS OFFSET AGAINST IT, WHICH IS NOT WHAT WAS PAID (0016).
+ *
+ * A credit note set against an invoice settles it and moves no money, so before this
+ * panel existed an invoice reduced by one showed a smaller outstanding with nothing on
+ * the page to explain it. The figures arrive as two — `allocated` and `offset` — and are
+ * drawn as two, because "who paid this" and "what did we credit against it" are different
+ * questions with different lists behind them.
+ *
+ * THE HEADING IS THE ASSERTION WORTH THE MOST HERE. A charge document's offsets are refund
+ * documents, and which refund document depends on the side: a purchase bill is settled by
+ * a debit note. A screen that wrote "Credit note" into the markup would be right on the
+ * sales side and wrong on the other, and nothing about the sales-side test could see it.
+ */
+describe('what has been offset against it', () => {
+  const issued = () => document({ status: 'issued', number: 'INV/2026-27/0001' })
+
+  /** The figure cell of the row whose label matches, which is never the label cell. */
+  const figureIn = (label: RegExp): HTMLElement => {
+    const row = screen.getByText(label).closest('tr') as HTMLElement
+    return within(row).getAllByRole('cell')[1] as HTMLElement
+  }
+
+  /*
+   * THREE FIGURES THAT DISAGREE, on purpose. Main sends what money settled, what documents
+   * settled, and what is left; a panel that printed one of them twice would look entirely
+   * ordinary against a fixture where two of them were equal.
+   */
+  it('prints what documents settled it apart from what money settled it', async () => {
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(
+        issued(),
+        issued(),
+        settlement({
+          movement: '1180.00',
+          allocated: '500.00',
+          offset: '300.00',
+          outstanding: '380.00',
+        }),
+      ),
+    })
+
+    await screen.findByText('Outstanding')
+    expect(figureIn(/Settled against this sales invoice/)).toHaveTextContent(/^500\.00$/)
+    expect(figureIn(/Less credit notes set against it/)).toHaveTextContent(/^300\.00$/)
+    expect(figureIn(/^Outstanding$/)).toHaveTextContent(/^380\.00$/)
+  })
+
+  /*
+   * THE COLUMN CARRIES THE SIGN AND THE FIGURE KEEPS THE ONE IT ARRIVED WITH (§1.7). The
+   * offset is taken OFF the movement to reach the outstanding underneath it, and main
+   * sends it as a positive quantity — so the heading says "Less" and the cell says
+   * 300.00. A screen that negated its copy would show the same credit as -300.00 here and
+   * as 300.00 in the list below, which is one page contradicting itself.
+   */
+  it('says the offset is subtracted rather than printing a negative', async () => {
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(
+        issued(),
+        issued(),
+        settlement({ offset: '300.00', outstanding: '880.00', offsets: [offsetRow()] }),
+      ),
+    })
+
+    await screen.findByText('Outstanding')
+    expect(figureIn(/Less credit notes set against it/)).toHaveTextContent(/^300\.00$/)
+    const listed = screen.getByText('CRN/2026-27/0001').closest('tr') as HTMLElement
+    expect(within(listed).getAllByRole('cell')[2]).toHaveTextContent(/^300\.00$/)
+  })
+
+  it('names the credit notes that were set against it, with their dates', async () => {
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(
+        issued(),
+        issued(),
+        settlement({ offset: '300.00', outstanding: '880.00', offsets: [offsetRow()] }),
+      ),
+    })
+
+    expect(await screen.findByRole('columnheader', { name: 'Credit note' })).toBeInTheDocument()
+    const row = (await screen.findByText('CRN/2026-27/0001')).closest('tr') as HTMLElement
+    const cells = within(row).getAllByRole('cell')
+    expect(cells[1]).toHaveTextContent(/^2026-04-20$/)
+    expect(cells[2]).toHaveTextContent(/^300\.00$/)
+  })
+
+  /*
+   * TWO LISTS, NOT ONE. The receipt and the credit note settled the same invoice by
+   * different amounts, and each figure has to appear under its own heading — a panel that
+   * drew the offsets into the receipts table would still show both numbers somewhere.
+   */
+  it('keeps the money and the credit in separate lists', async () => {
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(
+        issued(),
+        issued(),
+        settlement({
+          allocated: '500.00',
+          offset: '300.00',
+          outstanding: '380.00',
+          receipts: [
+            {
+              receiptId: 'rct-1',
+              number: 'RCT/2026-27/0001',
+              date: '2026-04-18',
+              amount: '500.00',
+            },
+          ],
+          offsets: [offsetRow()],
+        }),
+      ),
+    })
+
+    const receipt = (await screen.findByText('RCT/2026-27/0001')).closest('tr') as HTMLElement
+    expect(within(receipt).getAllByRole('cell')[2]).toHaveTextContent(/^500\.00$/)
+    const offset = screen.getByText('CRN/2026-27/0001').closest('tr') as HTMLElement
+    expect(within(offset).getAllByRole('cell')[2]).toHaveTextContent(/^300\.00$/)
+  })
+
+  /*
+   * AND THE OTHER SIDE, which is what makes the heading a rule rather than a string. A
+   * purchase bill is settled by a DEBIT note; a screen with the sales-side word written
+   * into it passes every test above and tells a buyer their supplier raised them a credit
+   * note.
+   */
+  it('heads a bill offsets with the debit note, not the credit note', async () => {
+    const bill = document({ kind: 'purchase-bill', status: 'issued', number: 'BILL/2026-27/0001' })
+    renderScreen(
+      <DocumentEditor
+        {...screenContext({ route: testRoute('purchase-bill', { id: 'doc-1' }) })}
+        kind="purchase-bill"
+      />,
+      {
+        bridge: bridgeFor(
+          bill,
+          bill,
+          settlement({
+            offset: '300.00',
+            outstanding: '880.00',
+            offsets: [
+              offsetRow({ documentKind: 'debit-note', documentNumber: 'DBN/2026-27/0001' }),
+            ],
+          }),
+        ),
+      },
+    )
+
+    expect(await screen.findByRole('columnheader', { name: 'Debit note' })).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'Credit note' })).toBeNull()
+    expect(screen.getByText(/Less debit notes set against it/)).toBeInTheDocument()
+  })
+
+  /* The invoice is the settled end, never the settling one: the set is owned by the note.
+   * So there is no picker here and nothing is asked for one. */
+  it('is never asked what an invoice could be set against', async () => {
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(
+        issued(),
+        issued(),
+        settlement({ offset: '300.00', outstanding: '880.00' }),
+      ),
+    })
+
+    /* The settlement panel is on screen, and then one more flush: the fetch this is
+     * asserting the absence of would be made from the effect that panel's own answer
+     * wakes, so a check run any earlier passes against every screen ever written. */
+    await screen.findByText('Outstanding')
+    await act(async () => {})
+
+    expect(bridge.callsTo('documents:openForOffset')).toHaveLength(0)
+    expect(screen.queryByRole('button', { name: /^Save what this/ })).toBeNull()
+  })
+})
+
 // ---- What differs by kind ---------------------------------------------------
 
 describe('a purchase bill', () => {
@@ -707,6 +1505,48 @@ describe('a purchase bill', () => {
 
     await waitFor(() => expect(bridge.callsTo('parties:list')).toHaveLength(1))
     expect(sentTo(bridge, 'parties:list')?.['role']).toBe('vendor')
+  })
+
+  /* And for what it BUYS. Same argument as the vendor list next door, one table down:
+   * plenty of items are both, so the side narrows the picker rather than describing the
+   * item — and a bill offering only what the business sells would offer nothing at all to
+   * the firm that resells nothing it buys. */
+  it('asks main for what this side buys, not for what it sells', async () => {
+    const { bridge } = renderScreen(<DocumentEditor {...purchase()} kind="purchase-bill" />, {
+      bridge: bridgeFor(bill()),
+    })
+
+    await waitFor(() => expect(bridge.callsTo('items:list')).toHaveLength(1))
+    expect(sentTo(bridge, 'items:list')?.['side']).toBe('purchased')
+  })
+
+  /*
+   * AND IT DOES NOT SEED A PRICE. `ItemSummary` carries a sale price and no purchase one,
+   * which is also the better answer: what a line on a bill costs is what the supplier
+   * BILLED, and a stored standard cost put in the box is a figure that agrees with nobody's
+   * paperwork and is one keystroke from being accepted. Everything else the item says
+   * still fills in.
+   */
+  it('fills a bill line from the item but leaves the price to the supplier', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...purchase()} kind="purchase-bill" />, {
+      bridge: bridgeFor(bill()),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Vendor')).toHaveValue('party-1'))
+    await user.selectOptions(screen.getByLabelText('Item, line 1'), 'item-2')
+    expect(screen.getByLabelText('Unit price, line 1')).toHaveValue('500.00')
+
+    await user.clear(screen.getByLabelText('Unit price, line 1'))
+    await user.type(screen.getByLabelText('Unit price, line 1'), '84.50')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
+    expect(linesSentTo(bridge, 'documents:update')[0]).toMatchObject({
+      itemId: 'item-2',
+      description: 'Oil seal 25x40',
+      unitPrice: '84.50',
+    })
   })
 
   it('labels the party as a vendor', async () => {
@@ -1059,6 +1899,383 @@ describe('a credit note', () => {
   })
 })
 
+/*
+ * THE PANEL THAT SETS A CREDIT NOTE AGAINST THE INVOICES IT SETTLES (0016).
+ *
+ * A credit note is a pool of money drawn down by refunds and by offsets, which is a
+ * receipt's shape exactly — so it gets a receipt's allocation table, and every assertion
+ * here has a twin in ReceiptEditor.test.tsx. What differs is that both ends are documents:
+ * the set is owned by the REFUND end, and the invoice's screen shows the result.
+ *
+ * WHAT CROSSED THE BRIDGE IS WHAT IS ASSERTED. The rows are the picker's own answer, so a
+ * screen that dropped a line, sent a blank as a zero, or sent one end's id where the other
+ * belonged would still draw a table with the right figures in it.
+ */
+describe('what a credit note settles', () => {
+  const issuedNote = (over: Partial<Document> = {}): Document =>
+    document({
+      kind: 'credit-note',
+      status: 'issued',
+      number: 'CRN/2026-27/0001',
+      entryId: 'entry-1',
+      ...over,
+    })
+
+  const offsetting = (id = 'doc-1') => screenContext({ route: testRoute('credit-note', { id }) })
+
+  /** What a note has on it before anything is set against it. */
+  const noteSettlement = (over: Partial<DocumentSettlement> = {}): DocumentSettlement =>
+    settlement({ movement: '1180.00', allocated: '0.00', offset: '0.00', ...over })
+
+  /** The credit note bridge, which also answers the corrections picker's query. */
+  function noteBridge(
+    settled: DocumentSettlement = noteSettlement(),
+    open: OpenDocument[] = [openInvoice()],
+    stored: Document = issuedNote(),
+  ): BridgeStub {
+    const base = bridgeFor(stored, stored, settled, open)
+    return {
+      ...base,
+      documents: {
+        ...base.documents,
+        list: () => Promise.resolve<Result<DocumentSummary[]>>({ ok: true, data: [] }),
+      },
+    } as BridgeStub
+  }
+
+  /** A stub that answers differently the second time, for asserting on a re-read. */
+  function answering<T>(...answers: readonly T[]): () => Promise<Result<T>> {
+    let asked = 0
+    return () => {
+      const answer = answers[Math.min(asked, answers.length - 1)] as T
+      asked += 1
+      return Promise.resolve<Result<T>>({ ok: true, data: answer })
+    }
+  }
+
+  const saveOffsets = 'Save what this credit note settles'
+
+  /*
+   * IT ASKS ABOUT THE NOTE, not about the party and a kind. `openForOffset` takes the
+   * document because both of those are already on it — a picker handed them separately
+   * could be given one customer's note and another customer's id, which is what 0016's
+   * same-party trigger exists for.
+   */
+  it('asks main what this note may be set against, naming the note', async () => {
+    const { bridge } = renderScreen(<DocumentEditor {...offsetting()} kind="credit-note" />, {
+      bridge: noteBridge(),
+    })
+
+    await waitFor(() => expect(bridge.callsTo('documents:openForOffset')).toHaveLength(1))
+    expect(bridge.lastCallTo('documents:openForOffset')?.args[0]).toBe('doc-1')
+  })
+
+  it('lists the open invoices with what is left on each', async () => {
+    renderScreen(<DocumentEditor {...offsetting()} kind="credit-note" />, {
+      bridge: noteBridge(noteSettlement(), [
+        openInvoice(),
+        openInvoice({
+          id: 'inv-2',
+          number: 'INV/2026-27/0002',
+          grandTotal: '2360.00',
+          outstanding: '400.00',
+        }),
+      ]),
+    })
+
+    const row = (await screen.findByText('INV/2026-27/0002')).closest('tr') as HTMLElement
+    const cells = within(row).getAllByRole('cell')
+    expect(cells[2]).toHaveTextContent(/^2,360\.00$/)
+    expect(cells[3]).toHaveTextContent(/^400\.00$/)
+  })
+
+  /* Read off the document table rather than written out — a debit note settles purchase
+   * bills, and the assertion for that is in the debit note section. */
+  it('heads the picker with the invoice, which is what a credit note settles', async () => {
+    renderScreen(<DocumentEditor {...offsetting()} kind="credit-note" />, {
+      bridge: noteBridge(),
+    })
+
+    expect(await screen.findByRole('columnheader', { name: 'Sales invoices' })).toBeInTheDocument()
+  })
+
+  /*
+   * A COPY, NOT A SUM. The figure the button writes is the one main computed against the
+   * ledger — already net of what other notes and receipts took, which is the case anything
+   * the renderer worked out would get wrong.
+   */
+  it('settles one in full with exactly the figure main sent', async () => {
+    const user = userEvent.setup()
+    renderScreen(<DocumentEditor {...offsetting()} kind="credit-note" />, {
+      bridge: noteBridge(noteSettlement(), [openInvoice({ outstanding: '680.00' })]),
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Settle in full' }))
+    expect(screen.getByLabelText('Set against INV/2026-27/0001')).toHaveValue('680.00')
+  })
+
+  /* The rows a note already settles come back as available — main puts its own offsets
+   * back on the picker — and the box is seeded from them, or the line the panel is
+   * showing could not be reduced. */
+  it('seeds a line from what the note already settles', async () => {
+    renderScreen(<DocumentEditor {...offsetting()} kind="credit-note" />, {
+      bridge: noteBridge(
+        noteSettlement({
+          offset: '300.00',
+          outstanding: '880.00',
+          offsets: [offsetRow({ documentId: 'inv-1', documentNumber: 'INV/2026-27/0001' })],
+        }),
+      ),
+    })
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Set against INV/2026-27/0001')).toHaveValue('300.00'),
+    )
+  })
+
+  /*
+   * EACH INVOICE APPEARS ONCE, in the panel that can change it. The settlement below draws
+   * a read-only list of the same offsets when it is the CHARGE end looking at them — and
+   * at this end that list would be the picker's own rows printed a second time, with the
+   * figures in the boxes above and no way to tell which pair a user should read. Counted
+   * rather than asserted absent: a second table would still show the right number.
+   */
+  it('shows each invoice once, in the panel that can change it', async () => {
+    renderScreen(<DocumentEditor {...offsetting()} kind="credit-note" />, {
+      bridge: noteBridge(
+        noteSettlement({
+          offset: '300.00',
+          outstanding: '880.00',
+          offsets: [offsetRow({ documentId: 'inv-1', documentNumber: 'INV/2026-27/0001' })],
+        }),
+      ),
+    })
+
+    await screen.findByLabelText('Set against INV/2026-27/0001')
+    expect(screen.getAllByText('INV/2026-27/0001')).toHaveLength(1)
+  })
+
+  /*
+   * THE WHOLE SET CROSSES, AND A BLANK IS NOT A ZERO. Main refuses an offset of nothing,
+   * so a row nobody filled in is left out — a panel that sent '0.00' would have every save
+   * refused for a line the user never touched.
+   *
+   * The lines are filled in ONE AT A TIME with an assertion after each. Typing both and
+   * asserting once passes just as happily against a panel that keeps only the last box it
+   * was given.
+   */
+  it('sends every line that was filled in, and leaves the blank one out', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...offsetting()} kind="credit-note" />, {
+      bridge: noteBridge(noteSettlement(), [
+        openInvoice(),
+        openInvoice({ id: 'inv-2', number: 'INV/2026-27/0002' }),
+        openInvoice({ id: 'inv-3', number: 'INV/2026-27/0003' }),
+      ]),
+    })
+
+    const first = await screen.findByLabelText('Set against INV/2026-27/0001')
+    await user.type(first, '100.00')
+    expect(first).toHaveValue('100.00')
+
+    const second = screen.getByLabelText('Set against INV/2026-27/0002')
+    await user.type(second, '250.00')
+    expect(second).toHaveValue('250.00')
+    expect(first).toHaveValue('100.00')
+
+    await user.click(screen.getByRole('button', { name: saveOffsets }))
+
+    await waitFor(() => expect(bridge.callsTo('documents:offset')).toHaveLength(1))
+    expect(sentTo(bridge, 'documents:offset')).toEqual({
+      refundDocumentId: 'doc-1',
+      offsets: [
+        { chargeDocumentId: 'inv-1', amount: '100.00' },
+        { chargeDocumentId: 'inv-2', amount: '250.00' },
+      ],
+    })
+  })
+
+  /*
+   * AN EMPTY SET IS A REAL ANSWER, and it is the only way back from a match somebody
+   * regrets: it takes every offset off and puts the credit back on account. A panel that
+   * refused to send an empty list would leave a wrongly matched invoice matched for ever.
+   */
+  it('clears every offset when the last line is emptied', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...offsetting()} kind="credit-note" />, {
+      bridge: noteBridge(
+        noteSettlement({
+          offset: '300.00',
+          outstanding: '880.00',
+          offsets: [offsetRow({ documentId: 'inv-1', documentNumber: 'INV/2026-27/0001' })],
+        }),
+      ),
+    })
+
+    const box = await screen.findByLabelText('Set against INV/2026-27/0001')
+    await waitFor(() => expect(box).toHaveValue('300.00'))
+    await user.clear(box)
+    await user.click(screen.getByRole('button', { name: saveOffsets }))
+
+    await waitFor(() => expect(bridge.callsTo('documents:offset')).toHaveLength(1))
+    expect(sentTo(bridge, 'documents:offset')).toEqual({
+      refundDocumentId: 'doc-1',
+      offsets: [],
+    })
+  })
+
+  /*
+   * IT ADOPTS WHAT CAME BACK AND READS THE PICKER AGAIN, and the second half is the one
+   * that is easy to miss. `documents.offset` answers with the note's new settlement, so
+   * the FIGURES are right without a second call — but every "outstanding" in the picker is
+   * a figure about a DIFFERENT document, and settling one of them has just changed it. A
+   * panel that adopted the answer and left the rows alone would show what each invoice had
+   * left before the save.
+   *
+   * The save is released inside `act`, because awaiting the promise is not waiting for the
+   * screen: the release schedules the state changes, and it is React that has to flush
+   * them before anything on the page can be asserted on.
+   */
+  it('adopts the settlement it is answered with, and re-reads the picker', async () => {
+    const user = userEvent.setup()
+    let release: (answer: Result<DocumentSettlement>) => void = () => {}
+    const saved = new Promise<Result<DocumentSettlement>>((resolve) => {
+      release = resolve
+    })
+
+    const base = noteBridge(noteSettlement(), [openInvoice()])
+    const { bridge } = renderScreen(<DocumentEditor {...offsetting()} kind="credit-note" />, {
+      bridge: {
+        ...base,
+        documents: {
+          ...base.documents,
+          openForOffset: answering(
+            [openInvoice({ outstanding: '1180.00' })],
+            [openInvoice({ outstanding: '900.00' })],
+          ),
+          offset: () => saved,
+        },
+      } as BridgeStub,
+    })
+
+    const box = await screen.findByLabelText('Set against INV/2026-27/0001')
+    await user.type(box, '280.00')
+    await user.click(screen.getByRole('button', { name: saveOffsets }))
+
+    /* In flight: the save is not offered twice. */
+    expect(screen.getByRole('button', { name: saveOffsets })).toBeDisabled()
+
+    await act(async () => {
+      release({
+        ok: true,
+        data: noteSettlement({ offset: '280.00', outstanding: '900.00' }),
+      })
+    })
+
+    await waitFor(() => expect(bridge.callsTo('documents:openForOffset')).toHaveLength(2))
+    const row = (await screen.findByText('INV/2026-27/0001')).closest('tr') as HTMLElement
+    expect(within(row).getAllByRole('cell')[3]).toHaveTextContent(/^900\.00$/)
+    /* By CELL, because the picker heads a column "Outstanding" as well — one is what is
+     * left on an invoice and the other is what is left on the note. */
+    const outstanding = screen
+      .getByRole('cell', { name: 'Outstanding' })
+      .closest('tr') as HTMLElement
+    expect(within(outstanding).getAllByRole('cell')[1]).toHaveTextContent(/^900\.00$/)
+  })
+
+  /*
+   * MAIN'S SENTENCE, WITH THE FIGURES IN IT. The cap is the repository's and it names both
+   * amounts — a screen that paraphrased would drop the one thing the user needs, which is
+   * how much of the note is actually left.
+   */
+  it("shows main's refusal when more is set than the note has left", async () => {
+    const user = userEvent.setup()
+    const base = noteBridge()
+    renderScreen(<DocumentEditor {...offsetting()} kind="credit-note" />, {
+      bridge: {
+        ...base,
+        documents: {
+          ...base.documents,
+          offset: () =>
+            Promise.resolve<Result<DocumentSettlement>>({
+              ok: false,
+              error: {
+                code: 'OFFSET_EXCEEDS_DOCUMENT',
+                message:
+                  'CRN/2026-27/0001 has 500.00 left to set against anything, and 900.00 was set. Reduce the lines until they come to what is left.',
+              },
+            }),
+        },
+      } as BridgeStub,
+    })
+
+    await user.type(await screen.findByLabelText('Set against INV/2026-27/0001'), '900.00')
+    await user.click(screen.getByRole('button', { name: saveOffsets }))
+
+    expect(await screen.findByText(/has 500\.00 left to set against anything/)).toBeInTheDocument()
+  })
+
+  /*
+   * THE GATES. A draft has posted nothing, so there is no movement for a line to draw on;
+   * a cancelled note's movement has been reversed to nothing. `setOffsets` refuses both
+   * with one sentence, and a picker whose save is always refused teaches a user to
+   * distrust the panel when what they needed was to issue the note.
+   *
+   * THE CANCELLED ONE IS WHERE THE STATUS CHECK IS LOAD-BEARING, and it is worth saying
+   * which of the two tests can see it. A draft is refused twice over — it is never asked
+   * for a settlement either, and the panel has nothing to seed its lines from — so
+   * replacing `isOffsetEditable` with `canOffset` alone leaves the draft test green. A
+   * cancelled note HAS a settlement, so it is the one where this gate is the only thing
+   * standing between the user and a picker main refuses line by line. Which is also why
+   * the assertion waits for the settlement panel rather than for the lede: the fetch it is
+   * asserting the absence of would be made after the settlement arrives, and a check run
+   * before that passes against every screen ever written.
+   */
+  it('offers no picker on a draft, and asks for nothing', async () => {
+    const { bridge } = renderScreen(<DocumentEditor {...offsetting()} kind="credit-note" />, {
+      bridge: noteBridge(noteSettlement(), [openInvoice()], document({ kind: 'credit-note' })),
+    })
+
+    await screen.findByRole('button', { name: 'Issue' })
+    await act(async () => {})
+
+    expect(bridge.callsTo('documents:openForOffset')).toHaveLength(0)
+    expect(screen.queryByRole('button', { name: saveOffsets })).toBeNull()
+  })
+
+  it('offers no picker on a cancelled one, and asks for nothing', async () => {
+    const { bridge } = renderScreen(<DocumentEditor {...offsetting()} kind="credit-note" />, {
+      bridge: noteBridge(
+        noteSettlement({ movement: '0.00', outstanding: '0.00' }),
+        [openInvoice()],
+        issuedNote({ status: 'cancelled' }),
+      ),
+    })
+
+    /* By CELL: the settlement panel is on screen, so anything the picker was going to ask
+     * for has been asked for by now. The picker heads a COLUMN "Outstanding", which is why
+     * this cannot be `findByText`. */
+    await screen.findByRole('cell', { name: 'Outstanding' })
+    await act(async () => {})
+
+    expect(bridge.callsTo('documents:openForOffset')).toHaveLength(0)
+    expect(screen.queryByRole('button', { name: saveOffsets })).toBeNull()
+  })
+
+  /* Nothing of theirs to settle is an ordinary thing to hold, not an unfinished job — and
+   * it is said out loud rather than drawn as an empty table. */
+  it('says the credit stays on account when they have nothing open', async () => {
+    renderScreen(<DocumentEditor {...offsetting()} kind="credit-note" />, {
+      bridge: noteBridge(noteSettlement(), []),
+    })
+
+    expect(
+      await screen.findByText('There is nothing of theirs to set this credit note against'),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/stays on account/)).toBeInTheDocument()
+  })
+})
+
 describe('a debit note', () => {
   /*
    * THE OTHER HALF OF THE PICKER, and the mutation pass is why it is here. A credit note
@@ -1107,6 +2324,45 @@ describe('a debit note', () => {
     )
 
     expect(await screen.findByLabelText(/The purchase bill this corrects/)).toBeInTheDocument()
+  })
+
+  /*
+   * AND THE OTHER HALF OF THE OFFSET PANEL, for the reason above. A credit note settles a
+   * `sales-invoice`, which is also what a hardcoded heading and a hardcoded picker would
+   * name — so every assertion in `what a credit note settles` passes against a screen that
+   * ignores the kind table. Only the purchase side can tell the two apart.
+   */
+  it('sets a debit note against purchase bills, not invoices', async () => {
+    const issuedNote = document({
+      kind: 'debit-note',
+      status: 'issued',
+      number: 'DBN/2026-27/0001',
+      entryId: 'entry-1',
+    })
+    const base = bridgeFor(issuedNote, issuedNote, settlement(), [
+      openInvoice({ kind: 'purchase-bill', number: 'BILL/2026-27/0001' }),
+    ])
+    renderScreen(
+      <DocumentEditor
+        {...screenContext({ route: testRoute('debit-note', { id: 'doc-1' }) })}
+        kind="debit-note"
+      />,
+      {
+        bridge: {
+          ...base,
+          documents: {
+            ...base.documents,
+            list: () => Promise.resolve<Result<DocumentSummary[]>>({ ok: true, data: [] }),
+          },
+        } as BridgeStub,
+      },
+    )
+
+    expect(await screen.findByRole('columnheader', { name: 'Purchase bills' })).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'Sales invoices' })).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Save what this debit note settles' }),
+    ).toBeInTheDocument()
   })
 })
 

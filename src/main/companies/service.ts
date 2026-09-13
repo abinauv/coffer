@@ -218,9 +218,11 @@ export class CompanyService {
         writeMetadata(database, METADATA_KEYS.regimeId, regime.id)
 
         /*
-         * The books, in one transaction: the chart of accounts and the first fiscal
-         * periods together. A company with accounts and no periods refuses every posting
-         * with `NO_PERIOD` while looking perfectly finished — see setUpBooks.
+         * The books, in one transaction: the chart of accounts, the first fiscal periods,
+         * a numbering series per kind, the starter units and somewhere to keep stock. A
+         * company with accounts and no periods refuses every posting with `NO_PERIOD`
+         * while looking perfectly finished, and the three seeds after it are the same
+         * failure in three other tables — see setUpBooks.
          *
          * BEFORE THE REGISTRY ENTRY, AND THAT ORDER IS THE POINT. Everything after
          * `registry.add` below is assignment and return, so nothing can fail once the

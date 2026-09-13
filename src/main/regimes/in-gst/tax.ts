@@ -6,10 +6,42 @@
  *   intra-state   CGST at half the rate + SGST at half the rate
  *                 (UTGST in place of SGST in a union territory without a legislature)
  *   inter-state   IGST at the full rate
- *   export        IGST, because a supply leaving India is inter-state
+ *   export        IGST, because a supply leaving India is inter-state —
+ *                 UNLESS it went out under an LUT or bond, when it carries none
  *
  * Never all three. A line carries either the pair or IGST, and the total is the same
  * either way — which is exactly the property the arithmetic below is arranged to keep.
+ *
+ * ── The export under LUT, which is the one exception and is not a rate ────────────
+ *
+ * An export is zero-rated under section 16 of the IGST Act, and there are two ways to
+ * make it so: pay the IGST and claim it back, or give a letter of undertaking and charge
+ * nothing. Until `exportTaxPayment` existed this function could only produce the first,
+ * because a supply leaving India is inter-state and IGST at the full rate is the honest
+ * answer to "what tax does this attract".
+ *
+ * SO AN LUT EXPORT COULD NOT BE REPRESENTED IN THESE BOOKS AT ALL. The only way to get a
+ * nil figure was to set the line's rate to zero — and a supply at a rate of zero is
+ * NIL-RATED, which is section 2(47) and a different thing: it is inside the tax, and rule
+ * 42 makes the taxpayer reverse the credit on its inputs. A zero-rated supply keeps that
+ * credit and may claim it as a refund. Two different supplies, two different boxes on the
+ * return, and opposite answers about a taxpayer's own money — with every total still
+ * adding up either way.
+ *
+ * WHAT THIS FUNCTION DOES ABOUT IT: the line keeps its RATE and its components come out
+ * at NOTHING. `zeroRatedLine` is the shape, and it is deliberately not the same shape as
+ * a nil-rated line: a nil-rated line carries NO components, because "which taxes would
+ * have applied" is not a fact about an exempt supply, while a zero-rated line carries
+ * IGST at the full rate for an amount of zero, because IGST is exactly the tax that would
+ * have applied and did not. A return reads the rate off the line either way, so the two
+ * remain distinguishable downstream without anything re-deriving them.
+ *
+ * IT IS HONOURED ONLY WHERE THE PLACE OF SUPPLY IS AN EXPORT. `without-payment` on a
+ * domestic invoice is a decision recorded against the wrong document, and letting it
+ * zero the tax there would turn a data-entry mistake into an unpaid liability. The
+ * document repository refuses to store one; this refuses to act on one. Two layers, and
+ * the second is the one that matters, because it is the only one that can see the
+ * regime's own answer about where the supply took place.
  *
  * ── Rounding ──────────────────────────────────────────────────────────────────────
  *
@@ -59,6 +91,7 @@ import type {
   TaxComputationResult,
   TaxedLine,
 } from '@main/regimes/types'
+import type { ExportTaxPayment } from '@shared/dto'
 import { intraStateComponentFor } from './jurisdictions'
 
 /** Every component code this regime can emit, in the order returns and invoices list them. */
@@ -108,14 +141,63 @@ function labelFor(code: GstComponentCode, ratePct: Decimal): string {
   return `${code} @ ${rateText(ratePct)}%`
 }
 
+/**
+ * Whether this supply is zero-rated and carries no tax: an export under an LUT or bond.
+ *
+ * BOTH HALVES ARE LOAD-BEARING AND THE ORDER OF THE `&&` IS NOT AN OPTIMISATION. The
+ * place of supply is what says a supply left the country, and it is the regime's own
+ * answer rather than anything a caller asserted; the flavour is what says it left under
+ * an undertaking. A flavour with no export behind it zeroes nothing, which is what stops
+ * a value recorded against the wrong document from becoming an unpaid liability.
+ */
+function isZeroRatedWithoutPayment(
+  place: PlaceOfSupply,
+  taxPayment: ExportTaxPayment | null | undefined,
+): boolean {
+  return place.isExport && taxPayment === 'without-payment'
+}
+
+/**
+ * A supply that carries its rate and no tax.
+ *
+ * NOT THE SAME AS A NIL-RATED LINE, and the difference is the components. A nil-rated
+ * line carries none, because which taxes would have applied is not a fact about an exempt
+ * supply. This one carries IGST at the full rate for an amount of zero, because IGST is
+ * precisely the tax that would have applied and did not — which is what "zero-rated"
+ * means, and what an invoice under an LUT is required to show.
+ */
+function zeroRatedLine(line: TaxableLine, taxable: Decimal, ratePct: Decimal): TaxedLine {
+  return {
+    lineId: line.lineId,
+    taxableAmount: toMoneyString(taxable),
+    components: [
+      {
+        code: 'IGST',
+        label: labelFor('IGST', ratePct),
+        ratePct: rateText(ratePct),
+        amount: toMoneyString(0),
+      },
+    ],
+    totalTax: toMoneyString(0),
+  }
+}
+
 /** Tax one line. Components sum to `totalTax` exactly. */
-export function taxLine(line: TaxableLine, place: PlaceOfSupply): TaxedLine {
+export function taxLine(
+  line: TaxableLine,
+  place: PlaceOfSupply,
+  taxPayment?: ExportTaxPayment | null,
+): TaxedLine {
   const taxable = parseMoney(line.taxableAmount, `taxable amount on line ${line.lineId}`)
   const ratePct = parseRate(line.ratePct, `tax rate on line ${line.lineId}`)
 
   /* A nil-rated line attracts no tax at all, so it carries no components rather than a
    * row of zeroes. Which taxes *would* have applied is not a fact about an exempt
-   * supply, and a nil row on an invoice reads as an oversight. */
+   * supply, and a nil row on an invoice reads as an oversight.
+   *
+   * CHECKED BEFORE THE LUT ARM, deliberately: a nil-rated line on an export under an
+   * undertaking is nil-rated, not zero-rated at 0%, and a component of `IGST @ 0%` for
+   * nothing would be a row asserting a rate the supply never had. */
   if (ratePct.isZero()) {
     return {
       lineId: line.lineId,
@@ -123,6 +205,10 @@ export function taxLine(line: TaxableLine, place: PlaceOfSupply): TaxedLine {
       components: [],
       totalTax: toMoneyString(0),
     }
+  }
+
+  if (isZeroRatedWithoutPayment(place, taxPayment)) {
+    return zeroRatedLine(line, taxable, ratePct)
   }
 
   const splits = splitComponents(place, ratePct)
@@ -209,7 +295,9 @@ export function computeTax(input: TaxComputationInput): TaxComputationResult {
     throw new Error(`Not a document date: ${JSON.stringify(input.date)}`)
   }
 
-  const lines = input.lines.map((line) => taxLine(line, input.placeOfSupply))
+  const lines = input.lines.map((line) =>
+    taxLine(line, input.placeOfSupply, input.exportTaxPayment),
+  )
   const summary = summarise(lines)
 
   /* Summed from the already-rounded line totals, so the document total is the sum of

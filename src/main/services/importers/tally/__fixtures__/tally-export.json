@@ -1,0 +1,729 @@
+{
+  "why": "A whole Tally XML export, held as JSON strings rather than TypeScript template literals ON PURPOSE: a literal CRLF inside a template literal is at the mercy of the editor, of prettier and of git autocrlf, so the fixture that exists to prove line endings are normalised would be the first thing silently rewritten to LF -- and it would still pass. JSON escapes survive all three. Every date here is in 2026 or 2027, so no value can coincide with the real clock. AND THE ORDERS DISAGREE WITH THE ANSWERS, in three separate ways: Vouchers.xml comes BEFORE Masters.xml, so every ledger a voucher names is introduced after the voucher; inside Masters.xml the group Karnataka Customers is written after the ledger that hangs under it; and the vouchers are in neither date order nor number order. An importer that resolved anything during its walk, or that sorted on the way through, disagrees with the expected output rather than passing by luck.",
+  "export": {
+    "Vouchers.xml": {
+      "why": "Eleven vouchers and one COMPANY element nobody claims, in an order that is neither by date nor by number. It declares ISO-8859-1, which the XML reader reports and cannot check. The last voucher sits DIRECTLY under REQUESTDATA with no TALLYMESSAGE around it, which is a shape real exports have and which a path-based predicate would miss. PB-2027-018 writes its entries under LEDGERENTRIES.LIST, one amount as <Amount> in mixed case, and one with a currency symbol and Indian grouping. CS-2027-007 is a voucher type the company invented -- ordinary in Tally -- and it is an otherwise perfectly good sale, so adding one row to the voucher-type table imports it.",
+      "xml": "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>\r\n<ENVELOPE>\r\n <HEADER>\r\n  <TALLYREQUEST>Import Data</TALLYREQUEST>\r\n </HEADER>\r\n <BODY>\r\n  <IMPORTDATA>\r\n   <REQUESTDESC>\r\n    <REPORTNAME>Vouchers</REPORTNAME>\r\n   </REQUESTDESC>\r\n   <REQUESTDATA>\r\n    <TALLYMESSAGE>\r\n     <VOUCHER REMOTEID=\"tly-v-si041\" VCHTYPE=\"Sales\" ACTION=\"Create\">\r\n      <DATE>20270719</DATE>\r\n      <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>\r\n      <VOUCHERNUMBER>SI-2027-041</VOUCHERNUMBER>\r\n      <PARTYLEDGERNAME>Bharat Metals Pvt Ltd</PARTYLEDGERNAME>\r\n      <PLACEOFSUPPLY>Karnataka</PLACEOFSUPPLY>\r\n      <REFERENCE>PO-7741</REFERENCE>\r\n      <NARRATION>Fabrication  work\r\n        for the Hosur site.</NARRATION>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Bharat Metals Pvt Ltd</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>-11800.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>   Sales - Fabrication\r\n       </LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>10000.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Output Levy 18%</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>1800.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n      <ALLINVENTORYENTRIES.LIST>\r\n       <STOCKITEMNAME>Steel Bracket</STOCKITEMNAME>\r\n       <ACTUALQTY> 120 Nos</ACTUALQTY>\r\n       <RATE>83.333/Nos</RATE>\r\n      </ALLINVENTORYENTRIES.LIST>\r\n     </VOUCHER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <VOUCHER VCHTYPE=\"Purchase\" ACTION=\"Create\">\r\n      <DATE>20270602</DATE>\r\n      <VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME>\r\n      <VOUCHERNUMBER>PB-2027-018</VOUCHERNUMBER>\r\n      <PARTYNAME>Nilgiri Steel Traders</PARTYNAME>\r\n      <LEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Purchases - Raw Material</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>-25000.00</AMOUNT>\r\n      </LEDGERENTRIES.LIST>\r\n      <LEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Input Levy 18%</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>\r\n       <Amount>-4500.00</Amount>\r\n      </LEDGERENTRIES.LIST>\r\n      <LEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Nilgiri Steel Traders</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>&#8377; 29,500.00</AMOUNT>\r\n      </LEDGERENTRIES.LIST>\r\n      <ALLINVENTORYENTRIES.LIST>\r\n       <STOCKITEMNAME>Steel Bracket</STOCKITEMNAME>\r\n      </ALLINVENTORYENTRIES.LIST>\r\n     </VOUCHER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <VOUCHER VCHTYPE=\"Credit Note\" ACTION=\"Create\">\r\n      <DATE>20270725</DATE>\r\n      <GUID>tly-v-cn003</GUID>\r\n      <VOUCHERTYPENAME>Credit Note</VOUCHERTYPENAME>\r\n      <VOUCHERNUMBER>CN-2027-003</VOUCHERNUMBER>\r\n      <PARTYLEDGERNAME>Bharat Metals Pvt Ltd</PARTYLEDGERNAME>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Sales Returns</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>-1000.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Site Allowance</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>-200.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Output Levy 18%</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>-216.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Bharat Metals Pvt Ltd</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>1416.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n     </VOUCHER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <VOUCHER VCHTYPE=\"Journal\" ACTION=\"Create\">\r\n      <DATE>20270630</DATE>\r\n      <GUID>tly-v-jv002</GUID>\r\n      <VOUCHERTYPENAME>Journal</VOUCHERTYPENAME>\r\n      <VOUCHERNUMBER>JV-2027-002</VOUCHERNUMBER>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Depreciation</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>-5000.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Accumulated Depreciation</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>5000.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n     </VOUCHER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <VOUCHER VCHTYPE=\"Receipt\" ACTION=\"Create\">\r\n      <DATE>20270722</DATE>\r\n      <GUID>tly-v-rc009</GUID>\r\n      <VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME>\r\n      <VOUCHERNUMBER>RC-2027-009</VOUCHERNUMBER>\r\n      <REFERENCE>CHQ 884120</REFERENCE>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>HDFC Bank - 4021</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>-11800.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Bharat Metals Pvt Ltd</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>11800.00</AMOUNT>\r\n       <BILLALLOCATIONS.LIST>\r\n        <NAME>SI-2027-041</NAME>\r\n        <BILLTYPE>Agst Ref</BILLTYPE>\r\n        <AMOUNT>11800.00</AMOUNT>\r\n       </BILLALLOCATIONS.LIST>\r\n      </ALLLEDGERENTRIES.LIST>\r\n     </VOUCHER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <VOUCHER VCHTYPE=\"Cash Sales\" ACTION=\"Create\">\r\n      <DATE>20270710</DATE>\r\n      <GUID>tly-v-cs007</GUID>\r\n      <VOUCHERTYPENAME>Cash Sales</VOUCHERTYPENAME>\r\n      <VOUCHERNUMBER>CS-2027-007</VOUCHERNUMBER>\r\n      <PARTYLEDGERNAME>Bharat Metals Pvt Ltd</PARTYLEDGERNAME>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Bharat Metals Pvt Ltd</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>-5900.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Sales - Fabrication</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>5000.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Output Levy 18%</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>900.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n     </VOUCHER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <VOUCHER VCHTYPE=\"Sales\" ACTION=\"Create\">\r\n      <DATE>20270801</DATE>\r\n      <GUID>tly-v-si042</GUID>\r\n      <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>\r\n      <VOUCHERNUMBER>SI-2027-042</VOUCHERNUMBER>\r\n      <PARTYLEDGERNAME>Bharat Metals Pvt Ltd</PARTYLEDGERNAME>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Bharat Metals Pvt Ltd</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>-11800.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Sales - Fabrication</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>10000.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Output Levy 18%</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>1700.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n     </VOUCHER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <VOUCHER VCHTYPE=\"Payment\" ACTION=\"Create\">\r\n      <DATE>20270615</DATE>\r\n      <GUID>tly-v-py014</GUID>\r\n      <VOUCHERTYPENAME>Payment</VOUCHERTYPENAME>\r\n      <VOUCHERNUMBER>PY-2027-014</VOUCHERNUMBER>\r\n      <NARRATION>Refund of the cancelled Hosur order.</NARRATION>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Bharat Metals Pvt Ltd</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>-2400.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Cash</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>2400.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n     </VOUCHER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <VOUCHER VCHTYPE=\"Receipt\" ACTION=\"Create\">\r\n      <DATE>20270721</DATE>\r\n      <GUID>tly-v-rc010</GUID>\r\n      <VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>HDFC Bank - 4021</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>-5000.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Bharat Metals Pvt Ltd</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>5000.00</AMOUNT>\r\n       <BILLALLOCATIONS.LIST>\r\n        <NAME>SI-2026-777</NAME>\r\n        <BILLTYPE>Agst Ref</BILLTYPE>\r\n        <AMOUNT>5000.00</AMOUNT>\r\n       </BILLALLOCATIONS.LIST>\r\n       <BILLALLOCATIONS.LIST>\r\n        <NAME>RC-2027-010</NAME>\r\n        <BILLTYPE>New Ref</BILLTYPE>\r\n        <AMOUNT>0.00</AMOUNT>\r\n       </BILLALLOCATIONS.LIST>\r\n      </ALLLEDGERENTRIES.LIST>\r\n     </VOUCHER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <VOUCHER VCHTYPE=\"Sales\" ACTION=\"Create\">\r\n      <DATE>20270705</DATE>\r\n      <GUID>tly-v-si043</GUID>\r\n      <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>\r\n      <VOUCHERNUMBER>SI-2027-043</VOUCHERNUMBER>\r\n      <ISCANCELLED>Yes</ISCANCELLED>\r\n      <PARTYLEDGERNAME>Bharat Metals Pvt Ltd</PARTYLEDGERNAME>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Bharat Metals Pvt Ltd</LEDGERNAME>\r\n       <AMOUNT>-9000.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Sales - Fabrication</LEDGERNAME>\r\n       <AMOUNT>9000.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n     </VOUCHER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <VOUCHER VCHTYPE=\"Receipt\" ACTION=\"Create\">\r\n      <DATE>20270728</DATE>\r\n      <GUID>tly-v-rc011</GUID>\r\n      <VOUCHERTYPENAME>Receipt</VOUCHERTYPENAME>\r\n      <VOUCHERNUMBER>RC-2027-011</VOUCHERNUMBER>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>HDFC Bank - 4021</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>-11700.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Discount Allowed</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>-100.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n      <ALLLEDGERENTRIES.LIST>\r\n       <LEDGERNAME>Bharat Metals Pvt Ltd</LEDGERNAME>\r\n       <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>\r\n       <AMOUNT>11800.00</AMOUNT>\r\n      </ALLLEDGERENTRIES.LIST>\r\n     </VOUCHER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <COMPANY>\r\n      <NAME>Subra Fabricators</NAME>\r\n     </COMPANY>\r\n    </TALLYMESSAGE>\r\n    <VOUCHER VCHTYPE=\"Purchase\" ACTION=\"Create\">\r\n     <DATE>20270605</DATE>\r\n     <GUID>tly-v-pb019</GUID>\r\n     <VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME>\r\n     <VOUCHERNUMBER>PB-2027-019</VOUCHERNUMBER>\r\n     <PARTYLEDGERNAME>Deccan Hardware</PARTYLEDGERNAME>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME>Purchases - Raw Material</LEDGERNAME>\r\n      <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>\r\n      <AMOUNT>-8000.00</AMOUNT>\r\n     </ALLLEDGERENTRIES.LIST>\r\n     <ALLLEDGERENTRIES.LIST>\r\n      <LEDGERNAME>Deccan Hardware</LEDGERNAME>\r\n      <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>\r\n      <AMOUNT>8000.00</AMOUNT>\r\n     </ALLLEDGERENTRIES.LIST>\r\n    </VOUCHER>\r\n   </REQUESTDATA>\r\n  </IMPORTDATA>\r\n </BODY>\r\n</ENVELOPE>\r\n"
+    },
+    "Masters.xml": {
+      "why": "The masters, second, so nothing in the vouchers file could have been resolved when it was read. Ledger names are padded with the indentation a real export carries. Deccan Hardware hangs under Karnataka Suppliers, which hangs under a Zone West this export never defines.",
+      "xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<ENVELOPE>\r\n <BODY>\r\n  <IMPORTDATA>\r\n   <REQUESTDATA>\r\n    <TALLYMESSAGE>\r\n     <LEDGER NAME=\"Bharat Metals Pvt Ltd\" RESERVEDNAME=\"\">\r\n      <GUID>tly-led-bharat</GUID>\r\n      <NAME>Bharat Metals Pvt Ltd</NAME>\r\n      <PARENT>Karnataka Customers</PARENT>\r\n      <OPENINGBALANCE>-45000.00</OPENINGBALANCE>\r\n      <CREDITPERIOD>30 Days</CREDITPERIOD>\r\n      <PARTYGSTIN>29AABCB1234C1ZK</PARTYGSTIN>\r\n      <LEDSTATENAME>Karnataka</LEDSTATENAME>\r\n      <COUNTRYNAME>India</COUNTRYNAME>\r\n      <EMAIL>accounts@bharatmetals.example</EMAIL>\r\n      <LANGUAGENAME.LIST>\r\n       <NAME.LIST>\r\n        <NAME>Bharat Metals Pvt Ltd</NAME>\r\n       </NAME.LIST>\r\n      </LANGUAGENAME.LIST>\r\n      <UDF:REGION.LIST>\r\n       <UDF:REGION>South</UDF:REGION>\r\n      </UDF:REGION.LIST>\r\n     </LEDGER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <UNIT NAME=\"Nos\">\r\n      <NAME>Nos</NAME>\r\n      <DECIMALPLACES>2</DECIMALPLACES>\r\n      <ISSIMPLEUNIT>Yes</ISSIMPLEUNIT>\r\n     </UNIT>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <LEDGER NAME=\"Nilgiri Steel Traders\">\r\n      <GUID>tly-led-nilgiri</GUID>\r\n      <PARENT>Sundry Creditors</PARENT>\r\n      <OPENINGBALANCE>22000.00</OPENINGBALANCE>\r\n      <CREDITPERIOD>Due on Receipt</CREDITPERIOD>\r\n      <LANGUAGENAME.LIST>\r\n       <NAME.LIST>\r\n        <NAME>Nilgiri Steel Traders</NAME>\r\n       </NAME.LIST>\r\n      </LANGUAGENAME.LIST>\r\n     </LEDGER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <STOCKITEM NAME=\"Steel Bracket\">\r\n      <GUID>tly-itm-bracket</GUID>\r\n      <PARENT>Fabricated</PARENT>\r\n      <BASEUNITS>Nos</BASEUNITS>\r\n      <DESCRIPTION>Steel bracket, 6mm</DESCRIPTION>\r\n      <GSTTYPEOFSUPPLY>Goods</GSTTYPEOFSUPPLY>\r\n     </STOCKITEM>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <GROUP NAME=\"Karnataka Customers\">\r\n      <NAME>Karnataka Customers</NAME>\r\n      <PARENT>Sundry Debtors</PARENT>\r\n     </GROUP>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <LEDGER NAME=\"HDFC Bank - 4021\">\r\n      <GUID>tly-led-hdfc</GUID>\r\n      <PARENT>Bank Accounts</PARENT>\r\n      <OPENINGBALANCE>-125000.00</OPENINGBALANCE>\r\n     </LEDGER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <LEDGER NAME=\"Cash\">\r\n      <GUID>tly-led-cash</GUID>\r\n      <PARENT>Cash-in-Hand</PARENT>\r\n      <OPENINGBALANCE>0.00</OPENINGBALANCE>\r\n     </LEDGER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <LEDGER NAME=\"Sales - Fabrication\">\r\n      <GUID>tly-led-sales</GUID>\r\n      <PARENT>Sales Accounts</PARENT>\r\n     </LEDGER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <LEDGER NAME=\"Purchases - Raw Material\">\r\n      <GUID>tly-led-purchases</GUID>\r\n      <PARENT>Purchase Accounts</PARENT>\r\n     </LEDGER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <LEDGER NAME=\"Output Levy 18%\">\r\n      <GUID>tly-led-outlevy</GUID>\r\n      <PARENT>Duties &amp; Taxes</PARENT>\r\n     </LEDGER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <LEDGER NAME=\"Input Levy 18%\">\r\n      <GUID>tly-led-inlevy</GUID>\r\n      <PARENT>Duties &amp; Taxes</PARENT>\r\n     </LEDGER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <LEDGER NAME=\"Sales Returns\">\r\n      <GUID>tly-led-returns</GUID>\r\n      <PARENT>Sales Accounts</PARENT>\r\n     </LEDGER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <LEDGER NAME=\"Discount Allowed\">\r\n      <GUID>tly-led-discount</GUID>\r\n      <PARENT>Indirect Expenses</PARENT>\r\n     </LEDGER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <LEDGER NAME=\"Depreciation\">\r\n      <GUID>tly-led-depreciation</GUID>\r\n      <PARENT>Indirect Expenses</PARENT>\r\n     </LEDGER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <LEDGER NAME=\"Deccan Hardware\">\r\n      <GUID>tly-led-deccan</GUID>\r\n      <PARENT>Karnataka Suppliers</PARENT>\r\n      <OPENINGBALANCE>6000.00</OPENINGBALANCE>\r\n     </LEDGER>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <GROUP NAME=\"Karnataka Suppliers\">\r\n      <PARENT>Zone West</PARENT>\r\n     </GROUP>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <UNIT NAME=\"Kg\">\r\n      <DECIMALPLACES>three</DECIMALPLACES>\r\n     </UNIT>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <STOCKITEM NAME=\"Design Consultancy\">\r\n      <GUID>tly-itm-design</GUID>\r\n      <BASEUNITS>Hrs</BASEUNITS>\r\n      <GSTTYPEOFSUPPLY>Services</GSTTYPEOFSUPPLY>\r\n     </STOCKITEM>\r\n    </TALLYMESSAGE>\r\n    <TALLYMESSAGE>\r\n     <STOCKITEM NAME=\"Powder Coating\">\r\n      <GUID>tly-itm-powder</GUID>\r\n      <BASEUNITS>Nos</BASEUNITS>\r\n      <GSTTYPEOFSUPPLY>Composite</GSTTYPEOFSUPPLY>\r\n     </STOCKITEM>\r\n    </TALLYMESSAGE>\r\n   </REQUESTDATA>\r\n  </IMPORTDATA>\r\n </BODY>\r\n</ENVELOPE>\r\n"
+    }
+  },
+  "chart": [
+    {
+      "code": "4010",
+      "name": "Sales - Fabrication"
+    },
+    {
+      "code": "1210",
+      "name": "HDFC Bank - 4021"
+    }
+  ],
+  "openingBalanceDate": "2027-04-01",
+  "cases": {
+    "ambiguousEntryList": {
+      "why": "One voucher writing its entries under BOTH ALLLEDGERENTRIES.LIST and LEDGERENTRIES.LIST. Adding them together would post the voucher twice over; taking the first would make the answer depend on which name elements.ts lists above the other. Neither is a decision to take on somebody else books.",
+      "files": {
+        "Both.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\">\n   <DATE>20270901</DATE>\n   <VOUCHERNUMBER>SI-BOTH-1</VOUCHERNUMBER>\n   <PARTYLEDGERNAME>Ambiguous Traders</PARTYLEDGERNAME>\n   <ALLLEDGERENTRIES.LIST>\n    <LEDGERNAME>Ambiguous Traders</LEDGERNAME>\n    <AMOUNT>-500.00</AMOUNT>\n   </ALLLEDGERENTRIES.LIST>\n   <LEDGERENTRIES.LIST>\n    <LEDGERNAME>Sales - Fabrication</LEDGERNAME>\n    <AMOUNT>500.00</AMOUNT>\n   </LEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "disagreeingVoucherType": {
+      "why": "The VCHTYPE attribute and the VOUCHERTYPENAME element naming two different things. Agreement is the test, so this reads as neither and is reported; the voucher then has no type and is refused.",
+      "files": {
+        "Disagree.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\">\n   <DATE>20270902</DATE>\n   <VOUCHERTYPENAME>Purchase</VOUCHERTYPENAME>\n   <VOUCHERNUMBER>SI-DIS-1</VOUCHERNUMBER>\n   <PARTYLEDGERNAME>Ambiguous Traders</PARTYLEDGERNAME>\n   <ALLLEDGERENTRIES.LIST>\n    <LEDGERNAME>Ambiguous Traders</LEDGERNAME>\n    <AMOUNT>-500.00</AMOUNT>\n   </ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST>\n    <LEDGERNAME>Sales - Fabrication</LEDGERNAME>\n    <AMOUNT>500.00</AMOUNT>\n   </ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "loopingParent": {
+      "why": "Two groups that are each other parent. A walker with no visited set does not report this, it hangs.",
+      "files": {
+        "Loop.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE><GROUP NAME=\"North Zone\"><PARENT>South Zone</PARENT></GROUP></TALLYMESSAGE>\n <TALLYMESSAGE><GROUP NAME=\"South Zone\"><PARENT>North Zone</PARENT></GROUP></TALLYMESSAGE>\n <TALLYMESSAGE>\n  <LEDGER NAME=\"Looped Traders\"><PARENT>North Zone</PARENT><OPENINGBALANCE>-900.00</OPENINGBALANCE></LEDGER>\n </TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "topLevelGroup": {
+      "why": "A chain that ENDS: the group exists, names no parent, and is not one Tally own. A different failure from a group this export never mentions, and a different sentence.",
+      "files": {
+        "Top.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE><GROUP NAME=\"Special Accounts\"><PARENT></PARENT></GROUP></TALLYMESSAGE>\n <TALLYMESSAGE><LEDGER NAME=\"Odd Ledger\"><PARENT>Special Accounts</PARENT></LEDGER></TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "twoPartyEntries": {
+      "why": "A sales voucher against two customers. There is no single party, and .find would answer with whichever Tally wrote first.",
+      "files": {
+        "TwoParties.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE><LEDGER NAME=\"First Customer\"><PARENT>Sundry Debtors</PARENT></LEDGER></TALLYMESSAGE>\n <TALLYMESSAGE><LEDGER NAME=\"Second Customer\"><PARENT>Sundry Debtors</PARENT></LEDGER></TALLYMESSAGE>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\">\n   <DATE>20270903</DATE>\n   <VOUCHERNUMBER>SI-TWO-1</VOUCHERNUMBER>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>First Customer</LEDGERNAME><AMOUNT>-300.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Second Customer</LEDGERNAME><AMOUNT>-200.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales - Fabrication</LEDGERNAME><AMOUNT>500.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "noParty": {
+      "why": "A voucher naming no party and holding no ledger under a customer or supplier group. There is nobody to bill.",
+      "files": {
+        "NoParty.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\">\n   <DATE>20270904</DATE>\n   <VOUCHERNUMBER>SI-NP-1</VOUCHERNUMBER>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Suspense</LEDGERNAME><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales - Fabrication</LEDGERNAME><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "namedPartyWithNoEntry": {
+      "why": "PARTYLEDGERNAME naming a ledger that is on none of the entries. Every entry would become a line, including the one that is really the party side.",
+      "files": {
+        "Named.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\">\n   <DATE>20270905</DATE>\n   <VOUCHERNUMBER>SI-NE-1</VOUCHERNUMBER>\n   <PARTYLEDGERNAME>Absent Traders</PARTYLEDGERNAME>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Some Debtor</LEDGERNAME><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales - Fabrication</LEDGERNAME><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "partyNameDisagreesWithChain": {
+      "why": "PARTYLEDGERNAME left stale after a ledger was renamed. The chain wins because the chain is a fact about the chart; the disagreement is still reported.",
+      "files": {
+        "Stale.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE><LEDGER NAME=\"Renamed Traders\"><PARENT>Sundry Debtors</PARENT></LEDGER></TALLYMESSAGE>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\">\n   <DATE>20270906</DATE>\n   <VOUCHERNUMBER>SI-ST-1</VOUCHERNUMBER>\n   <PARTYLEDGERNAME>Old Traders</PARTYLEDGERNAME>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Renamed Traders</LEDGERNAME><AMOUNT>-700.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales - Fabrication</LEDGERNAME><AMOUNT>700.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "unreadableDates": {
+      "why": "Three vouchers: one date in a format Tally does not write, one impossible day, one missing date element. Each is reported separately and none of them stops the fourth voucher from importing.",
+      "files": {
+        "Dates.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE><LEDGER NAME=\"Date Traders\"><PARENT>Sundry Debtors</PARENT></LEDGER></TALLYMESSAGE>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\"><DATE>1-Apr-2027</DATE><VOUCHERNUMBER>SI-D1</VOUCHERNUMBER>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Date Traders</LEDGERNAME><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales - Fabrication</LEDGERNAME><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\"><DATE>20270231</DATE><VOUCHERNUMBER>SI-D2</VOUCHERNUMBER>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Date Traders</LEDGERNAME><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales - Fabrication</LEDGERNAME><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\"><VOUCHERNUMBER>SI-D3</VOUCHERNUMBER>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Date Traders</LEDGERNAME><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales - Fabrication</LEDGERNAME><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\"><DATE>20270815</DATE><VOUCHERNUMBER>SI-D4</VOUCHERNUMBER>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Date Traders</LEDGERNAME><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales - Fabrication</LEDGERNAME><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "unreadableEntry": {
+      "why": "An entry whose amount is not a number, and one with no ledger name. Each takes its whole voucher with it, because dropping one entry leaves a voucher that no longer balances.",
+      "files": {
+        "BadEntries.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\"><DATE>20270907</DATE><VOUCHERNUMBER>SI-BE-1</VOUCHERNUMBER>\n   <PARTYLEDGERNAME>Bad Traders</PARTYLEDGERNAME>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Bad Traders</LEDGERNAME><AMOUNT>1.234,56</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales - Fabrication</LEDGERNAME><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\"><DATE>20270908</DATE><VOUCHERNUMBER>SI-BE-2</VOUCHERNUMBER>\n   <PARTYLEDGERNAME>Bad Traders</PARTYLEDGERNAME>\n   <ALLLEDGERENTRIES.LIST><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales - Fabrication</LEDGERNAME><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\"><DATE>20270909</DATE><VOUCHERNUMBER>SI-BE-3</VOUCHERNUMBER>\n   <PARTYLEDGERNAME>Bad Traders</PARTYLEDGERNAME>\n  </VOUCHER>\n </TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "renamedElements": {
+      "why": "An export whose voucher number is written under a name this build does not know. The document is refused for having no number, the unread element is reported BY NAME, and one correction reads the file -- which is the whole answer to \"what if an element name in this folder is wrong\".",
+      "files": {
+        "Renamed.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\"><DATE>20270910</DATE><VCHNO>SI-RN-1</VCHNO>\n   <PARTYLEDGERNAME>Renamed Traders</PARTYLEDGERNAME>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Renamed Traders</LEDGERNAME><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales - Fabrication</LEDGERNAME><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "mixedCaseElements": {
+      "why": "The same voucher with every tag in mixed case, which is what a file that has been through a connector or a template looks like. XML is case-sensitive; elementKey is what makes this one voucher rather than none.",
+      "files": {
+        "MixedCase.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Envelope><Body><ImportData><RequestData>\n <TallyMessage>\n  <Voucher VchType=\"Sales\"><Date>20270911</Date><VoucherNumber>SI-MC-1</VoucherNumber>\n   <PartyLedgerName>Mixed Traders</PartyLedgerName>\n   <AllLedgerEntries.List><LedgerName>Mixed Traders</LedgerName><Amount>-100.00</Amount></AllLedgerEntries.List>\n   <AllLedgerEntries.List><LedgerName>Sales - Fabrication</LedgerName><Amount>100.00</Amount></AllLedgerEntries.List>\n  </Voucher>\n </TallyMessage>\n</RequestData></ImportData></Body></Envelope>\n"
+      }
+    },
+    "optionalVoucher": {
+      "why": "An optional voucher, which Tally itself does not post. Reported and left out, beside an ordinary one that is imported.",
+      "files": {
+        "Optional.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\"><DATE>20270912</DATE><VOUCHERNUMBER>SI-OP-1</VOUCHERNUMBER><ISOPTIONAL>Yes</ISOPTIONAL>\n   <PARTYLEDGERNAME>Optional Traders</PARTYLEDGERNAME>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Optional Traders</LEDGERNAME><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales - Fabrication</LEDGERNAME><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\"><DATE>20270913</DATE><VOUCHERNUMBER>SI-OP-2</VOUCHERNUMBER><ISOPTIONAL>No</ISOPTIONAL>\n   <PARTYLEDGERNAME>Optional Traders</PARTYLEDGERNAME>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Optional Traders</LEDGERNAME><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales - Fabrication</LEDGERNAME><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "documentWithoutNumber": {
+      "why": "A sales voucher with no number beside a payment with no number. The document is refused because its number is its identity and goes into its fingerprint; the voucher is kept because a voucher number is allotted by whichever program recorded the money and is deliberately not in one.",
+      "files": {
+        "Unnumbered.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE><LEDGER NAME=\"Unnumbered Traders\"><PARENT>Sundry Debtors</PARENT></LEDGER></TALLYMESSAGE>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\"><DATE>20270914</DATE>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Unnumbered Traders</LEDGERNAME><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales - Fabrication</LEDGERNAME><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Receipt\"><DATE>20270915</DATE><GUID>tly-v-unnum</GUID>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Unnumbered Traders</LEDGERNAME><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC Bank - 4021</LEDGERNAME><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "zeroEntryWithFlag": {
+      "why": "A zero-amount entry, once with ISDEEMEDPOSITIVE and once without. Zero is neither negative nor positive, so the sign says nothing and the flag is the only signal there is; with no flag the entry has no side at all.",
+      "files": {
+        "Zero.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Sales\"><DATE>20270916</DATE><VOUCHERNUMBER>SI-Z-1</VOUCHERNUMBER>\n   <PARTYLEDGERNAME>Zero Traders</PARTYLEDGERNAME>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Zero Traders</LEDGERNAME><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales - Fabrication</LEDGERNAME><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Free Samples</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>0.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Packing</LEDGERNAME><AMOUNT>0.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "identicalReceipts": {
+      "why": "Two receipts from one customer, on one day, for one amount, with no bank reference. They fingerprint identically and they are two real payments.",
+      "files": {
+        "Twins.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE><LEDGER NAME=\"Twin Traders\"><PARENT>Sundry Debtors</PARENT></LEDGER></TALLYMESSAGE>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Receipt\"><DATE>20270917</DATE><VOUCHERNUMBER>RC-T-1</VOUCHERNUMBER><GUID>tly-v-t1</GUID>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Twin Traders</LEDGERNAME><AMOUNT>2500.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC Bank - 4021</LEDGERNAME><AMOUNT>-2500.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Receipt\"><DATE>20270917</DATE><VOUCHERNUMBER>RC-T-2</VOUCHERNUMBER><GUID>tly-v-t2</GUID>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Twin Traders</LEDGERNAME><AMOUNT>2500.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC Bank - 4021</LEDGERNAME><AMOUNT>-2500.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "duplicateGuid": {
+      "why": "Two ledgers carrying one GUID, which is what a merged company file looks like. One of them would be silently lost at write time, and which one depends on the order the writer iterates in.",
+      "files": {
+        "Dupes.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE><LEDGER NAME=\"First Copy\"><GUID>tly-led-same</GUID><PARENT>Sundry Debtors</PARENT></LEDGER></TALLYMESSAGE>\n <TALLYMESSAGE><LEDGER NAME=\"Second Copy\"><GUID>tly-led-same</GUID><PARENT>Sundry Debtors</PARENT></LEDGER></TALLYMESSAGE>\n <TALLYMESSAGE><GROUP NAME=\"Repeated Group\"><PARENT>Sundry Debtors</PARENT></GROUP></TALLYMESSAGE>\n <TALLYMESSAGE><GROUP NAME=\"Repeated Group\"><PARENT>Sundry Creditors</PARENT></GROUP></TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "replacementCharacters": {
+      "why": "A file decoded with the wrong codec, so U+FFFD stands where letters should. The XML reader reports it and this importer carries the report into the batch.",
+      "files": {
+        "Mojibake.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE><LEDGER NAME=\"Caf� Traders\"><PARENT>Sundry Debtors</PARENT></LEDGER></TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "blankCandidateBesideAValue": {
+      "why": "A voucher that writes an EMPTY <REFERENCE/> beside a <REFERENCENUMBER> that carries the bank reference. Both are candidates for one field, and an empty one is ABSENT rather than a second value -- otherwise the ordinary export, which fills in one of a pair and leaves the other blank, would be reported as ambiguous on every voucher it has.",
+      "files": {
+        "Blank.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE><LEDGER NAME=\"Blank Traders\"><PARENT>Sundry Debtors</PARENT></LEDGER></TALLYMESSAGE>\n <TALLYMESSAGE>\n  <VOUCHER VCHTYPE=\"Receipt\"><DATE>20270918</DATE><VOUCHERNUMBER>RC-BL-1</VOUCHERNUMBER>\n   <REFERENCE>\n   </REFERENCE>\n   <REFERENCENUMBER>UTR-4471100</REFERENCENUMBER>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>Blank Traders</LEDGERNAME><AMOUNT>800.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n   <ALLLEDGERENTRIES.LIST><LEDGERNAME>HDFC Bank - 4021</LEDGERNAME><AMOUNT>-800.00</AMOUNT></ALLLEDGERENTRIES.LIST>\n  </VOUCHER>\n </TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    },
+    "repeatedUnclaimedElement": {
+      "why": "ONE ledger carrying TWO elements of a name no field claims. Without this row the count in an unclaimed report is only ever the number of LEDGERS that carried one, so a per-element counter that never increments reads exactly the same.",
+      "files": {
+        "Repeated.xml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ENVELOPE><BODY><IMPORTDATA><REQUESTDATA>\n <TALLYMESSAGE>\n  <LEDGER NAME=\"Verbose Traders\">\n   <PARENT>Sundry Debtors</PARENT>\n   <LANGUAGENAME.LIST><NAME>Verbose Traders</NAME></LANGUAGENAME.LIST>\n   <LANGUAGENAME.LIST><NAME>Verbose Traders (Hindi)</NAME></LANGUAGENAME.LIST>\n  </LEDGER>\n </TALLYMESSAGE>\n</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n"
+      }
+    }
+  },
+  "expected": {
+    "documents": [
+      {
+        "sourceId": "tly-v-si041",
+        "kind": "sales-invoice",
+        "number": "SI-2027-041",
+        "date": "2027-07-19",
+        "partySourceId": "tly-led-bharat",
+        "partyName": "Bharat Metals Pvt Ltd",
+        "partyReference": "PO-7741",
+        "placeOfSupplyName": "Karnataka",
+        "narration": "Fabrication  work\n        for the Hosur site.",
+        "statedTotal": "11800.00",
+        "lines": [
+          {
+            "lineNumber": 1,
+            "description": "Sales - Fabrication",
+            "quantity": "1.000",
+            "unitPrice": "10000.00",
+            "discount": "0.00",
+            "ledger": "Sales - Fabrication",
+            "provenance": [
+              {
+                "file": "Vouchers.xml",
+                "line": 27,
+                "rowNumber": 1
+              }
+            ]
+          }
+        ],
+        "provenance": [
+          {
+            "file": "Vouchers.xml",
+            "line": 12,
+            "rowNumber": 1
+          }
+        ]
+      },
+      {
+        "sourceId": "voucher:Purchase:PB-2027-018",
+        "kind": "purchase-bill",
+        "number": "PB-2027-018",
+        "date": "2027-06-02",
+        "partySourceId": "tly-led-nilgiri",
+        "partyName": "Nilgiri Steel Traders",
+        "statedTotal": "29500.00",
+        "lines": [
+          {
+            "lineNumber": 1,
+            "description": "Purchases - Raw Material",
+            "quantity": "1.000",
+            "unitPrice": "25000.00",
+            "discount": "0.00",
+            "ledger": "Purchases - Raw Material",
+            "provenance": [
+              {
+                "file": "Vouchers.xml",
+                "line": 51,
+                "rowNumber": 2
+              }
+            ]
+          }
+        ],
+        "provenance": [
+          {
+            "file": "Vouchers.xml",
+            "line": 45,
+            "rowNumber": 2
+          }
+        ]
+      },
+      {
+        "sourceId": "tly-v-cn003",
+        "kind": "credit-note",
+        "number": "CN-2027-003",
+        "date": "2027-07-25",
+        "partySourceId": "tly-led-bharat",
+        "partyName": "Bharat Metals Pvt Ltd",
+        "statedTotal": "1416.00",
+        "lines": [
+          {
+            "lineNumber": 1,
+            "description": "Sales Returns",
+            "quantity": "1.000",
+            "unitPrice": "1000.00",
+            "discount": "0.00",
+            "ledger": "Sales Returns",
+            "provenance": [
+              {
+                "file": "Vouchers.xml",
+                "line": 78,
+                "rowNumber": 3
+              }
+            ]
+          },
+          {
+            "lineNumber": 2,
+            "description": "Site Allowance",
+            "quantity": "1.000",
+            "unitPrice": "200.00",
+            "discount": "0.00",
+            "ledger": "Site Allowance",
+            "provenance": [
+              {
+                "file": "Vouchers.xml",
+                "line": 83,
+                "rowNumber": 3
+              }
+            ]
+          }
+        ],
+        "provenance": [
+          {
+            "file": "Vouchers.xml",
+            "line": 71,
+            "rowNumber": 3
+          }
+        ]
+      },
+      {
+        "sourceId": "tly-v-pb019",
+        "kind": "purchase-bill",
+        "number": "PB-2027-019",
+        "date": "2027-06-05",
+        "partySourceId": "tly-led-deccan",
+        "partyName": "Deccan Hardware",
+        "statedTotal": "8000.00",
+        "lines": [
+          {
+            "lineNumber": 1,
+            "description": "Purchases - Raw Material",
+            "quantity": "1.000",
+            "unitPrice": "8000.00",
+            "discount": "0.00",
+            "ledger": "Purchases - Raw Material",
+            "provenance": [
+              {
+                "file": "Vouchers.xml",
+                "line": 288,
+                "rowNumber": 13
+              }
+            ]
+          }
+        ],
+        "provenance": [
+          {
+            "file": "Vouchers.xml",
+            "line": 282,
+            "rowNumber": 13
+          }
+        ]
+      }
+    ],
+    "receipts": [
+      {
+        "sourceId": "tly-v-rc009",
+        "kind": "receipt",
+        "number": "RC-2027-009",
+        "date": "2027-07-22",
+        "partySourceId": "tly-led-bharat",
+        "partyName": "Bharat Metals Pvt Ltd",
+        "amount": "11800.00",
+        "ledger": "HDFC Bank - 4021",
+        "reference": "CHQ 884120",
+        "allocations": [
+          {
+            "documentNumber": "SI-2027-041",
+            "amount": "11800.00",
+            "provenance": [
+              {
+                "file": "Vouchers.xml",
+                "line": 134,
+                "rowNumber": 5
+              }
+            ]
+          }
+        ],
+        "provenance": [
+          {
+            "file": "Vouchers.xml",
+            "line": 118,
+            "rowNumber": 5
+          }
+        ]
+      },
+      {
+        "sourceId": "tly-v-py014",
+        "kind": "refund",
+        "number": "PY-2027-014",
+        "date": "2027-06-15",
+        "partySourceId": "tly-led-bharat",
+        "partyName": "Bharat Metals Pvt Ltd",
+        "amount": "2400.00",
+        "ledger": "Cash",
+        "narration": "Refund of the cancelled Hosur order.",
+        "allocations": [],
+        "provenance": [
+          {
+            "file": "Vouchers.xml",
+            "line": 190,
+            "rowNumber": 8
+          }
+        ]
+      },
+      {
+        "sourceId": "tly-v-rc010",
+        "kind": "receipt",
+        "number": "tly-v-rc010",
+        "date": "2027-07-21",
+        "partySourceId": "tly-led-bharat",
+        "partyName": "Bharat Metals Pvt Ltd",
+        "amount": "5000.00",
+        "ledger": "HDFC Bank - 4021",
+        "allocations": [
+          {
+            "documentNumber": "SI-2026-777",
+            "amount": "5000.00",
+            "provenance": [
+              {
+                "file": "Vouchers.xml",
+                "line": 223,
+                "rowNumber": 9
+              }
+            ]
+          }
+        ],
+        "provenance": [
+          {
+            "file": "Vouchers.xml",
+            "line": 209,
+            "rowNumber": 9
+          }
+        ]
+      }
+    ],
+    "parties": [
+      {
+        "sourceId": "tly-led-bharat",
+        "name": "Bharat Metals Pvt Ltd",
+        "isCustomer": true,
+        "isVendor": false,
+        "registrationNumber": "29AABCB1234C1ZK",
+        "jurisdictionName": "Karnataka",
+        "countryName": "India",
+        "email": "accounts@bharatmetals.example",
+        "paymentTermsDays": 30,
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 6,
+            "rowNumber": 1
+          }
+        ]
+      },
+      {
+        "sourceId": "tly-led-nilgiri",
+        "name": "Nilgiri Steel Traders",
+        "isCustomer": false,
+        "isVendor": true,
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 34,
+            "rowNumber": 3
+          }
+        ]
+      },
+      {
+        "sourceId": "tly-led-deccan",
+        "name": "Deccan Hardware",
+        "isCustomer": false,
+        "isVendor": true,
+        "provenance": []
+      }
+    ],
+    "accounts": [
+      {
+        "sourceId": "tly-led-hdfc",
+        "name": "HDFC Bank - 4021",
+        "type": "asset",
+        "sourceType": "Bank Accounts",
+        "parentName": "Bank Accounts",
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 62,
+            "rowNumber": 6
+          }
+        ]
+      },
+      {
+        "sourceId": "tly-led-cash",
+        "name": "Cash",
+        "type": "asset",
+        "sourceType": "Cash-in-Hand",
+        "parentName": "Cash-in-Hand",
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 69,
+            "rowNumber": 7
+          }
+        ]
+      },
+      {
+        "sourceId": "tly-led-sales",
+        "name": "Sales - Fabrication",
+        "type": "income",
+        "sourceType": "Sales Accounts",
+        "parentName": "Sales Accounts",
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 76,
+            "rowNumber": 8
+          }
+        ]
+      },
+      {
+        "sourceId": "tly-led-purchases",
+        "name": "Purchases - Raw Material",
+        "type": "expense",
+        "sourceType": "Purchase Accounts",
+        "parentName": "Purchase Accounts",
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 82,
+            "rowNumber": 9
+          }
+        ]
+      },
+      {
+        "sourceId": "tly-led-outlevy",
+        "name": "Output Levy 18%",
+        "type": "liability",
+        "sourceType": "Duties & Taxes",
+        "parentName": "Duties & Taxes",
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 88,
+            "rowNumber": 10
+          }
+        ]
+      },
+      {
+        "sourceId": "tly-led-inlevy",
+        "name": "Input Levy 18%",
+        "type": "liability",
+        "sourceType": "Duties & Taxes",
+        "parentName": "Duties & Taxes",
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 94,
+            "rowNumber": 11
+          }
+        ]
+      },
+      {
+        "sourceId": "tly-led-returns",
+        "name": "Sales Returns",
+        "type": "income",
+        "sourceType": "Sales Accounts",
+        "parentName": "Sales Accounts",
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 100,
+            "rowNumber": 12
+          }
+        ]
+      },
+      {
+        "sourceId": "tly-led-discount",
+        "name": "Discount Allowed",
+        "type": "expense",
+        "sourceType": "Indirect Expenses",
+        "parentName": "Indirect Expenses",
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 106,
+            "rowNumber": 13
+          }
+        ]
+      },
+      {
+        "sourceId": "tly-led-depreciation",
+        "name": "Depreciation",
+        "type": "expense",
+        "sourceType": "Indirect Expenses",
+        "parentName": "Indirect Expenses",
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 112,
+            "rowNumber": 14
+          }
+        ]
+      }
+    ],
+    "openingBalances": [
+      {
+        "sourceId": "opening:tly-led-bharat",
+        "ledger": {
+          "kind": "role",
+          "role": "accounts-receivable"
+        },
+        "partySourceId": "tly-led-bharat",
+        "partyName": "Bharat Metals Pvt Ltd",
+        "amount": "45000.00",
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 6,
+            "rowNumber": 1
+          }
+        ]
+      },
+      {
+        "sourceId": "opening:tly-led-nilgiri",
+        "ledger": {
+          "kind": "role",
+          "role": "accounts-payable"
+        },
+        "partySourceId": "tly-led-nilgiri",
+        "partyName": "Nilgiri Steel Traders",
+        "amount": "22000.00",
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 34,
+            "rowNumber": 3
+          }
+        ]
+      },
+      {
+        "sourceId": "opening:tly-led-hdfc",
+        "ledger": {
+          "kind": "name",
+          "ledger": "HDFC Bank - 4021"
+        },
+        "amount": "125000.00",
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 62,
+            "rowNumber": 6
+          }
+        ]
+      }
+    ],
+    "items": [
+      {
+        "sourceId": "tly-itm-bracket",
+        "name": "Steel Bracket",
+        "kind": "goods",
+        "description": "Steel bracket, 6mm",
+        "unitLabel": "Nos",
+        "isSold": true,
+        "isPurchased": true,
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 47,
+            "rowNumber": 4
+          }
+        ]
+      },
+      {
+        "sourceId": "tly-itm-design",
+        "name": "Design Consultancy",
+        "kind": "service",
+        "unitLabel": "Hrs",
+        "isSold": true,
+        "isPurchased": true,
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 135,
+            "rowNumber": 18
+          }
+        ]
+      },
+      {
+        "sourceId": "tly-itm-powder",
+        "name": "Powder Coating",
+        "kind": "goods",
+        "unitLabel": "Nos",
+        "isSold": true,
+        "isPurchased": true,
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 142,
+            "rowNumber": 19
+          }
+        ]
+      }
+    ],
+    "units": [
+      {
+        "code": "NOS",
+        "label": "Nos",
+        "decimalPlaces": 2,
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 27,
+            "rowNumber": 2
+          }
+        ]
+      },
+      {
+        "code": "KG",
+        "label": "Kg",
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 130,
+            "rowNumber": 17
+          }
+        ]
+      },
+      {
+        "code": "HRS",
+        "label": "Hrs",
+        "provenance": [
+          {
+            "file": "Masters.xml",
+            "line": 135,
+            "rowNumber": 18
+          }
+        ]
+      }
+    ],
+    "ledgers": [
+      {
+        "ledger": "Sales - Fabrication",
+        "key": "sales - fabrication",
+        "usageCount": 1,
+        "kind": "code",
+        "target": "4010"
+      },
+      {
+        "ledger": "Purchases - Raw Material",
+        "key": "purchases - raw material",
+        "usageCount": 2,
+        "kind": "new",
+        "target": "tly-led-purchases"
+      },
+      {
+        "ledger": "Sales Returns",
+        "key": "sales returns",
+        "usageCount": 1,
+        "kind": "role",
+        "target": "sales-returns"
+      },
+      {
+        "ledger": "Site Allowance",
+        "key": "site allowance",
+        "usageCount": 1,
+        "kind": "unmapped",
+        "target": null
+      },
+      {
+        "ledger": "HDFC Bank - 4021",
+        "key": "hdfc bank - 4021",
+        "usageCount": 3,
+        "kind": "code",
+        "target": "1210"
+      },
+      {
+        "ledger": "Cash",
+        "key": "cash",
+        "usageCount": 1,
+        "kind": "role",
+        "target": "cash"
+      }
+    ]
+  }
+}

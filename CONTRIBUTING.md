@@ -14,11 +14,15 @@ running window. [`docs/README.md`](./docs/README.md) indexes the rest.
 
 ## Project status
 
-Coffer is **pre-alpha**. Interfaces move weekly and the schema is not yet stable.
+Coffer is **alpha**, and nothing has been released. The ledger, the documents, the
+vouchers and the stock register are built and tested; interfaces still move and the schema
+is not yet stable.
 
-Until the first alpha lands, the most useful contributions are **issues, questions and
-design feedback** rather than pull requests — a PR against a module that gets restructured
-next week helps nobody. Once interfaces settle, this section will say so.
+The most useful contributions are still **issues, questions and design feedback** — a PR
+against a module that gets restructured next week helps nobody. The exception is
+[`docs/good-first-issues.md`](./docs/good-first-issues.md): every entry there is drawn from
+a note the code left about itself, so the decision is already made and written down, and a
+PR is welcome without a conversation first.
 
 ## Ways to help
 
@@ -82,17 +86,21 @@ ship prebuilt binaries, so there is no rebuild step and no C++ toolchain require
 `postinstall` runs `scripts/native-modules.mjs`, which only checks that those binaries
 load — it takes about a second.
 
-If `npm run dev` builds cleanly and no window appears, read
-[`docs/getting-started.md`](./docs/getting-started.md) §6 before debugging anything else.
-Two known traps produce exactly that.
+**`npm install`, not `npm ci`.** `npm ci` reaches for `node-gyp` and fails asking for a
+C++ compiler, to build a binary the package already contains. It is the first trap in
+[`docs/getting-started.md`](./docs/getting-started.md) §6, and the fix is two lines.
+
+If `npm run dev` builds cleanly and no window appears, read that same section before
+debugging anything else. Two of the traps there produce exactly that.
 
 ### The loop
 
 ```bash
-npm run verify              # typecheck + lint + format:check + test — before you push
+npm run verify              # typecheck + lint + format:check + test + test:scripts
 npm test -- --watch         # while working
 npm test -- --project=main  # or --project=renderer, to run one side only
 npm run format              # prettier, writing in place
+npm run mutate -- --defs <campaign>   # prove a test would have failed
 ```
 
 Tests run as two projects: `main` (Node) and `renderer` (a real DOM, happy-dom). Which
@@ -109,6 +117,11 @@ anything you touched. Every script is listed in
 - **One change.** Unrelated fixes go in separate PRs, however tempting.
 - **Tests.** New logic needs tests. Anything touching money, tax or posting needs
   **golden fixtures** — if your change cannot break a test, it is not covered.
+- **Evidence that the tests would fail.** For a rule you are claiming to enforce, break it
+  once and check that something goes red. `npm run mutate` is the harness; a recorded
+  campaign in `scripts/mutations/` is a run somebody else can repeat, which is the
+  difference between evidence and a claim. Not required for every PR, and expected for
+  anything that adds a constraint.
 - **Green.** `npm run verify` passes.
 - **No drive-by refactors.** Improvements you spotted elsewhere go in an issue.
 - **Conventional commits**, scoped to the module:

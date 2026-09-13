@@ -24,11 +24,12 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { sql } from 'kysely'
+import { sql, type Selectable, type Updateable } from 'kysely'
 
 import { parseMoney, parseRate, toMoneyString, toRateString } from '@main/domain/money'
 import type {
   CreateItemInput,
+  DecimalString,
   Item,
   ItemSummary,
   ListItemsInput,
@@ -38,11 +39,22 @@ import type {
 import type { CofferDb } from '../kysely'
 import type { ItemsTable } from '../schema'
 import { RepoError } from './errors'
+import { setItemStockTracking } from './stock'
+import { inTransaction } from './transaction'
 import { requireActiveUnit } from './units'
 
-type ItemRow = {
-  [K in keyof ItemsTable]: ItemsTable[K]
-}
+/**
+ * A row of `items` as a SELECT hands it back.
+ *
+ * `Selectable<ItemsTable>` AND NOT `{ [K in keyof ItemsTable]: ItemsTable[K] }`, which is
+ * what this was. That identity map is right only while no column of the table is a Kysely
+ * `ColumnType`: the moment one is, the map hands back the wrapper rather than the value a
+ * SELECT produces. `is_stock_tracked` was spelled `SqlBool | undefined` in the schema for
+ * exactly that reason — a compatibility shim for this line, wearing the shape of a claim
+ * about the column. It is `Generated<SqlBool>` now, which says what the column actually
+ * is, and this type is what makes that spelling possible.
+ */
+type ItemRow = Selectable<ItemsTable>
 
 // ---- Reading ---------------------------------------------------------------
 
@@ -98,43 +110,85 @@ export async function createItem(db: CofferDb, input: CreateItemInput): Promise<
   const code = trimmedOrNull(input.code)
 
   assertHasASide(input.isSold === true, input.isPurchased === true)
-  await assertNameFree(db, name, null)
-  await assertCodeFree(db, code, null)
 
   const now = new Date().toISOString()
   const id = randomUUID()
 
-  await db
-    .insertInto('items')
-    .values({
-      id,
-      code,
-      name,
-      description: trimmedOrNull(input.description),
-      kind: input.kind,
-      unit_code: await unitCodeOf(db, input.unitCode),
-      classification_code: trimmedOrNull(input.classificationCode),
-      tax_rate_pct: taxRateOf(input.taxRatePct),
-      sale_price: priceOf(input.salePrice, 'sale price'),
-      purchase_price: priceOf(input.purchasePrice, 'purchase price'),
-      is_charge: input.isCharge === true ? 1 : 0,
-      is_sold: input.isSold === true ? 1 : 0,
-      is_purchased: input.isPurchased === true ? 1 : 0,
-      sales_account_id: await postingAccountOf(db, input.salesAccountId, 'sales'),
-      purchase_account_id: await postingAccountOf(db, input.purchaseAccountId, 'purchase'),
-      is_archived: 0,
-      created_at: now,
-      updated_at: now,
-    })
-    .execute()
+  /* ONE TRANSACTION, because the stock settings are a second statement against the row
+   * this one just wrote. An item created and then refused a stock register — a service
+   * asked to keep a balance — must leave nothing behind, or the caller is told it failed
+   * and finds the item in their list. */
+  return inTransaction(db, async (trx) => {
+    await assertNameFree(trx, name, null)
+    await assertCodeFree(trx, code, null)
 
-  const created = await getItem(db, id)
-  if (created === null) {
-    throw new RepoError('ITEM_NOT_FOUND', 'The item was written but could not be read back.', {
-      id,
-    })
-  }
-  return created
+    await trx
+      .insertInto('items')
+      .values({
+        id,
+        code,
+        name,
+        description: trimmedOrNull(input.description),
+        kind: input.kind,
+        unit_code: await unitCodeOf(trx, input.unitCode),
+        classification_code: trimmedOrNull(input.classificationCode),
+        tax_rate_pct: taxRateOf(input.taxRatePct),
+        sale_price: priceOf(input.salePrice, 'sale price'),
+        purchase_price: priceOf(input.purchasePrice, 'purchase price'),
+        is_charge: input.isCharge === true ? 1 : 0,
+        is_sold: input.isSold === true ? 1 : 0,
+        is_purchased: input.isPurchased === true ? 1 : 0,
+        sales_account_id: await postingAccountOf(trx, input.salesAccountId, 'sales'),
+        purchase_account_id: await postingAccountOf(trx, input.purchaseAccountId, 'purchase'),
+        is_archived: 0,
+        created_at: now,
+        updated_at: now,
+      })
+      .execute()
+
+    /* `is_stock_tracked` defaults to 0 and `reorder_level` to null, so a caller that says
+     * nothing gets an item that keeps no balance — which is what every item created
+     * before 0017 is, and what a consumable should be. */
+    await applyStockSettings(trx, id, false, null, input)
+
+    const created = await getItem(trx, id)
+    if (created === null) {
+      throw new RepoError('ITEM_NOT_FOUND', 'The item was written but could not be read back.', {
+        id,
+      })
+    }
+    return created
+  })
+}
+
+/**
+ * Write the two stock columns, through the one function that owns the rules.
+ *
+ * DELEGATED AND NOT REIMPLEMENTED, which is the whole reason these fields could be added
+ * here at all. `setItemStockTracking` refuses a service a balance, refuses switching a
+ * register off once movements exist, and clears a reorder level along with the register —
+ * three rules with sentences and `details` already written. A second implementation on
+ * this path would be a second set of answers to the same questions, and the one that goes
+ * stale is whichever nobody is looking at.
+ *
+ * Skipped entirely when the caller says nothing about either field, so an edit to a name
+ * does not re-decide anything about stock, and so `updateItem` costs no extra statement
+ * for the ordinary case.
+ */
+async function applyStockSettings(
+  db: CofferDb,
+  id: string,
+  currentIsTracked: boolean,
+  currentReorderLevel: DecimalString | null,
+  input: { isStockTracked?: boolean; reorderLevel?: DecimalString | null },
+): Promise<void> {
+  if (input.isStockTracked === undefined && input.reorderLevel === undefined) return
+
+  await setItemStockTracking(db, {
+    itemId: id,
+    isStockTracked: input.isStockTracked ?? currentIsTracked,
+    reorderLevel: input.reorderLevel === undefined ? currentReorderLevel : input.reorderLevel,
+  })
 }
 
 /**
@@ -149,9 +203,13 @@ export async function createItem(db: CofferDb, input: CreateItemInput): Promise<
  * typo in the name would be blocked by a decision made about the chart of accounts.
  */
 export async function updateItem(db: CofferDb, input: UpdateItemInput): Promise<Item> {
+  return inTransaction(db, (trx) => updateItemWithin(trx, input))
+}
+
+async function updateItemWithin(db: CofferDb, input: UpdateItemInput): Promise<Item> {
   const existing = await requireItem(db, input.id)
 
-  const update: Partial<ItemRow> = { updated_at: new Date().toISOString() }
+  const update: Updateable<ItemsTable> = { updated_at: new Date().toISOString() }
 
   if (input.name !== undefined) {
     const name = requireName(input.name)
@@ -193,7 +251,54 @@ export async function updateItem(db: CofferDb, input: UpdateItemInput): Promise<
     update.purchase_account_id = await postingAccountOf(db, input.purchaseAccountId, 'purchase')
   }
 
+  /*
+   * THE OTHER DIRECTION OF 0017'S CHECK, ANSWERED BEFORE THE WRITE THAT WOULD TRIP IT.
+   *
+   * A service may not keep a balance, and there are two ways to break that: switch the
+   * register on, which `setItemStockTracking` refuses with a sentence, or turn a tracked
+   * item INTO a service, which is the one 0017's header says nobody writes. The CHECK
+   * catches both — it is re-evaluated on every write to the row — but it catches this one
+   * with `CHECK constraint failed`, from a statement that names no item.
+   *
+   * So the repository speaks first and the CHECK is the floor (CONVENTIONS §6). Both
+   * layers answer with the same code, so only `details` tells them apart, and the
+   * migration's own test writes straight at the table to reach the floor.
+   */
+  const nextIsStockTracked = input.isStockTracked ?? existing.isStockTracked
+  if (input.kind !== undefined && input.kind !== 'goods' && nextIsStockTracked) {
+    throw new RepoError(
+      'ITEM_NOT_STOCKABLE',
+      `${existing.name} keeps a stock balance, and a service holds none. Switch its stock ` +
+        'register off first.',
+      { id: existing.id, name: existing.name, kind: input.kind },
+    )
+  }
+
+  /*
+   * THE ORDER OF THE TWO STATEMENTS IS A RULE, and it comes from the CHECK being about
+   * two columns of ONE row: there is an intermediate state, and one of the two orders puts
+   * the row through a state the CHECK forbids.
+   *
+   * Switching a register OFF has to happen BEFORE the kind moves to 'service' — otherwise
+   * the row is briefly a tracked service and the CHECK aborts with a message naming no
+   * item. Switching one ON has to happen AFTER, so that a service being reclassified as
+   * goods in the same edit is goods by the time the question is asked.
+   *
+   * The alternative is to write the two columns into the UPDATE above, which is the
+   * second implementation of the stock rules this delegation exists to avoid. Both
+   * statements are in one transaction, so no caller ever sees the state in between.
+   */
+  const settingsFirst = !nextIsStockTracked
+
+  if (settingsFirst) {
+    await applyStockSettings(db, existing.id, existing.isStockTracked, existing.reorderLevel, input)
+  }
+
   await db.updateTable('items').set(update).where('id', '=', existing.id).execute()
+
+  if (!settingsFirst) {
+    await applyStockSettings(db, existing.id, existing.isStockTracked, existing.reorderLevel, input)
+  }
 
   const updated = await getItem(db, existing.id)
   if (updated === null) {
@@ -453,6 +558,11 @@ function toSummary(row: ItemRow): ItemSummary {
     classificationCode: row.classification_code,
     taxRatePct: row.tax_rate_pct,
     salePrice: row.sale_price,
+    /* On the SUMMARY, so a picker can price a purchase line and an expense line can find
+     * its account without a second call per item. See `ItemSummary`. */
+    purchasePrice: row.purchase_price,
+    salesAccountId: row.sales_account_id,
+    purchaseAccountId: row.purchase_account_id,
     isSold: row.is_sold === 1,
     isPurchased: row.is_purchased === 1,
     isCharge: row.is_charge === 1,
@@ -464,9 +574,8 @@ function toItem(row: ItemRow): Item {
   return {
     ...toSummary(row),
     description: row.description,
-    purchasePrice: row.purchase_price,
-    salesAccountId: row.sales_account_id,
-    purchaseAccountId: row.purchase_account_id,
+    isStockTracked: row.is_stock_tracked === 1,
+    reorderLevel: row.reorder_level,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }

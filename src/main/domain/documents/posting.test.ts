@@ -148,6 +148,10 @@ function line(over: Partial<DocumentLine> & Pick<DocumentLine, 'lineNumber'>): D
     classificationCode: '8482',
     isCharge: false,
     accountId: null,
+    /* Nothing recorded, which is what every line written before migration 0021 carries
+     * and what the posting rule has to keep treating as eligible. The tests that care
+     * about a blocked credit say so on the line. */
+    itcEligibility: null,
     taxes: [tax('CGST', '9', '90.00'), tax('SGST', '9', '90.00')],
     ...over,
   }
@@ -165,6 +169,8 @@ function invoice(over: Partial<PostableDocument> = {}): PostableDocument {
     placeOfSupply: { jurisdictionCode: '33', countryCode: 'in' },
     roundingPolicy: 'none',
     narration: '',
+    isReverseCharge: false,
+    exportTaxPayment: null,
     lines: [line({ lineNumber: 1 })],
     ...over,
   }
@@ -1132,5 +1138,214 @@ describe('controlRoleFor', () => {
     const control = entry.lines.find((line) => line.partyId !== null)
 
     expect(control?.accountId).toBe(ACCOUNTS['receivable']?.id)
+  })
+})
+
+// ---- The two facts about a supply that are not the tax ----------------------
+
+/** What one account moved by on a document of a stated kind, signed debit-minus-credit. */
+function movedOn(kind: PostingKind, document: PostableDocument, name: string): string {
+  const entry = postAs(kind, document)
+  return sum(
+    entry.lines
+      .filter((entryLine) => entryLine.accountId === account(name).id)
+      .map((entryLine) => entryLine.debit.minus(entryLine.credit)),
+  ).toString()
+}
+
+function totalsOf(entry: { lines: readonly { debit: Decimal; credit: Decimal }[] }) {
+  return {
+    debit: sum(entry.lines.map((line) => line.debit)).toString(),
+    credit: sum(entry.lines.map((line) => line.credit)).toString(),
+  }
+}
+
+describe('reverse charge — two postings from one bill, and only on one side', () => {
+  /*
+   * ON THE PURCHASE SIDE THIS BUSINESS IS THE RECIPIENT. It OWES the output tax to the
+   * authority and it MAY CLAIM the same figure as input credit, so the tax lands on both
+   * sides of the balance sheet and nets to nothing in profit — which is what a reverse
+   * charge does. And the supplier is credited with the VALUE only, because the tax never
+   * passes through them.
+   */
+  it('makes a purchase bill owe the tax and claim it, and pays the supplier the net', () => {
+    const bill = documentOf('purchase-bill', { isReverseCharge: true })
+
+    expect(movedOn('purchase-bill', bill, 'payable')).toBe('-1000')
+    expect(movedOn('purchase-bill', bill, 'purchases')).toBe('1000')
+    /* Claimed. */
+    expect(movedOn('purchase-bill', bill, 'cgstIn')).toBe('90')
+    expect(movedOn('purchase-bill', bill, 'sgstIn')).toBe('90')
+    /* Owed. */
+    expect(movedOn('purchase-bill', bill, 'cgst')).toBe('-90')
+    expect(movedOn('purchase-bill', bill, 'sgst')).toBe('-90')
+
+    expect(totalsOf(postAs('purchase-bill', bill))).toEqual({ debit: '1180', credit: '1180' })
+  })
+
+  /*
+   * ON THE SALES SIDE IT IS NOT THE MIRROR. This business supplies and the CUSTOMER
+   * discharges, so no figure on the document is this business's liability and no tax posts
+   * at all. The value is still turnover — the supply happened.
+   */
+  it('makes a sales invoice carry the value and no tax whatever', () => {
+    const document = documentOf('sales-invoice', { isReverseCharge: true })
+
+    expect(movedOn('sales-invoice', document, 'receivable')).toBe('1000')
+    expect(movedOn('sales-invoice', document, 'sales')).toBe('-1000')
+    expect(movedOn('sales-invoice', document, 'cgst')).toBe('0')
+    expect(movedOn('sales-invoice', document, 'sgst')).toBe('0')
+
+    const entry = postAs('sales-invoice', document)
+    expect(totalsOf(entry)).toEqual({ debit: '1000', credit: '1000' })
+    /* And there is no tax LINE at all rather than a line of zero — invariant 5 refuses
+     * one, so a rule that posted zeroes would fail at the repository instead of here. */
+    expect(entry.lines).toHaveLength(2)
+  })
+
+  it('reverses both legs on a debit note, so a correction unwinds what the bill did', () => {
+    const note = documentOf('debit-note', { isReverseCharge: true })
+
+    expect(movedOn('debit-note', note, 'payable')).toBe('1000')
+    expect(movedOn('debit-note', note, 'cgstIn')).toBe('-90')
+    expect(movedOn('debit-note', note, 'cgst')).toBe('90')
+  })
+
+  it('changes nothing at all when the flag is false', () => {
+    for (const kind of POSTING_KINDS) {
+      expect(postAs(kind, documentOf(kind, { isReverseCharge: false })), kind).toEqual(
+        postAs(kind, documentOf(kind)),
+      )
+    }
+  })
+
+  /*
+   * THE CONTROL AMOUNT IS THE GRAND TOTAL LESS THE TAX, WHICH INCLUDES THE ROUNDING. A
+   * rule that took the net total instead would be right on an unrounded document and out
+   * by the round-off on a rounded one, which is the paisa nobody can find.
+   */
+  it('still carries the rounding on a reverse-charge document', () => {
+    const rounded = documentOf('purchase-bill', {
+      isReverseCharge: true,
+      roundingPolicy: 'whole-unit',
+      lines: [
+        line({
+          lineNumber: 1,
+          taxableAmount: D('1000.40'),
+          taxes: [tax('CGST', '9', '90.04'), tax('SGST', '9', '90.04')],
+        }),
+      ],
+    })
+
+    /* 1000.40 + 180.08 is 1180.48, rounded to 1180.00, so the round-off is -0.48 and the
+     * payable takes 1180.00 - 180.08 = 999.92. */
+    expect(movedOn('purchase-bill', rounded, 'payable')).toBe('-999.92')
+    expect(movedOn('purchase-bill', rounded, 'roundOff')).toBe('-0.48')
+    const totals = totalsOf(postAs('purchase-bill', rounded))
+    expect(totals.debit).toBe(totals.credit)
+  })
+})
+
+describe('input tax credit eligibility, on the line', () => {
+  const blocked = (eligibility: 'ineligible-17-5' | 'ineligible-other') =>
+    documentOf('purchase-bill', { lines: [line({ lineNumber: 1, itcEligibility: eligibility })] })
+
+  /*
+   * BLOCKED INPUT TAX IS NOT AN ASSET. Input tax reaches the input tax account because it
+   * is RECOVERABLE; where credit is blocked it is not, and an account holding it is an
+   * asset the business will never realise. It is part of what the thing cost, so it joins
+   * the line's own value account.
+   */
+  for (const eligibility of ['ineligible-17-5', 'ineligible-other'] as const) {
+    it(`costs a ${eligibility} line's tax into the expense instead of the asset`, () => {
+      const document = blocked(eligibility)
+
+      expect(movedOn('purchase-bill', document, 'cgstIn')).toBe('0')
+      expect(movedOn('purchase-bill', document, 'sgstIn')).toBe('0')
+      /* 1000 of goods plus 180 of tax nobody can reclaim. */
+      expect(movedOn('purchase-bill', document, 'purchases')).toBe('1180')
+      expect(movedOn('purchase-bill', document, 'payable')).toBe('-1180')
+    })
+  }
+
+  it('leaves an eligible line, and a line that says nothing, exactly as they were', () => {
+    const stated = documentOf('purchase-bill', {
+      lines: [line({ lineNumber: 1, itcEligibility: 'eligible' })],
+    })
+
+    expect(postAs('purchase-bill', stated)).toEqual(
+      postAs('purchase-bill', documentOf('purchase-bill')),
+    )
+    expect(movedOn('purchase-bill', stated, 'cgstIn')).toBe('90')
+  })
+
+  /*
+   * ONE BILL, TWO LINES, TWO ANSWERS — the whole reason the column is on the LINE, and the
+   * case a document-level field could not express without the user splitting a real bill
+   * into two documents.
+   */
+  it('splits one bill between the asset and the expense, line by line', () => {
+    const mixed = documentOf('purchase-bill', {
+      lines: [
+        line({ lineNumber: 1, description: 'Laptop', itcEligibility: 'eligible' }),
+        line({ lineNumber: 2, description: 'Staff car', itcEligibility: 'ineligible-17-5' }),
+      ],
+    })
+
+    expect(movedOn('purchase-bill', mixed, 'cgstIn')).toBe('90')
+    expect(movedOn('purchase-bill', mixed, 'sgstIn')).toBe('90')
+    /* 1000 for the laptop, 1180 for the car. */
+    expect(movedOn('purchase-bill', mixed, 'purchases')).toBe('2180')
+    expect(movedOn('purchase-bill', mixed, 'payable')).toBe('-2360')
+  })
+
+  it('sends a blocked line’s tax to the account the LINE names, not the kind’s default', () => {
+    const named = documentOf('purchase-bill', {
+      lines: [
+        line({
+          lineNumber: 1,
+          accountId: account('freightIn').id,
+          itcEligibility: 'ineligible-other',
+        }),
+      ],
+    })
+
+    expect(movedOn('purchase-bill', named, 'freightIn')).toBe('1180')
+    expect(movedOn('purchase-bill', named, 'purchases')).toBe('0')
+  })
+
+  /*
+   * A SALES DOCUMENT NEVER CONSULTS IT. The levy is output tax, which is owed rather than
+   * reclaimed, so no eligibility rule can touch it — and a value on a sales line (which
+   * the repository refuses and the database does not) changes nothing here.
+   */
+  it('is ignored on a sales document, whatever it says', () => {
+    const invoiceLine = documentOf('sales-invoice', {
+      lines: [line({ lineNumber: 1, itcEligibility: 'ineligible-17-5' })],
+    })
+
+    expect(movedOn('sales-invoice', invoiceLine, 'cgst')).toBe('-90')
+    expect(movedOn('sales-invoice', invoiceLine, 'sales')).toBe('-1000')
+  })
+
+  /*
+   * BLOCKED AND UNDER REVERSE CHARGE AT ONCE, which is the interaction and is not a corner
+   * case: an imported service on which credit is blocked is an ordinary bill. The output
+   * tax is still OWED — no eligibility rule touches a liability to the authority — and the
+   * input leg is costed in rather than claimed, so the tax stops netting to nothing and
+   * becomes a real cost. Which is precisely what a blocked credit means.
+   */
+  it('still owes the tax on a blocked reverse-charge bill, and costs the credit in', () => {
+    const document = documentOf('purchase-bill', {
+      isReverseCharge: true,
+      lines: [line({ lineNumber: 1, itcEligibility: 'ineligible-17-5' })],
+    })
+
+    expect(movedOn('purchase-bill', document, 'cgst')).toBe('-90')
+    expect(movedOn('purchase-bill', document, 'sgst')).toBe('-90')
+    expect(movedOn('purchase-bill', document, 'cgstIn')).toBe('0')
+    expect(movedOn('purchase-bill', document, 'purchases')).toBe('1180')
+    /* The supplier is paid the value only; the 180 owed is a separate liability. */
+    expect(movedOn('purchase-bill', document, 'payable')).toBe('-1000')
   })
 })

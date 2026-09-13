@@ -177,6 +177,7 @@ describe('describeRegime', () => {
       'jurisdictions',
       'label',
       'numberFormat',
+      'registrationLabel',
       'taxComponents',
       'taxRates',
     ])
@@ -229,6 +230,9 @@ describe('describeRegime', () => {
     expect(described.jurisdictions).toHaveLength(1)
     /* A regime that classifies nothing says so with a null code, and the field hides. */
     expect(described.classification.code).toBeNull()
+    /* The word above a registration number is the regime's own. India says GSTIN / UIN,
+     * and a mapping that had reached for a constant would say it here too. */
+    expect(described.registrationLabel).toBe('NIF')
     /* Every India component is levied on both sides, so this is the only assertion in
      * the suite that can tell `component.levy` from the constant 'both'. */
     expect(described.taxComponents[0]?.levy).toBe('output')
@@ -272,6 +276,7 @@ function portugal(): TaxRegime {
   return {
     id: 'pt',
     label: 'Portugal — IVA',
+    registrationLabel: 'NIF',
     jurisdictions: () => jurisdictions,
     taxRates: () => taxRates,
     taxComponents: () => taxComponents,

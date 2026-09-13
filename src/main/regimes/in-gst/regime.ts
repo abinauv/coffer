@@ -29,6 +29,10 @@ export const inGstRegime: TaxRegime = {
 
   computeTax,
   placeOfSupply,
+  /* What the field is called on the face of a tax invoice. A UIN is what a body that
+   * cannot be registered as a taxpayer — an embassy, a UN agency — carries instead, and
+   * it goes in the same box, so the label names both rather than the commoner one. */
+  registrationLabel: 'GSTIN / UIN',
   validateRegistrationNumber: validateGstin,
   validateDocumentNumber,
   jurisdictionName,

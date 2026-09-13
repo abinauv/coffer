@@ -16,6 +16,7 @@
 import { describe, expect, it } from 'vitest'
 import { DOCUMENT_KINDS, definitionOf, opposite, type DocumentKind } from './documents'
 import {
+  isReceiptKind,
   RECEIPT_KINDS,
   receiptDefinitionOf,
   receiptFacing,
@@ -242,5 +243,33 @@ describe('settledByIn, given a table the real one cannot be', () => {
 describe('receiptDefinitionOf', () => {
   it('refuses a kind this build does not know, and says what to do', () => {
     expect(() => receiptDefinitionOf('advance' as ReceiptKind)).toThrow(/newer Coffer/)
+  })
+})
+
+describe('isReceiptKind', () => {
+  it('recognises every kind in the table', () => {
+    for (const kind of KINDS) {
+      expect(isReceiptKind(kind), kind).toBe(true)
+    }
+  })
+
+  /*
+   * `isDocumentKind`'s twin, and the interesting refusal is the same one: a DOCUMENT kind
+   * is a real string arriving in the same field, and a reader that answered `true` to it
+   * would send somebody to a voucher editor for an invoice.
+   */
+  it('refuses a kind from a newer build, and one belonging to the other table', () => {
+    expect(isReceiptKind('advance')).toBe(false)
+    expect(isReceiptKind('sales-invoice')).toBe(false)
+    expect(isReceiptKind('')).toBe(false)
+    expect(isReceiptKind('toString')).toBe(false)
+  })
+
+  /* The two tables share no member, which is what makes narrowing by table a decision
+   * rather than a coin toss — a string in both would be routed by whichever was asked
+   * first, and `AgedItem.kind` carries `source` beside it for exactly this reason. */
+  it('shares no member with the document table', () => {
+    const documents = new Set(DOCUMENT_KINDS.map((definition) => definition.kind))
+    expect(KINDS.filter((kind) => documents.has(kind as unknown as DocumentKind))).toEqual([])
   })
 })

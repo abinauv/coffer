@@ -17,6 +17,7 @@ import {
   correctsKind,
   definitionOf,
   DOCUMENT_KINDS,
+  isDocumentKind,
   kindsOnSide,
   opposite,
   postingKindIn,
@@ -72,6 +73,31 @@ describe('definitionOf', () => {
    */
   it('refuses a kind this build does not know, and says what to do', () => {
     expect(() => definitionOf('delivery-challan' as DocumentKind)).toThrow(/newer Coffer/)
+  })
+})
+
+describe('isDocumentKind', () => {
+  it('recognises every kind in the table', () => {
+    for (const kind of KINDS) {
+      expect(isDocumentKind(kind), kind).toBe(true)
+    }
+  })
+
+  /*
+   * THE CASE IT EXISTS FOR. A kind crosses IPC as a `string` — `AgedItem.kind` is a
+   * document kind on one row and a voucher kind on the next, and a DTO field cannot name
+   * two enums — so every reader narrows, and what it must not do is cast. This is the
+   * value a cast would wave through: a kind from a newer build, and a receipt kind, which
+   * is a real string in the same field and belongs to the other table.
+   */
+  it('refuses a kind from a newer build, and one belonging to the other table', () => {
+    expect(isDocumentKind('delivery-challan')).toBe(false)
+    expect(isDocumentKind('receipt')).toBe(false)
+    expect(isDocumentKind('')).toBe(false)
+    /* Not a substring match, and not a property lookup on an object: `toString` would be
+     * `true` under either mistake. */
+    expect(isDocumentKind('toString')).toBe(false)
+    expect(isDocumentKind('invoice')).toBe(false)
   })
 })
 

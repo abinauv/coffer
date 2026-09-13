@@ -21,6 +21,7 @@ import type {
   AgedReportInput,
   AccountingPeriod,
   AppInfo,
+  ArchiveItemInput,
   AsAtDateInput,
   BalanceSheet,
   BackupInput,
@@ -32,15 +33,29 @@ import type {
   CreateAccountInput,
   CreateCompanyInput,
   CreateDocumentInput,
+  CreateItemInput,
   CreateJournalEntryInput,
+  CreateNumberingSeriesInput,
+  CreateUnitInput,
   DateRangeInput,
   DayBook,
   Document,
   DocumentSummary,
   CancelDocumentInput,
   IssueDocumentInput,
+  Item,
+  ItemSummary,
   ListDocumentsInput,
+  ListItemsInput,
+  ListNumberingSeriesInput,
+  ListUnitsInput,
+  NumberPreview,
+  NumberingSeriesRecord,
+  UnitOfMeasure,
   UpdateDocumentInput,
+  UpdateItemInput,
+  UpdateNumberingSeriesInput,
+  UpdateUnitInput,
   JournalEntry,
   ArchivePartyInput,
   CreatePartyInput,
@@ -78,6 +93,50 @@ import type {
   UpdatePartyInput,
   YearEndCloseResult,
 } from './dto'
+
+/*
+ * THREE INPUT WRAPPERS THAT BELONG IN ./dto.ts AND ARE HERE INSTEAD.
+ *
+ * `dto.ts` was frozen at Gate 2.0 and other batches are building against it, so this
+ * batch may not add to it — the same reason `API_SURFACE` sits under main/ipc rather
+ * than beside `toChannelName` below. Move all three to ./dto.ts when it thaws; four
+ * files import them from here (the units and numbering services, and their handlers)
+ * and each import moves with them.
+ *
+ * THEY ARE RECORDS RATHER THAN LOOSE ARGUMENTS because a method taking two of the same
+ * kind of thing is a method whose call sites can transpose them — which is what
+ * `ArchiveItemInput` already says in ./dto.ts for an item.
+ *
+ * AND `ArchiveUnitInput` IS NOT A COPY OF IT, however identical the pair looks in a
+ * diff. A unit is keyed by a CODE and every other master record by an id, and reusing
+ * the item type would put the word `id` in front of the one aggregate that has none.
+ */
+
+/** Which unit, and which way. A unit is keyed by its code — there is no id. */
+export interface ArchiveUnitInput {
+  code: string
+  archived: boolean
+}
+
+/** Which series, and which way. */
+export interface ArchiveNumberingSeriesInput {
+  id: string
+  archived: boolean
+}
+
+/**
+ * What to preview, and in which year.
+ *
+ * `fiscalYearLabel` is nullable rather than optional, because "this document is in no
+ * fiscal year" is a real answer for a series that neither prints the year nor resets on
+ * it — and a series that does either refuses a null with `FISCAL_YEAR_REQUIRED` rather
+ * than guessing. An optional field would let a screen forget the year and get a preview
+ * of a number that collides with last year's.
+ */
+export interface PreviewNumberInput {
+  seriesId: string
+  fiscalYearLabel: string | null
+}
 
 export interface CofferApi {
   system: {
@@ -199,6 +258,75 @@ export interface CofferApi {
   }
 
   /**
+   * What goes on a document line — products, services and the charges beside them.
+   *
+   * EVERY FIELD ON AN ITEM IS A DEFAULT FOR A LINE, NEVER A LOOKUP THE LINE PERFORMS
+   * LATER. A line stores its own description, price, unit and rate, so repricing an item
+   * here, renaming it or archiving it cannot rewrite an invoice already issued — which
+   * is why there is no method on this group that touches a document, and why archiving
+   * an item is safe on books full of history.
+   *
+   * `classificationCode` IS PUT TO THE REGIME, on the way in, exactly as a party's
+   * registration number is. What a valid HSN or SAC looks like — how many digits, whether
+   * a code starting 99 may be four of them — is the regime's business and `db/` may not
+   * import one (CONVENTIONS §1.6), so the items service asks before calling and refuses
+   * with `ITEM_CLASSIFICATION_INVALID`. What is stored is the code the regime spells back,
+   * not the one that was typed: `8471.30` and `8471 30` are the same tariff item, and a
+   * code stored with its separators in would never match the schedule again.
+   *
+   * There is no `price` method and no `stock` method. A valuation is a sum over the stock
+   * ledger and belongs with the reports, for the reason a party has no balance here.
+   */
+  items: {
+    list(input?: ListItemsInput): Promise<Result<ItemSummary[]>>
+    get(id: string): Promise<Result<Item | null>>
+    /** The classification code is checked against the regime and stored as it spells it. */
+    create(input: CreateItemInput): Promise<Result<Item>>
+    /** Absent means "leave it"; `null` means "clear it". See `UpdateItemInput`. */
+    update(input: UpdateItemInput): Promise<Result<Item>>
+    /** Archived items reach no picker and no new line. Reversible, unlike `delete`. */
+    archive(input: ArchiveItemInput): Promise<Result<Item>>
+    /** Refused once it appears on a document. Archive instead. */
+    delete(id: string): Promise<Result<void>>
+  }
+
+  /**
+   * What a quantity is counted in.
+   *
+   * A GROUP OF ITS OWN RATHER THAN METHODS ON `items`, and the key is the reason: a unit
+   * has no surrogate id — its CODE is its identity, so `get`, `archive` and `delete` all
+   * take a code where every other master record takes an id, and one service per group
+   * (ARCHITECTURE §5) is what keeps that difference visible instead of buried in an
+   * argument name. `companyProfile` is the precedent that a small group is a fine thing.
+   *
+   * THE CODE IS NORMALISED — trimmed and upper-cased — before it touches the database, on
+   * the way in AND on the way to a lookup, so `kg` typed into a picker finds `KG`. SQLite's
+   * TEXT primary key is case-sensitive and so is the foreign key from an item, so this is
+   * not tidying: without it an item saved against `kg` cannot be attached to `KG` at all.
+   *
+   * `update` TAKES NO NEW CODE. It is the identity, it is what every item referring to the
+   * unit stores, and it is printed on every document already issued. A business that meant
+   * `KG` instead of `KGS` creates the second one and moves its items across, which is a
+   * decision somebody makes rather than a rename that rewrites what old paperwork said.
+   *
+   * NOTHING HERE RESTRICTS A BUSINESS TO A KNOWN LIST. `BUNDLE` and `TIN` are as real as
+   * `KGS`. The reference project silently rewrote anything outside four units to `Nos` and
+   * that bug is not being ported (CONVENTIONS §9).
+   */
+  units: {
+    list(input?: ListUnitsInput): Promise<Result<UnitOfMeasure[]>>
+    /** By code, normalised first — `kg` finds `KG`. Null when there is no such unit. */
+    get(code: string): Promise<Result<UnitOfMeasure | null>>
+    create(input: CreateUnitInput): Promise<Result<UnitOfMeasure>>
+    /** No `code` to change: it is the identity. See the note above. */
+    update(input: UpdateUnitInput): Promise<Result<UnitOfMeasure>>
+    /** Archived units reach no picker. Reversible, unlike `delete`. */
+    archive(input: ArchiveUnitInput): Promise<Result<UnitOfMeasure>>
+    /** Refused once an item is measured in it. Archive instead. */
+    delete(code: string): Promise<Result<void>>
+  }
+
+  /**
    * Trade documents of the open company's books — quotations, invoices, credit notes,
    * purchase bills, debit notes. One group, because they are one table with a `kind`.
    *
@@ -291,6 +419,59 @@ export interface CofferApi {
      * `documents.openForOffset`, because there the thing doing the settling is a document.
      */
     open(input: OpenDocumentsInput): Promise<Result<OpenDocument[]>>
+  }
+
+  /**
+   * How a document's number is built, and which series a new one takes.
+   *
+   * EVERY PART OF THE SHAPE IS DATA — prefix, separator, whether the fiscal year sits in
+   * the middle, how wide the sequence is padded, whether it restarts in April — because
+   * the shape is the business's own and matching the series they already use is the first
+   * thing anybody leaving another system asks for.
+   *
+   * THERE IS NO `allocate` AND THERE WILL NOT BE. A number is spent by issuing a document
+   * (`documents.issue`) or by recording a receipt, inside the same transaction that posts
+   * the entry, and it is never released: a released number is a gap in a series that rule
+   * 46(b) requires to be consecutive, and the cost of it is a conversation with an officer
+   * about an invoice nobody can produce. `preview` is the read-only half — it says what
+   * the series would produce next and spends nothing.
+   *
+   * A SERIES THAT HAS NUMBERED SOMETHING DOES NOT CHANGE SHAPE. `update` still takes the
+   * shape fields, because a settings screen posts the whole record back and re-sending the
+   * prefix a series already has is not a change to it; changing one is refused with
+   * `SERIES_IN_USE`. What stays editable is the label, the default flag and the archive
+   * flag, which is what the business actually needs after it has started issuing.
+   *
+   * `seedDefaults` IS A REPAIR, AND IT EXISTS BECAUSE OF A DATE. The nine default series
+   * are written by `setUpBooks`, which runs once, when a company file is created — so a
+   * file made before migration 0012 has NO series at all and cannot issue anything, and a
+   * file made before 0015 is missing the `refund` and `refund-received` series and cannot
+   * record either. Neither had any in-app repair. This is it, and it has nothing to decide:
+   * the seed table is total over the numbered kinds and skips every kind that already has a
+   * series, so running it on books somebody has already configured adds nothing, takes
+   * nothing away, and moves no counter.
+   */
+  numbering: {
+    list(input?: ListNumberingSeriesInput): Promise<Result<NumberingSeriesRecord[]>>
+    get(id: string): Promise<Result<NumberingSeriesRecord | null>>
+    /** The first series a kind gets is its default, unless the caller says otherwise. */
+    create(input: CreateNumberingSeriesInput): Promise<Result<NumberingSeriesRecord>>
+    /** No `kind`: moving a series would renumber what it has already issued. */
+    update(input: UpdateNumberingSeriesInput): Promise<Result<NumberingSeriesRecord>>
+    /** An archived series numbers nothing new and holds no default. Reversible. */
+    archive(input: ArchiveNumberingSeriesInput): Promise<Result<NumberingSeriesRecord>>
+    /** Refused once it has handed out a number. Archive instead. */
+    delete(id: string): Promise<Result<void>>
+    /** What the series would produce next. Spends nothing and moves no counter. */
+    preview(input: PreviewNumberInput): Promise<Result<NumberPreview>>
+    /**
+     * Give every numbered kind a series it does not already have.
+     *
+     * Answers HOW MANY were created, so a settings screen can say what it did rather than
+     * claiming success over a no-op. Zero is the ordinary answer on books that are already
+     * complete, and it is not a failure.
+     */
+    seedDefaults(): Promise<Result<number>>
   }
 
   /**

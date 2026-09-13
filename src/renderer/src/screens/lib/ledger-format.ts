@@ -15,7 +15,8 @@
  * compile rather than quietly render 1,234,567 as 12,34,567.
  */
 
-import type { DecimalString, NumberFormat } from '@shared/dto'
+import type { BadgeTone } from '@renderer/components/atoms'
+import type { DecimalString, NumberFormat, PeriodStatus } from '@shared/dto'
 
 /**
  * Group a run of digits the way the regime groups them.
@@ -142,9 +143,35 @@ export function periodStatusLabel(status: string): string {
   return PERIOD_STATUS_LABELS[status] ?? status
 }
 
-/** Tone for the badge beside a period. Locked is not a warning — it is a settled state. */
-export function periodStatusTone(status: string): 'neutral' | 'positive' | 'info' {
-  if (status === 'open') return 'positive'
-  if (status === 'locked') return 'info'
-  return 'neutral'
+/*
+ * Tone for the badge beside a period.
+ *
+ * TYPED AS `BadgeTone`, WHICH IS THE WHOLE POINT. This returned `'info'` until 0016, and
+ * `'info'` is not one of the atom's five tones: `.badge--info` has no rule in atoms.css,
+ * so the first caller would have got an unstyled pill and the first `<Badge>` it was
+ * handed to would not have compiled. `statusTone` in document-view.ts is the same
+ * function done right, and this is now spelled the same way.
+ *
+ * NEITHER CLOSED NOR LOCKED IS A JUDGEMENT, SO NEITHER IS COLOURED AS ONE. Of the tones
+ * that remain once `neutral` is spoken for, `positive`, `negative` and `warning` all say
+ * something about whether the state is good, and `accent` is this palette's "there is
+ * still something to do here" — the word document-view puts on a DRAFT. A locked period
+ * is the state with least left to do in the product; accenting it would light up exactly
+ * the rows that want nothing from the reader. So the quiet tone carries both, and the
+ * LABEL carries the difference between them, which is the rule the Badge atom already
+ * states: tone is never the only signal.
+ *
+ * A total record over `PeriodStatus` rather than an if-chain (CONVENTIONS §1.9) — a
+ * fourth period state cannot reach a badge without someone deciding how it reads. The
+ * parameter stays `string`, as `periodStatusLabel` next door does, because a status
+ * arriving from a future migration should render quietly rather than crash a register.
+ */
+const PERIOD_STATUS_TONES: Readonly<Record<PeriodStatus, BadgeTone>> = {
+  open: 'positive',
+  closed: 'neutral',
+  locked: 'neutral',
+}
+
+export function periodStatusTone(status: string): BadgeTone {
+  return PERIOD_STATUS_TONES[status as PeriodStatus] ?? 'neutral'
 }

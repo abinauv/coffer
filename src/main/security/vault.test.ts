@@ -808,8 +808,17 @@ describe('vault files', () => {
 
 describe('with the parameters Coffer actually ships', () => {
   /* Everything above runs at the cheapest accepted parameters. This one pays the real
-   * cost once, so the profile in argon2.ts is known to work end to end. */
-  it('creates, unlocks, changes the passphrase and recovers', async () => {
+   * cost once, so the profile in argon2.ts is known to work end to end.
+   *
+   * Which makes it the second-slowest test in the suite, and legitimately so: shipping
+   * Argon2id parameters are chosen to be expensive, and this exercises four derivations
+   * at them. It fits inside the default 5s timeout on an idle machine and does not on a
+   * loaded one — it was seen failing with a message about a hanging test while other
+   * suites ran in parallel, which is the same false alarm `connection.test.ts` documents
+   * for `reports damage`. The timeout is raised rather than the parameters lowered:
+   * cheapening them here would leave the shipped profile untested, which is the one
+   * thing this test exists for. */
+  it('creates, unlocks, changes the passphrase and recovers', { timeout: 60_000 }, async () => {
     const { vault, dek, recoveryCodes } = await createVault(PASSPHRASE, { recoveryCodeCount: 2 })
 
     expect(slotOf(vault, 'passphrase').kdf).toEqual(PASSPHRASE_KDF)

@@ -17,6 +17,7 @@
 
 import type { Decimal } from '@main/domain/money'
 import type { FiscalYearRule } from '@main/domain/time'
+import type { ExportTaxPayment } from '@shared/dto'
 import type { DecimalString } from '@shared/scalars'
 
 // ---- Identity -------------------------------------------------------------
@@ -157,6 +158,26 @@ export interface TaxComputationInput {
   lines: TaxableLine[]
   /** Document date — rates change, and a document is taxed as of its own date. */
   date: string
+  /**
+   * Whether a supply leaving the country carries tax, or goes out under an undertaking.
+   *
+   * NOT A REPORTING FLAG, AND THIS IS WHY IT IS AN INPUT TO THE TAX RATHER THAN A COLUMN
+   * SOMEWHERE ELSE. A supply that leaves is inter-state, so a regime asked for the tax on
+   * it answers with the full rate. That is right where the tax is paid and reclaimed
+   * afterwards, and wrong where the exporter gave an undertaking instead: then the supply
+   * carries its RATE and NO TAX.
+   *
+   * The only other way to produce a nil figure is to set the line rate to zero, and that
+   * is a DIFFERENT SUPPLY — nil-rated rather than zero-rated — whose input credit has to
+   * be reversed rather than refunded. So a regime that could not be told this could not
+   * represent an export under an undertaking at all.
+   *
+   * DOCUMENT-LEVEL, like the place of supply, because it is a fact about the supply and
+   * not about a line. Undefined or null means nothing was stated, which is every domestic
+   * document and every document written before the column existed; a regime that has no
+   * such distinction ignores it.
+   */
+  exportTaxPayment?: ExportTaxPayment | null
 }
 
 export interface TaxComputationResult {
@@ -234,6 +255,22 @@ export interface TaxRegime {
 
   /** Where a supply is treated as happening. Decides intra vs inter jurisdiction. */
   placeOfSupply(supplier: TaxParty, customer: TaxParty): PlaceOfSupply
+
+  /**
+   * What this regime calls a registration number, as it prints on a document.
+   *
+   * 'GSTIN / UIN' in India, 'VAT number' in the EU, 'EIN' in the United States. It is on
+   * the adapter for the reason `ClassificationScheme.label` is: the word is the regime's
+   * and nothing above `regimes/` may invent it (CONVENTIONS §1.6). The PDF mapper printed
+   * 'Registration no.' until this existed — neutral, defensible, and silently wrong for
+   * the only country this build ships a regime for, on the one line of a tax invoice a
+   * reader checks first.
+   *
+   * A READONLY FIELD AND NOT A METHOD, unlike `taxRates()`: it is a fact about the regime
+   * rather than something a compliance pack supplies, and it cannot change while a
+   * company file is open.
+   */
+  readonly registrationLabel: string
 
   /** GSTIN, VAT number, EIN. Also derives the jurisdiction when the format encodes it. */
   validateRegistrationNumber(value: string): ValidationResult

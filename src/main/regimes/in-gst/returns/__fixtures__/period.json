@@ -1,0 +1,860 @@
+{
+  "$comment": "One worked month, November 2027, for a Tamil Nadu (33) supplier. Every expected figure below was worked out BY HAND from the rules -- the rate applied once at full precision, the line's tax rounded once at money scale and allocated across components (tax.ts), then nothing rounded again anywhere in the return except GSTR-3B's cash payable. So this file is a statement of what the returns ARE, not a recording of what the code did. Every date is in 2027, which the real clock cannot be in, so no value here can coincide with today and pass for the wrong reason. THE DOCUMENTS ARE DELIBERATELY OUT OF ORDER -- not by date, not by number, and with the Tamil Nadu customer listed before the Karnataka one although B2B sorts the other way -- so a builder that returned them in input order would disagree with every expected list below.",
+  "period": {
+    "from": "2027-11-01",
+    "to": "2027-11-30",
+    "label": "November 2027"
+  },
+  "documents": [
+    {
+      "$why": "CDNUR. A credit note to an unregistered inter-state customer, naming NO original -- one note against several invoices, legal since 2019 -- so it exercises CORRECTED_DOCUMENT_UNNAMED and the null original columns. Listed first though it is the last document of the month.",
+      "id": "d13",
+      "kind": "credit-note",
+      "number": "CRN-2002",
+      "date": "2027-11-29",
+      "isCancelled": false,
+      "counterparty": {
+        "partyId": "p-priya",
+        "name": "Priya Menon",
+        "registrationNumber": null,
+        "jurisdictionCode": "32",
+        "countryCode": "in"
+      },
+      "placeOfSupply": {
+        "jurisdictionCode": "32",
+        "countryCode": "in",
+        "isIntraJurisdiction": false,
+        "isExport": false
+      },
+      "corrects": null,
+      "exportDetail": null,
+      "roundOff": "0.00",
+      "isReverseCharge": null,
+      "supplyTreatment": null,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "classificationCode": "8415",
+          "quantity": "1.000",
+          "unitCode": "NOS",
+          "uqc": "NOS",
+          "taxableValue": "30000.00",
+          "ratePct": "18",
+          "isCharge": false,
+          "itcEligibility": null,
+          "taxes": [
+            {
+              "code": "IGST",
+              "ratePct": "18",
+              "amount": "5400.00"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$why": "B2CS, INTRA-state, and worth 128,000 -- far above the threshold. This is the row that proves 'inter-state' is doing work in B2CL on its own: it fails only that one condition. Its second line is nil-rated milk, which is what puts a figure in GSTR-3B 3.1(c) and makes the rule 42 question real.",
+      "id": "d4",
+      "kind": "sales-invoice",
+      "number": "INV-1004",
+      "date": "2027-11-15",
+      "isCancelled": false,
+      "counterparty": {
+        "partyId": "p-walkin",
+        "name": "Counter sale",
+        "registrationNumber": null,
+        "jurisdictionCode": "33",
+        "countryCode": "in"
+      },
+      "placeOfSupply": {
+        "jurisdictionCode": "33",
+        "countryCode": "in",
+        "isIntraJurisdiction": true,
+        "isExport": false
+      },
+      "corrects": null,
+      "exportDetail": null,
+      "roundOff": "0.00",
+      "isReverseCharge": null,
+      "supplyTreatment": null,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "classificationCode": "1006",
+          "quantity": "100.000",
+          "unitCode": "BAGS",
+          "uqc": null,
+          "taxableValue": "120000.00",
+          "ratePct": "5",
+          "isCharge": false,
+          "itcEligibility": null,
+          "taxes": [
+            {
+              "code": "CGST",
+              "ratePct": "2.5",
+              "amount": "3000.00"
+            },
+            {
+              "code": "SGST",
+              "ratePct": "2.5",
+              "amount": "3000.00"
+            }
+          ]
+        },
+        {
+          "lineNumber": 2,
+          "classificationCode": "0401",
+          "quantity": "20.000",
+          "unitCode": "LTR",
+          "uqc": "LTR",
+          "taxableValue": "2000.00",
+          "ratePct": "0",
+          "isCharge": false,
+          "itcEligibility": null,
+          "taxes": []
+        }
+      ]
+    },
+    {
+      "$why": "EXP with payment of tax, stated explicitly and with a shipping bill, so it raises no issue at all -- the control against which the inferred export below is read.",
+      "id": "d9",
+      "kind": "sales-invoice",
+      "number": "EXP-3001",
+      "date": "2027-11-25",
+      "isCancelled": false,
+      "counterparty": {
+        "partyId": "p-gulf",
+        "name": "Gulf Trading LLC",
+        "registrationNumber": null,
+        "jurisdictionCode": null,
+        "countryCode": "ae"
+      },
+      "placeOfSupply": {
+        "jurisdictionCode": null,
+        "countryCode": "ae",
+        "isIntraJurisdiction": false,
+        "isExport": true
+      },
+      "corrects": null,
+      "exportDetail": {
+        "taxPayment": "with-payment",
+        "shippingBillNumber": "7001234",
+        "shippingBillDate": "2027-11-26",
+        "portCode": "INMAA1"
+      },
+      "roundOff": "0.00",
+      "isReverseCharge": null,
+      "supplyTreatment": null,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "classificationCode": "6109",
+          "quantity": "200.000",
+          "unitCode": "NOS",
+          "uqc": "NOS",
+          "taxableValue": "60000.00",
+          "ratePct": "18",
+          "isCharge": false,
+          "itcEligibility": null,
+          "taxes": [
+            {
+              "code": "IGST",
+              "ratePct": "18",
+              "amount": "10800.00"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$why": "B2B intra-state, two rate slabs on one document -- 18% goods and a 5% freight charge -- so the rate rows have to be split and ordered by rate, and CGST appears twice at two different component rates. The only document that states its reverse-charge flag, which is what makes the unrecorded count 9 rather than 10.",
+      "id": "d1",
+      "kind": "sales-invoice",
+      "number": "INV-1001",
+      "date": "2027-11-04",
+      "isCancelled": false,
+      "counterparty": {
+        "partyId": "p-anand",
+        "name": "Anand Traders",
+        "registrationNumber": "33AABCC1234E1ZG",
+        "jurisdictionCode": "33",
+        "countryCode": "in"
+      },
+      "placeOfSupply": {
+        "jurisdictionCode": "33",
+        "countryCode": "in",
+        "isIntraJurisdiction": true,
+        "isExport": false
+      },
+      "corrects": null,
+      "exportDetail": null,
+      "roundOff": "0.00",
+      "isReverseCharge": false,
+      "supplyTreatment": null,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "classificationCode": "8471",
+          "quantity": "2.000",
+          "unitCode": "NOS",
+          "uqc": "NOS",
+          "taxableValue": "10000.00",
+          "ratePct": "18",
+          "isCharge": false,
+          "itcEligibility": null,
+          "taxes": [
+            {
+              "code": "CGST",
+              "ratePct": "9",
+              "amount": "900.00"
+            },
+            {
+              "code": "SGST",
+              "ratePct": "9",
+              "amount": "900.00"
+            }
+          ]
+        },
+        {
+          "lineNumber": 2,
+          "classificationCode": "996511",
+          "quantity": "0.000",
+          "unitCode": null,
+          "uqc": null,
+          "taxableValue": "500.00",
+          "ratePct": "5",
+          "isCharge": true,
+          "itcEligibility": null,
+          "taxes": [
+            {
+              "code": "CGST",
+              "ratePct": "2.5",
+              "amount": "12.50"
+            },
+            {
+              "code": "SGST",
+              "ratePct": "2.5",
+              "amount": "12.50"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$why": "CANCELLED. It must appear in no value section, contribute to no total and reach no HSN row -- and its number is still declared in the document table, which is the whole of the cancelled-documents decision. If it leaks anywhere, B2B's taxable value goes up by 1,000 and every section total still ties.",
+      "id": "d11",
+      "kind": "sales-invoice",
+      "number": "INV-1007",
+      "date": "2027-11-28",
+      "isCancelled": true,
+      "counterparty": {
+        "partyId": "p-anand",
+        "name": "Anand Traders",
+        "registrationNumber": "33AABCC1234E1ZG",
+        "jurisdictionCode": "33",
+        "countryCode": "in"
+      },
+      "placeOfSupply": {
+        "jurisdictionCode": "33",
+        "countryCode": "in",
+        "isIntraJurisdiction": true,
+        "isExport": false
+      },
+      "corrects": null,
+      "exportDetail": null,
+      "roundOff": "0.00",
+      "isReverseCharge": null,
+      "supplyTreatment": null,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "classificationCode": "8471",
+          "quantity": "1.000",
+          "unitCode": "NOS",
+          "uqc": "NOS",
+          "taxableValue": "1000.00",
+          "ratePct": "18",
+          "isCharge": false,
+          "itcEligibility": null,
+          "taxes": [
+            {
+              "code": "CGST",
+              "ratePct": "9",
+              "amount": "90.00"
+            },
+            {
+              "code": "SGST",
+              "ratePct": "9",
+              "amount": "90.00"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$why": "EXACTLY ON THE THRESHOLD. 84,745.76 + 15,254.24 = 100,000.00 to the paisa, unregistered and inter-state, so it satisfies two of B2CL's three conditions and fails the third by nothing at all. 'More than' excludes it, so it is B2CS.",
+      "id": "d6",
+      "kind": "sales-invoice",
+      "number": "INV-1006",
+      "date": "2027-11-20",
+      "isCancelled": false,
+      "counterparty": {
+        "partyId": "p-meera",
+        "name": "Meera Nair",
+        "registrationNumber": null,
+        "jurisdictionCode": "32",
+        "countryCode": "in"
+      },
+      "placeOfSupply": {
+        "jurisdictionCode": "32",
+        "countryCode": "in",
+        "isIntraJurisdiction": false,
+        "isExport": false
+      },
+      "corrects": null,
+      "exportDetail": null,
+      "roundOff": "0.00",
+      "isReverseCharge": null,
+      "supplyTreatment": null,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "classificationCode": "9403",
+          "quantity": "4.000",
+          "unitCode": "NOS",
+          "uqc": "NOS",
+          "taxableValue": "84745.76",
+          "ratePct": "18",
+          "isCharge": false,
+          "itcEligibility": null,
+          "taxes": [
+            {
+              "code": "IGST",
+              "ratePct": "18",
+              "amount": "15254.24"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$why": "B2B inter-state. Its GSTIN sorts BEFORE the Tamil Nadu customer's although it is listed after, so B2B party order is observable.",
+      "id": "d2",
+      "kind": "sales-invoice",
+      "number": "INV-1002",
+      "date": "2027-11-09",
+      "isCancelled": false,
+      "counterparty": {
+        "partyId": "p-bengaluru",
+        "name": "Bengaluru Systems",
+        "registrationNumber": "29AAAAA0000A1ZY",
+        "jurisdictionCode": "29",
+        "countryCode": "in"
+      },
+      "placeOfSupply": {
+        "jurisdictionCode": "29",
+        "countryCode": "in",
+        "isIntraJurisdiction": false,
+        "isExport": false
+      },
+      "corrects": null,
+      "exportDetail": null,
+      "roundOff": "0.00",
+      "isReverseCharge": null,
+      "supplyTreatment": null,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "classificationCode": "8517",
+          "quantity": "5.000",
+          "unitCode": "NOS",
+          "uqc": "NOS",
+          "taxableValue": "25000.00",
+          "ratePct": "18",
+          "isCharge": false,
+          "itcEligibility": null,
+          "taxes": [
+            {
+              "code": "IGST",
+              "ratePct": "18",
+              "amount": "4500.00"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$why": "EXP with NOTHING recorded about it: no export detail at all, nil-rated, no tax. The flavour cannot be read off the tax, so it is assumed to be under LUT and says so, and the missing shipping bill is an ERROR because the portal will not take the row.",
+      "id": "d10",
+      "kind": "sales-invoice",
+      "number": "EXP-3002",
+      "date": "2027-11-27",
+      "isCancelled": false,
+      "counterparty": {
+        "partyId": "p-gulf",
+        "name": "Gulf Trading LLC",
+        "registrationNumber": null,
+        "jurisdictionCode": null,
+        "countryCode": "ae"
+      },
+      "placeOfSupply": {
+        "jurisdictionCode": null,
+        "countryCode": "ae",
+        "isIntraJurisdiction": false,
+        "isExport": true
+      },
+      "corrects": null,
+      "exportDetail": null,
+      "roundOff": "0.00",
+      "isReverseCharge": null,
+      "supplyTreatment": null,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "classificationCode": "6109",
+          "quantity": "50.000",
+          "unitCode": "NOS",
+          "uqc": "NOS",
+          "taxableValue": "15000.00",
+          "ratePct": "0",
+          "isCharge": false,
+          "itcEligibility": null,
+          "taxes": []
+        }
+      ]
+    },
+    {
+      "$why": "B2CL: unregistered, inter-state, and 106,200 -- all three conditions at once. Move the threshold to 250,000 and this one document moves to B2CS, which is the test that proves the figure comes from the pack.",
+      "id": "d3",
+      "kind": "sales-invoice",
+      "number": "INV-1003",
+      "date": "2027-11-12",
+      "isCancelled": false,
+      "counterparty": {
+        "partyId": "p-priya",
+        "name": "Priya Menon",
+        "registrationNumber": null,
+        "jurisdictionCode": "32",
+        "countryCode": "in"
+      },
+      "placeOfSupply": {
+        "jurisdictionCode": "32",
+        "countryCode": "in",
+        "isIntraJurisdiction": false,
+        "isExport": false
+      },
+      "corrects": null,
+      "exportDetail": null,
+      "roundOff": "0.00",
+      "isReverseCharge": null,
+      "supplyTreatment": null,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "classificationCode": "8415",
+          "quantity": "3.000",
+          "unitCode": "NOS",
+          "uqc": "NOS",
+          "taxableValue": "90000.00",
+          "ratePct": "18",
+          "isCharge": false,
+          "itcEligibility": null,
+          "taxes": [
+            {
+              "code": "IGST",
+              "ratePct": "18",
+              "amount": "16200.00"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$why": "CDNR: a credit note against a registered customer, naming the invoice it corrects. In GSTR-1 it is reported POSITIVE, as it was raised; in the HSN summary and in GSTR-3B it is negative, because a returned laptop was not supplied.",
+      "id": "d8",
+      "kind": "credit-note",
+      "number": "CRN-2001",
+      "date": "2027-11-22",
+      "isCancelled": false,
+      "counterparty": {
+        "partyId": "p-anand",
+        "name": "Anand Traders",
+        "registrationNumber": "33AABCC1234E1ZG",
+        "jurisdictionCode": "33",
+        "countryCode": "in"
+      },
+      "placeOfSupply": {
+        "jurisdictionCode": "33",
+        "countryCode": "in",
+        "isIntraJurisdiction": true,
+        "isExport": false
+      },
+      "corrects": {
+        "documentId": "d1",
+        "kind": "sales-invoice",
+        "number": "INV-1001",
+        "date": "2027-11-04"
+      },
+      "exportDetail": null,
+      "roundOff": "0.00",
+      "isReverseCharge": null,
+      "supplyTreatment": null,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "classificationCode": "8471",
+          "quantity": "1.000",
+          "unitCode": "NOS",
+          "uqc": "NOS",
+          "taxableValue": "5000.00",
+          "ratePct": "18",
+          "isCharge": false,
+          "itcEligibility": null,
+          "taxes": [
+            {
+              "code": "CGST",
+              "ratePct": "9",
+              "amount": "450.00"
+            },
+            {
+              "code": "SGST",
+              "ratePct": "9",
+              "amount": "450.00"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$why": "B2CS: unregistered and inter-state but only 47,200 -- it fails the threshold condition ALONE. It also carries a whole-rupee round-off of -0.47, so its invoice value (47,200.00) is not its taxable value plus its tax (47,200.47), which is what proves the round-off reaches the invoice value and not the taxable value.",
+      "id": "d5",
+      "kind": "sales-invoice",
+      "number": "INV-1005",
+      "date": "2027-11-18",
+      "isCancelled": false,
+      "counterparty": {
+        "partyId": "p-ravi",
+        "name": "Ravi Kumar",
+        "registrationNumber": null,
+        "jurisdictionCode": "29",
+        "countryCode": "in"
+      },
+      "placeOfSupply": {
+        "jurisdictionCode": "29",
+        "countryCode": "in",
+        "isIntraJurisdiction": false,
+        "isExport": false
+      },
+      "corrects": null,
+      "exportDetail": null,
+      "roundOff": "-0.47",
+      "isReverseCharge": null,
+      "supplyTreatment": null,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "classificationCode": "8471",
+          "quantity": "1.000",
+          "unitCode": "NOS",
+          "uqc": "NOS",
+          "taxableValue": "40000.40",
+          "ratePct": "18",
+          "isCharge": false,
+          "itcEligibility": null,
+          "taxes": [
+            {
+              "code": "IGST",
+              "ratePct": "18",
+              "amount": "7200.07"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "inwardDocuments": [
+    {
+      "$why": "Ordinary intra-state purchase. Records neither its reverse-charge flag nor its ITC eligibility, so it takes both defaults and is counted in both issues.",
+      "id": "p1",
+      "kind": "purchase-bill",
+      "number": "BILL-88",
+      "date": "2027-11-06",
+      "isCancelled": false,
+      "counterparty": {
+        "partyId": "v-chennai",
+        "name": "Chennai Supplies",
+        "registrationNumber": "33AAACS1111A1Z5",
+        "jurisdictionCode": "33",
+        "countryCode": "in"
+      },
+      "placeOfSupply": {
+        "jurisdictionCode": "33",
+        "countryCode": "in",
+        "isIntraJurisdiction": true,
+        "isExport": false
+      },
+      "corrects": null,
+      "exportDetail": null,
+      "roundOff": "0.00",
+      "isReverseCharge": null,
+      "supplyTreatment": null,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "classificationCode": "8471",
+          "quantity": "3.000",
+          "unitCode": "NOS",
+          "uqc": "NOS",
+          "taxableValue": "30000.00",
+          "ratePct": "18",
+          "isCharge": false,
+          "itcEligibility": null,
+          "taxes": [
+            {
+              "code": "CGST",
+              "ratePct": "9",
+              "amount": "2700.00"
+            },
+            {
+              "code": "SGST",
+              "ratePct": "9",
+              "amount": "2700.00"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$why": "Inter-state purchase: the supplier is in Maharashtra, the place of supply is our own state, and the tax is IGST. Its ITC eligibility is unrecorded, which makes the count two.",
+      "id": "p2",
+      "kind": "purchase-bill",
+      "number": "BILL-91",
+      "date": "2027-11-14",
+      "isCancelled": false,
+      "counterparty": {
+        "partyId": "v-mumbai",
+        "name": "Mumbai Metals",
+        "registrationNumber": "27AAACM2222B1Z3",
+        "jurisdictionCode": "27",
+        "countryCode": "in"
+      },
+      "placeOfSupply": {
+        "jurisdictionCode": "33",
+        "countryCode": "in",
+        "isIntraJurisdiction": false,
+        "isExport": false
+      },
+      "corrects": null,
+      "exportDetail": null,
+      "roundOff": "0.00",
+      "isReverseCharge": false,
+      "supplyTreatment": null,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "classificationCode": "7308",
+          "quantity": "10.000",
+          "unitCode": "KGS",
+          "uqc": "KGS",
+          "taxableValue": "50000.00",
+          "ratePct": "18",
+          "isCharge": false,
+          "itcEligibility": null,
+          "taxes": [
+            {
+              "code": "IGST",
+              "ratePct": "18",
+              "amount": "9000.00"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$why": "The reverse-charge one: goods transport from an unregistered agency. Its tax is a liability payable in CASH -- no credit may be set against it -- and the same figure is available as credit in 4(A)(3). Both halves have to appear or the return is wrong twice.",
+      "id": "p3",
+      "kind": "purchase-bill",
+      "number": "RCM-01",
+      "date": "2027-11-16",
+      "isCancelled": false,
+      "counterparty": {
+        "partyId": "v-gta",
+        "name": "Kovai Goods Carriers",
+        "registrationNumber": null,
+        "jurisdictionCode": "33",
+        "countryCode": "in"
+      },
+      "placeOfSupply": {
+        "jurisdictionCode": "33",
+        "countryCode": "in",
+        "isIntraJurisdiction": true,
+        "isExport": false
+      },
+      "corrects": null,
+      "exportDetail": null,
+      "roundOff": "0.00",
+      "isReverseCharge": true,
+      "supplyTreatment": null,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "classificationCode": "996511",
+          "quantity": "0.000",
+          "unitCode": null,
+          "uqc": null,
+          "taxableValue": "10000.00",
+          "ratePct": "5",
+          "isCharge": false,
+          "itcEligibility": "eligible",
+          "taxes": [
+            {
+              "code": "CGST",
+              "ratePct": "2.5",
+              "amount": "250.00"
+            },
+            {
+              "code": "SGST",
+              "ratePct": "2.5",
+              "amount": "250.00"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$why": "A motor car: blocked credit under section 17(5). Its 224,000 of tax must be reported in 4(D) and must NOT reach 4(A) -- if it leaked into the credit available, the cash payable would fall to nothing and the return would still tie.",
+      "id": "p4",
+      "kind": "purchase-bill",
+      "number": "BILL-95",
+      "date": "2027-11-19",
+      "isCancelled": false,
+      "counterparty": {
+        "partyId": "v-motors",
+        "name": "Marina Motors",
+        "registrationNumber": "33AAACD3333C1Z1",
+        "jurisdictionCode": "33",
+        "countryCode": "in"
+      },
+      "placeOfSupply": {
+        "jurisdictionCode": "33",
+        "countryCode": "in",
+        "isIntraJurisdiction": true,
+        "isExport": false
+      },
+      "corrects": null,
+      "exportDetail": null,
+      "roundOff": "0.00",
+      "isReverseCharge": false,
+      "supplyTreatment": null,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "classificationCode": "8703",
+          "quantity": "1.000",
+          "unitCode": "NOS",
+          "uqc": "NOS",
+          "taxableValue": "800000.00",
+          "ratePct": "28",
+          "isCharge": false,
+          "itcEligibility": "ineligible-17-5",
+          "taxes": [
+            {
+              "code": "CGST",
+              "ratePct": "14",
+              "amount": "112000.00"
+            },
+            {
+              "code": "SGST",
+              "ratePct": "14",
+              "amount": "112000.00"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "$why": "A purchase return. Coffer's debit note is the PURCHASE-side refund, so it reduces the credit available -- and it is the row that shows 4(A)(5) is netted rather than summed.",
+      "id": "p5",
+      "kind": "debit-note",
+      "number": "DBN-01",
+      "date": "2027-11-24",
+      "isCancelled": false,
+      "counterparty": {
+        "partyId": "v-chennai",
+        "name": "Chennai Supplies",
+        "registrationNumber": "33AAACS1111A1Z5",
+        "jurisdictionCode": "33",
+        "countryCode": "in"
+      },
+      "placeOfSupply": {
+        "jurisdictionCode": "33",
+        "countryCode": "in",
+        "isIntraJurisdiction": true,
+        "isExport": false
+      },
+      "corrects": {
+        "documentId": "p1",
+        "kind": "purchase-bill",
+        "number": "BILL-88",
+        "date": "2027-11-06"
+      },
+      "exportDetail": null,
+      "roundOff": "0.00",
+      "isReverseCharge": false,
+      "supplyTreatment": null,
+      "lines": [
+        {
+          "lineNumber": 1,
+          "classificationCode": "8471",
+          "quantity": "1.000",
+          "unitCode": "NOS",
+          "uqc": "NOS",
+          "taxableValue": "10000.00",
+          "ratePct": "18",
+          "isCharge": false,
+          "itcEligibility": "eligible",
+          "taxes": [
+            {
+              "code": "CGST",
+              "ratePct": "9",
+              "amount": "900.00"
+            },
+            {
+              "code": "SGST",
+              "ratePct": "9",
+              "amount": "900.00"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "issuedRanges": [
+    {
+      "$why": "Seven tax invoices, one of them cancelled. The cancelled one is INV-1007 and it is in no value section -- this row is the only place in the return it appears.",
+      "kind": "sales-invoice",
+      "seriesLabel": "Tax invoices",
+      "fromNumber": "INV-1001",
+      "toNumber": "INV-1007",
+      "totalIssued": 7,
+      "cancelled": 1
+    },
+    {
+      "$why": "Listed second though 'Credit note' sorts first, so table 13's order is observable.",
+      "kind": "sales-invoice",
+      "seriesLabel": "Export invoices",
+      "fromNumber": "EXP-3001",
+      "toNumber": "EXP-3002",
+      "totalIssued": 2,
+      "cancelled": 0
+    },
+    {
+      "kind": "credit-note",
+      "seriesLabel": "Credit notes",
+      "fromNumber": "CRN-2001",
+      "toNumber": "CRN-2002",
+      "totalIssued": 2,
+      "cancelled": 0
+    }
+  ]
+}

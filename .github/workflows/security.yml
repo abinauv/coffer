@@ -1,0 +1,112 @@
+name: Security
+
+# Two scans neither sibling workflow can do. `npm run verify` proves the code does what
+# its tests say; the build matrix proves it compiles on three platforms. Neither asks
+# whether the code is dangerous, or what a dependency bump quietly dragged in with it.
+#
+# Everything here comes from github.com/actions or github.com/github, and that is a rule
+# rather than a coincidence: a security workflow that trusts a third-party action to tell
+# it whether it is secure has a hole in the middle of it.
+#
+# TODO (open hardening item): pin every `uses:` below to a full 40-character commit SHA,
+# for the reasons set out at the top of ci.yml. The form is
+#
+#     uses: actions/checkout@<the 40-character sha that v7.0.0 points at>  # v7.0.0
+#
+# Not done in this pass because the SHAs must be read off the upstream repositories and
+# an invented one breaks every run silently. The references in this file:
+#   - actions/checkout@v7                 x2  (`codeql`, `dependency-review`)
+#   - github/codeql-action/init@v3        x1  (`codeql`)
+#   - github/codeql-action/analyze@v3     x1  (`codeql`)
+#   - actions/dependency-review-action@v4 x1  (`dependency-review`)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # CodeQL reads yesterday's code with today's queries, so a scan that only runs on a
+  # change never sees a rule published after the code it would flag was merged. That is
+  # the common case for a repository whose files settle. Monday early, and at :17 rather
+  # than on the hour, because every cron on GitHub fires on the hour and then queues.
+  schedule:
+    - cron: '17 4 * * 1'
+  # Re-run a scan by hand — after enabling a new query suite, or to confirm a finding was
+  # actually fixed rather than waiting a week to find out.
+  workflow_dispatch:
+
+# A newer push to the same branch supersedes an older one, matching ci.yml. `main` is
+# excluded so a merge always leaves a completed scan behind it.
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# Read-only by default. Each job below adds only the one permission it cannot work
+# without, so a compromised action in one job does not inherit the other's rights.
+permissions:
+  contents: read
+
+jobs:
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # The only write this workflow asks for anywhere. `analyze` uploads its SARIF
+      # results so they appear under Security -> Code scanning and annotate the pull
+      # request; without this the analysis runs and then has nowhere to put what it
+      # found.
+      security-events: write
+      # CodeQL reads the workflow run's own metadata to attach results to the right ref.
+      # A public repository grants that implicitly and a private one does not, so it is
+      # stated rather than relied on.
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+
+      # One language, one analysis. `javascript-typescript` is a single CodeQL language —
+      # the extractor takes .ts, .tsx and .js together — so listing JavaScript and
+      # TypeScript separately would analyse the same tree twice for the same findings.
+      #
+      # The default query suite is used deliberately. `security-extended` exists and
+      # finds more, at a false-positive rate that goes unread on a project this size; the
+      # time to turn it on is when the default suite is reliably green and someone is
+      # actually triaging it.
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+
+      # No `npm ci` and no build step, on purpose. JavaScript and TypeScript are
+      # extracted straight from source: CodeQL needs no compilation here and skips
+      # node_modules, so installing would add minutes and no findings. A compiled
+      # language would need `github/codeql-action/autobuild` between init and analyze.
+      - name: Analyse
+        uses: github/codeql-action/analyze@v3
+
+  dependency-review:
+    name: Dependency review
+    # Pull requests only, and not by preference: the action diffs the dependency graph of
+    # the base ref against the head ref, and outside a pull request there is no second
+    # ref to diff against. On a push or a scheduled run it simply has nothing to compare,
+    # so the job is skipped rather than failed.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      # Reading the dependency graph for the two refs. Nothing here writes; the summary
+      # is left in the job log rather than commented onto the pull request, which would
+      # cost `pull-requests: write` for a line a reviewer can already see in the checks.
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      # Fails the pull request that introduces a dependency with a known advisory, while
+      # backing it out is still one revert. This is the half of the supply chain the rest
+      # of CI cannot see: `npm ci` verifies that the lockfile is what it says it is, not
+      # that what it says is safe.
+      #
+      # `fail-on-severity` is left at its default of `low`. The usual reason to raise it
+      # is noise, and this repository does not generate that noise — every dependency is
+      # pinned to an exact version in package.json and they change rarely, so each alert
+      # is about something a human deliberately just added.
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v4

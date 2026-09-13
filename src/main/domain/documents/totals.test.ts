@@ -25,6 +25,7 @@ function line(overrides: Partial<DocumentLine> = {}): DocumentLine {
     classificationCode: null,
     isCharge: false,
     accountId: null,
+    itcEligibility: null,
     taxes: [],
     ...overrides,
   }

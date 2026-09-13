@@ -5,11 +5,14 @@ import type { CompanyService } from './handlers/companies'
 import type { LedgerService } from './handlers/ledger'
 import type { CompanyProfileService } from './handlers/company-profile'
 import type { DocumentsService } from './handlers/documents'
+import type { ItemsService } from './handlers/items'
+import type { NumberingService } from './handlers/numbering'
 import type { PartiesService } from './handlers/parties'
 import type { ReceiptsService } from './handlers/receipts'
 import type { RegimeService } from './handlers/regime'
 import type { ReportService } from './handlers/reports'
 import type { SystemEnvironment } from './handlers/system'
+import type { UnitsService } from './handlers/units'
 import {
   HandlerRegistrationError,
   HandlerRegistry,
@@ -46,6 +49,9 @@ let system: SystemEnvironment
 let companies: CompanyService
 let ledger: LedgerService
 let parties: PartiesService
+let items: ItemsService
+let units: UnitsService
+let numbering: NumberingService
 let companyProfile: CompanyProfileService
 let documents: DocumentsService
 let receipts: ReceiptsService
@@ -65,6 +71,9 @@ function dependencies(overrides: Partial<IpcDependencies> = {}): IpcDependencies
     companies,
     ledger,
     parties,
+    items,
+    units,
+    numbering,
     documents,
     companyProfile,
     receipts,
@@ -133,6 +142,35 @@ beforeEach(() => {
     delete: vi.fn(async () => undefined),
   } as unknown as PartiesService
 
+  items = {
+    list: vi.fn(async () => []),
+    get: vi.fn(async () => null),
+    create: vi.fn(),
+    update: vi.fn(),
+    archive: vi.fn(),
+    delete: vi.fn(async () => undefined),
+  } as unknown as ItemsService
+
+  units = {
+    list: vi.fn(async () => []),
+    get: vi.fn(async () => null),
+    create: vi.fn(),
+    update: vi.fn(),
+    archive: vi.fn(),
+    delete: vi.fn(async () => undefined),
+  } as unknown as UnitsService
+
+  numbering = {
+    list: vi.fn(async () => []),
+    get: vi.fn(async () => null),
+    create: vi.fn(),
+    update: vi.fn(),
+    archive: vi.fn(),
+    delete: vi.fn(async () => undefined),
+    preview: vi.fn(),
+    seedDefaults: vi.fn(async () => 0),
+  } as unknown as NumberingService
+
   companyProfile = {
     get: vi.fn(async () => null),
     save: vi.fn(),
@@ -192,6 +230,48 @@ describe('registerIpcHandlers', () => {
     registerIpcHandlers(dependencies())
 
     await expect(invoke('system:getAppInfo')).resolves.toEqual({ ok: true, data: APP_INFO })
+  })
+
+  /*
+   * The three groups that reached the app last, named rather than merely covered by the
+   * derivation above. Their repositories were complete and imported by nothing for two
+   * phases, so `items`, `units` and `numbering` are precisely the groups where "the
+   * contract declares it" and "something answers it" had drifted apart.
+   */
+  it('answers the master-data and numbering groups', async () => {
+    registerIpcHandlers(dependencies())
+
+    await expect(invoke('items:list')).resolves.toEqual({ ok: true, data: [] })
+    await expect(invoke('units:list')).resolves.toEqual({ ok: true, data: [] })
+    await expect(invoke('numbering:list')).resolves.toEqual({ ok: true, data: [] })
+  })
+
+  /*
+   * The repair, end to end. A company file made before migration 0015 is missing its two
+   * refund series and can record neither; this is the channel that fixes it, and the count
+   * is what lets a settings screen say what it did rather than claim success over a no-op.
+   */
+  it('carries the numbering repair through to the service, count and all', async () => {
+    numbering.seedDefaults = vi.fn(async () => 2)
+    registerIpcHandlers(dependencies())
+
+    await expect(invoke('numbering:seedDefaults')).resolves.toEqual({ ok: true, data: 2 })
+    expect(numbering.seedDefaults).toHaveBeenCalledTimes(1)
+  })
+
+  /* A unit is keyed by its code and every other master record by an id. The boundary is
+   * where that difference has to survive, so it is asserted on the channel rather than
+   * only in the handler's own tests. */
+  it('takes a code where a unit is named and an id everywhere else', async () => {
+    registerIpcHandlers(dependencies())
+
+    await expect(invoke('units:archive', { code: 'KGS', archived: true })).resolves.toMatchObject({
+      ok: true,
+    })
+    await expect(invoke('units:archive', { id: 'KGS', archived: true })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_ARGUMENT' },
+    })
   })
 
   it('answers a malformed call with a typed failure rather than throwing', async () => {

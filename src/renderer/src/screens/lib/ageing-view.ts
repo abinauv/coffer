@@ -19,9 +19,9 @@
  */
 
 import type { ScreenNav } from '@renderer/lib/screens'
-import { DOCUMENT_KINDS, definitionOf, type DocumentKind, type TradeSide } from '@shared/documents'
+import { definitionOf, isDocumentKind, type TradeSide } from '@shared/documents'
 import type { AgedBucket, AgedItem, AgedPartyRow, DecimalString } from '@shared/dto'
-import { RECEIPT_KINDS, receiptDefinitionOf, type ReceiptKind } from '@shared/receipts'
+import { isReceiptKind, receiptDefinitionOf } from '@shared/receipts'
 import { editorScreenId as documentEditorScreenId } from './document-view'
 import { editorScreenId as receiptEditorScreenId } from './receipt-view'
 
@@ -236,19 +236,11 @@ export interface ItemTarget {
 }
 
 /*
- * Narrowed against the tables rather than cast. `AgedItem.kind` is a string on the wire
- * because the DTO cannot name two enums in one field, and a cast would turn a kind this
- * build has never heard of into a route to a screen that does not exist. Asking the table
- * is the same question `definitionOf` asks before it throws, put where a null is the
- * useful answer.
+ * The two predicates are `@shared`'s. `AgedItem.kind` is a string on the wire because the
+ * DTO cannot name two enums in one field, so every reader of it has to narrow — this file
+ * did it privately, and so did the dashboard's view model and the PDF mapper, until the
+ * integration gate hoisted one copy into the tables' own modules.
  */
-function isDocumentKind(value: string): value is DocumentKind {
-  return DOCUMENT_KINDS.some((definition) => definition.kind === value)
-}
-
-function isReceiptKind(value: string): value is ReceiptKind {
-  return RECEIPT_KINDS.some((definition) => definition.kind === value)
-}
 
 /**
  * The screen an item opens, or null where there is nowhere to go.

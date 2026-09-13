@@ -13,29 +13,34 @@
  * THE REAL `CompanyProvider`, NOT A MOCKED `useCompany`. The first version of this file
  * mocked the module and the mock did not take; chasing that was the wrong instinct
  * anyway. What is being tested is that these two providers agree about when a company is
- * open, and a stand-in for one of them cannot show that. `Opener` below drives the real
- * one through the same `adopt` and `close` the welcome screens use.
+ * open, and a stand-in for one of them cannot show that. The company is opened through
+ * `renderScreen`'s `company` option, which drives the real provider through the same
+ * `adopt` the welcome screens call; `Closer` below drives the real `close`.
+ *
+ * AND `regime: null` ON EVERY MOUNT IS LOAD-BEARING, not tidiness. `renderScreen` puts a
+ * `RegimeProvider` above whatever it renders, so `OpenCompanyRegime` — the thing under
+ * test — is nested inside one. Left at the harness's default that outer provider would
+ * publish India, and a mutation DELETING the inner `RegimeProvider` from
+ * `OpenCompanyRegime` would leave `Probe` reading `regime: in` from above and every
+ * assertion here still passing. Publishing null outside means the only way `regime: in`
+ * reaches the probe is through the provider this file is about.
  */
 
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useEffect } from 'react'
 import type { JSX, ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import type { CompanySummary, RegimeDescription, Result } from '@shared/dto'
-import { DEFAULT_REGIME, installBridge, type BridgeStub } from '@renderer/test/harness'
-import { CompanyProvider, useCompany } from './company'
+import type { RegimeDescription, Result } from '@shared/dto'
+import {
+  DEFAULT_COMPANY,
+  DEFAULT_REGIME,
+  renderScreen,
+  type BridgeStub,
+} from '@renderer/test/harness'
+import { useCompany } from './company'
 import { OpenCompanyRegime, RegimeProvider, useNumberFormat, useRegime } from './regime'
 
-const SUMMARY: CompanySummary = {
-  id: 'acme',
-  displayName: 'Acme Pvt Ltd',
-  filePath: '/books/acme.coffer',
-  vaultPath: '/books/acme.coffer.vault',
-  lastOpenedAt: null,
-  createdAt: '2026-08-14T09:30:00.000Z',
-  availability: 'ok',
-}
+const SUMMARY = DEFAULT_COMPANY
 
 /** Prints what the hooks see, so assertions are made on text rather than on state. */
 function Probe(): JSX.Element {
@@ -48,14 +53,9 @@ function Money(): JSX.Element {
   return <p>separator: {format.groupSeparator}</p>
 }
 
-/** Opens a company on mount and offers a way to close it, as the welcome screens do. */
-function Opener({ open }: { open: boolean }): JSX.Element {
-  const { adopt, close } = useCompany()
-
-  useEffect(() => {
-    if (open) adopt({ company: SUMMARY, recoveryCodesRemaining: 3 })
-  }, [open, adopt])
-
+/** A way to close the books, as the workspace offers one. Opening is the harness's job. */
+function Closer(): JSX.Element {
+  const { close } = useCompany()
   return (
     <button type="button" onClick={() => void close()}>
       close the books
@@ -68,12 +68,12 @@ const CLOSES: BridgeStub = {
 }
 
 function mount(stub: BridgeStub, open: boolean, children: ReactNode = <Probe />): void {
-  installBridge({ ...CLOSES, ...stub })
-  render(
-    <CompanyProvider>
-      <Opener open={open} />
+  renderScreen(
+    <>
+      <Closer />
       <OpenCompanyRegime>{children}</OpenCompanyRegime>
-    </CompanyProvider>,
+    </>,
+    { bridge: { ...CLOSES, ...stub }, company: open ? SUMMARY : null, regime: null },
   )
 }
 
@@ -105,13 +105,11 @@ describe('with no company open', () => {
   })
 
   it('never asks main for rules there are none of', () => {
-    const bridge = installBridge(CLOSES)
-    render(
-      <CompanyProvider>
-        <OpenCompanyRegime>
-          <Probe />
-        </OpenCompanyRegime>
-      </CompanyProvider>,
+    const { bridge } = renderScreen(
+      <OpenCompanyRegime>
+        <Probe />
+      </OpenCompanyRegime>,
+      { bridge: CLOSES, regime: null },
     )
 
     expect(bridge.callsTo('regime:describe')).toHaveLength(0)

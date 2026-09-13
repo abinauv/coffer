@@ -9,7 +9,7 @@
 
 import { useId } from 'react'
 import type { JSX, ReactNode } from 'react'
-import { Button } from '@renderer/components/atoms'
+import { Button, useFieldMessage } from '@renderer/components/atoms'
 
 interface PathFieldProps {
   label: string
@@ -35,8 +35,7 @@ export function PathField({
   isDisabled = false,
 }: PathFieldProps): JSX.Element {
   const id = useId()
-  const messageId = `${id}-message`
-  const message: ReactNode = error ?? hint
+  const { describedBy, message } = useFieldMessage({ id, hint, error })
 
   return (
     <div className="field path-field">
@@ -47,7 +46,7 @@ export function PathField({
         <p
           className={`path-field__value ${value === '' ? 'path-field__value--empty' : 'selectable'}`}
           aria-labelledby={id}
-          aria-describedby={message === undefined ? undefined : messageId}
+          aria-describedby={describedBy}
           title={value === '' ? undefined : value}
         >
           {value === '' ? placeholder : value}
@@ -56,15 +55,7 @@ export function PathField({
           {buttonLabel}
         </Button>
       </div>
-      {message !== undefined && (
-        <p
-          id={messageId}
-          className={error === undefined ? 'field__hint' : 'field__error'}
-          role={error === undefined ? undefined : 'alert'}
-        >
-          {message}
-        </p>
-      )}
+      {message}
     </div>
   )
 }

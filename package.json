@@ -26,10 +26,12 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "test": "vitest run",
     "test:watch": "vitest",
+    "mutate": "node scripts/mutate.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify": "npm run typecheck && npm run lint && npm run format:check && npm test",
+    "test:scripts": "node --test scripts/mutate.test.mjs",
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:scripts",
     "coverage": "vitest run --coverage"
   },
   "dependencies": {

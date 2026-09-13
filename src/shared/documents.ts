@@ -187,6 +187,25 @@ export const TRADE_SIDES: readonly TradeSide[] = [
 ]
 
 /**
+ * Whether a string is a kind this build knows.
+ *
+ * WRITTEN PRIVATELY IN THREE PLACES BEFORE IT LIVED HERE — the aged report's view model,
+ * the dashboard's, and the PDF mapper — because `kind` crosses the wire as a `string` and
+ * cannot be otherwise: `AgedItem.kind` is a document kind on one row and a receipt kind
+ * on the next, and a DTO field cannot name two enums. Every caller therefore has to
+ * narrow, every one of them narrowed the same way, and three copies of a predicate over
+ * a table is three chances for one of them to become a cast.
+ *
+ * A CAST IS THE THING THIS EXISTS TO PREVENT. `value as DocumentKind` compiles and turns
+ * a kind written by a newer build into a route to a screen that does not exist, or into a
+ * `definitionOf` that throws from three frames deeper. Asking the table is the same
+ * question `definitionOf` asks before it throws, put where `false` is the useful answer.
+ */
+export function isDocumentKind(value: string): value is DocumentKind {
+  return DOCUMENT_KINDS.some((definition) => definition.kind === value)
+}
+
+/**
  * The definition for a kind.
  *
  * Throws rather than returning null. Every caller has a `DocumentKind`, which the type

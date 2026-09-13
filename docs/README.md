@@ -3,7 +3,8 @@
 Coffer is a local-first, double-entry ERP for small businesses. It runs on your own
 machine, and one company's books are one encrypted file you own.
 
-The project is **pre-alpha**. There is no release to download, and interfaces still move.
+The project is **alpha**. The ledger, the documents, the vouchers and the stock register
+are built and tested; nothing has been released yet, and interfaces still move.
 
 ---
 
@@ -22,7 +23,8 @@ The project is **pre-alpha**. There is no release to download, and interfaces st
 
 **[Getting started](./getting-started.md)** — clone to a running window. What every
 `npm` script does, how the main/preload/renderer build fits together, where a new feature
-belongs, and the two traps that produce a successful build and a broken app.
+belongs, and the four traps — starting with the one that makes `npm ci` demand a C++
+compiler for a binary it already has.
 
 **[Conventions](./CONVENTIONS.md)** — naming, types, storage representations, how to add
 an IPC endpoint, how errors are shaped, and the seven rules that are not negotiable. Read
@@ -39,8 +41,9 @@ actually in the code, each with the files involved and how to tell when it is do
 
 **[The data model, so far](./data-model.md)** — a company is an encrypted SQLite database
 plus a sidecar vault. What the registry holds and what it must never hold, why there is
-no `company_id` anywhere, how keys are wrapped, what a backup archive contains, and how
-migrations work.
+no `company_id` anywhere, how keys are wrapped, what a backup archive contains, all
+twenty-two migrations and the twenty tables they produce, and six things SQLite does that
+its documentation does not lead you to expect.
 
 **[Adding a tax regime](./adding-a-tax-regime.md)** — the `TaxRegime` interface as the
 internationalisation seam. Every member a new regime must implement, what ESLint enforces,
@@ -65,9 +68,22 @@ download's SHA-256 while builds are unsigned.
 
 ## What is not here yet
 
-Coffer is at the end of Phase 0. The ledger, documents, inventory and return generation
-are later phases, so there is no documentation for them — and none should be written
-before the code is. `ARCHITECTURE.md` describes where they are heading.
+Documentation is written after the code, never before it, so a gap here is usually a gap
+there. Four in particular are worth knowing about before you go looking:
+
+- **No document on the stock register of its own.** What exists is in
+  [`data-model.md`](./data-model.md) and in `src/main/domain/inventory/types.ts`, whose
+  seven invariants are the contract.
+- **No document on generating a return.** `regimes/in-gst/returns/` builds GSTR-1 and
+  GSTR-3B, and every artefact it produces carries a `SCHEMA_UNVERIFIED` notice saying the
+  arithmetic is pinned and the shape has never been through a filing cycle. Writing a
+  user-facing page about it before that is true would be the mistake the notice exists to
+  prevent.
+- **No document on printing or importing.** `services/pdf/` and
+  `services/importers/{csv,xml,zoho,tally}/` are built and tested and have no IPC group
+  behind them, so there is nothing a user can be told to do yet.
+- **No release notes.** [`CHANGELOG.md`](../CHANGELOG.md) has one `[Unreleased]` section,
+  which is what the first alpha's notes will be.
 
 If a document here disagrees with the code, the code is right and the document is a bug.
 Please report it.

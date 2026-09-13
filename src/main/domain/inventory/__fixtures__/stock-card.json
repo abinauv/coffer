@@ -1,0 +1,240 @@
+{
+  "$comment": "A worked stock card under moving weighted average, computed by hand. Thirteen movements covering a receipt that re-averages, an issue that must not, freight capitalised with no quantity, a free sample that lowers the average, both kinds of return, both kinds of adjustment, an item that runs down to exactly nothing, and a receipt afterwards that must start a fresh average rather than carry the stale one. Changing the costing rule, the rounding, or the unit-cost scale must fail a test here.",
+  "$order": "THE MOVEMENTS BELOW ARE DELIBERATELY NOT IN CARD ORDER. They are listed 5, 12, 1, 9, 3, 13, 7, 2, 11, 4, 10, 6, 8 — neither sorted nor reversed — while `expected.rows` is in date-then-sequence order. A fixture already in the answer's order cannot tell a sorted card from an unsorted one, and this project has shipped that test twice. Delete the sort in `runStockCard` and the very first row becomes an issue of 60 against an empty item, which the card refuses outright.",
+  "itemId": "item-widget",
+  "method": "moving-average",
+  "opening": { "quantity": "0.000", "value": "0.00" },
+  "movements": [
+    {
+      "sequence": 5,
+      "date": "2026-04-15",
+      "kind": "issue",
+      "quantity": "60.000",
+      "cost": null
+    },
+    {
+      "sequence": 12,
+      "date": "2026-05-04",
+      "kind": "adjustment-in",
+      "quantity": "2.000",
+      "cost": "640.00"
+    },
+    {
+      "sequence": 1,
+      "date": "2026-04-01",
+      "kind": "opening",
+      "quantity": "100.000",
+      "cost": "25000.00"
+    },
+    {
+      "sequence": 9,
+      "date": "2026-04-25",
+      "kind": "adjustment-out",
+      "quantity": "3.000",
+      "cost": null
+    },
+    {
+      "sequence": 3,
+      "date": "2026-04-08",
+      "kind": "issue",
+      "quantity": "40.000",
+      "cost": null
+    },
+    {
+      "sequence": 13,
+      "date": "2026-05-06",
+      "kind": "issue",
+      "quantity": "12.500",
+      "cost": null
+    },
+    {
+      "sequence": 7,
+      "date": "2026-04-20",
+      "kind": "purchase-return",
+      "quantity": "5.000",
+      "cost": null
+    },
+    {
+      "sequence": 2,
+      "date": "2026-04-05",
+      "kind": "receipt",
+      "quantity": "50.000",
+      "cost": "13750.00"
+    },
+    {
+      "sequence": 11,
+      "date": "2026-05-02",
+      "kind": "receipt",
+      "quantity": "30.000",
+      "cost": "9600.00"
+    },
+    {
+      "sequence": 4,
+      "date": "2026-04-12",
+      "kind": "receipt",
+      "quantity": "0.000",
+      "cost": "1200.00"
+    },
+    {
+      "sequence": 10,
+      "date": "2026-04-28",
+      "kind": "issue",
+      "quantity": "72.000",
+      "cost": null
+    },
+    {
+      "sequence": 6,
+      "date": "2026-04-18",
+      "kind": "sales-return",
+      "quantity": "10.000",
+      "cost": "2692.43"
+    },
+    {
+      "sequence": 8,
+      "date": "2026-04-22",
+      "kind": "receipt",
+      "quantity": "20.000",
+      "cost": "0.00"
+    }
+  ],
+  "expected": {
+    "rows": [
+      {
+        "sequence": 1,
+        "kind": "opening",
+        "moved": "100.000",
+        "cost": "25000.00",
+        "quantity": "100.000",
+        "unitCost": "250.000000",
+        "value": "25000.00",
+        "why": "opening stock at 250.00 a unit"
+      },
+      {
+        "sequence": 2,
+        "kind": "receipt",
+        "moved": "50.000",
+        "cost": "13750.00",
+        "quantity": "150.000",
+        "unitCost": "258.333333",
+        "value": "38750.00",
+        "why": "50 at 275.00 lifts the average: 38750.00 over 150.000 is 258.333333..."
+      },
+      {
+        "sequence": 3,
+        "kind": "issue",
+        "moved": "40.000",
+        "cost": "10333.33",
+        "quantity": "110.000",
+        "unitCost": "258.333364",
+        "value": "28416.67",
+        "why": "38750.00 x 40.000 / 150.000 is 10333.3333..., which is 10333.33 at money scale. THE AVERAGE WAS NOT RECOMPUTED — it drifts from 258.333333 to 258.333364 only because a third of a paisa could not leave, and the VALUE is what is right"
+      },
+      {
+        "sequence": 4,
+        "kind": "receipt",
+        "moved": "0.000",
+        "cost": "1200.00",
+        "quantity": "110.000",
+        "unitCost": "269.242455",
+        "value": "29616.67",
+        "why": "inward freight capitalised onto stock already on hand: no quantity, and the average rises anyway"
+      },
+      {
+        "sequence": 5,
+        "kind": "issue",
+        "moved": "60.000",
+        "cost": "16154.55",
+        "quantity": "50.000",
+        "unitCost": "269.242400",
+        "value": "13462.12",
+        "why": "29616.67 x 60.000 / 110.000 is 16154.5472..., which rounds up to 16154.55"
+      },
+      {
+        "sequence": 6,
+        "kind": "sales-return",
+        "moved": "10.000",
+        "cost": "2692.43",
+        "quantity": "60.000",
+        "unitCost": "269.242500",
+        "value": "16154.55",
+        "why": "10 of the 60 sold, back at the cost they left at: 16154.55 x 10.000 / 60.000 is 2692.425, half-up to 2692.43. NOT at today's average"
+      },
+      {
+        "sequence": 7,
+        "kind": "purchase-return",
+        "moved": "5.000",
+        "cost": "1346.21",
+        "quantity": "55.000",
+        "unitCost": "269.242545",
+        "value": "14808.34",
+        "why": "goods back to the supplier leave at the average, not at the price paid: 16154.55 x 5.000 / 60.000 is 1346.2125, down to 1346.21"
+      },
+      {
+        "sequence": 8,
+        "kind": "receipt",
+        "moved": "20.000",
+        "cost": "0.00",
+        "quantity": "75.000",
+        "unitCost": "197.444533",
+        "value": "14808.34",
+        "why": "free samples taken in at nil. Quantity rises, value does not, and the average FALLS from 269.24 to 197.44"
+      },
+      {
+        "sequence": 9,
+        "kind": "adjustment-out",
+        "moved": "3.000",
+        "cost": "592.33",
+        "quantity": "72.000",
+        "unitCost": "197.444583",
+        "value": "14216.01",
+        "why": "shrinkage found at a count, valued like any other outward movement"
+      },
+      {
+        "sequence": 10,
+        "kind": "issue",
+        "moved": "72.000",
+        "cost": "14216.01",
+        "quantity": "0.000",
+        "unitCost": "0.000000",
+        "value": "0.00",
+        "why": "the whole of what is on hand leaves at the whole of what it is worth. NO PAISA IS STRANDED: the value is exactly 0.00, and the unit cost of nothing is 0, not the last average and not NaN"
+      },
+      {
+        "sequence": 11,
+        "kind": "receipt",
+        "moved": "30.000",
+        "cost": "9600.00",
+        "quantity": "30.000",
+        "unitCost": "320.000000",
+        "value": "9600.00",
+        "why": "THE AVERAGE RESETS. 320.00, not the 197.44 the item carried before it emptied"
+      },
+      {
+        "sequence": 12,
+        "kind": "adjustment-in",
+        "moved": "2.000",
+        "cost": "640.00",
+        "quantity": "32.000",
+        "unitCost": "320.000000",
+        "value": "10240.00",
+        "why": "a stock-take surplus brought in at the current average leaves the average where it was"
+      },
+      {
+        "sequence": 13,
+        "kind": "issue",
+        "moved": "12.500",
+        "cost": "4000.00",
+        "quantity": "19.500",
+        "unitCost": "320.000000",
+        "value": "6240.00",
+        "why": "a fractional quantity: 10240.00 x 12.500 / 32.000 is exactly 4000.00"
+      }
+    ],
+    "closing": { "quantity": "19.500", "value": "6240.00", "unitCost": "320.000000" },
+    "quantityIn": "212.000",
+    "quantityOut": "192.500",
+    "costIn": "52882.43",
+    "costOut": "46642.43",
+    "$tie": "0.00 opening + 52882.43 in - 46642.43 out = 6240.00 closing. Asserted as literals, not as an identity over the rows, because an identity that holds by construction stays true when a whole row is dropped."
+  }
+}

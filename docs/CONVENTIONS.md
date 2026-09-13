@@ -124,6 +124,25 @@ repo layer sees a snake_case key.
 
 Never store a local-time timestamp. Never store a `Date` object.
 
+**A `Record<string, string>` whose KEYS come from a file is `Object.create(null)`, not
+`{}`.** `Record<string, string>` is a promise about values, and a plain object breaks it
+the moment the key is somebody else's. Measured:
+
+```js
+const o = {}
+o['__proto__'] = 'hello'
+Object.keys(o) // []            the write VANISHED — no own property
+typeof o['__proto__'] // 'object'      and reading it back gives Object.prototype
+typeof o['constructor'] // 'function'    which the type says is a string
+```
+
+Neither of those throws, and neither is visible at the write. `Object.create(null)` has no
+inherited keys, so the key stays a key and the value stays a string; a `Map` does the same
+where lookups are the point. This is why the XML reader's attribute records are
+null-prototype objects and its entity table is a `Map` — an attribute name comes from the
+file, so the file chooses the key. There are tests pinning both, one of which asserts
+`Object.keys` equals `['__proto__', 'constructor', 'hasOwnProperty']`.
+
 **A column that must be filled in exactly some of the time gets ONE rule, written as a
 biconditional, not two checks.** `due_date` is present exactly when a document has left
 draft on a kind that charges on terms — one trigger condition, both directions at once.
@@ -228,6 +247,65 @@ to its absence:
 
 Snapshot the files to disk, not only to memory: an interrupted run does not execute its
 `finally`, and the mutation left behind becomes the next run's "original".
+
+The harness is **`scripts/mutate.mjs`**, reached as **`npm run mutate`**:
+
+```
+npm run mutate -- --file src/main/domain/money/scale.ts --anchor '  money: 2,' --replace '  money: 3,'
+npm run mutate -- --defs domain-money          # a recorded campaign
+npm run mutate -- --defs domain-money --dry-run # anchors only, no tests
+```
+
+The first form is a one-off. The second reads a definitions file from
+`scripts/mutations/`, and that difference is the difference between a claim and
+evidence: "I mutation-tested it" is a statement about a run nobody else can repeat,
+whereas a definitions file is the same statement with the run attached to it.
+`scripts/mutations/domain-money.mjs` is the worked example — a canary, eleven
+mutations, and a note on each survivor saying whether it is a gap or an equivalent
+mutant. The exit code carries the verdict on its own, so the page need not be read to
+be acted on: 0 everything killed, 1 something survived, 2 the run was broken.
+
+It has its own test, `scripts/mutate.test.mjs` — `node --test scripts/mutate.test.mjs`
+— which is the same argument one level up rather than ceremony. **A tool that reports
+on your tests needs its own.** What it proves is that a killed control reports BROKEN,
+that a surviving canary reports BROKEN however clean the rest of the page looks, that a
+zero-match anchor is reported rather than skipped, that a snapshot left by an earlier
+run refuses to start, and that an exception mid-campaign still puts the source back
+byte for byte. Its fixtures are under the OS temp directory; it mutates nothing in
+`src/`.
+
+**Why the control and the canary are not optional.** In a single day this harness
+failed in ten distinct ways, and each one printed a full page of confident results that
+was entirely fictional. They are worth listing because they do not look like bugs when
+you are writing them, and because each is now a thing the harness cannot do:
+
+| What went wrong                                                                          | What it looked like                                                |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| PowerShell 5.1 `Get-Content`/`Set-Content` round-tripped UTF-8 through the ANSI codepage | every em-dash corrupted and a BOM added, in silence                |
+| `npx.cmd` through `spawnSync` refused with `EINVAL` on Windows                           | no run started; every mutation SURVIVED                            |
+| a lowercase drive letter as `cwd`                                                        | vitest read it as a different root and failed the whole suite      |
+| `--reporter=basic`, which does not exist in Vitest 4                                     | no run started; all 19 mutations SURVIVED                          |
+| vitest wrote its summary to stderr                                                       | every mutant, control included, reported as a module-load kill     |
+| driving vitest from an Electron-as-node parent                                           | 0 tests collected in every file                                    |
+| prettier reformatting between runs                                                       | a canary's anchor silently deleted                                 |
+| an interrupted run left a mutation in the source                                         | the next run snapshotted it as the original and made it permanent  |
+| reading only the `Tests` line                                                            | `Test Files 1 failed` above `Tests 384 passed` called a gap        |
+| Python's `write_text` translating `\n` to `\r\n`                                         | a whole file to CRLF, and every multi-line anchor stopped matching |
+
+Ten different causes and one symptom: **a run that never started is indistinguishable
+from a run that caught nothing.** Exactly one of the ten was noticed by reading the
+report, and only because the anchor check said `ANCHOR? (matched 0x)` out loud. Every
+other one was caught by a control that should have been green and was not, or by a
+canary that should have died and did not. That is what those two are for, and it is why
+a report carrying neither of them is not a result — it is a page of numbers.
+
+So the harness is Node only — nothing but `fs` with an explicit `utf8` ever writes a
+source file, and the restore path copies the original bytes rather than re-encoding
+text. It spawns vitest's own entry with `process.execPath`, never `npx`. It
+upper-cases the drive letter. It concatenates stdout and stderr before it parses. It
+reads the FILE count before the test count, both against a baseline the control took
+before anything was touched. And its snapshot is a file on disk, so finding one is a
+refusal to start rather than a warning.
 
 **Defence in depth makes tests blind.** Where a rule lives in both a migration and a
 repository, a test that goes through the repository passes whichever layer answers first

@@ -204,6 +204,20 @@ export interface AgedParty<T> {
   buckets: Decimal[]
   /** What stands to the party's credit against no particular charge. Positive. */
   onAccount: Decimal
+  /**
+   * What is past due: every item this party owes that fell due before the report's date.
+   *
+   * NOT `total` LESS THE FIRST COLUMN, and not a sum over the columns either. It is
+   * accumulated as each item is placed, from THE SAME TEST the screen's own `isOverdue`
+   * makes — a positive amount whose age is above nought — so the figure and the red badge
+   * beside it cannot come apart. Summing "every bucket but the first" would be a second
+   * rule agreeing with the first only while the first column is the not-yet-due one, and
+   * the columns are a table this file takes as an argument.
+   *
+   * Nought is not late: money falls due on its due date and is not in default that day.
+   * And what stands to the party's credit is never overdue — nobody owes it.
+   */
+  overdue: Decimal
   /** The columns less what is on account. What this party actually owes. */
   total: Decimal
 }
@@ -211,6 +225,8 @@ export interface AgedParty<T> {
 export interface AgeingTotals {
   buckets: Decimal[]
   onAccount: Decimal
+  /** Everything past due, summed from the party rows. See `AgedParty.overdue`. */
+  overdue: Decimal
   total: Decimal
 }
 
@@ -248,6 +264,7 @@ export function ageItems<T extends AgeableItem>(
         items: [],
         buckets: buckets.map(() => ZERO),
         onAccount: ZERO,
+        overdue: ZERO,
         total: ZERO,
       }
       byParty.set(item.partyId, party)
@@ -266,6 +283,10 @@ export function ageItems<T extends AgeableItem>(
       const bucket = bucketIndexIn(buckets, daysOverdue)
       party.items.push({ item, daysOverdue, bucket })
       party.buckets[bucket] = (party.buckets[bucket] ?? ZERO).plus(item.amount)
+      /* The same two conditions the screen's `isOverdue` makes, in the one place that
+       * has both to hand: this arm is already the "somebody owes it" half, and nought
+       * days is not late. */
+      if (daysOverdue > 0) party.overdue = party.overdue.plus(item.amount)
     }
     party.total = party.total.plus(item.amount)
   }
@@ -306,6 +327,7 @@ function totalsOf<T>(
   const totals: AgeingTotals = {
     buckets: buckets.map(() => ZERO),
     onAccount: ZERO,
+    overdue: ZERO,
     total: ZERO,
   }
 
@@ -314,6 +336,7 @@ function totalsOf<T>(
       totals.buckets[index] = (totals.buckets[index] ?? ZERO).plus(amount)
     }
     totals.onAccount = totals.onAccount.plus(party.onAccount)
+    totals.overdue = totals.overdue.plus(party.overdue)
     totals.total = totals.total.plus(party.total)
   }
   return totals

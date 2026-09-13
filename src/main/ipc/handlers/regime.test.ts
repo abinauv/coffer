@@ -17,6 +17,7 @@ import { createRegimeHandlers, type RegimeService } from './regime'
 const DESCRIPTION: RegimeDescription = {
   id: 'in',
   label: 'India — GST',
+  registrationLabel: 'GSTIN / UIN',
   numberFormat: {
     groupSizes: [3, 2],
     decimalSeparator: '.',

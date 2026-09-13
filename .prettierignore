@@ -5,3 +5,7 @@ release
 package-lock.json
 LICENSE
 *.min.*
+
+# A snapshot left behind by an interrupted mutation run. Reformatting one is harmless
+# today, but the harness restores from these bytes — see scripts/mutate.mjs.
+.mutation-snapshot.local

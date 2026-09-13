@@ -9,7 +9,7 @@
 import type { JSX } from 'react'
 import { Button, Input } from '@renderer/components/atoms'
 import { useNumberFormat } from '@renderer/store/regime'
-import type { ReportSection } from '@shared/dto'
+import type { DecimalString, NumberFormat, ReportSection } from '@shared/dto'
 import { formatAmount } from '../lib/ledger-format'
 import { isContraBalance, sectionHeading } from '../lib/report-view'
 
@@ -55,12 +55,7 @@ export function ReportSectionTable({
                 </span>
               </td>
               <td className="ledger-table__figure">
-                {formatAmount(line.amount, format)}
-                {/* A negative on a statement is real and is never hidden — but an asset
-                    in credit is an overdraft, and the reader deserves the word. */}
-                {isContraBalance(line.amount) && (
-                  <span className="ledger-table__muted"> (contra)</span>
-                )}
+                <Figure amount={line.amount} format={format} />
               </td>
             </tr>
           ))
@@ -69,10 +64,40 @@ export function ReportSectionTable({
       <tfoot>
         <tr className="ledger-table__total">
           <td>{totalLabel ?? `Total ${title.toLowerCase()}`}</td>
-          <td className="ledger-table__figure">{formatAmount(section.total, format)}</td>
+          {/* The foot is marked on exactly the same rule as the lines above it. It was
+              bare until 0016, so a section entirely in credit footed with a lone
+              `-15,000.00` under a column where every abnormal figure carried the word —
+              which teaches the reader that the word means something and then withholds
+              it at the one line they will quote. A section total is abnormal in the same
+              sense a line is: assets are read as debits, income as credits, and a total
+              facing the other way is the block as a whole being the wrong way round.
+              (The net profit line is NOT this — a loss is an ordinary outcome, not an
+              abnormal balance, and ProfitAndLoss.tsx names it in words of its own.) */}
+          <td className="ledger-table__figure">
+            <Figure amount={section.total} format={format} />
+          </td>
         </tr>
       </tfoot>
     </table>
+  )
+}
+
+/**
+ * One figure in the figure column, with the word for a balance facing the wrong way.
+ *
+ * A negative on a statement is real and is never hidden — the sign arrives from main and
+ * is never flipped here (CONVENTIONS §1.7) — but an asset in credit is an overdraft, and
+ * the reader deserves the word rather than a minus sign to spot in a column of digits.
+ *
+ * It is one component rather than two copies because the line and the total have to
+ * agree: written twice, they disagreed for as long as this table has existed.
+ */
+function Figure({ amount, format }: { amount: DecimalString; format: NumberFormat }): JSX.Element {
+  return (
+    <>
+      {formatAmount(amount, format)}
+      {isContraBalance(amount) && <span className="ledger-table__muted"> (contra)</span>}
+    </>
   )
 }
 

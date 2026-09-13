@@ -5,17 +5,35 @@ name: Release
 # The builds are unsigned (SECURITY.md, "Known gaps"), which makes SHA256SUMS.txt the
 # only integrity signal a download has. It is generated here, from the artefacts that are
 # actually attached, and it is not optional.
+#
+# TODO (open hardening item): pin every `uses:` below to a full 40-character commit SHA.
+# The reasoning is in ci.yml's copy of this note, and it applies with more force here,
+# because this is the workflow that holds `contents: write` and puts binaries on a
+# download page. The form is
+#
+#     uses: actions/checkout@<the 40-character sha that v7.0.0 points at>  # v7.0.0
+#
+# Left undone in this pass because the SHAs have to be read off the upstream
+# repositories, and an invented one breaks every release at once. The references in this
+# file, all eight of them:
+#   - actions/checkout@v7          x3  (`verify`, the `build` matrix, `release`)
+#   - actions/setup-node@v7        x3  (`verify`, the `build` matrix, `release`)
+#   - actions/upload-artifact@v7   x1  (the `build` matrix)
+#   - actions/download-artifact@v8 x1  (`release`)
 
 on:
   push:
     tags:
       - 'v*'
+  # Rehearse the release path without cutting a tag. Dispatched from a branch, the
+  # verify -> build -> upload chain runs in full and leaves real installers attached to
+  # the workflow run, which is the only way to learn that packaging broke before a
+  # version number has been spent on it. Nothing is published: the `release` job below
+  # refuses to run outside a tag.
+  workflow_dispatch:
 
 permissions:
   contents: read
-
-env:
-  NODE_VERSION: '22'
 
 jobs:
   # A tag push does not run the CI workflow, so re-run the correctness gate here. A
@@ -27,7 +45,10 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          # .nvmrc, the same file ci.yml and a contributor's `nvm use` read. The Node
+          # version is written down once, so a release cannot be built on a different one
+          # than main was tested on.
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - run: npm run verify
@@ -74,7 +95,8 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          # As in `verify`: .nvmrc, so there is one version to change and not four.
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install
@@ -115,6 +137,12 @@ jobs:
   release:
     name: Publish release
     needs: build
+    # Only a tag push publishes. A workflow_dispatch run reaches this job with
+    # `github.ref_name` set to a branch, and `gh release create --verify-tag` would then
+    # either fail late or, worse, cut a release named after the branch. A rehearsal ends
+    # with the installers attached to the workflow run and nothing on the releases page,
+    # which is what a rehearsal should leave behind.
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -123,7 +151,8 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          # .nvmrc again — scripts/checksums.mjs runs under this Node.
+          node-version-file: .nvmrc
 
       - name: Collect artefacts
         uses: actions/download-artifact@v8

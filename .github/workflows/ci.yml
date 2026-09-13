@@ -3,11 +3,30 @@ name: CI
 # The gate that keeps three platforms buildable. Fast, single-runner correctness checks
 # first; the cross-platform build matrix in parallel beside them, because the failure
 # mode this project actually has is "works on the maintainer's Windows box".
+#
+# TODO (open hardening item): pin every `uses:` below to a full 40-character commit SHA.
+# A tag such as `actions/checkout@v7` is mutable. Whoever can move that tag runs their
+# code inside this workflow, holding this workflow's token — the same class of foothold
+# as a compromised dependency, with none of the lockfile's protection. The form is
+#
+#     uses: actions/checkout@<the 40-character sha that v7.0.0 points at>  # v7.0.0
+#
+# keeping the readable version in the trailing comment so a human, and Dependabot, can
+# still tell what is pinned. Not done in this pass because the SHAs must be read off the
+# upstream repositories and an invented one breaks every run at once. The references in
+# this file, all four of them:
+#   - actions/checkout@v7    x2  (the `checks` job, the `build` matrix)
+#   - actions/setup-node@v7  x2  (the `checks` job, the `build` matrix)
+# release.yml and security.yml carry the same note over their own references.
 
 on:
   push:
     branches: [main]
   pull_request:
+  # A maintainer can re-run the gate from the Actions tab without pushing an empty
+  # commit — for a run that failed on a flaky runner rather than on this code, and to
+  # exercise the push-only steps below on demand.
+  workflow_dispatch:
 
 # A newer push to the same branch supersedes an older one. `main` is excluded so a merge
 # is never left without a completed run.
@@ -18,20 +37,22 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  # docs/ARCHITECTURE.md: Node 22 is the baseline (package.json engines).
-  NODE_VERSION: '22'
-
 jobs:
   checks:
-    name: Typecheck, lint, test
+    name: Typecheck, lint, format, coverage
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          # .nvmrc is the one place the Node version is written down. A contributor's
+          # `nvm use` and this runner read the same file, so CI cannot quietly drift from
+          # what a fresh clone gets. That matters more here than in most repositories:
+          # on Node 24 `npm ci` fails outright, because better-sqlite3-multiple-ciphers
+          # has no Node-24 prebuild and falls back to a source build needing a C++
+          # toolchain — which docs/getting-started.md §1 promises nobody needs.
+          node-version-file: .nvmrc
           # Keyed on package-lock.json; restores ~/.npm, so `npm ci` still installs a
           # clean tree but downloads almost nothing.
           cache: npm
@@ -39,14 +60,36 @@ jobs:
       - name: Install
         run: npm ci
 
+      # These four are `npm run verify`, in its order, one step each. Deliberately not
+      # collapsed into a single `npm run verify` call: as separate steps the job summary
+      # names the gate that failed, instead of leaving it to be found in a log.
       - name: Typecheck
         run: npm run typecheck
 
+      # `--max-warnings 0` on top of the package script. eslint.config.js sets rules such
+      # as `no-console` to `warn`, and `eslint .` exits 0 on warnings — so a rule
+      # documented as enforced was not enforced by anything. The tree is at zero warnings
+      # today, so this holds a line already reached rather than moving it. The flag lives
+      # here and not in eslint.config.js so that a local `npm run lint` still reports
+      # warnings without failing while you work.
       - name: Lint
-        run: npm run lint
+        run: npm run lint -- --max-warnings 0
 
-      - name: Test
-        run: npm test
+      # This step was the gap. `npm run verify` — the gate release.yml runs, and the one
+      # docs/getting-started.md §4 tells contributors to run — includes format:check, and
+      # CI did not. Formatting drift could therefore merge to main and first fail on a
+      # tag, mid-release, which is the most expensive place to discover a reflow.
+      - name: Format
+        run: npm run format:check
+
+      # `npm run coverage` in place of `npm test`, not alongside it: it is the same suite
+      # under v8 instrumentation, so running both would execute every test twice for no
+      # extra signal. What it adds is enforcement. vitest.config.ts sets thresholds — 90%
+      # lines, 90% functions, 85% branches over domain/, regimes/ and security/ — and no
+      # workflow ran them, which made them a comment rather than a threshold. Now they
+      # fail this job.
+      - name: Test with coverage
+        run: npm run coverage
 
   build:
     name: Build (${{ matrix.os }})
@@ -61,7 +104,8 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          # As in `checks`: .nvmrc, so there is one version to change and not four.
+          node-version-file: .nvmrc
           cache: npm
 
       # postinstall runs scripts/native-modules.mjs, so the prebuilt binaries are already
@@ -77,3 +121,24 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # The suite on Windows and macOS too, because part of it exists only there.
+      # src/main/ipc/path-access.test.ts pairs `it.runIf(IS_CASE_INSENSITIVE)` with
+      # `it.runIf(!IS_CASE_INSENSITIVE)`; on the ubuntu-only `checks` job exactly one of
+      # that pair is skipped, silently, on every run. A green tick was covering an
+      # assertion nothing had made.
+      #
+      # The trade, stated plainly: three full suites on every pull request is a lot of
+      # runner minutes for a change that usually touches neither branch, so this is
+      # limited to pushes to main and to manual runs. A pull request still gets the whole
+      # suite on ubuntu from `checks`; the platform-specific halves are proven one merge
+      # later instead of one review earlier, and always before anything is released. If a
+      # case-sensitivity regression ever does reach main, delete the `if:` and pay for it
+      # on every PR — that is the correct response, not a smaller test.
+      #
+      # Linux is excluded because `checks` has already run the suite there, with
+      # coverage. Last in the job so a failing test cannot mask a broken build: proving
+      # these three platforms still build is what this matrix exists for.
+      - name: Test
+        if: github.event_name != 'pull_request' && runner.os != 'Linux'
+        run: npm test
