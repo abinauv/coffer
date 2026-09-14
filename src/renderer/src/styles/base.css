@@ -390,11 +390,20 @@ table {
 }
 
 .caps-label {
+  display: block;
   font-size: var(--text-2xs);
   font-weight: var(--weight-semibold);
   letter-spacing: var(--tracking-caps);
   text-transform: uppercase;
-  color: var(--ink-faint);
+  color: var(--ink-muted);
+}
+
+/* Paths, GSTINs and recovery codes get retyped and read aloud, so they are deliberately
+ * easy to select and use the slashed-zero identifier face. */
+.selectable {
+  cursor: text;
+  font-family: var(--font-mono);
+  font-variant-numeric: var(--numeric-identifier);
 }
 
 /* ---- Reduced motion -----------------------------------------------------

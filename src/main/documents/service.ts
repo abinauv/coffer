@@ -85,8 +85,8 @@ import type {
   Document,
   DocumentLineInput,
   DocumentLineTaxDto,
+  DocumentListRow,
   DocumentSettlement,
-  DocumentSummary,
   ExportTaxPayment,
   IssueDocumentInput,
   ListDocumentsInput,
@@ -137,7 +137,7 @@ export class DocumentsService {
     this.books = new OpenBooks(companies)
   }
 
-  async list(input: ListDocumentsInput = {}): Promise<DocumentSummary[]> {
+  async list(input: ListDocumentsInput = {}): Promise<DocumentListRow[]> {
     return listDocuments(this.books.db(), input)
   }
 

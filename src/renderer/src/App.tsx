@@ -5,6 +5,7 @@
  *
  *   Platform    everything below wants to know the OS and the window chrome.
  *   Theme       independent, but must be above anything that reads it.
+ *   Density     the same, and for the same reason.
  *   Toasts      above the rest so any provider below can report a failure.
  *   Company     the fact the shell's structure is derived from.
  *   Regime      the open company's rules. Under Company because it needs to know
@@ -21,6 +22,7 @@ import type { JSX } from 'react'
 import { AppShell } from './components/shell/AppShell'
 import { CommandProvider } from './store/commands'
 import { CompanyProvider } from './store/company'
+import { DensityProvider } from './store/density'
 import { NavigationProvider } from './store/navigation'
 import { OpenCompanyRegime } from './store/regime'
 import { PlatformProvider } from './store/platform'
@@ -31,17 +33,19 @@ export function App(): JSX.Element {
   return (
     <PlatformProvider>
       <ThemeProvider>
-        <ToastProvider>
-          <CompanyProvider>
-            <OpenCompanyRegime>
-              <NavigationProvider>
-                <CommandProvider>
-                  <AppShell />
-                </CommandProvider>
-              </NavigationProvider>
-            </OpenCompanyRegime>
-          </CompanyProvider>
-        </ToastProvider>
+        <DensityProvider>
+          <ToastProvider>
+            <CompanyProvider>
+              <OpenCompanyRegime>
+                <NavigationProvider>
+                  <CommandProvider>
+                    <AppShell />
+                  </CommandProvider>
+                </NavigationProvider>
+              </OpenCompanyRegime>
+            </CompanyProvider>
+          </ToastProvider>
+        </DensityProvider>
       </ThemeProvider>
     </PlatformProvider>
   )

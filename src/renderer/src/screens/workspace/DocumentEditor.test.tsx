@@ -43,8 +43,8 @@ import type {
   Account,
   Document,
   DocumentLineDto,
+  DocumentListRow,
   DocumentOffsetDto,
-  DocumentSummary,
   DocumentSettlement,
   DocumentStatusDto,
   ItemSummary,
@@ -1699,7 +1699,7 @@ describe('a credit note', () => {
 
   const correcting = (id = 'doc-1') => screenContext({ route: testRoute('credit-note', { id }) })
 
-  const INVOICES: DocumentSummary[] = [
+  const INVOICES: DocumentListRow[] = [
     {
       id: 'inv-1',
       kind: 'sales-invoice',
@@ -1710,6 +1710,7 @@ describe('a credit note', () => {
       partyId: 'party-1',
       partyName: 'Sunrise Components',
       grandTotal: '1180.00',
+      settlement: 'open',
     },
   ]
 
@@ -1724,7 +1725,7 @@ describe('a credit note', () => {
       ...base,
       documents: {
         ...base.documents,
-        list: () => Promise.resolve<Result<DocumentSummary[]>>({ ok: true, data: INVOICES }),
+        list: () => Promise.resolve<Result<DocumentListRow[]>>({ ok: true, data: INVOICES }),
         get: (id: string) =>
           Promise.resolve<Result<Document | null>>({
             ok: true,
@@ -1938,7 +1939,7 @@ describe('what a credit note settles', () => {
       ...base,
       documents: {
         ...base.documents,
-        list: () => Promise.resolve<Result<DocumentSummary[]>>({ ok: true, data: [] }),
+        list: () => Promise.resolve<Result<DocumentListRow[]>>({ ok: true, data: [] }),
       },
     } as BridgeStub
   }
@@ -2295,7 +2296,7 @@ describe('a debit note', () => {
           ...base,
           documents: {
             ...base.documents,
-            list: () => Promise.resolve<Result<DocumentSummary[]>>({ ok: true, data: [] }),
+            list: () => Promise.resolve<Result<DocumentListRow[]>>({ ok: true, data: [] }),
           },
         } as BridgeStub,
       },
@@ -2317,7 +2318,7 @@ describe('a debit note', () => {
           ...base,
           documents: {
             ...base.documents,
-            list: () => Promise.resolve<Result<DocumentSummary[]>>({ ok: true, data: [] }),
+            list: () => Promise.resolve<Result<DocumentListRow[]>>({ ok: true, data: [] }),
           },
         } as BridgeStub,
       },
@@ -2352,7 +2353,7 @@ describe('a debit note', () => {
           ...base,
           documents: {
             ...base.documents,
-            list: () => Promise.resolve<Result<DocumentSummary[]>>({ ok: true, data: [] }),
+            list: () => Promise.resolve<Result<DocumentListRow[]>>({ ok: true, data: [] }),
           },
         } as BridgeStub,
       },
@@ -2436,7 +2437,7 @@ describe('a document of another kind', () => {
       ...base,
       documents: {
         ...base.documents,
-        list: () => Promise.resolve<Result<DocumentSummary[]>>({ ok: true, data: [] }),
+        list: () => Promise.resolve<Result<DocumentListRow[]>>({ ok: true, data: [] }),
       },
     } as BridgeStub
   }

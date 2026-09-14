@@ -96,6 +96,7 @@
 
 import { D, ZERO, toMoneyString, type Decimal } from '@main/domain/money'
 import { correctsKind, definitionOf, type DocumentKind } from '@main/domain/documents'
+import type { SettlementState } from '@shared/dto'
 import { settles, type ReceiptKind } from '@shared/receipts'
 import type { DateString } from '@shared/scalars'
 
@@ -127,7 +128,7 @@ export interface DocumentControl {
  * `Map` allocation per call.
  */
 export async function documentMovement(db: CofferDb, document: DocumentControl): Promise<Decimal> {
-  return (await movementsFor(db, document.partyId, [document])).get(document.id) ?? ZERO
+  return (await movementsFor(db, [document])).get(document.id) ?? ZERO
 }
 
 /**
@@ -341,17 +342,27 @@ export interface OpenDocumentRow {
  * One query for the lines and one fold, keyed by the ORIGINAL entry — a reversal is
  * folded into the entry it reverses, which is what makes a cancelled document come to
  * zero without a status filter anywhere (see the header).
+ *
+ * ANY MIX OF PARTIES, SINCE THE REGISTER NEEDED IT. The pickers ask about one party's
+ * documents and the register about a page of everybody's. It was `party_id = ?` and is now
+ * `party_id IN (…)`, and that is the same rule rather than a looser one: the posting rules
+ * put the party on the control line and on no other (see the header), so the only
+ * party-carrying lines an entry has are its own document's. There is no per-line check
+ * that the party matches the document, because on a posted entry it cannot fail to — and
+ * an unreachable branch is removed here, not labelled (see below).
  */
 async function movementsFor(
   db: CofferDb,
-  partyId: string,
   documents: readonly DocumentControl[],
 ): Promise<Map<string, Decimal>> {
   const totals = new Map<string, Decimal>()
-  const entryIds = documents
-    .map((document) => document.entryId)
-    .filter((id): id is string => id !== null)
-  if (entryIds.length === 0) return totals
+  const posted = documents.filter(
+    (document): document is DocumentControl & { entryId: string } => document.entryId !== null,
+  )
+  if (posted.length === 0) return totals
+
+  const entryIds = posted.map((document) => document.entryId)
+  const partyIds = [...new Set(posted.map((document) => document.partyId))]
 
   const rows = await db
     .selectFrom('journal_lines')
@@ -362,7 +373,7 @@ async function movementsFor(
       'journal_lines.debit as debit',
       'journal_lines.credit as credit',
     ])
-    .where('journal_lines.party_id', '=', partyId)
+    .where('journal_lines.party_id', 'in', partyIds)
     .where((eb) =>
       eb.or([
         eb('journal_entries.id', 'in', entryIds),
@@ -457,6 +468,53 @@ async function offsetsByDocument(
     }
   }
   return totals
+}
+
+/**
+ * Where each of a page of documents stands: open, part settled, or settled.
+ *
+ * The register's question, answered from the same three batches every other figure in this
+ * file reads — movements, allocations, offsets — so a "Paid" badge and the aged report are
+ * one computation apart and never two. Four queries for the whole page, whatever its size.
+ *
+ * THE CALLER DECIDES WHICH DOCUMENTS THE QUESTION APPLIES TO, and passes only those: issued
+ * documents of kinds that post. That is not a status filter on the arithmetic, which the
+ * header forbids, but a statement of what a badge means — a draft is not "open", it is not
+ * yet anything. A document left out simply has no entry in the map.
+ *
+ * A document whose movement comes to zero or less has nothing to settle and gets no state
+ * either. Settled means "nothing is outstanding" and includes an over-settled document; the
+ * figure that says by how much is the editor's, not the register's.
+ */
+export async function settlementStatesFor(
+  db: CofferDb,
+  documents: readonly DocumentControl[],
+): Promise<Map<string, SettlementState>> {
+  const states = new Map<string, SettlementState>()
+  if (documents.length === 0) return states
+
+  const ids = documents.map((document) => document.id)
+  const movements = await movementsFor(db, documents)
+  const allocated = await allocatedByDocument(db, ids)
+  const offset = await offsetsByDocument(db, ids)
+
+  for (const document of documents) {
+    const movement = facing(document.kind, movements.get(document.id) ?? ZERO)
+    /* `lessThanOrEqualTo(ZERO)`, not `!isPositive()`: decimal.js counts +0 as positive. */
+    if (movement.lessThanOrEqualTo(ZERO)) continue
+    const outstanding = movement
+      .minus(allocated.get(document.id) ?? ZERO)
+      .minus(offset.get(document.id) ?? ZERO)
+    states.set(
+      document.id,
+      outstanding.lessThanOrEqualTo(ZERO)
+        ? 'settled'
+        : outstanding.lessThan(movement)
+          ? 'part'
+          : 'open',
+    )
+  }
+  return states
 }
 
 export interface OpenDocumentsOptions {
@@ -608,7 +666,7 @@ async function openOfKind(db: CofferDb, options: OpenOfKindOptions): Promise<Ope
   }))
 
   const ids = rows.map((row) => row.id)
-  const movements = await movementsFor(db, options.partyId, documents)
+  const movements = await movementsFor(db, documents)
   const allocated = await allocatedByDocument(db, ids, options.exceptReceiptId)
   const offset = await offsetsByDocument(db, ids, options.exceptRefundDocumentId)
 

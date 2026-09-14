@@ -1,7 +1,7 @@
 /*
  * The renderer's state, in one import.
  *
- * Five small contexts rather than one store: theme, toasts, commands, the open
+ * Small contexts rather than one store: theme, density, toasts, commands, the open
  * company and where the user is. They are separate because they change at wildly
  * different rates — a toast timer must not re-render the sidebar — and because
  * each one is small enough to hold in your head.
@@ -13,6 +13,7 @@
  */
 
 export { ThemeProvider, useTheme, applyStoredTheme } from './theme'
+export { DensityProvider, useDensity, applyStoredDensity } from './density'
 export { ToastProvider, useToasts } from './toasts'
 export { CommandProvider, useCommands, useRegisterCommands } from './commands'
 export { CompanyProvider, useCompany } from './company'

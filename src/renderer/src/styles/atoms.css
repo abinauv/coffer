@@ -53,76 +53,151 @@
   width: 100%;
 }
 
-.button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
+/*
+ * THE STATES, from the design system's button table (§03): rest, hover, active, focus,
+ * disabled — and busy, which is not disabled.
+ *
+ * Each step is a token, and the direction of a step lives in the tokens rather than here:
+ * hover and press darken on paper and lighten on slate, so nothing in this file says
+ * "darker". The border moves one step ahead of the fill, which is what keeps a pressed
+ * button's edge visible against its own background.
+ *
+ * `:enabled` guards every hover and press, so a disabled button never pretends to react.
+ * A busy button is disabled for the click but keeps its variant's colours — see below.
+ */
 
 .button--primary {
   background: var(--accent);
+  border-color: var(--accent-strong);
   color: var(--on-accent);
-  box-shadow: var(--shadow-xs);
 }
 
-.button--primary:hover:not(:disabled) {
+.button--primary:hover:enabled {
   background: var(--accent-strong);
+  border-color: var(--accent-pressed);
 }
 
-.button--primary:active:not(:disabled) {
+.button--primary:active:enabled {
   background: var(--accent-pressed);
+  border-color: var(--accent-pressed);
 }
 
 .button--secondary {
   background: var(--surface);
-  color: var(--ink);
   border-color: var(--rule-strong);
-  box-shadow: var(--shadow-xs);
+  color: var(--ink);
 }
 
-.button--secondary:hover:not(:disabled) {
+.button--secondary:hover:enabled {
   background: var(--surface-hover);
+  border-color: var(--ink-faint);
 }
 
-.button--secondary:active:not(:disabled) {
+.button--secondary:active:enabled {
   background: var(--surface-active);
+  border-color: var(--ink-faint);
 }
 
+/* Ghost speaks in the accent, so it still reads as something to press with no box
+ * around it; its fills come from the accent's soft steps. */
 .button--ghost {
   background: transparent;
-  color: var(--ink-muted);
+  color: var(--accent-ink);
 }
 
-.button--ghost:hover:not(:disabled) {
-  background: var(--surface-active);
-  color: var(--ink);
+.button--ghost:hover:enabled {
+  background: var(--accent-soft);
+}
+
+.button--ghost:active:enabled {
+  background: var(--accent-soft-strong);
+  color: var(--accent-strong);
 }
 
 .button--danger {
   background: var(--negative);
+  border-color: var(--negative-ink);
   color: var(--on-negative);
 }
 
-/* Hover and press darken in light and lighten in dark. That direction lives in the
- * tokens, which is why this is not a `filter`: brightening a dark red on paper made
- * it lighter than its own rest state and read as disabled. */
-.button--danger:hover:not(:disabled) {
+.button--danger:hover:enabled {
   background: var(--negative-ink);
+  border-color: var(--negative-pressed);
 }
 
-.button--danger:active:not(:disabled) {
+.button--danger:active:enabled {
   background: var(--negative-pressed);
+  border-color: var(--negative-pressed);
 }
 
-.button:active:not(:disabled) {
-  transform: translateY(0.5px);
+/* A destructive button's ring is its own colour, so focus on it cannot be mistaken
+ * for focus on the safe choice beside it. */
+.button--danger:focus-visible {
+  outline-color: var(--negative);
+}
+
+.button:active:enabled {
+  transform: translateY(1px);
+}
+
+/* Disabled is drawn, not faded. Half-opacity text on a coloured fill fails contrast,
+ * and a faded primary still looks like the thing to press. Every variant greys to the
+ * same sunken well; ghost keeps no fill at all. */
+.button:disabled:not([aria-busy='true']) {
+  background: var(--surface-sunken);
+  border-color: var(--rule);
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+.button--secondary:disabled:not([aria-busy='true']) {
+  background: var(--surface);
+}
+
+.button--ghost:disabled:not([aria-busy='true']) {
+  background: transparent;
+  border-color: transparent;
+}
+
+/* Busy keeps its colours and its label, so the width holds and the button still says
+ * what it is doing. Only the cursor says it will not take another press. */
+.button[aria-busy='true'] {
+  cursor: progress;
+}
+
+/* Where the icon was. A ring with one side open, turning; under reduced motion the
+ * global rule stops it after one frame and it stays a still, open ring, which still
+ * reads as "working" beside a label that has not changed. */
+.button__spinner {
+  flex: none;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: var(--radius-pill);
+  animation: button-spin var(--duration-spin) linear infinite;
+}
+
+@keyframes button-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ---- Field --------------------------------------------------------------- */
 
+/*
+ * One home for the field. `screens/screens.css` used to redefine `.field`, `.field__label`
+ * and `.field__control`, and because it loads after this file its copies won everywhere:
+ * the control became a column, which is what threw the search icon out of its input and
+ * centred the passphrase field (B4, B5, B6 in the design plan). Nothing outside this file
+ * may restyle these classes.
+ */
+
 .field {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -132,6 +207,8 @@
   color: var(--ink-muted);
 }
 
+/* A row: the input, and whatever sits inside its border with it (an icon, a prefix, the
+ * passphrase reveal). Vertical centring is the row's job, not each child's. */
 .field__control {
   position: relative;
   display: flex;
@@ -140,9 +217,48 @@
 
 .field__icon {
   position: absolute;
+  top: 50%;
   left: var(--space-2);
+  transform: translateY(-50%);
   color: var(--ink-faint);
   pointer-events: none;
+}
+
+/* Identifiers — GSTINs, account codes, document numbers, recovery codes — are read aloud
+ * and retyped, so they are set in the mono face with a slashed zero. */
+.field__input--identifier {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: var(--numeric-identifier);
+}
+
+/* Money: right-aligned so figures line up with the column they will join, tabular so a
+ * 1 is as wide as a 7, and the currency symbol in a well at the start of the box. The
+ * symbol comes from the regime (MoneyField), never from here. */
+.field__input--figure {
+  text-align: end;
+  font-variant-numeric: var(--numeric-figures);
+}
+
+.field__prefix {
+  flex: none;
+  display: grid;
+  place-items: center;
+  align-self: stretch;
+  min-width: var(--control-height);
+  padding: 0 var(--space-2);
+  background: var(--ground);
+  border: 1px solid var(--rule-strong);
+  border-right-color: var(--rule);
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.field__prefix + .field__input {
+  border-left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .field__input {
@@ -215,9 +331,22 @@ select.field__control[aria-invalid='true'] {
   color: var(--ink-faint);
 }
 
+/* An error leads with "!", so it is not told apart from the hint by red alone. The mark
+ * is generated content with an empty alternative, so a screen reader announces the
+ * sentence and not the word "exclamation". */
 .field__error {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
   font-size: var(--text-xs);
+  line-height: var(--leading-snug);
   color: var(--negative-ink);
+}
+
+.field__error::before {
+  content: '!' / '';
+  flex: none;
+  font-weight: var(--weight-bold);
 }
 
 /* ---- Dialog -------------------------------------------------------------- */
@@ -375,7 +504,9 @@ select.field__control[aria-invalid='true'] {
   transform: translateY(-50%);
 }
 
-/* ---- Keycap -------------------------------------------------------------- */
+/* ---- Keycap --------------------------------------------------------------
+ * 11px mono with a heavier bottom edge, so a cap reads as a physical key without a
+ * gradient. The shortcut drawn is always the one the registry binds (lib/keys.ts). */
 
 .kbd {
   display: inline-flex;
@@ -388,27 +519,31 @@ select.field__control[aria-invalid='true'] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 var(--space-1);
-  background: var(--surface-sunken);
-  border: 1px solid var(--rule);
+  min-width: 20px;
+  padding: 1px var(--space-1);
+  background: var(--surface);
+  border: 1px solid var(--rule-total);
+  border-bottom-width: 2px;
   border-radius: var(--radius-xs);
-  color: var(--ink-faint);
-  font-family: var(--font-sans);
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
   font-size: var(--text-2xs);
-  font-weight: var(--weight-medium);
-  line-height: var(--leading-none);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-snug);
 }
 
-/* ---- Badge --------------------------------------------------------------- */
+/* ---- Badge ---------------------------------------------------------------
+ * A squared tag, not a pill: the design sets status like a stamp on a ledger line. Every
+ * badge carries a word; the tone is the second signal, never the first. Each tone draws
+ * its fill, its ink and its line from the same family, so the edge holds on any surface. */
 
 .badge {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-pill);
+  padding: 1px var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
   line-height: var(--leading-snug);
@@ -417,25 +552,39 @@ select.field__control[aria-invalid='true'] {
 
 .badge--neutral {
   background: var(--surface-sunken);
+  border-color: var(--rule);
   color: var(--ink-muted);
 }
 
 .badge--accent {
   background: var(--accent-soft);
+  border-color: var(--accent-line);
   color: var(--accent-ink);
 }
 
 .badge--positive {
   background: var(--positive-soft);
+  border-color: var(--positive-line);
   color: var(--positive-ink);
 }
 
 .badge--negative {
   background: var(--negative-soft);
+  border-color: var(--negative-line);
   color: var(--negative-ink);
 }
 
 .badge--warning {
   background: var(--warning-soft);
+  border-color: var(--warning-line);
   color: var(--warning-ink);
+}
+
+/* Void: a document that was issued and then cancelled. Struck through, on plain surface
+ * with the control rule — it recedes, and the strike says why without any colour. */
+.badge--struck {
+  background: var(--surface);
+  border-color: var(--rule-strong);
+  color: var(--ink-muted);
+  text-decoration: line-through;
 }

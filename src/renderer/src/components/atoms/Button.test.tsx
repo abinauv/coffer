@@ -188,6 +188,45 @@ describe('disabled and busy', () => {
 
     expect(screen.getByRole('button', { name: 'Post' })).not.toHaveAttribute('aria-busy')
   })
+
+  /* The design system's rule: work that can fail keeps its label and swaps its icon for a
+   * spinner. The spinner is decorative — `aria-busy` is what is announced — so it must not
+   * change the accessible name. */
+  it('swaps the leading icon for a spinner while busy, leaving the name alone', () => {
+    const { container } = render(
+      <Button icon="archive" isBusy>
+        Back up now
+      </Button>,
+    )
+
+    const button = screen.getByRole('button', { name: 'Back up now' })
+    expect(container.querySelector('svg')).toBeNull()
+    expect(button.querySelector('.button__spinner')).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  it('leads the label with a spinner while busy when it has no icon', () => {
+    render(<Button isBusy>Create company</Button>)
+
+    const button = screen.getByRole('button', { name: 'Create company' })
+    expect(button.firstElementChild).toHaveClass('button__spinner')
+  })
+
+  it('keeps a trailing icon while busy, since it is not the one the spinner replaces', () => {
+    const { container } = render(
+      <Button iconEnd="arrow-right" isBusy>
+        Open
+      </Button>,
+    )
+
+    expect(container.querySelectorAll('svg')).toHaveLength(1)
+    expect(container.querySelector('.button__spinner')).not.toBeNull()
+  })
+
+  it('draws no spinner when it is not busy', () => {
+    const { container } = render(<Button icon="archive">Back up now</Button>)
+
+    expect(container.querySelector('.button__spinner')).toBeNull()
+  })
 })
 
 describe('the form type', () => {

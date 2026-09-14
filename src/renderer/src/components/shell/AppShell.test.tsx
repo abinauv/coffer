@@ -36,12 +36,13 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type {
   AgedReport,
   CompanySummary,
-  DocumentSummary,
+  DocumentListRow,
   ReceiptSummary,
   Result,
 } from '@shared/dto'
 import { DEFAULT_COMPANY, renderScreen, type BridgeStub } from '@renderer/test/harness'
 import type { Command } from '../../lib/command-registry'
+import { DENSITY_STORAGE_KEY } from '../../lib/density'
 import { SIDEBAR_STORAGE_KEY } from '../../lib/layout'
 import { registerScreens } from '../../lib/screens'
 import { THEME_STORAGE_KEY } from '../../lib/theme'
@@ -103,7 +104,7 @@ const BRIDGE: BridgeStub = {
   /* The dashboard's reads. See the header: the frame renders the active screen, so the
    * frame's tests answer whatever that screen asks for. */
   reports: { aged: (input) => ok<AgedReport>({ ...NOTHING_OUTSTANDING, side: input.side }) },
-  documents: { list: () => ok<DocumentSummary[]>([]) },
+  documents: { list: () => ok<DocumentListRow[]>([]) },
   receipts: { list: () => ok<ReceiptSummary[]>([]) },
   companyProfile: { get: () => ok(null) },
   parties: { list: () => ok([]) },
@@ -153,6 +154,7 @@ function sidebar(): HTMLElement | null {
 
 beforeEach(() => {
   localStorage.clear()
+  document.documentElement.removeAttribute('data-density')
 })
 
 describe('the two layouts', () => {
@@ -263,6 +265,31 @@ describe('the commands the frame owns', () => {
     expect(commandFor('view.theme.light').hint).toBe('Current')
     expect(commandFor('view.theme.system').hint).toBeUndefined()
     expect(document.documentElement).toHaveAttribute('data-theme', 'light')
+  })
+
+  it('registers both densities and marks the one stored', () => {
+    localStorage.setItem(DENSITY_STORAGE_KEY, 'compact')
+    mount()
+
+    expect(commandFor('view.density.compact').hint).toBe('Current')
+    expect(commandFor('view.density.comfortable').hint).toBeUndefined()
+    expect(commandFor('view.density.compact').title).toBe('Density: compact')
+  })
+
+  /* The whole preference end to end: the command, the attribute tokens.css keys on, and
+   * the stored value that survives a relaunch. Comfortable REMOVES the attribute. */
+  it('switches density from the palette, writes the attribute and remembers it', () => {
+    mount()
+    expect(commandFor('view.density.comfortable').hint).toBe('Current')
+
+    run('view.density.compact')
+    expect(document.documentElement).toHaveAttribute('data-density', 'compact')
+    expect(localStorage.getItem(DENSITY_STORAGE_KEY)).toBe('compact')
+    expect(commandFor('view.density.compact').hint).toBe('Current')
+
+    run('view.density.comfortable')
+    expect(document.documentElement).not.toHaveAttribute('data-density')
+    expect(localStorage.getItem(DENSITY_STORAGE_KEY)).toBe('comfortable')
   })
 
   it('offers closing the company only when there is one, and names it', () => {

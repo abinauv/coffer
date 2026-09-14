@@ -35,7 +35,7 @@ import { MIGRATIONS } from '../migrations'
 import { setAccountRole, updateAccount } from './accounts'
 import { accountBalance } from './balances'
 import { setUpBooks } from './bootstrap'
-import { createDocument } from './documents'
+import { createDocument, listDocuments } from './documents'
 import { isRepoError, type RepoError, type RepoErrorCode } from './errors'
 import { cancelDocument, issueDocument } from './issuing'
 import { getEntry, postManualEntry } from './journal'
@@ -1540,6 +1540,128 @@ describe('what a document has outstanding', () => {
 })
 
 // ---- Listing ---------------------------------------------------------------
+
+/*
+ * The settlement state a document register shows beside each row.
+ *
+ * Tested here rather than in documents.test.ts because the states are only interesting once
+ * money has moved against a document, and this file is where receipts are built. The
+ * figures are `outstanding.ts`'s; what is asserted is which of three words they come to,
+ * and which rows get no word at all.
+ */
+describe('where a document stands in the register', () => {
+  async function stateOf(documentId: string) {
+    const rows = await listDocuments(db)
+    const row = rows.find((each) => each.id === documentId)
+    if (row === undefined) throw new Error('document not in the register')
+    return row.settlement
+  }
+
+  it('calls an issued invoice with nothing against it open', async () => {
+    const document = await invoice()
+
+    expect(await stateOf(document.id)).toBe('open')
+  })
+
+  it('calls it part settled once some money is allocated', async () => {
+    const document = await invoice()
+    await createReceipt(
+      db,
+      receiptInput({
+        amount: '500.00',
+        allocations: [{ documentId: document.id, amount: '500.00' }],
+      }),
+      NOW,
+    )
+
+    expect(await stateOf(document.id)).toBe('part')
+  })
+
+  it('calls it settled when the allocations cover it', async () => {
+    const document = await invoice()
+    await createReceipt(
+      db,
+      receiptInput({ allocations: [{ documentId: document.id, amount: '1180.00' }] }),
+      NOW,
+    )
+
+    expect(await stateOf(document.id)).toBe('settled')
+  })
+
+  /* The receipt is cancelled, its allocations go with it, and the invoice is owed again —
+   * the register follows without anything written to make it. */
+  it('goes back to open when the receipt that settled it is cancelled', async () => {
+    const document = await invoice()
+    const receipt = await createReceipt(
+      db,
+      receiptInput({ allocations: [{ documentId: document.id, amount: '1180.00' }] }),
+      NOW,
+    )
+    await cancelReceipt(db, { id: receipt.id }, LATER)
+
+    expect(await stateOf(document.id)).toBe('open')
+  })
+
+  it('gives a draft no state, because it has posted nothing', async () => {
+    const document = await createDocument(db, draft(), NOW)
+
+    expect(await stateOf(document.id)).toBeNull()
+  })
+
+  it('gives a cancelled invoice no state, rather than calling it settled', async () => {
+    const document = await invoice()
+    await cancelDocument(db, { id: document.id }, LATER)
+
+    expect(await stateOf(document.id)).toBeNull()
+  })
+
+  /* A credit note is settled by refunding it. Read in its own facing, a partial refund is
+   * "part", not a figure further from zero. */
+  it('reads a credit note in its own direction', async () => {
+    const note = await creditNote()
+    expect(await stateOf(note.id)).toBe('open')
+
+    await createReceipt(
+      db,
+      receiptInput({
+        kind: 'refund',
+        amount: '400.00',
+        allocations: [{ documentId: note.id, amount: '400.00' }],
+      }),
+      NOW,
+    )
+
+    expect(await stateOf(note.id)).toBe('part')
+  })
+
+  /* One page, two customers. The movement query reads the lines naming any party on the
+   * page, and each document must still come out as its own. */
+  it('keeps each party’s documents apart on one page', async () => {
+    const other = (
+      await createParty(db, { name: 'Deccan Tooling', countryCode: 'in', isCustomer: true })
+    ).id
+    const paid = await invoice()
+    const unpaid = await invoice({ partyId: other })
+    await createReceipt(
+      db,
+      receiptInput({ allocations: [{ documentId: paid.id, amount: '1180.00' }] }),
+      NOW,
+    )
+
+    expect(await stateOf(paid.id)).toBe('settled')
+    expect(await stateOf(unpaid.id)).toBe('open')
+  })
+
+  /* Over-allocation is refused by the repository, so it is written past it. The register
+   * says settled; by how much is the editor's figure, not a fourth word. */
+  it('calls an over-settled document settled', async () => {
+    const document = await invoice()
+    const receipt = await createReceipt(db, receiptInput({ amount: '5000.00' }), NOW)
+    writeAllocation(receipt.id, document.id, '2000.00')
+
+    expect(await stateOf(document.id)).toBe('settled')
+  })
+})
 
 describe('the register', () => {
   it('lists newest first, with what each has left', async () => {

@@ -674,6 +674,38 @@ export interface DocumentSummary {
   grandTotal: DecimalString
 }
 
+/**
+ * How much of an issued document's money has come in (or gone out, for a refund).
+ *
+ *   open      nothing has been settled against it yet
+ *   part      some has, and some is still outstanding
+ *   settled   none is outstanding — paid, refunded, or offset in full
+ *
+ * DERIVED, NEVER STORED, from the same movement-less-allocations-less-offsets figure every
+ * aged report reads (db/repos/outstanding.ts), so a register's "Paid" and the aged report
+ * cannot disagree. Main works it out; a screen only names it.
+ *
+ * Not DocumentSettlement, which is the editor's whole breakdown of one document — the
+ * movement, every allocation and every offset. This is only which of three states it is in.
+ */
+export type SettlementState = 'open' | 'part' | 'settled'
+
+/**
+ * One row of a document register: the summary, plus where its settlement stands.
+ *
+ * A row type of its own rather than a field on `DocumentSummary`, because only the list
+ * reads the allocation and offset tables for it. `Document` extends the summary and is
+ * returned by every write, and none of those needs the extra queries.
+ */
+export interface DocumentListRow extends DocumentSummary {
+  /**
+   * Null wherever the question does not apply: a draft (it has posted nothing), a
+   * cancelled document (its entry is reversed), a kind that never posts (a quotation), and
+   * a document whose value on the party's account is zero, which has nothing to settle.
+   */
+  settlement: SettlementState | null
+}
+
 export interface Document extends DocumentSummary {
   seriesId: string | null
   partyReference: string | null

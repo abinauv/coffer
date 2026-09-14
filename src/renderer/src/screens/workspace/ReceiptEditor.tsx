@@ -53,6 +53,7 @@ import type {
 } from '@shared/dto'
 import { RECEIPT_KINDS, receiptDefinitionOf, type ReceiptKind } from '@shared/receipts'
 import { FailureNotice } from '../components/FailureNotice'
+import { MoneyField } from '../components/MoneyField'
 import { Notice } from '../components/Notice'
 import { ScreenFrame } from '../components/ScreenFrame'
 import { formatAmount } from '../lib/ledger-format'
@@ -63,6 +64,7 @@ import {
   canAllocate,
   canCancel,
   draftAllocations,
+  isStruckStatus,
   newSentence,
   partyLabel,
   partyRoleFor,
@@ -345,7 +347,9 @@ export function ReceiptEditor({
 
         {receipt !== null && (
           <div className="toolbar">
-            <Badge tone={statusTone(status)}>{statusLabel(status)}</Badge>
+            <Badge tone={statusTone(status)} isStruck={isStruckStatus(status)}>
+              {statusLabel(status)}
+            </Badge>
             {canAllocate(status) && (
               <Button
                 variant="primary"
@@ -405,7 +409,7 @@ export function ReceiptEditor({
             onChange={(event) => setDate(event.target.value)}
           />
 
-          <Input
+          <MoneyField
             label="Amount"
             value={amount}
             disabled={!isNew}

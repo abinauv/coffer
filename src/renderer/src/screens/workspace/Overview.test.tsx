@@ -27,7 +27,7 @@ import type {
   AgedReport,
   CompanyProfile,
   CompanySummary,
-  DocumentSummary,
+  DocumentListRow,
   PartySummary,
   ReceiptSummary,
   RegimeDescription,
@@ -179,7 +179,7 @@ const PAYABLES: AgedReport = {
   ties: true,
 }
 
-function document(over: Partial<DocumentSummary> = {}): DocumentSummary {
+function document(over: Partial<DocumentListRow> = {}): DocumentListRow {
   return {
     id: 'document-1',
     kind: 'sales-invoice',
@@ -190,6 +190,7 @@ function document(over: Partial<DocumentSummary> = {}): DocumentSummary {
     partyId: 'party-1',
     partyName: 'Sunrise Components',
     grandTotal: '1180.00',
+    settlement: 'open',
     ...over,
   }
 }
@@ -211,7 +212,7 @@ function receipt(over: Partial<ReceiptSummary> = {}): ReceiptSummary {
 }
 
 /* Oldest FIRST, which is not the order the panel draws them in. */
-const DOCUMENTS: DocumentSummary[] = [
+const DOCUMENTS: DocumentListRow[] = [
   document(),
   document({
     id: 'document-2',
@@ -246,7 +247,7 @@ const RECEIPTS: ReceiptSummary[] = [
   receipt({ id: 'receipt-3', number: 'RC/2019-20/0002', date: '2019-07-20', amount: '3000.00' }),
 ]
 
-const DRAFTS: DocumentSummary[] = [
+const DRAFTS: DocumentListRow[] = [
   document({
     id: 'draft-1',
     status: 'draft',
@@ -287,8 +288,8 @@ const PROFILE: CompanyProfile = {
 interface Books {
   sales?: () => Promise<Result<AgedReport>>
   purchase?: () => Promise<Result<AgedReport>>
-  drafts?: () => Promise<Result<DocumentSummary[]>>
-  documents?: () => Promise<Result<DocumentSummary[]>>
+  drafts?: () => Promise<Result<DocumentListRow[]>>
+  documents?: () => Promise<Result<DocumentListRow[]>>
   receipts?: () => Promise<Result<ReceiptSummary[]>>
   profile?: () => Promise<Result<CompanyProfile | null>>
   parties?: () => Promise<Result<PartySummary[]>>

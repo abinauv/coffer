@@ -97,3 +97,23 @@ describe('the class list', () => {
     expect(screen.getByText('Issued').className).toBe('badge badge--accent')
   })
 })
+
+describe('struck through', () => {
+  /* A cancelled document is voided, not in trouble. The strike carries that without a
+   * colour, so it must be its own class beside the tone rather than a tone of its own. */
+  it('strikes a voided status through, beside its tone', () => {
+    render(
+      <Badge tone="neutral" isStruck>
+        Cancelled
+      </Badge>,
+    )
+
+    expect(screen.getByText('Cancelled')).toHaveClass('badge', 'badge--neutral', 'badge--struck')
+  })
+
+  it('is not struck unless asked', () => {
+    render(<Badge tone="neutral">Draft</Badge>)
+
+    expect(screen.getByText('Draft')).not.toHaveClass('badge--struck')
+  })
+})

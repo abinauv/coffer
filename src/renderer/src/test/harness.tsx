@@ -33,6 +33,7 @@ import { makeRoute, type Route } from '@renderer/lib/routing'
 import type { ScreenContext } from '@renderer/lib/screens'
 import { CommandProvider } from '@renderer/store/commands'
 import { CompanyProvider, useCompany } from '@renderer/store/company'
+import { DensityProvider } from '@renderer/store/density'
 import { NavigationProvider } from '@renderer/store/navigation'
 import { PlatformProvider } from '@renderer/store/platform'
 import { RegimeProvider } from '@renderer/store/regime'
@@ -276,21 +277,23 @@ function Providers({
 }): JSX.Element {
   return (
     <ThemeProvider>
-      <PlatformProvider>
-        <ToastProvider>
-          <CompanyProvider>
-            <OpenCompany company={company} recoveryCodesRemaining={recoveryCodesRemaining} />
-            <RegimeProvider value={regime}>
-              <NavigationProvider>
-                <CommandProvider>
-                  {children}
-                  {toastViewport && <ToastViewport />}
-                </CommandProvider>
-              </NavigationProvider>
-            </RegimeProvider>
-          </CompanyProvider>
-        </ToastProvider>
-      </PlatformProvider>
+      <DensityProvider>
+        <PlatformProvider>
+          <ToastProvider>
+            <CompanyProvider>
+              <OpenCompany company={company} recoveryCodesRemaining={recoveryCodesRemaining} />
+              <RegimeProvider value={regime}>
+                <NavigationProvider>
+                  <CommandProvider>
+                    {children}
+                    {toastViewport && <ToastViewport />}
+                  </CommandProvider>
+                </NavigationProvider>
+              </RegimeProvider>
+            </CompanyProvider>
+          </ToastProvider>
+        </PlatformProvider>
+      </DensityProvider>
     </ThemeProvider>
   )
 }

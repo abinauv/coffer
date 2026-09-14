@@ -184,9 +184,17 @@ export function statusLabel(status: string): string {
  * there is no draft, so no row has anything left to do. Posted is the settled normal and
  * cancelled recedes, exactly as `statusTone` in document-view.ts argues — a cancelled
  * receipt is how a bounced cheque is recorded properly, not a warning.
+ *
+ * Posted stays positive where an issued document moved to the accent: a posted receipt IS
+ * money that arrived, which is exactly what the positive tone means.
  */
 export function statusTone(status: string): BadgeTone {
   return status === 'posted' ? 'positive' : 'neutral'
+}
+
+/** Whether a status is a voided one, drawn struck through. Only `cancelled` is. */
+export function isStruckStatus(status: string): boolean {
+  return status === 'cancelled'
 }
 
 /** The status buttons, in the order a register is scanned. `''` is no filter. */

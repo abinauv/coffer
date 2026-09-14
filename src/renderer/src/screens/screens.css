@@ -11,10 +11,36 @@
 
 /* ---- Page scaffolding ---------------------------------------------------- */
 
+/*
+ * Widths (B3). `form` is a reading column and `list` is a working width. On the welcome
+ * canvas, which centres its content, both are capped so a form never stretches across a
+ * wide window; in the workspace a list takes the room it has, and a form keeps its
+ * column plus the frame's own padding.
+ */
+.page {
+  width: 100%;
+}
+
+.page--form {
+  max-width: 44rem;
+}
+
+.page--list {
+  max-width: 60rem;
+}
+
 /* The workspace frame supplies no padding of its own (ScreenFrame's `isInset`). The
  * amount is a density token. */
 .page--inset {
   padding: var(--screen-pad);
+}
+
+.page--inset.page--form {
+  max-width: calc(44rem + var(--screen-pad) * 2);
+}
+
+.page--inset.page--list {
+  max-width: none;
 }
 
 .page__head {
@@ -96,96 +122,49 @@
   color: var(--ink-faint);
 }
 
-.caps-label {
-  display: block;
-  color: var(--ink-muted);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-}
-
-.truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-/* Paths, GSTINs and recovery codes get retyped and read aloud, so they are
- * deliberately easy to select and use the slashed-zero identifier face. */
-.selectable {
-  user-select: text;
-  cursor: text;
-  font-family: var(--font-mono);
-  font-variant-numeric: var(--numeric-identifier);
-}
-
-/* For focusable regions where an outset ring would be clipped by a scroll container. */
-.focus-inset:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: calc(var(--focus-ring-offset) * -1);
-}
+/* `.caps-label`, `.truncate`, `.selectable` and `.focus-inset` lived here as second copies
+ * of the ones in styles/base.css, and the field classes as second copies of those in
+ * styles/atoms.css. This file loads later, so its copies silently won everywhere (B4).
+ * Each now has one home; nothing here may redefine an atom's or a utility's class. */
 
 /* ---- Fields -------------------------------------------------------------- */
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.field__label {
-  color: var(--ink);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-}
-
-.field__control {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.field__input {
-  width: 100%;
-}
-
-.passphrase-field {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
+/* The reveal sits inside the input's border, on the right, as its own small well; the
+ * atom's control row positions it. The input reserves the room so typed characters never
+ * run under it (B6). */
 .passphrase-field__input {
   width: 100%;
-  /* Room for the reveal button, which sits inside the field. */
-  padding-inline-end: var(--space-10);
+  padding-inline-end: var(--space-16);
   font-family: var(--font-mono);
+  font-size: var(--text-sm);
 }
 
 .passphrase-field__reveal {
   position: absolute;
-  inset-inline-end: var(--space-1);
+  inset-block: 1px;
+  inset-inline-end: 1px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-1);
+  min-width: var(--space-12);
+  padding: 0 var(--space-3);
   border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--ink-muted);
+  border-inline-start: 1px solid var(--rule);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--ground);
+  color: var(--accent-ink);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   cursor: pointer;
 }
 
-.passphrase-field__reveal:hover {
-  background: var(--surface-hover);
-  color: var(--ink);
+.passphrase-field__reveal:hover:enabled {
+  background: var(--surface-active);
 }
 
-.passphrase-field__reveal:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
+.passphrase-field__reveal:disabled {
+  color: var(--ink-faint);
+  cursor: not-allowed;
 }
 
 .path-field {
@@ -309,6 +288,58 @@
 
 /* ---- Notices ------------------------------------------------------------- */
 
+/*
+ * Four voices, never more (design system §03), and until B2 none of them had a box: a
+ * danger notice was an icon over plain text, the same as an info one. Each tone takes its
+ * fill, its line and its icon colour from one token family. The title and body stay in
+ * ink, because the tone is the second signal — the title already says what happened.
+ */
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--ink);
+}
+
+.notice--info {
+  background: var(--info-soft);
+  border-color: var(--info-line);
+}
+
+.notice--info .notice__icon {
+  color: var(--info-ink);
+}
+
+.notice--positive {
+  background: var(--positive-soft);
+  border-color: var(--positive-line);
+}
+
+.notice--positive .notice__icon {
+  color: var(--positive-ink);
+}
+
+.notice--warning {
+  background: var(--warning-soft);
+  border-color: var(--warning-line);
+}
+
+.notice--warning .notice__icon {
+  color: var(--warning-ink);
+}
+
+.notice--danger {
+  background: var(--negative-soft);
+  border-color: var(--negative-line);
+}
+
+.notice--danger .notice__icon {
+  color: var(--negative-ink);
+}
+
 .notice__content {
   display: flex;
   flex-direction: column;
@@ -330,6 +361,7 @@
 
 .notice__body {
   margin: 0;
+  color: var(--ink-muted);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
 }
@@ -429,7 +461,9 @@
   gap: var(--space-2);
 }
 
-/* ---- Empty state --------------------------------------------------------- */
+/* ---- Empty, loading and error states --------------------------------------
+ * The three states every screen ships besides its full one (design system §05). Built in
+ * screens/components as EmptyState, RegisterSkeleton and ErrorState. */
 
 .empty {
   display: flex;
@@ -437,19 +471,22 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-12) var(--space-6);
-  border: 1px dashed var(--rule-total);
-  border-radius: var(--radius-lg);
   text-align: center;
 }
 
+/* A place for something, not a picture of anything. */
 .empty__mark {
-  color: var(--ink-faint);
+  width: var(--space-10);
+  height: var(--space-10);
+  margin-bottom: var(--space-1);
+  border: 2px dashed var(--rule-total);
+  border-radius: var(--radius-sm);
 }
 
 .empty__title {
   margin: 0;
   color: var(--ink-strong);
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
   font-weight: var(--weight-semibold);
 }
 
@@ -457,7 +494,12 @@
   margin: 0;
   max-width: 46ch;
   color: var(--ink-muted);
+  font-size: var(--text-sm);
   line-height: var(--leading-relaxed);
+}
+
+.empty__body p {
+  margin: 0;
 }
 
 .empty__actions {
@@ -468,6 +510,97 @@
   margin-top: var(--space-2);
 }
 
+.empty__shortcut {
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+}
+
+/* No spinner: bars at the real columns' widths, in the sunken tone, holding the grid. */
+.skeleton__rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.skeleton__row {
+  display: grid;
+  gap: var(--space-3);
+  align-items: center;
+  height: var(--row-height);
+  padding: 0 var(--row-pad-x);
+  border-bottom: 1px solid var(--rule);
+}
+
+.skeleton__cell {
+  display: flex;
+}
+
+.skeleton__cell[data-align='end'] {
+  justify-content: flex-end;
+}
+
+.skeleton__bar {
+  display: block;
+  height: var(--space-3);
+  border-radius: var(--radius-xs);
+  background: var(--surface-sunken);
+}
+
+/* Cause, then fix, then actions. The mark is a word-sized "!" in the negative family, so
+ * the state is not told by colour alone. */
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  max-width: 60ch;
+  padding: var(--space-8) var(--space-6);
+}
+
+.error-state__mark {
+  display: grid;
+  place-items: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  border: 1px solid var(--negative-line);
+  border-radius: var(--radius-pill);
+  background: var(--negative-soft);
+  color: var(--negative-ink);
+  font-weight: var(--weight-bold);
+}
+
+.error-state__title {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+}
+
+.error-state__cause,
+.error-state__fix {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.error-state__cause p,
+.error-state__fix p {
+  margin: 0;
+}
+
+.error-state__detail {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.error-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
 /* ---- Facts --------------------------------------------------------------- */
 
 .facts {
@@ -703,7 +836,7 @@
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking-caps);
   border-bottom: 1px solid var(--rule-total);
 }
 
@@ -741,7 +874,7 @@
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking-caps);
   border-bottom: 1px solid var(--rule-total);
 }
 
@@ -801,7 +934,7 @@
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--tracking-caps);
   color: var(--ink);
   border-bottom: 1px solid var(--rule-total);
 }

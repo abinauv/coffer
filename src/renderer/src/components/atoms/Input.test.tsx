@@ -238,3 +238,74 @@ describe('the icon slot', () => {
     expect(control?.querySelector('svg')).toBeNull()
   })
 })
+
+describe('identifiers and figures', () => {
+  it('sets an identifier in the identifier face, and only when asked', () => {
+    render(
+      <>
+        <Input label="GSTIN" isIdentifier defaultValue="27AAECS1234F1Z5" />
+        <Input label="Party name" defaultValue="Sharma Traders" />
+      </>,
+    )
+
+    expect(screen.getByLabelText('GSTIN')).toHaveClass('field__input--identifier')
+    expect(screen.getByLabelText('Party name')).not.toHaveClass('field__input--identifier')
+  })
+
+  it('right-aligns a figure, and only when asked', () => {
+    render(<Input label="Rate" isFigure defaultValue="12,500.00" />)
+
+    expect(screen.getByLabelText('Rate')).toHaveClass('field__input', 'field__input--figure')
+  })
+})
+
+describe('the prefix', () => {
+  it('draws the unit beside the value without joining the name or the value', () => {
+    render(<Input label="Amount" prefix="₹" defaultValue="500.00" />)
+
+    const input = screen.getByRole('textbox', { name: 'Amount' })
+    expect(input).toHaveValue('500.00')
+    const prefix = screen.getByText('₹')
+    expect(prefix).toHaveClass('field__prefix')
+    expect(prefix).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  it('draws no prefix when none is given', () => {
+    const { container } = render(<Input label="Amount" />)
+
+    expect(container.querySelector('.field__prefix')).toBeNull()
+  })
+})
+
+describe('a disabled field says why', () => {
+  it('disables the field and puts the reason where the hint was', () => {
+    render(
+      <Input
+        label="Place of supply"
+        hint="Where the goods are delivered."
+        disabledReason="Taken from the party's GSTIN."
+      />,
+    )
+
+    const input = screen.getByRole('textbox', { name: 'Place of supply' })
+    expect(input).toBeDisabled()
+    expect(input).toHaveAccessibleDescription("Taken from the party's GSTIN.")
+    expect(screen.queryByText('Where the goods are delivered.')).toBeNull()
+  })
+
+  it('still shows an error over the reason', () => {
+    render(
+      <Input label="Place of supply" disabledReason="Taken from the GSTIN." error="Required." />,
+    )
+
+    expect(screen.getByRole('textbox', { name: 'Place of supply' })).toHaveAccessibleDescription(
+      'Required.',
+    )
+  })
+
+  it('stays enabled with no reason and no disabled flag', () => {
+    render(<Input label="Place of supply" />)
+
+    expect(screen.getByRole('textbox', { name: 'Place of supply' })).toBeEnabled()
+  })
+})

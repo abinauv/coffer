@@ -42,11 +42,13 @@ import { isReceiptKind, receiptDefinitionOf } from '@shared/receipts'
 import { agedTitle, columnFigure, isOverdue, type ItemTarget } from './ageing-view'
 import {
   editorScreenId as documentEditorScreenId,
+  isStruckStatus as isStruckDocumentStatus,
   statusLabel as documentStatusLabel,
   statusTone as documentStatusTone,
 } from './document-view'
 import {
   editorScreenId as receiptEditorScreenId,
+  isStruckStatus as isStruckReceiptStatus,
   statusLabel as receiptStatusLabel,
   statusTone as receiptStatusTone,
 } from './receipt-view'
@@ -450,6 +452,17 @@ const ACTIVITY_TONES: Readonly<Record<ActivitySource, (status: string) => BadgeT
 
 export function activityTone(row: ActivityRow): BadgeTone {
   return ACTIVITY_TONES[row.source](row.status)
+}
+
+/* Struck through for a voided row. A record of two for the same reason as the tones: the
+ * vocabularies are the two sources' own, even where today they agree on cancelled. */
+const ACTIVITY_STRUCK: Readonly<Record<ActivitySource, (status: string) => boolean>> = {
+  document: isStruckDocumentStatus,
+  receipt: isStruckReceiptStatus,
+}
+
+export function activityIsStruck(row: ActivityRow): boolean {
+  return ACTIVITY_STRUCK[row.source](row.status)
 }
 
 const ACTIVITY_TARGETS: Readonly<Record<ActivitySource, (row: ActivityRow) => ItemTarget | null>> =

@@ -45,6 +45,7 @@ import { formatAmount } from '../lib/ledger-format'
 import {
   editorScreenId,
   emptyRegisterSentence,
+  isStruckStatus,
   PAGE_SIZE,
   partyLabel,
   registerLede,
@@ -65,14 +66,16 @@ export function DocumentRegister({
   /*
    * A due date, and DELIBERATELY NOT AN OVERDUE FLAG.
    *
-   * The obvious next step is a red badge on anything past its date, and this screen is
-   * the wrong place for it: a register lists documents and knows nothing about what has
-   * been paid against them. "Overdue" is a statement about money still outstanding, not
+   * The obvious next step is a red badge on anything past its date, and a date alone is
+   * the wrong basis for it: "Overdue" is a statement about money still outstanding, not
    * about a date that has gone by, and an invoice settled in full last week would wear
    * the badge for ever.
    *
-   * The screen that can say it is the aged report, because outstanding is what it is made
-   * of. Here the date is shown and the reader draws their own conclusion.
+   * Each row now carries its settlement state from main (`DocumentListRow.settlement`,
+   * the aged report's own figures), and `settlementBadge` in document-view.ts turns that
+   * and the due date into Paid, Part paid or Overdue. Drawing it on this screen is the
+   * register restyle's job (design plan, Phase 5b); until then the date is shown and the
+   * reader draws their own conclusion.
    */
   const showsDue = chargesOnTerms(kind)
 
@@ -250,7 +253,12 @@ export function DocumentRegister({
                   {showsDue && <td className="ledger-table__code">{document.dueDate ?? '—'}</td>}
                   <td>{document.partyName}</td>
                   <td>
-                    <Badge tone={statusTone(document.status)}>{statusLabel(document.status)}</Badge>
+                    <Badge
+                      tone={statusTone(document.status)}
+                      isStruck={isStruckStatus(document.status)}
+                    >
+                      {statusLabel(document.status)}
+                    </Badge>
                   </td>
                   <td className="ledger-table__figure">
                     {formatAmount(document.grandTotal, format)}
