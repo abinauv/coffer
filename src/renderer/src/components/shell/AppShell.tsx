@@ -15,6 +15,7 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import type { JSX } from 'react'
+import { DENSITY_LABELS, DENSITY_PREFERENCES } from '../../lib/density'
 import {
   NARROW_VIEWPORT_QUERY,
   resolveSidebarCollapsed,
@@ -30,6 +31,7 @@ import { browserStore, readPreference, writePreference } from '../../lib/storage
 import type { Command } from '../../lib/command-registry'
 import { useCommands, useRegisterCommands } from '../../store/commands'
 import { useCompany } from '../../store/company'
+import { useDensity } from '../../store/density'
 import { useNavigation } from '../../store/navigation'
 import { useScreens } from '../../store/screens'
 import { useTheme } from '../../store/theme'
@@ -129,6 +131,7 @@ function SidebarCommand({
 function ShellCommands(): JSX.Element {
   const { setPaletteOpen } = useCommands()
   const { preference, setPreference } = useTheme()
+  const density = useDensity()
   const { company, close } = useCompany()
   const { route, navigate, back, canGoBack } = useNavigation()
   const { show } = useToasts()
@@ -152,6 +155,17 @@ function ShellCommands(): JSX.Element {
       keywords: ['theme', 'dark mode', 'light mode', 'contrast'],
       ...(option === preference ? { hint: 'Current' } : {}),
       run: () => setPreference(option),
+    }))
+
+    /* Until Settings exists (design plan, Phase 8), the palette is where density is chosen.
+     * One command per preference rather than a toggle, so the palette says which is on. */
+    const densities: Command[] = DENSITY_PREFERENCES.map((option) => ({
+      id: `view.density.${option}`,
+      title: `Density: ${DENSITY_LABELS[option].toLowerCase()}`,
+      section: 'View',
+      keywords: ['density', 'compact', 'comfortable', 'rows', 'spacing'],
+      ...(option === density.preference ? { hint: 'Current' } : {}),
+      run: () => density.setPreference(option),
     }))
 
     const frame: Command[] = [
@@ -196,13 +210,14 @@ function ShellCommands(): JSX.Element {
         ]
       : []
 
-    return [...frame, ...navigation, ...appearance, ...companyCommands]
+    return [...frame, ...navigation, ...appearance, ...densities, ...companyCommands]
   }, [
     screens,
     route.area,
     navigate,
     preference,
     setPreference,
+    density,
     setPaletteOpen,
     canGoBack,
     back,

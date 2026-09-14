@@ -23,7 +23,7 @@ import type { JSX } from 'react'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { DocumentSummary, Result } from '@shared/dto'
+import type { DocumentListRow, Result } from '@shared/dto'
 import { chargesOnTerms, DOCUMENT_KINDS, type DocumentKind } from '@shared/documents'
 import { renderScreen, screenContext, type BridgeStub } from '../../test/harness'
 import { documentRegisterScreens, DocumentRegister } from './DocumentRegister'
@@ -33,7 +33,7 @@ const register = (kind: DocumentKind = 'sales-invoice'): JSX.Element => (
   <DocumentRegister {...screenContext()} kind={kind} />
 )
 
-function invoice(over: Partial<DocumentSummary> = {}): DocumentSummary {
+function invoice(over: Partial<DocumentListRow> = {}): DocumentListRow {
   return {
     id: 'doc-1',
     kind: 'sales-invoice',
@@ -44,11 +44,12 @@ function invoice(over: Partial<DocumentSummary> = {}): DocumentSummary {
     partyId: 'party-1',
     partyName: 'Sunrise Components',
     grandTotal: '125000.00',
+    settlement: 'open',
     ...over,
   }
 }
 
-const ROWS: DocumentSummary[] = [
+const ROWS: DocumentListRow[] = [
   invoice(),
   invoice({
     id: 'doc-2',
@@ -56,6 +57,7 @@ const ROWS: DocumentSummary[] = [
     number: null,
     partyName: 'Kaveri Metals',
     grandTotal: '4720.50',
+    settlement: null,
   }),
   invoice({
     id: 'doc-3',
@@ -63,11 +65,12 @@ const ROWS: DocumentSummary[] = [
     number: 'INV/2026-27/0002',
     partyName: 'Nilgiri Traders',
     grandTotal: '900.00',
+    settlement: null,
   }),
 ]
 
-const listing = (rows: DocumentSummary[]): BridgeStub => ({
-  documents: { list: () => Promise.resolve<Result<DocumentSummary[]>>({ ok: true, data: rows }) },
+const listing = (rows: DocumentListRow[]): BridgeStub => ({
+  documents: { list: () => Promise.resolve<Result<DocumentListRow[]>>({ ok: true, data: rows }) },
 })
 
 /** The filters the last query carried, for asserting that a click reached main. */
@@ -220,7 +223,7 @@ describe('what it draws', () => {
         documents: {
           list: () => {
             call += 1
-            return Promise.resolve<Result<DocumentSummary[]>>({
+            return Promise.resolve<Result<DocumentListRow[]>>({
               ok: true,
               data: call === 1 ? ROWS : [],
             })
@@ -241,7 +244,7 @@ describe('what it draws', () => {
       bridge: {
         documents: {
           list: () =>
-            Promise.resolve<Result<DocumentSummary[]>>({
+            Promise.resolve<Result<DocumentListRow[]>>({
               ok: false,
               error: { code: 'NO_COMPANY_OPEN', message: 'Open a company first.' },
             }),
@@ -255,7 +258,7 @@ describe('what it draws', () => {
 })
 
 describe('paging', () => {
-  const page = (count: number, prefix: string): DocumentSummary[] =>
+  const page = (count: number, prefix: string): DocumentListRow[] =>
     Array.from({ length: count }, (_unused, index) =>
       invoice({
         id: `${prefix}-${index}`,

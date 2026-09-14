@@ -40,7 +40,7 @@ import type {
   DateRangeInput,
   DayBook,
   Document,
-  DocumentSummary,
+  DocumentListRow,
   CancelDocumentInput,
   IssueDocumentInput,
   Item,
@@ -343,7 +343,7 @@ export interface CofferApi {
    * issued document — see the four rules in src/main/domain/documents/types.ts.
    */
   documents: {
-    list(input?: ListDocumentsInput): Promise<Result<DocumentSummary[]>>
+    list(input?: ListDocumentsInput): Promise<Result<DocumentListRow[]>>
     get(id: string): Promise<Result<Document | null>>
     /** Place of supply absent means "whatever the regime says". Supplying it overrides. */
     create(input: CreateDocumentInput): Promise<Result<Document>>

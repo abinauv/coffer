@@ -65,8 +65,8 @@ import type {
   ItcEligibility,
   TaxedLineInput,
   DocumentLineTaxDto,
+  DocumentListRow,
   DocumentStatusDto,
-  DocumentSummary,
   DocumentTotalsDto,
   ListDocumentsInput,
   UpdateTaxedDocumentInput,
@@ -75,6 +75,7 @@ import { isDocumentKind } from '@shared/documents'
 
 import type { CofferDb } from '../kysely'
 import { RepoError, repoErrorFrom } from './errors'
+import { settlementStatesFor } from './outstanding'
 import { assertPartiesActive } from './parties'
 
 /**
@@ -97,7 +98,7 @@ export const MAX_DOCUMENT_PAGE = 500
 export async function listDocuments(
   db: CofferDb,
   input: ListDocumentsInput = {},
-): Promise<DocumentSummary[]> {
+): Promise<DocumentListRow[]> {
   let query = db
     .selectFrom('documents')
     .innerJoin('parties', 'parties.id', 'documents.party_id')
@@ -110,6 +111,7 @@ export async function listDocuments(
       'documents.due_date as due_date',
       'documents.party_id as party_id',
       'documents.rounding_policy as rounding_policy',
+      'documents.entry_id as entry_id',
       'parties.name as party_name',
     ])
 
@@ -151,6 +153,17 @@ export async function listDocuments(
     rows.map((row) => row.id),
   )
 
+  /* Where each issued document stands, in four queries for the page. Only issued ones are
+   * asked about: a cancelled document's movement nets to zero through its reversal, and
+   * a register must not call it settled. A quotation needs no filter of its own — it never
+   * posts, so it has no movement and gets no state (see `settlementStatesFor`). */
+  const settlements = await settlementStatesFor(
+    db,
+    rows
+      .filter((row) => row.status === 'issued')
+      .map((row) => ({ id: row.id, kind: row.kind, partyId: row.party_id, entryId: row.entry_id })),
+  )
+
   return rows.map((row) => ({
     id: row.id,
     kind: row.kind,
@@ -167,6 +180,7 @@ export async function listDocuments(
       linesByDocument.get(row.id) ?? [],
       row.rounding_policy as 'whole-unit' | 'none',
     ).grandTotal,
+    settlement: settlements.get(row.id) ?? null,
   }))
 }
 

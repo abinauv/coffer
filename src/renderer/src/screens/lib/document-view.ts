@@ -20,8 +20,14 @@
 
 import type { BadgeTone } from '@renderer/components/atoms'
 import type { NavGroupId, ScreenNav } from '@renderer/lib/screens'
-import { definitionOf, type DocumentKind, type TradeSide } from '@shared/documents'
-import type { DocumentStatusDto } from '@shared/dto'
+import {
+  chargesOnTerms,
+  definitionOf,
+  isDocumentKind,
+  type DocumentKind,
+  type TradeSide,
+} from '@shared/documents'
+import type { DocumentListRow, DocumentStatusDto } from '@shared/dto'
 
 /**
  * Rows drawn per page.
@@ -228,14 +234,19 @@ export function statusLabel(status: string): string {
 }
 
 /**
- * The badge a status wears.
+ * The badge a status wears — the design system's status set (§03).
  *
  * CANCELLED IS NOT A WARNING, AND NOTHING HERE IS. It is a settled, deliberate state —
  * the document was issued, the entry was reversed, and the number was kept so the series
  * has no hole. Colouring it as a problem would put a red mark against the one action a
  * user takes to correct a mistake properly, and make a register look alarming for having
- * been kept well. So it recedes to neutral, issued reads as the settled normal, and the
- * accent goes on the draft — the only row on the page with something still to do.
+ * been kept well. So it recedes to neutral, and `isStruckStatus` strikes it through.
+ *
+ * ISSUED IS THE ACCENT AND DRAFT IS NEUTRAL, which is the reverse of what this said before
+ * the redesign, and the reason is the badge that is coming: `Paid`. Positive teal means
+ * money went the right way, so it belongs to a settled invoice, not to one that has merely
+ * been issued — an issued invoice painted positive would look paid. Issued takes the
+ * product's own voice instead, and a draft, which has posted nothing, stays quiet.
  *
  * Typed as `BadgeTone` rather than as a union written out here, so a tone the atom does
  * not have cannot be returned. `periodStatusTone` next door was written the other way and
@@ -245,11 +256,62 @@ export function statusLabel(status: string): string {
  * recurring, which is why it is worth stating here rather than only there.
  */
 export function statusTone(status: string): BadgeTone {
-  if (status === 'issued') return 'positive'
-  if (status === 'draft') return 'accent'
+  if (status === 'issued') return 'accent'
   return 'neutral'
 }
 
+/** Whether a status is a voided one, drawn struck through. Only `cancelled` is. */
+export function isStruckStatus(status: string): boolean {
+  return status === 'cancelled'
+}
+
+// ---- Settlement -------------------------------------------------------------
+
+/**
+ * The second badge a register row can wear: how much of it has been settled, and whether
+ * it is late. Null for a row with nothing to say.
+ *
+ * THE STATE IS MAIN'S. `settlement` arrives worked out from the same figures as the aged
+ * report; this only names it. What is decided here is words and a tone:
+ *
+ *   settled    Paid, or Refunded for a credit or debit note         positive
+ *   part       Part paid / Part refunded                            warning
+ *   late       Overdue 31d — takes the place of open or part        negative
+ *
+ * An open, on-time document gets no second badge: its status already says Issued, and a
+ * row that said "Issued · Unpaid" for every invoice on the page would be noise.
+ *
+ * LATE IS A DATE COMPARISON, NOT MONEY, which is why it may be decided here. It needs a due
+ * date (only kinds charged on terms carry one), something still outstanding, and a day
+ * after the due date. Nought days is not late, as in the aged report: an invoice on 30-day
+ * terms is not in default on the thirtieth day.
+ */
+export function settlementBadge(
+  row: Pick<DocumentListRow, 'kind' | 'settlement' | 'dueDate'>,
+  today: string,
+): { label: string; tone: BadgeTone } | null {
+  if (row.settlement === null || !isDocumentKind(row.kind)) return null
+  const refund = definitionOf(row.kind).direction === 'refund'
+
+  if (row.settlement === 'settled') return { label: refund ? 'Refunded' : 'Paid', tone: 'positive' }
+
+  const late = chargesOnTerms(row.kind) && row.dueDate !== null ? daysAfter(row.dueDate, today) : 0
+  if (late > 0) return { label: `Overdue ${String(late)}d`, tone: 'negative' }
+
+  if (row.settlement === 'part') {
+    return { label: refund ? 'Part refunded' : 'Part paid', tone: 'warning' }
+  }
+  return null
+}
+
+/** Whole days from `from` to `to`, both ISO dates. Negative when `to` is earlier. */
+function daysAfter(from: string, to: string): number {
+  const utc = (iso: string): number => {
+    const [year = 0, month = 1, day = 1] = iso.split('-').map(Number)
+    return Date.UTC(year, month - 1, day)
+  }
+  return Math.round((utc(to) - utc(from)) / 86_400_000)
+}
 /** The status buttons, in the order a register is scanned. `''` is no filter. */
 export function statusFilters(): ReadonlyArray<{ value: DocumentStatusDto | ''; label: string }> {
   return [

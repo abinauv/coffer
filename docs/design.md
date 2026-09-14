@@ -36,20 +36,21 @@ legally required to keep. Calm and exact beats lively.
 
 ## 3. Where everything lives
 
-| What                                   | Where                                                                                                                                                                                                                                       |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Name, tagline, description             | `src/branding.ts` is the source of truth. `electron-builder.yml` repeats the values by hand, because YAML cannot import it: change both                                                                                                     |
-| The mark                               | `src/shared/brand-mark.ts` holds its construction and small-size rules. Drawn by `components/shell/BrandMark.tsx` and, with the name, `Wordmark.tsx`                                                                                        |
-| App icon                               | `build/icon.png`, 1024 × 1024, committed. Drawn from the mark by `scripts/generate-icon.mjs` (`npm run icon`): rerun it and commit the result after changing the mark or the accent. electron-builder derives every platform's icon from it |
-| README banner, social preview          | `scripts/render-brand-assets.mjs` (`npm run brand:assets`). The banner is committed at `docs/assets/banner.png`; the social preview goes to `dist/brand/` and is uploaded by hand in the repository settings                                |
-| Colour, type, spacing, radius, density | `src/renderer/src/styles/tokens.css`, with the palette's reasoning and its measurements in the header                                                                                                                                       |
-| Fonts                                  | `src/renderer/src/assets/fonts/` as local woff2, declared with `@font-face` in `styles/base.css`. Versions, checksums and the OFL notice are in `THIRD-PARTY.md`                                                                            |
-| Element defaults                       | `src/renderer/src/styles/base.css`                                                                                                                                                                                                          |
-| Component styles                       | `styles/atoms.css` (buttons, inputs, badges…), `styles/shell.css` (title bar, sidebar), `screens/screens.css` (screen layouts)                                                                                                              |
-| Components                             | `src/renderer/src/components/` — `atoms/`, `shell/`, `command-palette/`, `toast/`                                                                                                                                                           |
-| Icons                                  | `src/renderer/src/lib/icons.ts` — 24 × 24 stroke paths drawn by `components/atoms/Icon.tsx`. No icon library                                                                                                                                |
-| Screens                                | `src/renderer/src/screens/welcome/` (create, pick, unlock, recover a company) and `screens/workspace/` (everything inside an open company)                                                                                                  |
-| Screen building blocks                 | `src/renderer/src/screens/components/` — frames, notices, the passphrase field and strength meter, report lines                                                                                                                             |
+| What                                   | Where                                                                                                                                                                                                                                          |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Name, tagline, description             | `src/branding.ts` is the source of truth. `electron-builder.yml` repeats the values by hand, because YAML cannot import it: change both                                                                                                        |
+| The mark                               | `src/shared/brand-mark.ts` holds its construction and small-size rules. Drawn by `components/shell/BrandMark.tsx` and, with the name, `Wordmark.tsx`                                                                                           |
+| App icon                               | `build/icon.png`, 1024 × 1024, committed. Drawn from the mark by `scripts/generate-icon.mjs` (`npm run icon`): rerun it and commit the result after changing the mark or the accent. electron-builder derives every platform's icon from it    |
+| README banner, social preview          | `scripts/render-brand-assets.mjs` (`npm run brand:assets`). The banner is committed at `docs/assets/banner.png`; the social preview goes to `dist/brand/` and is uploaded by hand in the repository settings                                   |
+| Colour, type, spacing, radius, density | `src/renderer/src/styles/tokens.css`, with the palette's reasoning and its measurements in the header                                                                                                                                          |
+| Fonts                                  | `src/renderer/src/assets/fonts/` as local woff2, declared with `@font-face` in `styles/base.css`. Versions, checksums and the OFL notice are in `THIRD-PARTY.md`                                                                               |
+| Element defaults                       | `src/renderer/src/styles/base.css`                                                                                                                                                                                                             |
+| Component styles                       | `styles/atoms.css` (buttons, inputs, badges…), `styles/shell.css` (title bar, sidebar), `screens/screens.css` (screen layouts)                                                                                                                 |
+| Components                             | `src/renderer/src/components/` — `atoms/`, `shell/`, `command-palette/`, `toast/`                                                                                                                                                              |
+| Icons                                  | `src/renderer/src/lib/icons.ts` — 24 × 24 stroke paths drawn by `components/atoms/Icon.tsx`. No icon library                                                                                                                                   |
+| Screens                                | `src/renderer/src/screens/welcome/` (create, pick, unlock, recover a company) and `screens/workspace/` (everything inside an open company)                                                                                                     |
+| Screen building blocks                 | `src/renderer/src/screens/components/` — frames, notices, the passphrase field and strength meter, report lines, `MoneyField`, and the three states every screen ships besides its full one: `EmptyState`, `RegisterSkeleton` and `ErrorState` |
+| Density preference                     | `lib/density.ts` decides, `store/density.tsx` wires it: the `data-density` attribute on `<html>`, stored as `coffer.density`. Chosen from the command palette until Settings exists                                                            |
 
 ## 4. Rules a redesign must keep
 
@@ -110,7 +111,34 @@ is a bug, however it looks.
 
 - **Density is four numbers.** `--control-height`, `--row-height`, the row padding pair and
   `--screen-pad`. Controls, table rows and the workspace frame read them; nothing else
-  moves. There is no way to switch to Compact yet.
+  moves. Compact is chosen from the command palette ("Density: compact") until Settings
+  exists.
+- **Compact removes padding, never legibility.** No control or row below `--hit-min`
+  (24px) in either density, and Compact touches no type token. `styles/tokens.test.ts`
+  reads the stylesheet and fails if either slips.
+
+**Components and states**
+
+- **One home per class.** An atom's classes are styled in `styles/atoms.css` and a utility's
+  in `styles/base.css`, and no later stylesheet redefines them. A second copy in
+  `screens.css` once won everywhere because it loads last, and bent every field on every
+  screen.
+- **A disabled control is drawn, not faded,** and a field that is disabled says why in place
+  of its hint (`disabledReason`).
+- **Busy keeps the label.** Work that can fail swaps the button's icon for a spinner and
+  keeps its words; it never becomes "Loading".
+- **Every badge carries a word,** and the tones mean one thing each: positive is money that
+  went the right way (Paid), warning is part of the way (Part paid), negative is late
+  (Overdue), the accent is an issued document, and a cancelled one is struck through rather
+  than coloured. A register's settlement state comes worked out from main
+  (`DocumentListRow.settlement`); the screen only names it.
+- **Four notice tones, never more:** info, positive, warning, danger.
+- **An error leads with "!",** so it is not told from a hint by red alone.
+- **Identifiers are set in mono with a slashed zero** (`isIdentifier`). **Money is typed into
+  a `MoneyField`,** which takes the currency symbol from the regime and hands back exactly
+  what was typed — it never groups, rounds or parses.
+- **Every screen ships an empty, a loading and an error state,** and a register loads as a
+  skeleton at its real column widths, never behind a spinner.
 
 **Language**
 
@@ -119,6 +147,11 @@ is a bug, however it looks.
 - **List only fonts that ship.** Plex has no Tamil cut, so Tamil text uses the operating
   system's Tamil face. A family named in `--font-sans` and not bundled falls through to
   whatever the OS has, silently.
+- **Dates the app writes read `31 Mar 2026`. Dates typed into a field use the platform's own
+  date picker,** which shows the operating system's format (`dd-mm-yyyy` on an Indian
+  Windows). That is a deliberate exception rather than an oversight: the native picker keeps
+  keyboard entry, the OS calendar and the user's own locale, and a hand-built date field
+  that drew the regime's format would have to rebuild all three.
 
 **Platform and security**
 

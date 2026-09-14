@@ -111,11 +111,10 @@ export function agedNav(side: TradeSide, sideIndex: number): ScreenNav {
 /**
  * Whether an item is late.
  *
- * `DocumentRegister` refuses this on purpose and its header says why: a register lists
- * documents and knows nothing about what has been paid against them, so an invoice
- * settled in full last week would wear the badge for ever. This page is the one that can
- * say it, because outstanding is what it is made of — every item here is money still
- * standing on the control account as at the report's date.
+ * A due date alone cannot say it — an invoice settled in full last week would wear the badge
+ * for ever. This page can, because outstanding is what it is made of: every item here is
+ * money still standing on the control account as at the report's date. The registers say it
+ * from the same figures, through `DocumentListRow.settlement` and `settlementBadge`.
  *
  * TWO CONDITIONS, AND THE SECOND IS THE ONE THAT IS EASY TO DROP. A credit note raised a
  * hundred days ago has `daysOverdue` of a hundred and is not overdue by any reading:

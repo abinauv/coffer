@@ -4,6 +4,7 @@ import {
   editorScreenId,
   emptyRegisterSentence,
   isCounterpartyAuthored,
+  isStruckStatus,
   PAGE_SIZE,
   partyLabel,
   partyReferenceHint,
@@ -12,6 +13,7 @@ import {
   registerLede,
   registerNav,
   registerScreenId,
+  settlementBadge,
   statusFilters,
   statusLabel,
   statusTone,
@@ -46,9 +48,17 @@ describe('statusTone', () => {
     expect(statusTone('cancelled')).toBe('neutral')
   })
 
-  it('gives the draft the accent, because it is the row with something left to do', () => {
-    expect(statusTone('draft')).toBe('accent')
-    expect(statusTone('issued')).toBe('positive')
+  /* Positive is kept for `Paid`. An issued invoice in teal would look settled. */
+  it('gives issued the accent and keeps positive for a document that is paid', () => {
+    expect(statusTone('issued')).toBe('accent')
+    expect(statusTone('issued')).not.toBe('positive')
+    expect(statusTone('draft')).toBe('neutral')
+  })
+
+  it('strikes through a cancelled document and nothing else', () => {
+    expect(isStruckStatus('cancelled')).toBe(true)
+    expect(isStruckStatus('issued')).toBe(false)
+    expect(isStruckStatus('draft')).toBe(false)
   })
 
   it('does not colour a status it does not know', () => {
@@ -194,5 +204,77 @@ describe('what each register says', () => {
   it('writes a different lede for every kind', () => {
     const ledes = KINDS.map(registerLede)
     expect(new Set(ledes).size).toBe(ledes.length)
+  })
+})
+
+describe('settlementBadge', () => {
+  const TODAY = '2026-06-15'
+  const row = (over: Partial<Parameters<typeof settlementBadge>[0]> = {}) => ({
+    kind: 'sales-invoice',
+    settlement: 'open' as const,
+    dueDate: '2026-06-30',
+    ...over,
+  })
+
+  it('says nothing about an open invoice that is not yet due', () => {
+    expect(settlementBadge(row(), TODAY)).toBeNull()
+  })
+
+  it('says nothing where main gave no state', () => {
+    expect(settlementBadge(row({ settlement: null }), TODAY)).toBeNull()
+  })
+
+  /* Positive is Paid, which is why Issued moved to the accent. */
+  it('calls a settled invoice paid, in the positive tone', () => {
+    expect(settlementBadge(row({ settlement: 'settled' }), TODAY)).toEqual({
+      label: 'Paid',
+      tone: 'positive',
+    })
+  })
+
+  it('calls a part-settled invoice part paid, as a warning', () => {
+    expect(settlementBadge(row({ settlement: 'part' }), TODAY)).toEqual({
+      label: 'Part paid',
+      tone: 'warning',
+    })
+  })
+
+  it('uses the refund words for a note that money is paid back on', () => {
+    expect(settlementBadge(row({ kind: 'credit-note', settlement: 'settled' }), TODAY)?.label).toBe(
+      'Refunded',
+    )
+    expect(settlementBadge(row({ kind: 'debit-note', settlement: 'part' }), TODAY)?.label).toBe(
+      'Part refunded',
+    )
+  })
+
+  it('says how late an unsettled invoice is, in days, over open or part', () => {
+    expect(settlementBadge(row({ dueDate: '2026-05-15' }), TODAY)).toEqual({
+      label: 'Overdue 31d',
+      tone: 'negative',
+    })
+    expect(settlementBadge(row({ settlement: 'part', dueDate: '2026-06-14' }), TODAY)?.label).toBe(
+      'Overdue 1d',
+    )
+  })
+
+  /* As in the aged report: nought days is due today, not late. */
+  it('does not call an invoice late on the day it falls due', () => {
+    expect(settlementBadge(row({ dueDate: TODAY }), TODAY)).toBeNull()
+  })
+
+  it('never calls a paid invoice late, however old its due date', () => {
+    expect(
+      settlementBadge(row({ settlement: 'settled', dueDate: '2020-01-01' }), TODAY)?.label,
+    ).toBe('Paid')
+  })
+
+  /* A credit note is the customer's own money standing to their credit. It is not late. */
+  it('never calls a note late, since nothing charges on terms there', () => {
+    expect(settlementBadge(row({ kind: 'credit-note', dueDate: '2020-01-01' }), TODAY)).toBeNull()
+  })
+
+  it('counts days across a month and a year boundary without drifting', () => {
+    expect(settlementBadge(row({ dueDate: '2025-12-31' }), '2026-03-01')?.label).toBe('Overdue 60d')
   })
 })

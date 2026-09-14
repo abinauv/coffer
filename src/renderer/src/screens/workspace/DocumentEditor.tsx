@@ -110,6 +110,7 @@ import { ScreenFrame } from '../components/ScreenFrame'
 import { formatAmount } from '../lib/ledger-format'
 import {
   editorScreenId,
+  isStruckStatus,
   partyLabel,
   partyReferenceHint,
   partyReferenceLabel,
@@ -700,7 +701,9 @@ export function DocumentEditor({
 
         {document !== null && (
           <div className="toolbar">
-            <Badge tone={statusTone(status)}>{statusLabel(status)}</Badge>
+            <Badge tone={statusTone(status)} isStruck={isStruckStatus(status)}>
+              {statusLabel(status)}
+            </Badge>
             {canIssue(status) && (
               <Button variant="primary" disabled={isBusy || isDirty} onClick={() => void issue()}>
                 Issue

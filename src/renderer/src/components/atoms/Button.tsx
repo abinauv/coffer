@@ -10,7 +10,11 @@ interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'cla
   icon?: IconName
   iconEnd?: IconName
   isFullWidth?: boolean
-  /** Disables the button and shows progress. Keeps the label so width is stable. */
+  /**
+   * Disables the button and shows progress. The label stays, so the width holds and the
+   * button still names what it is doing; a spinner takes the leading icon's place, or
+   * leads the label when there is no icon. It never becomes the word "Loading".
+   */
   isBusy?: boolean
   className?: string
   ref?: Ref<HTMLButtonElement>
@@ -50,7 +54,11 @@ export function Button({
       aria-busy={isBusy || undefined}
       {...rest}
     >
-      {icon !== undefined && <Icon name={icon} size={size === 'sm' ? 14 : 16} />}
+      {isBusy ? (
+        <span className="button__spinner" aria-hidden="true" />
+      ) : (
+        icon !== undefined && <Icon name={icon} size={size === 'sm' ? 14 : 16} />
+      )}
       {children !== undefined && <span className="button__label">{children}</span>}
       {iconEnd !== undefined && <Icon name={iconEnd} size={size === 'sm' ? 14 : 16} />}
     </button>

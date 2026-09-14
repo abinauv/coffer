@@ -41,6 +41,7 @@ import { formatAmount, formatAmountOrBlank } from '../lib/ledger-format'
 import {
   editorScreenId,
   emptyRegisterSentence,
+  isStruckStatus,
   PAGE_SIZE,
   partyLabel,
   registerLede,
@@ -217,7 +218,12 @@ export function ReceiptRegister({
                   <td className="ledger-table__code">{receipt.date}</td>
                   <td>{receipt.partyName}</td>
                   <td>
-                    <Badge tone={statusTone(receipt.status)}>{statusLabel(receipt.status)}</Badge>
+                    <Badge
+                      tone={statusTone(receipt.status)}
+                      isStruck={isStruckStatus(receipt.status)}
+                    >
+                      {statusLabel(receipt.status)}
+                    </Badge>
                   </td>
                   <td className="ledger-table__figure">{formatAmount(receipt.amount, format)}</td>
                   {/* Blank rather than a zero when it is all matched: a column of 0.00

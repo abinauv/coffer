@@ -22,6 +22,7 @@ import {
   draftAllocations,
   editorScreenId,
   emptyRegisterSentence,
+  isStruckStatus,
   newSentence,
   PAGE_SIZE,
   partyLabel,
@@ -230,6 +231,8 @@ describe('the statuses', () => {
   it('does not treat a cancelled receipt as a warning', () => {
     expect(statusTone('posted')).toBe('positive')
     expect(statusTone('cancelled')).toBe('neutral')
+    expect(isStruckStatus('cancelled')).toBe(true)
+    expect(isStruckStatus('posted')).toBe(false)
   })
 
   it('offers a filter for each, and one for neither', () => {

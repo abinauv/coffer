@@ -52,6 +52,10 @@ export default defineConfig({
           environment: 'happy-dom',
           include: ['src/renderer/**/*.test.{ts,tsx}'],
           setupFiles: ['src/renderer/src/test/setup.ts'],
+          /* Vitest hands every stylesheet import back as an empty string, `?raw` included.
+           * tokens.css is let through because styles/tokens.test.ts holds its values to the
+           * density floors; no other stylesheet is, so no test depends on CSS applying. */
+          css: { include: [/styles[\\/]tokens\.css/] },
         },
       },
     ],

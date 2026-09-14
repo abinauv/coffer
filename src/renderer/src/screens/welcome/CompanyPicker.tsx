@@ -23,6 +23,7 @@ import { useNavigation } from '@renderer/store/navigation'
 import { registerScreens } from '@renderer/lib/screens'
 import { useToasts } from '@renderer/store/toasts'
 import type { CompanySummary } from '@shared/dto'
+import { EmptyState } from '../components/EmptyState'
 import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
 import { PathField } from '../components/PathField'
@@ -128,7 +129,7 @@ export function CompanyPicker(): JSX.Element {
         <FailureNotice error={error} context="list" onAction={{ refresh: () => void refresh() }} />
       )}
 
-      {companies !== null && companies.length === 0 && <EmptyState onCreate={goCreate} />}
+      {companies !== null && companies.length === 0 && <NoCompanies onCreate={goCreate} />}
 
       {companies !== null && companies.length > 0 && (
         <ul className="company-list">
@@ -259,22 +260,23 @@ function CompanyRow({
   )
 }
 
-function EmptyState({ onCreate }: { onCreate: () => void }): JSX.Element {
+function NoCompanies({ onCreate }: { onCreate: () => void }): JSX.Element {
   return (
-    <div className="empty">
-      <Icon name="ledger" size={26} className="empty__mark" />
-      <h2 className="empty__title">No companies yet</h2>
-      <p className="empty__body">
+    <EmptyState
+      title="No companies yet"
+      titleAs="h2"
+      action={
+        <Button variant="primary" icon="plus" onClick={onCreate}>
+          Create a company
+        </Button>
+      }
+    >
+      <p>
         A company is one encrypted file plus the vault holding its keys, kept wherever you choose —
         a folder on this machine, or a drive you can lock in a cupboard. Create one to start, or add
         a file you already have.
       </p>
-      <div className="empty__actions">
-        <Button variant="primary" icon="plus" onClick={onCreate}>
-          Create a company
-        </Button>
-      </div>
-    </div>
+    </EmptyState>
   )
 }
 

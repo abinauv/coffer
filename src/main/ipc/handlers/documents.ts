@@ -25,9 +25,9 @@ import type {
   CreateDocumentInput,
   Document,
   DocumentLineInput,
+  DocumentListRow,
   DocumentSettlement,
   DocumentStatusDto,
-  DocumentSummary,
   IssueDocumentInput,
   ListDocumentsInput,
   OffsetInput,
@@ -56,7 +56,7 @@ import {
  * One method per contract method, same names, same DTOs, no envelope.
  */
 export interface DocumentsService {
-  list(input: ListDocumentsInput): Promise<DocumentSummary[]>
+  list(input: ListDocumentsInput): Promise<DocumentListRow[]>
   get(id: string): Promise<Document | null>
   create(input: CreateDocumentInput): Promise<Document>
   update(input: UpdateDocumentInput): Promise<Document>

@@ -44,7 +44,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
-import { Badge, Button, Dialog, Icon } from '@renderer/components/atoms'
+import { Badge, Button, Dialog } from '@renderer/components/atoms'
 import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { makeRoute } from '@renderer/lib/routing'
@@ -63,6 +63,7 @@ import type {
   PassphraseStrength,
   ReceiptSummary,
 } from '@shared/dto'
+import { EmptyState } from '../components/EmptyState'
 import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
 import { PassphraseField } from '../components/PassphraseField'
@@ -83,6 +84,7 @@ import { formatAmount, formatAmountOrBlank } from '../lib/ledger-format'
 import { failureTitle } from '../lib/messages'
 import { NO_RESET_WARNING } from '../lib/passphrase-meter'
 import {
+  activityIsStruck,
   activityLabel,
   activityStatusLabel,
   activityTarget,
@@ -769,7 +771,9 @@ function ActivityTable({
               <td className="ledger-table__code">{row.date}</td>
               <td>{row.partyName}</td>
               <td>
-                <Badge tone={activityTone(row)}>{activityStatusLabel(row)}</Badge>
+                <Badge tone={activityTone(row)} isStruck={activityIsStruck(row)}>
+                  {activityStatusLabel(row)}
+                </Badge>
               </td>
               <td className="ledger-table__figure">{formatAmount(row.amount, format)}</td>
             </tr>
@@ -810,14 +814,12 @@ function FirstRun({
 
   return (
     <DashboardPanel title="Start here">
-      <div className="empty">
-        <Icon name="ledger" size={28} className="empty__mark" />
-        <p className="empty__title">Nothing has been raised in these books yet</p>
-        <p className="empty__body">
+      <EmptyState title="Nothing has been raised in these books yet" titleAs="p">
+        <p>
           Which is exactly where a new set of books starts. Three things have to happen before the
           figures on this screen mean anything, and they have to happen in this order.
         </p>
-      </div>
+      </EmptyState>
 
       <ol className="stack">
         {steps.map((step) => (

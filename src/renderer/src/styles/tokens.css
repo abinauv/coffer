@@ -291,6 +291,9 @@
   --duration-fast: 110ms; /* menus, tooltips, dropdowns */
   --duration-base: 170ms; /* dialogs, drawers, panels */
   --duration-slow: 260ms; /* the command palette, and nothing else */
+  /* One turn of a busy button's spinner. A loop, so it is not one of the four above, and
+   * the reduced-motion rule in base.css stops it after a single frame. */
+  --duration-spin: 700ms;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-emphasis: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -348,7 +351,9 @@
 
 :root[data-density='compact'] {
   --control-height: 26px;
-  --control-height-sm: 22px;
+  /* 24, not the handoff's 22: a small button is still a hit target, and none may be
+   * smaller than --hit-min. tokens.test.ts holds this. */
+  --control-height-sm: 24px;
   --row-height: 28px;
   --row-pad-y: var(--space-1);
   --row-pad-x: var(--space-3);
