@@ -1,4 +1,5 @@
 import type { JSX } from 'react'
+import { MARK_GRID, markPaths, markShapes } from '@shared/brand-mark'
 
 interface BrandMarkProps {
   size?: number
@@ -6,23 +7,29 @@ interface BrandMarkProps {
 }
 
 /**
- * The Coffer mark: a strongbox seen face on, with the two ruled lines of a ledger
- * across it. Drawn rather than imported so it inherits the accent token and needs
- * no asset, no raster, and no second copy for dark mode.
+ * The Coffer mark: a square recessed into a square. The geometry, and the rules for small
+ * sizes, are in src/shared/brand-mark.ts, which the packaging icon and the README banner
+ * are drawn from too.
+ *
+ * Drawn rather than imported so it takes its colour from the accent token (through
+ * `currentColor`) and needs no asset, no raster and no second copy for dark mode.
  */
 export function BrandMark({ size = 20, className }: BrandMarkProps): JSX.Element {
+  const shapes = markShapes(size)
+  const paths = markPaths(shapes.size)
+
   return (
     <svg
-      viewBox="0 0 24 24"
-      width={size}
-      height={size}
+      viewBox={`0 0 ${MARK_GRID} ${MARK_GRID}`}
+      width={shapes.size}
+      height={shapes.size}
       className={['brand-mark', className ?? ''].filter(Boolean).join(' ')}
+      data-inner={shapes.inner.solid ? 'solid' : 'frame'}
       aria-hidden="true"
       focusable="false"
     >
-      <rect x="2.5" y="4" width="19" height="16" rx="3" className="brand-mark__body" />
-      <path d="M7 10.5h10M7 14h6" className="brand-mark__rules" />
-      <circle cx="18" cy="14" r="1.6" className="brand-mark__dial" />
+      <path d={paths.outer} fillRule="evenodd" className="brand-mark__outer" />
+      <path d={paths.inner} fillRule="evenodd" className="brand-mark__inner" />
     </svg>
   )
 }

@@ -99,13 +99,6 @@
   min-width: 0;
 }
 
-.titlebar__product {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  letter-spacing: var(--tracking-tight);
-  color: var(--ink);
-}
-
 .titlebar__divider {
   width: 1px;
   height: 12px;
@@ -164,25 +157,36 @@
 
 /* ---- Brand mark ---------------------------------------------------------- */
 
+/* One colour, from the accent: Lapis on paper, and the lighter Lapis on slate. A context
+ * that needs the mark reversed sets `color` on it. Never the positive teal. */
 .brand-mark {
   flex: none;
+  color: var(--accent);
 }
 
-.brand-mark__body {
-  fill: var(--accent);
+.brand-mark__outer,
+.brand-mark__inner {
+  fill: currentColor;
 }
 
-.brand-mark__rules {
-  stroke: var(--on-accent);
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  fill: none;
+/* ---- Wordmark ------------------------------------------------------------ */
+
+/* The name in Plex Serif beside the mark. The serif is for the name and printed documents;
+ * nothing else in the running interface uses it. */
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
-.brand-mark__dial {
-  fill: none;
-  stroke: var(--on-accent);
-  stroke-width: 1.4;
+.wordmark__name {
+  font-family: var(--font-serif);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-wordmark);
+  line-height: var(--leading-none);
+  color: var(--ink-strong);
 }
 
 /* ---- Theme control ------------------------------------------------------- */
