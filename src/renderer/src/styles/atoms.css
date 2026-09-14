@@ -25,26 +25,27 @@
     color var(--duration-fast) var(--ease-out);
 }
 
+/* Heights are density tokens: Compact moves them, and nothing else about a button. */
 .button--md {
-  height: 32px;
+  height: var(--control-height);
   padding: 0 var(--space-3);
   font-size: var(--text-base);
 }
 
 .button--sm {
-  height: 26px;
+  height: var(--control-height-sm);
   padding: 0 var(--space-2);
   font-size: var(--text-sm);
   border-radius: var(--radius-xs);
 }
 
 .button--icon-only.button--md {
-  width: 32px;
+  width: var(--control-height);
   padding: 0;
 }
 
 .button--icon-only.button--sm {
-  width: 26px;
+  width: var(--control-height-sm);
   padding: 0;
 }
 
@@ -67,6 +68,10 @@
   background: var(--accent-strong);
 }
 
+.button--primary:active:not(:disabled) {
+  background: var(--accent-pressed);
+}
+
 .button--secondary {
   background: var(--surface);
   color: var(--ink);
@@ -76,6 +81,10 @@
 
 .button--secondary:hover:not(:disabled) {
   background: var(--surface-hover);
+}
+
+.button--secondary:active:not(:disabled) {
+  background: var(--surface-active);
 }
 
 .button--ghost {
@@ -93,8 +102,15 @@
   color: var(--on-negative);
 }
 
+/* Hover and press darken in light and lighten in dark. That direction lives in the
+ * tokens, which is why this is not a `filter`: brightening a dark red on paper made
+ * it lighter than its own rest state and read as disabled. */
 .button--danger:hover:not(:disabled) {
-  filter: brightness(1.08);
+  background: var(--negative-ink);
+}
+
+.button--danger:active:not(:disabled) {
+  background: var(--negative-pressed);
 }
 
 .button:active:not(:disabled) {
@@ -131,7 +147,7 @@
 
 .field__input {
   width: 100%;
-  height: 32px;
+  height: var(--control-height);
   padding: 0 var(--space-3);
   background: var(--surface);
   color: var(--ink);
@@ -141,6 +157,35 @@
   transition:
     border-color var(--duration-fast) var(--ease-out),
     box-shadow var(--duration-fast) var(--ease-out);
+}
+
+/* The Select atom puts `field__control` on the <select> itself, and until now nothing
+ * styled it: it drew as the OS control, shorter than the input beside it and ruled in
+ * black. It takes the input's box. The native arrow stays, and so does the native menu. */
+select.field__control {
+  width: 100%;
+  height: var(--control-height);
+  padding: 0 var(--space-2);
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+  cursor: pointer;
+}
+
+select.field__control:hover:not(:disabled) {
+  border-color: var(--ink-faint);
+}
+
+select.field__control:disabled {
+  background: var(--surface-sunken);
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+select.field__control[aria-invalid='true'] {
+  border-color: var(--negative);
 }
 
 .field__control--with-icon .field__input {

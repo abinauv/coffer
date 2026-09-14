@@ -11,6 +11,12 @@
 
 /* ---- Page scaffolding ---------------------------------------------------- */
 
+/* The workspace frame supplies no padding of its own (ScreenFrame's `isInset`). The
+ * amount is a density token. */
+.page--inset {
+  padding: var(--screen-pad);
+}
+
 .page__head {
   display: flex;
   flex-direction: column;
@@ -431,7 +437,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-12) var(--space-6);
-  border: 1px dashed var(--rule-strong);
+  border: 1px dashed var(--rule-total);
   border-radius: var(--radius-lg);
   text-align: center;
 }
@@ -522,7 +528,7 @@
   flex-direction: column;
   gap: var(--space-5);
   padding: var(--space-6);
-  border: 1px solid var(--rule-strong);
+  border: 1px solid var(--rule-total);
   border-radius: var(--radius-md);
   background: var(--surface);
 }
@@ -621,7 +627,12 @@
 /* ---- Print --------------------------------------------------------------- */
 
 /* Printing is a first-class way to store recovery codes, so the sheet prints as a
- * document and nothing else goes with it: no chrome, no navigation, no buttons. */
+ * document and nothing else goes with it: no chrome, no navigation, no buttons.
+ *
+ * The raw black and white below are the one deliberate exception to "tokens only". Paper
+ * has no theme: a dark-mode token printed on a laser printer is grey on grey, and codes
+ * that will be retyped in an emergency must print at full contrast whatever theme the
+ * screen was in. */
 
 @media print {
   .print-hidden {
@@ -664,6 +675,13 @@
  * (a `1` must be the same width as a `7` or the columns stop lining up), the rules are
  * hairlines, and the emphasis is carried by weight rather than by colour — a report that
  * has to be printed in black and white must still be legible.
+ *
+ * Headers, sections and totals are ruled with `--rule-total`, not `--rule-strong`. The
+ * strong rule is the one that identifies a control and is dark enough to meet 3:1; on a
+ * table header it would outweigh the figures under it.
+ *
+ * Row height and padding are density tokens. `height` on a cell is a minimum, so a row
+ * holding a control still grows to fit it.
  */
 
 .ledger-table {
@@ -674,7 +692,8 @@
 
 .ledger-table th,
 .ledger-table td {
-  padding: var(--space-2) var(--space-3);
+  height: var(--row-height);
+  padding: var(--row-pad-y) var(--row-pad-x);
   text-align: start;
   border-bottom: 1px solid var(--rule);
 }
@@ -685,7 +704,7 @@
   font-weight: var(--weight-medium);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule-total);
 }
 
 /* Codes and amounts are read down the column, so every digit is the same width. */
@@ -723,19 +742,19 @@
   font-weight: var(--weight-medium);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule-total);
 }
 
 .ledger-table__subtotal td {
   font-weight: var(--weight-medium);
-  border-bottom: 1px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule-total);
 }
 
 /* The two figures this whole screen exists to compare. Double-ruled, as on paper. */
 .ledger-table__total td {
   padding-top: var(--space-3);
   font-weight: var(--weight-semibold);
-  border-top: 3px double var(--rule-strong);
+  border-top: 3px double var(--rule-total);
   border-bottom: none;
 }
 
@@ -784,7 +803,7 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--ink);
-  border-bottom: 1px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule-total);
 }
 
 /* A profit is not celebrated and a loss is not scolded — the tone is a quiet tint that
@@ -793,8 +812,10 @@
   color: var(--ink);
 }
 
+/* This read `var(--danger-ink, var(--ink))`. No `--danger-ink` token has ever existed, so a
+ * loss was always painted in plain ink and the fallback hid it. */
 .ledger-table__total--danger td {
-  color: var(--danger-ink, var(--ink));
+  color: var(--figure-negative);
 }
 
 .stack--tight {
@@ -809,7 +830,7 @@
   padding-top: var(--space-4);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
-  border-bottom: 1px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule-total);
 }
 
 .day-book__total {
@@ -838,7 +859,7 @@
 .aged__drill > td {
   padding: 0 0 var(--space-3) var(--space-6);
   background: var(--surface-sunken);
-  border-bottom: 1px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule-total);
 }
 
 .aged__items {

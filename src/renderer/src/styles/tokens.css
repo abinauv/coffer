@@ -15,6 +15,10 @@
  * so an explicit light choice wins over a dark OS, and once under
  * `[data-theme='dark']` so an explicit dark choice wins over a light OS.
  *
+ * DENSITY. `data-density` is absent for Comfortable and `compact` for Compact. It
+ * moves four numbers — control height, row height, row padding and screen padding —
+ * and nothing else. Compact never shrinks a hit target below 24px or type below 12px.
+ *
  * ---------------------------------------------------------------------------
  * THE PALETTE, AND WHY
  *
@@ -28,23 +32,43 @@
  * small brightness steps, and it moves the accent to the light end of the ramp
  * because a mid-tone fill cannot reach 3:1 against a dark ground.
  *
+ * The accent is `lapis`, a blue-violet. It is deliberately not green: a green brand
+ * next to a green "positive" figure makes the one state that must be unambiguous
+ * ambiguous.
+ *
  * COLOUR VISION. Money that is negative is the single most important state to read
  * correctly, so red/green is exactly the pair we cannot rely on. Two defences:
  *
  *   - Positive is a spruce-teal (hue ~168), not a leaf green. Teal keeps its blue
  *     component, so under protanopia and deuteranopia it sits on the opposite side
- *     of the blue-yellow axis from red rather than collapsing onto it. Measured on
- *     simulated protan/deutan/tritan output, the worst-case CIELAB separation
- *     between positive, negative and warning is dE 23 in light and dE 22 in dark;
- *     the naive green/red/amber trio scores dE 15 and dE 11.
+ *     of the blue-yellow axis from red rather than collapsing onto it.
  *   - Hue is never the only channel. A negative figure also carries a sign, and
  *     `--figure-negative` is deliberately the darkest, heaviest colour in the set.
  *
- * The accent is an ink indigo, not a green — a green brand next to a green
- * "positive" figure makes the one state that must be unambiguous ambiguous.
- * Every foreground/background pair below was checked: text tokens meet WCAG AA
- * (4.5:1) on every surface they are used on, and `--rule-strong` and `--accent`
- * meet 3:1 for non-text.
+ * MEASURED, on simulated protan/deutan/tritan output at full severity, as CIELAB
+ * dE76 between the four meaning-carrying colours (accent, positive, negative,
+ * warning):
+ *
+ *              normal   protan   deutan   tritan   worst
+ *   light        42.3     30.5     23.7     24.5    23.7  (deutan, negative/warning)
+ *   dark         47.9     45.8     30.6     30.5    30.6  (deutan, negative/warning)
+ *
+ * The naive green/red/amber trio scores 15 and 11. The palette this file replaced
+ * scored 23 and 22.
+ *
+ * CONTRAST, worst case across every surface each token is permitted to sit on:
+ *
+ *   light   ink 14.25 · ink-strong 15.69 · ink-muted 6.54 · ink-faint 4.52
+ *           accent-ink 7.94 · positive-ink 6.58 · negative-ink 8.03
+ *           warning-ink 5.54 · figure-negative 7.41 · rule-strong 3.29
+ *   dark    ink 13.26 · ink-strong 15.30 · ink-muted 6.50 · ink-faint 5.21
+ *           accent-ink 8.97 · positive-ink 9.35 · negative-ink 8.12
+ *           warning-ink 10.56 · figure-negative 5.07 · rule-strong 3.79
+ *
+ * Text meets WCAG AA (4.5:1) everywhere. `--rule-strong` and the four state fills
+ * meet 3:1 for non-text. `--rule` is a decorative hairline and is exempt — it must
+ * never be the only thing identifying a control. Re-measure all of the above if any
+ * of accent, positive, negative or warning changes.
  */
 
 :root {
@@ -53,63 +77,76 @@
   /* ---- Surfaces ------------------------------------------------------- */
 
   /** The window's own background. Nothing sits behind it. */
-  --ground: #f4f3ef;
+  --ground: #f5f3ee;
   /** Cards, panels, table bodies — anything holding content. */
   --surface: #ffffff;
   /** A surface that has been lifted: menus, popovers, dialogs. */
   --surface-raised: #ffffff;
   /** Wells: code blocks, empty states, inset regions. */
-  --surface-sunken: #eae8e1;
-  --surface-hover: #f4f3ef;
-  --surface-active: #eae8e1;
-  /** Application chrome: the title bar. */
-  --chrome: #eceae4;
-  --sidebar: #efede7;
+  --surface-sunken: #ebe8e0;
+  --surface-hover: #f5f3ee;
+  --surface-active: #ebe8e0;
+  /** Application chrome: the title bar. src/main/index.ts repeats this value for
+   *  the OS window controls' first paint; change both. */
+  --chrome: #ece9e2;
+  /** The navigation column. */
+  --sidebar: #f0ede6;
   /** Scrim behind a modal. */
-  --overlay: rgba(21, 26, 32, 0.42);
+  --overlay: rgba(23, 26, 31, 0.42);
 
   /* ---- Lines ---------------------------------------------------------- */
 
-  /** The default hairline. Table rows, card edges, dividers. */
-  --rule: #e0ddd4;
-  /** Where a boundary has to be felt: inputs, focus containers, headers. */
-  --rule-strong: #cbc7bb;
+  /** The default hairline. Table rows, card edges, dividers. Decorative. */
+  --rule: #e2ded4;
+  /** Where a boundary identifies a control: inputs, selects, secondary buttons.
+   *  Meets 3:1 on every surface, which is why it is darker than it looks like it
+   *  should be. Do not lighten it to taste. */
+  --rule-strong: #847e72;
+  /** A row of rows: the line above a total. Heavier than --rule, lighter than ink. */
+  --rule-total: #c7c2b4;
 
   /* ---- Ink ------------------------------------------------------------ */
 
-  --ink: #151a20;
+  --ink: #171a1f;
   /** Headings and figures that must carry weight. */
-  --ink-strong: #0e1216;
+  --ink-strong: #0c0f13;
   /** Secondary text: labels, metadata, helper copy. AA on every surface. */
-  --ink-muted: #47505f;
+  --ink-muted: #4a515c;
   /** Tertiary text: shortcut hints, placeholders, timestamps. Still AA. */
-  --ink-faint: #5e6775;
+  --ink-faint: #616977;
 
   /* ---- Accent --------------------------------------------------------- */
 
-  --accent: #2a3f86;
-  --accent-strong: #223471;
-  --accent-soft: #e8ebf7;
+  --accent: #3a3d9e;
+  --accent-strong: #2e3182;
+  --accent-pressed: #262a75;
+  --accent-soft: #eaeaf8;
+  --accent-soft-strong: #d9daf2;
+  --accent-line: #d3d5f0;
   /** Accent as text — on `--surface` or on `--accent-soft`. */
-  --accent-ink: #26397a;
+  --accent-ink: #34379a;
   /** Text and icons on a solid `--accent` fill. */
   --on-accent: #ffffff;
 
   /* ---- Semantic states ------------------------------------------------- */
 
-  --positive: #0e7160;
-  --positive-ink: #0a5748;
+  --positive: #0f7a63;
+  --positive-ink: #0a5b4a;
   --positive-soft: #ddefea;
+  --positive-line: #bedfd6;
   --on-positive: #ffffff;
 
-  --negative: #a02012;
-  --negative-ink: #82190d;
+  --negative: #992010;
+  --negative-ink: #851810;
+  --negative-pressed: #6e140c;
   --negative-soft: #fbe6e2;
+  --negative-line: #f0d8d2;
   --on-negative: #ffffff;
 
-  --warning: #bd7a05;
-  --warning-ink: #855405;
+  --warning: #b3730a;
+  --warning-ink: #7e5206;
   --warning-soft: #fbeed3;
+  --warning-line: #efdcb4;
   --on-warning: #1c1305;
 
   /* Informational states share the accent hue: in this product "here is
@@ -119,6 +156,7 @@
   --info: var(--accent);
   --info-ink: var(--accent-ink);
   --info-soft: var(--accent-soft);
+  --info-line: var(--accent-line);
   --on-info: var(--on-accent);
 
   /* ---- Figures -------------------------------------------------------- */
@@ -127,42 +165,52 @@
    * a positive figure is simply ink, and red is reserved for the one state that
    * must never be misread. `--positive` is for deltas and trends, not balances. */
   --figure: var(--ink);
-  --figure-negative: #8c1c10;
+  --figure-negative: #8e1b0f;
   --figure-muted: var(--ink-faint);
 
   /* ---- Focus ---------------------------------------------------------- */
 
-  --focus-ring: #2a3f86;
+  --focus-ring: #3a3d9e;
   /** Painted between ring and element so the ring reads on any background. */
   --focus-ring-contrast: #ffffff;
   --focus-ring-width: 2px;
   --focus-ring-offset: 2px;
 
-  --selection-bg: #d7ddf3;
-  --selection-ink: #151a20;
+  --selection-bg: #d9daf2;
+  --selection-ink: #171a1f;
 
   /* ---- Elevation ------------------------------------------------------ */
 
   /* Light lifts things with soft, ink-tinted shadow — pure black reads dirty on
    * warm paper. Dark lifts with a much deeper shadow plus a top hairline, because
    * a shadow alone is invisible against a near-black ground. */
-  --shadow-xs: 0 1px 1px rgba(21, 26, 32, 0.05);
-  --shadow-sm: 0 1px 2px rgba(21, 26, 32, 0.07), 0 1px 1px rgba(21, 26, 32, 0.04);
-  --shadow-md: 0 4px 12px rgba(21, 26, 32, 0.09), 0 1px 3px rgba(21, 26, 32, 0.06);
-  --shadow-lg: 0 12px 32px rgba(21, 26, 32, 0.13), 0 2px 8px rgba(21, 26, 32, 0.07);
-  --shadow-xl: 0 24px 64px rgba(21, 26, 32, 0.17), 0 4px 12px rgba(21, 26, 32, 0.08);
+  --shadow-xs: 0 1px 1px rgba(23, 26, 31, 0.05);
+  --shadow-sm: 0 1px 2px rgba(23, 26, 31, 0.07), 0 1px 1px rgba(23, 26, 31, 0.04);
+  --shadow-md: 0 4px 12px rgba(23, 26, 31, 0.09), 0 1px 3px rgba(23, 26, 31, 0.06);
+  --shadow-lg: 0 12px 32px rgba(23, 26, 31, 0.13), 0 2px 8px rgba(23, 26, 31, 0.07);
+  --shadow-xl: 0 24px 64px rgba(23, 26, 31, 0.17), 0 4px 12px rgba(23, 26, 31, 0.08);
   --shadow-lift: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 
   /* ---- Type ----------------------------------------------------------- */
 
-  /* No bundled webfont. The CSP forbids remote origins and a font package is a
-   * dependency this batch may not add, so the stack is the platform's own UI face
-   * — which is also the one that already has the tabular figures below. */
+  /* IBM Plex, bundled as local woff2 under SIL OFL 1.1 — the CSP forbids remote
+   * origins and the licence has to permit redistribution under the AGPL. The files
+   * and their licence are in assets/fonts/, declared in base.css, and listed with
+   * checksums in THIRD-PARTY.md. Plex is a maintained superfamily whose sans, serif
+   * and mono share one skeleton and whose Devanagari cut is drawn to match. Script
+   * faces are listed after the Latin face so the browser falls through per glyph.
+   *
+   * List only faces that are actually bundled. A family named here and not shipped
+   * falls through to whatever the OS has, silently. Plex has no Tamil cut, so Tamil
+   * text reaches the system stack (Nirmala UI on Windows, Tamil Sangam MN on macOS);
+   * that is deliberate, not a missing file. The system stack is also the last resort
+   * for a build where the fonts failed to bundle. */
   --font-sans:
-    system-ui, -apple-system, 'Segoe UI Variable Text', 'Segoe UI', Roboto, 'Helvetica Neue',
-    sans-serif;
+    'IBM Plex Sans', 'IBM Plex Sans Devanagari', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /** The wordmark and the printed invoice. Never in the running interface. */
+  --font-serif: 'IBM Plex Serif', Georgia, 'Times New Roman', serif;
   --font-mono:
-    ui-monospace, 'Cascadia Mono', 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+    'IBM Plex Mono', ui-monospace, 'Cascadia Mono', 'SF Mono', Menlo, Consolas, monospace;
 
   /* Columns of money only line up if the digits are the same width. Applied by
    * default to tables, inputs and the .figure/.numeric utilities in base.css. */
@@ -171,7 +219,7 @@
    * slashed zero so 0 and O cannot be confused when read aloud or retyped. */
   --numeric-identifier: tabular-nums slashed-zero;
 
-  --text-2xs: 0.6875rem; /* 11px — keycaps, column micro-labels */
+  --text-2xs: 0.6875rem; /* 11px — keycaps, column micro-labels. Never a sentence. */
   --text-xs: 0.75rem; /* 12px — metadata, captions */
   --text-sm: 0.8125rem; /* 13px — dense tables, secondary UI */
   --text-base: 0.875rem; /* 14px — the default */
@@ -181,18 +229,21 @@
   --text-2xl: 1.75rem; /* 28px */
   --text-3xl: 2.25rem; /* 36px — headline figures */
 
+  /* Leading is set for the tallest script the build ships, not for English.
+   * Devanagari sits taller than Latin at the same size and its shirorekha
+   * crowds a tight line-height. */
   --leading-none: 1;
-  --leading-tight: 1.2;
-  --leading-snug: 1.35;
-  --leading-normal: 1.5;
-  --leading-relaxed: 1.65;
+  --leading-tight: 1.25;
+  --leading-snug: 1.4;
+  --leading-normal: 1.55;
+  --leading-relaxed: 1.7;
 
   --weight-regular: 400;
   --weight-medium: 500;
   --weight-semibold: 600;
   --weight-bold: 700;
 
-  --tracking-tight: -0.014em;
+  --tracking-tight: -0.015em;
   --tracking-normal: 0;
   --tracking-wide: 0.02em;
   /* Uppercase micro-labels need real letter-spacing or they read as a blur. */
@@ -218,7 +269,10 @@
 
   /* ---- Radii ---------------------------------------------------------- */
 
-  /* Squarer than a consumer app. A ledger is ruled, not rounded. */
+  /* Squarer than a consumer app. A ledger is ruled, not rounded. Inputs and
+   * buttons take sm; cards and dialogs take md; nothing inside a data table is
+   * rounded at all, because a rounded cell edge reads as a chip and invites a
+   * click that does nothing. */
   --radius-xs: 3px;
   --radius-sm: 5px;
   --radius-md: 8px;
@@ -229,18 +283,38 @@
   /* ---- Motion --------------------------------------------------------- */
 
   /* Durations are tokens so that `prefers-reduced-motion` can collapse every
-   * animation in the product by redefining four values (see base.css). */
-  --duration-instant: 60ms;
-  --duration-fast: 110ms;
-  --duration-base: 170ms;
-  --duration-slow: 260ms;
+   * animation in the product by redefining four values (see base.css). Nothing
+   * that moves money animates: a saved figure appears, it does not count up. */
+  --duration-instant: 60ms; /* hover, press */
+  --duration-fast: 110ms; /* menus, tooltips, dropdowns */
+  --duration-base: 170ms; /* dialogs, drawers, panels */
+  --duration-slow: 260ms; /* the command palette, and nothing else */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --ease-emphasis: cubic-bezier(0.2, 0.8, 0.2, 1);
 
+  /* ---- Density -------------------------------------------------------- */
+
+  /* Comfortable. `[data-density='compact']` below is the only other value. */
+  --control-height: 32px;
+  --control-height-sm: 26px;
+  --row-height: 36px;
+  --row-pad-y: var(--space-2);
+  --row-pad-x: var(--space-4);
+  --screen-pad: var(--space-6);
+  /* Never below this, in either density, however small the glyph inside it. */
+  --hit-min: 24px;
+
   /* ---- Layout --------------------------------------------------------- */
 
   --titlebar-height: 38px;
+  --statusbar-height: 26px;
+  /* The section bar and contextual rail are designed and not yet drawn; these
+   * are their sizes, defined ahead of the shell that will use them. */
+  --sectionbar-height: 40px;
+  --rail-width: 208px;
+  --rail-width-collapsed: 56px;
+  /* The sidebar the shell draws today, which lists every section at once. */
   --sidebar-width: 232px;
   --sidebar-width-collapsed: 56px;
   /* The cap on a reading column. Ledger tables ignore it and use the width they
@@ -266,6 +340,20 @@
 }
 
 /* --------------------------------------------------------------------------
+ * Compact. Four numbers, and nothing else. Nothing sets the attribute yet: the
+ * density preference arrives with the component work, and Settings after it.
+ * -------------------------------------------------------------------------- */
+
+:root[data-density='compact'] {
+  --control-height: 26px;
+  --control-height-sm: 22px;
+  --row-height: 28px;
+  --row-pad-y: var(--space-1);
+  --row-pad-x: var(--space-3);
+  --screen-pad: var(--space-4);
+}
+
+/* --------------------------------------------------------------------------
  * Dark — following the OS, unless the user explicitly chose light.
  * -------------------------------------------------------------------------- */
 
@@ -274,8 +362,8 @@
     color-scheme: dark;
 
     --ground: #0e1216;
-    --surface: #151a20;
-    --surface-raised: #1a2028;
+    --surface: #161b21;
+    --surface-raised: #1c222a;
     --surface-sunken: #0a0d11;
     --surface-hover: #1b212a;
     --surface-active: #212832;
@@ -284,40 +372,48 @@
     --overlay: rgba(3, 5, 7, 0.66);
 
     --rule: #262e39;
-    --rule-strong: #39424e;
+    --rule-strong: #727c8a;
+    --rule-total: #3a4450;
 
     --ink: #e6eaf0;
-    --ink-strong: #f7f9fb;
-    --ink-muted: #9aa4b2;
-    --ink-faint: #7c8693;
+    --ink-strong: #f8fafc;
+    --ink-muted: #9ca6b4;
+    --ink-faint: #8a94a2;
 
-    --accent: #93b0f8;
-    --accent-strong: #adc4fb;
-    --accent-soft: #18213a;
-    --accent-ink: #b0c6fb;
+    --accent: #a2aefb;
+    --accent-strong: #bcc4fd;
+    --accent-pressed: #cdd3fe;
+    --accent-soft: #1a1e3d;
+    --accent-soft-strong: #24294a;
+    --accent-line: #2c3357;
+    --accent-ink: #b6befc;
     --on-accent: #0c111c;
 
-    --positive: #43c9b4;
-    --positive-ink: #66d6c5;
+    --positive: #57dcc2;
+    --positive-ink: #6bd8c6;
     --positive-soft: #0f2723;
+    --positive-line: #1a3b35;
     --on-positive: #04140f;
 
-    --negative: #f87a72;
-    --negative-ink: #ff9a90;
+    --negative: #e86a5e;
+    --negative-ink: #ff9f96;
+    --negative-pressed: #f2857b;
     --negative-soft: #2e1512;
+    --negative-line: #45201c;
     --on-negative: #2a0d09;
 
-    --warning: #eeb64a;
-    --warning-ink: #f6c96e;
+    --warning: #e8ae3c;
+    --warning-ink: #f7cc74;
     --warning-soft: #2b1f0c;
+    --warning-line: #413014;
     --on-warning: #251803;
 
-    --figure-negative: #f88f86;
+    --figure-negative: #e86a5e;
 
-    --focus-ring: #93b0f8;
+    --focus-ring: #a2aefb;
     --focus-ring-contrast: #0a0d11;
 
-    --selection-bg: #24325a;
+    --selection-bg: #24294a;
     --selection-ink: #e6eaf0;
 
     --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.5);
@@ -338,8 +434,8 @@
   color-scheme: dark;
 
   --ground: #0e1216;
-  --surface: #151a20;
-  --surface-raised: #1a2028;
+  --surface: #161b21;
+  --surface-raised: #1c222a;
   --surface-sunken: #0a0d11;
   --surface-hover: #1b212a;
   --surface-active: #212832;
@@ -348,40 +444,48 @@
   --overlay: rgba(3, 5, 7, 0.66);
 
   --rule: #262e39;
-  --rule-strong: #39424e;
+  --rule-strong: #727c8a;
+  --rule-total: #3a4450;
 
   --ink: #e6eaf0;
-  --ink-strong: #f7f9fb;
-  --ink-muted: #9aa4b2;
-  --ink-faint: #7c8693;
+  --ink-strong: #f8fafc;
+  --ink-muted: #9ca6b4;
+  --ink-faint: #8a94a2;
 
-  --accent: #93b0f8;
-  --accent-strong: #adc4fb;
-  --accent-soft: #18213a;
-  --accent-ink: #b0c6fb;
+  --accent: #a2aefb;
+  --accent-strong: #bcc4fd;
+  --accent-pressed: #cdd3fe;
+  --accent-soft: #1a1e3d;
+  --accent-soft-strong: #24294a;
+  --accent-line: #2c3357;
+  --accent-ink: #b6befc;
   --on-accent: #0c111c;
 
-  --positive: #43c9b4;
-  --positive-ink: #66d6c5;
+  --positive: #57dcc2;
+  --positive-ink: #6bd8c6;
   --positive-soft: #0f2723;
+  --positive-line: #1a3b35;
   --on-positive: #04140f;
 
-  --negative: #f87a72;
-  --negative-ink: #ff9a90;
+  --negative: #e86a5e;
+  --negative-ink: #ff9f96;
+  --negative-pressed: #f2857b;
   --negative-soft: #2e1512;
+  --negative-line: #45201c;
   --on-negative: #2a0d09;
 
-  --warning: #eeb64a;
-  --warning-ink: #f6c96e;
+  --warning: #e8ae3c;
+  --warning-ink: #f7cc74;
   --warning-soft: #2b1f0c;
+  --warning-line: #413014;
   --on-warning: #251803;
 
-  --figure-negative: #f88f86;
+  --figure-negative: #e86a5e;
 
-  --focus-ring: #93b0f8;
+  --focus-ring: #a2aefb;
   --focus-ring-contrast: #0a0d11;
 
-  --selection-bg: #24325a;
+  --selection-bg: #24294a;
   --selection-ink: #e6eaf0;
 
   --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.5);
