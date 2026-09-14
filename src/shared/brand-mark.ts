@@ -7,14 +7,23 @@
  * (scripts/generate-icon.mjs) and the README banner and social preview
  * (scripts/render-brand-assets.mjs) — so the three cannot drift apart.
  *
- * THE CONSTRUCTION, from the brand sheet (§01). Drawn on an 8×8 grid:
+ * THE CONSTRUCTION. Drawn on an 8×8 grid:
  *
- *   outer frame   inset 1 unit, stroke 0.6, corner radius 0.3
- *   inner frame   inset 3 units, stroke 0.6, corner radius 0.1
+ *   outer frame   inset 1 unit,    stroke 0.5, corner radius 0.3
+ *   inner frame   inset 2.5 units, stroke 0.5, corner radius 0.1
  *
- * The inner square is fractionally sharper than the outer one, which is what makes it read
- * as recessed rather than as a target. Here the grid is scaled by 3 to a 24-unit box, the
+ * So the inner square is half the outer square's width, and its opening is a third. The
+ * inner square is fractionally sharper than the outer one, which is what makes it read as
+ * recessed rather than as a target. Here the grid is scaled by 3 to a 24-unit box, the
  * same box every icon in lib/icons.ts is drawn in.
+ *
+ * WHY HALF, AND NOT THE SHEET'S WRITTEN THIRD. The brand sheet's construction note says
+ * inset 3 and stroke 0.6, which makes the inner square a third of the outer one. Every
+ * rendered specimen on the same sheet — the app icon at four platform sizes, the title
+ * bar, the README banner, the social preview — draws it at close to half, with a stroke
+ * nearer 0.5. At a third the opening shrinks to a pinhole and the mark reads as a target
+ * or a stop button, the two things the sheet says it must not be; at half it reads as a
+ * panel set into a panel. The specimens are what the design looks like, so they win.
  *
  * A stroke sits INSIDE its frame's edge, the way a CSS border does: the outer frame's
  * outside edge is at the inset, and the stroke eats inwards from there. That is how the
@@ -24,8 +33,9 @@
  *
  * SMALL SIZES. Two rules, both from the sheet's minimum-size specimens:
  *
- *   - Below 20px the inner frame becomes a solid square. At 16px a 2px hole closes up in
- *     rasterisation and the mark turns into a smudge.
+ *   - Below 20px the inner frame becomes a solid square the size of its own opening. At
+ *     16px a 2px hole closes up in rasterisation and the mark turns into a smudge, and a
+ *     solid square as big as the whole inner frame would touch the outer one.
  *   - Below 20px the outer stroke is held at two device pixels, which is what the 16px
  *     specimen draws, so the frame does not thin to a grey hairline.
  *
@@ -54,8 +64,8 @@ export interface MarkFrame {
   readonly radius: number
 }
 
-export const MARK_OUTER: MarkFrame = { inset: 3, stroke: 1.8, radius: 0.9 }
-export const MARK_INNER: MarkFrame = { inset: 9, stroke: 1.8, radius: 0.3 }
+export const MARK_OUTER: MarkFrame = { inset: 3, stroke: 1.5, radius: 0.9 }
+export const MARK_INNER: MarkFrame = { inset: 7.5, stroke: 1.5, radius: 0.3 }
 
 /** One rounded rectangle, in grid units. */
 export interface MarkRect {
@@ -119,7 +129,7 @@ export function markShapes(requested: number): MarkShapes {
     size,
     outer: { outside: outsideOf(MARK_OUTER), hole: holeOf(MARK_OUTER, outerStroke) },
     inner: isSmall
-      ? { solid: true, outside: outsideOf(MARK_INNER) }
+      ? { solid: true, outside: holeOf(MARK_INNER, MARK_INNER.stroke) }
       : {
           solid: false,
           outside: outsideOf(MARK_INNER),
