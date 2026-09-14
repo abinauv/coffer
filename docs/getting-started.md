@@ -127,17 +127,18 @@ Run it **after** `npm run format`. Prettier reflowing a file silently deletes an
 
 ### Packaging and release
 
-|                         |                                                               |
-| ----------------------- | ------------------------------------------------------------- |
-| `npm run build`         | electron-vite production build into `out/`. No installer.     |
-| `npm start`             | Run the last `npm run build` output, without a dev server.    |
-| `npm run build:win`     | Build, then `electron-builder --win --publish never`.         |
-| `npm run build:mac`     | The same for macOS.                                           |
-| `npm run build:linux`   | The same for Linux.                                           |
-| `npm run native:check`  | Verify the native binaries load under plain Node.             |
-| `npm run native:verify` | Also load them inside a real Electron main process.           |
-| `npm run checksums`     | SHA-256 every artefact in a directory into `SHA256SUMS.txt`.  |
-| `npm run icon`          | Regenerate `build/icon.png` from `scripts/generate-icon.mjs`. |
+|                         |                                                              |
+| ----------------------- | ------------------------------------------------------------ |
+| `npm run build`         | electron-vite production build into `out/`. No installer.    |
+| `npm start`             | Run the last `npm run build` output, without a dev server.   |
+| `npm run build:win`     | Build, then `electron-builder --win --publish never`.        |
+| `npm run build:mac`     | The same for macOS.                                          |
+| `npm run build:linux`   | The same for Linux.                                          |
+| `npm run native:check`  | Verify the native binaries load under plain Node.            |
+| `npm run native:verify` | Also load them inside a real Electron main process.          |
+| `npm run checksums`     | SHA-256 every artefact in a directory into `SHA256SUMS.txt`. |
+| `npm run icon`          | Redraw the committed `build/icon.png` from the mark.         |
+| `npm run brand:assets`  | Render the README banner and the social preview.             |
 
 `native:verify` is the check that matters before a release, because a binary that loads
 under Node can still be the wrong one for Electron:

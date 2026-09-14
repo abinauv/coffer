@@ -31,8 +31,8 @@ import { useCommands } from '../../store/commands'
 import { useCompany } from '../../store/company'
 import { useAppInfo, usePlatform, useWindowChrome } from '../../store/platform'
 import { Icon } from '../atoms'
-import { BrandMark } from './BrandMark'
 import { ThemeControl } from './ThemeControl'
+import { Wordmark } from './Wordmark'
 
 const PALETTE_SHORTCUT: Shortcut = { key: 'k', ctrlOrCmd: true }
 
@@ -46,8 +46,7 @@ export function TitleBar(): JSX.Element {
   return (
     <header className="titlebar drag-region" data-chrome={chrome}>
       <div className="titlebar__lead">
-        <BrandMark size={17} />
-        <span className="titlebar__product">{BRAND.name}</span>
+        <Wordmark markSize={17} />
         {company && (
           <>
             <span className="titlebar__divider" aria-hidden="true" />

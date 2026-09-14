@@ -244,6 +244,8 @@
   --weight-bold: 700;
 
   --tracking-tight: -0.015em;
+  /* The wordmark only. Plex Serif at display size wants a little more than tight. */
+  --tracking-wordmark: -0.02em;
   --tracking-normal: 0;
   --tracking-wide: 0.02em;
   /* Uppercase micro-labels need real letter-spacing or they read as a blur. */

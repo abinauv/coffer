@@ -55,15 +55,41 @@ describe('BrandMark', () => {
     expect(markIn(container)).toHaveClass('brand-mark', 'titlebar__mark')
   })
 
-  /* The strongbox, its two ledger rules and the dial. Each part carries its own class
-   * because each takes its colour from a different token — a mark drawn as one path
-   * would be a single flat silhouette. */
-  it('draws the box, the rules and the dial as separately styled parts', () => {
-    const { container } = render(<BrandMark />)
+  /* Two frames, each filled even-odd: without the rule a frame's hole is painted over and
+   * the mark becomes two nested solid squares, which the brand sheet calls a stop button. */
+  it('draws the outer and inner frames as even-odd paths', () => {
+    const { container } = render(<BrandMark size={24} />)
 
     const mark = markIn(container)
-    expect(mark.querySelector('.brand-mark__body')?.tagName).toBe('rect')
-    expect(mark.querySelector('.brand-mark__rules')?.tagName).toBe('path')
-    expect(mark.querySelector('.brand-mark__dial')?.tagName).toBe('circle')
+    for (const part of ['.brand-mark__outer', '.brand-mark__inner']) {
+      const path = mark.querySelector(part)
+      expect(path?.tagName).toBe('path')
+      expect(path).toHaveAttribute('fill-rule', 'evenodd')
+    }
+  })
+
+  it('draws the inner square as a frame from 20px up', () => {
+    const { container } = render(<BrandMark size={20} />)
+
+    const mark = markIn(container)
+    expect(mark).toHaveAttribute('data-inner', 'frame')
+    /* An outside edge and a hole: two subpaths. */
+    expect(mark.querySelector('.brand-mark__inner')?.getAttribute('d')?.match(/M/g)).toHaveLength(2)
+  })
+
+  it('fills the inner square below 20px, where a hole would close up', () => {
+    const { container } = render(<BrandMark size={17} />)
+
+    const mark = markIn(container)
+    expect(mark).toHaveAttribute('data-inner', 'solid')
+    expect(mark.querySelector('.brand-mark__inner')?.getAttribute('d')?.match(/M/g)).toHaveLength(1)
+  })
+
+  it('is never drawn below 16px', () => {
+    const { container } = render(<BrandMark size={12} />)
+
+    const mark = markIn(container)
+    expect(mark).toHaveAttribute('width', '16')
+    expect(mark).toHaveAttribute('height', '16')
   })
 })

@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/banner.png" alt="Coffer — Your books, in your own safe." width="100%">
+
 # Coffer
 
 **Free, open-source accounting and ERP software for small businesses in India — GST
@@ -8,9 +10,9 @@ invoicing, double-entry books and inventory, offline and encrypted on your own c
 _Your books, in your own safe._
 
 [![CI](https://github.com/abinauv/coffer/actions/workflows/ci.yml/badge.svg)](https://github.com/abinauv/coffer/actions/workflows/ci.yml)
-[![Licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-0F6B58.svg)](./LICENSE)
-[![Status: alpha](https://img.shields.io/badge/status-alpha-8A5518.svg)](#status)
-[![Platforms: Windows, macOS, Linux](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-4B5563.svg)](#install)
+[![Licence: AGPL v3](https://img.shields.io/badge/licence-AGPL--3.0-3A3D9E.svg?labelColor=4A515C)](./LICENSE)
+[![Status: alpha](https://img.shields.io/badge/status-alpha-B3730A.svg?labelColor=4A515C)](#status)
+[![Platforms: Windows, macOS, Linux](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-171A1F.svg?labelColor=4A515C)](#install)
 
 </div>
 
