@@ -136,7 +136,7 @@ registerScreens([
     id: 'profit-and-loss',
     title: 'Profit and loss',
     area: 'workspace',
-    nav: { label: 'Profit and loss', icon: 'ledger', group: 'reports', order: 2 },
+    nav: { label: 'Profit and loss', icon: 'trend', group: 'reports', order: 2 },
     render: () => <ProfitAndLoss />,
   },
 ])

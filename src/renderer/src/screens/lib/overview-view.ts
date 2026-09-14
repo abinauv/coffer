@@ -494,7 +494,7 @@ export function activityTarget(row: ActivityRow): ItemTarget | null {
  * Rows drawn in a "needs attention" panel.
  *
  * Small on purpose. A dashboard panel listing forty drafts is a register with none of a
- * register's filters, and the registers are one click away in the sidebar.
+ * register's filters, and the registers are one click away in the rail.
  */
 export const ATTENTION_LIMIT = 5
 

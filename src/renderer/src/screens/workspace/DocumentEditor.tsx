@@ -1476,7 +1476,7 @@ function Lines({
       {units.length === 0 && (
         <p className="prose prose--muted">
           No units are set up yet, and a line needs none — a quantity can be counted in nothing.
-          Units, in the sidebar, is where they come from.
+          Units of measure, under Inventory, is where they come from.
         </p>
       )}
       <p className="prose prose--muted">
@@ -1552,14 +1552,16 @@ function Totals({
 
 /*
  * One editor per kind, from the same table the registers use. No `nav` on any of them:
- * an editor is reached from its register or from a row, never from the sidebar — there
- * is no such thing as "the" credit note to land on.
+ * an editor is reached from its register or from a row, never from the rail — there
+ * is no such thing as "the" credit note to land on. `navParent` is that register, so
+ * the rail keeps it marked while the editor is open.
  */
 export const documentEditorScreens: readonly ScreenDefinition[] = DOCUMENT_KINDS.map(
   (definition) => ({
     id: editorScreenId(definition.kind),
     title: definition.label,
     area: 'workspace' as const,
+    navParent: registerScreenId(definition.kind),
     render: (context: ScreenContext) => <DocumentEditor {...context} kind={definition.kind} />,
   }),
 )

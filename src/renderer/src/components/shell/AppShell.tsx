@@ -3,10 +3,10 @@
  *
  * Two layouts, chosen by the area of the current route and nothing else:
  *
- *   welcome    no company is open. Title bar and a centred canvas. No sidebar,
+ *   welcome    no company is open. Title bar and a centred canvas. No navigation,
  *              because there is nothing to navigate between until a company is
- *              unlocked, and offering one would be a lie about what is reachable.
- *   workspace  a company is open. Title bar, sidebar, content.
+ *              unlocked, and offering any would be a lie about what is reachable.
+ *   workspace  a company is open. Title bar, section bar, rail, content, status bar.
  *
  * The shell also owns the commands that belong to the frame itself. Business
  * commands are contributed by the screens that own them — nothing in this file
@@ -18,11 +18,11 @@ import type { JSX } from 'react'
 import { DENSITY_LABELS, DENSITY_PREFERENCES } from '../../lib/density'
 import {
   NARROW_VIEWPORT_QUERY,
-  resolveSidebarCollapsed,
-  SIDEBAR_STORAGE_KEY,
-  parseSidebarPreference,
-  toggledSidebarPreference,
-  type SidebarPreference,
+  parseRailPreference,
+  RAIL_STORAGE_KEY,
+  resolveRailCollapsed,
+  toggledRailPreference,
+  type RailPreference,
 } from '../../lib/layout'
 import { useMediaQuery } from '../../lib/hooks'
 import { makeRoute } from '../../lib/routing'
@@ -38,9 +38,12 @@ import { useTheme } from '../../store/theme'
 import { useToasts } from '../../store/toasts'
 import { CommandPalette } from '../command-palette/CommandPalette'
 import { ToastViewport } from '../toast/ToastViewport'
+import { ContextRail } from './ContextRail'
 import { ScreenHost } from './ScreenHost'
-import { Sidebar } from './Sidebar'
+import { SectionBar } from './SectionBar'
+import { StatusBar } from './StatusBar'
 import { TitleBar } from './TitleBar'
+import { useSectionNavigation } from './useSectionNavigation'
 
 export function AppShell(): JSX.Element {
   const { route } = useNavigation()
@@ -60,27 +63,39 @@ export function AppShell(): JSX.Element {
 }
 
 function Workspace(): JSX.Element {
-  const [preference, setPreferenceState] = useState<SidebarPreference>(() =>
-    parseSidebarPreference(readPreference(browserStore(), SIDEBAR_STORAGE_KEY)),
+  const [preference, setPreferenceState] = useState<RailPreference>(() =>
+    parseRailPreference(readPreference(browserStore(), RAIL_STORAGE_KEY)),
   )
   const isNarrow = useMediaQuery(NARROW_VIEWPORT_QUERY)
-  const isCollapsed = resolveSidebarCollapsed(preference, isNarrow)
+  const isCollapsed = resolveRailCollapsed(preference, isNarrow)
+  const sections = useSectionNavigation()
 
   const toggle = useCallback(() => {
     setPreferenceState((current) => {
-      const next = toggledSidebarPreference(current, isNarrow)
-      writePreference(browserStore(), SIDEBAR_STORAGE_KEY, next)
+      const next = toggledRailPreference(current, isNarrow)
+      writePreference(browserStore(), RAIL_STORAGE_KEY, next)
       return next
     })
   }, [isNarrow])
 
   return (
-    <div className="app__body">
-      <Sidebar isCollapsed={isCollapsed} onToggleCollapsed={toggle} />
+    <div className="app__body app__body--workspace">
+      <SectionBar
+        sections={sections.sections}
+        currentId={sections.current?.id ?? null}
+        onSelect={sections.select}
+      />
+      <ContextRail
+        section={sections.current}
+        marked={sections.marked}
+        isCollapsed={isCollapsed}
+        onToggleCollapsed={toggle}
+      />
       <main className="app__main" id="main" tabIndex={-1}>
         <ScreenHost />
       </main>
-      <SidebarCommand onToggle={toggle} isCollapsed={isCollapsed} />
+      <StatusBar />
+      <WorkspaceCommands onToggleRail={toggle} isCollapsed={isCollapsed} onStep={sections.step} />
     </div>
   )
 }
@@ -95,27 +110,47 @@ function Welcome(): JSX.Element {
   )
 }
 
-/** Registered only while the workspace exists, so it cannot fire from the picker. */
-function SidebarCommand({
-  onToggle,
+/** Registered only while the workspace exists, so none of them can fire from the picker. */
+function WorkspaceCommands({
+  onToggleRail,
   isCollapsed,
+  onStep,
 }: {
-  onToggle: () => void
+  onToggleRail: () => void
   isCollapsed: boolean
+  onStep: (by: 1 | -1) => void
 }): JSX.Element {
   useRegisterCommands(
     useMemo<Command[]>(
       () => [
         {
-          id: 'view.toggle-sidebar',
-          title: isCollapsed ? 'Expand the sidebar' : 'Collapse the sidebar',
+          id: 'view.toggle-rail',
+          title: isCollapsed ? 'Expand the rail' : 'Collapse the rail to icons',
           section: 'View',
-          keywords: ['nav', 'navigation', 'panel'],
+          keywords: ['nav', 'navigation', 'panel', 'sidebar', 'icons'],
           shortcut: { key: 'b', ctrlOrCmd: true },
-          run: onToggle,
+          run: onToggleRail,
+        },
+        /* Ctrl ] and Ctrl [ from the design system's Modern key map. Ctrl [ was Back, which
+         * moved to Alt ←, the key every browser and file manager already uses for it. */
+        {
+          id: 'nav.section.next',
+          title: 'Go to the next section',
+          section: 'Go to',
+          keywords: ['section', 'tab', 'right'],
+          shortcut: { key: ']', ctrlOrCmd: true },
+          run: () => onStep(1),
+        },
+        {
+          id: 'nav.section.previous',
+          title: 'Go to the previous section',
+          section: 'Go to',
+          keywords: ['section', 'tab', 'left'],
+          shortcut: { key: '[', ctrlOrCmd: true },
+          run: () => onStep(-1),
         },
       ],
-      [onToggle, isCollapsed],
+      [onToggleRail, isCollapsed, onStep],
     ),
   )
   return <></>
@@ -181,7 +216,7 @@ function ShellCommands(): JSX.Element {
         id: 'nav.back',
         title: 'Go back',
         section: 'General',
-        shortcut: { key: '[', ctrlOrCmd: true },
+        shortcut: { key: 'ArrowLeft', alt: true },
         isDisabled: !canGoBack,
         run: back,
       },

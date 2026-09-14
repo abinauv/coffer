@@ -242,7 +242,7 @@ registerScreens([
     id: 'account-ledger',
     title: 'Account ledger',
     area: 'workspace',
-    nav: { label: 'Account ledger', icon: 'ledger', group: 'reports', order: 4 },
+    nav: { label: 'Account ledger', icon: 'ledger', group: 'accounts', order: 2 },
     render: () => <AccountLedger />,
   },
 ])

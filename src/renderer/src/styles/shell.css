@@ -1,9 +1,11 @@
 /*
- * The shell: title bar, sidebar, content frame, command palette, toasts.
+ * The shell: title bar, section bar, rail, content frame, status bar, command
+ * palette, toasts.
  *
- * The layout is one grid column of three rows — title bar, body, and whatever the
- * body contains — sized so that at the 1024×640 minimum window (src/main/index.ts)
- * the content region still has room for a ledger table.
+ * The frame is two rows — title bar and body. The workspace body is its own grid:
+ * the section bar across the top, the rail beside the content, the status bar across
+ * the bottom. Sized so that at the 1024×640 minimum window (src/main/index.ts) the
+ * content region still has room for a ledger table.
  */
 
 .app {
@@ -23,6 +25,13 @@
 
 .app__body--welcome {
   grid-template-columns: 1fr;
+}
+
+.app__body--workspace {
+  /* `minmax(0, 1fr)`, not `1fr`: a wide table in the content must scroll inside it,
+   * not push the grid wider than the window. */
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .app__main,
@@ -99,16 +108,19 @@
   min-width: 0;
 }
 
-.titlebar__divider {
-  width: 1px;
-  height: 12px;
-  /* A separator, not a control boundary, so not `--rule-strong`. */
-  background: var(--rule-total);
+.titlebar__company {
+  min-width: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
 }
 
-.titlebar__company {
-  font-size: var(--text-sm);
-  color: var(--ink-muted);
+.titlebar__year {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-variant-numeric: var(--numeric-identifier);
+  color: var(--ink-faint);
 }
 
 .titlebar__version {
@@ -150,8 +162,7 @@
 }
 
 .titlebar__search-hint {
-  font-size: var(--text-2xs);
-  color: var(--ink-faint);
+  display: inline-flex;
   flex: none;
 }
 
@@ -189,107 +200,121 @@
   color: var(--ink-strong);
 }
 
-/* ---- Theme control ------------------------------------------------------- */
+/* ---- Section bar ------------------------------------------------------- */
 
-.theme-control {
-  display: inline-flex;
-  padding: 2px;
-  background: var(--surface-sunken);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-sm);
-  gap: 2px;
+/* Six sections across the workspace. The current one takes the ground colour, as if it
+ * were a tab opening onto the content, plus a 2px accent underline and a heavier weight:
+ * three channels, so it never rests on colour alone. */
+.sectionbar {
+  grid-column: 1 / -1;
+  height: var(--sectionbar-height);
+  padding-inline: var(--space-3);
+  background: var(--sidebar);
+  border-bottom: 1px solid var(--rule);
 }
 
-.theme-control__option {
-  display: inline-flex;
+.sectionbar__list {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sectionbar__entry {
+  display: flex;
+}
+
+.sectionbar__item {
+  display: flex;
   align-items: center;
-  gap: var(--space-1);
-  height: 20px;
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-4);
   border: 0;
-  border-radius: var(--radius-xs);
+  /* The underline sits on the bar's own bottom rule, so the two read as one line. */
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
   background: transparent;
-  color: var(--ink-faint);
-  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
   cursor: pointer;
   transition:
     background-color var(--duration-fast) var(--ease-out),
     color var(--duration-fast) var(--ease-out);
 }
 
-.theme-control--compact .theme-control__option {
-  padding: 0;
-  width: 24px;
-  justify-content: center;
+.sectionbar__item:hover {
+  color: var(--ink);
+  background: var(--surface-active);
 }
 
-.theme-control__option:hover {
-  color: var(--ink-muted);
+.sectionbar__item[data-active='true'] {
+  background: var(--ground);
+  border-bottom-color: var(--accent);
+  color: var(--ink-strong);
+  font-weight: var(--weight-semibold);
 }
 
-.theme-control__option[aria-checked='true'] {
-  background: var(--surface);
-  color: var(--accent-ink);
-  box-shadow: var(--shadow-xs);
-}
+/* ---- Contextual rail ----------------------------------------------------- */
 
-/* ---- Sidebar ------------------------------------------------------------- */
-
-.sidebar {
+.rail {
   display: flex;
   flex-direction: column;
-  width: var(--sidebar-width);
+  width: var(--rail-width);
+  min-height: 0;
   background: var(--sidebar);
   border-right: 1px solid var(--rule);
   overflow: hidden;
   transition: width var(--duration-base) var(--ease-out);
 }
 
-.sidebar[data-collapsed='true'] {
-  width: var(--sidebar-width-collapsed);
+.rail[data-collapsed='true'] {
+  width: var(--rail-width-collapsed);
 }
 
-.sidebar__scroll {
+.rail__scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding: var(--space-3) var(--space-2);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
 }
 
-.sidebar__empty {
+.rail__empty {
   padding: var(--space-2);
   font-size: var(--text-xs);
   color: var(--ink-faint);
   line-height: var(--leading-relaxed);
 }
 
-.sidebar__heading {
-  padding: 0 var(--space-2) var(--space-1);
+.rail__heading {
+  padding: var(--space-1) var(--space-2) var(--space-2);
 }
 
-.sidebar__list {
+.rail__list {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.sidebar__item {
-  position: relative;
+.rail__item {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   width: 100%;
-  height: 30px;
-  padding: 0 var(--space-2);
+  /* Labels wrap, never truncate: a long name takes a second line, and the row grows. */
+  min-height: 30px;
+  padding: var(--space-1) var(--space-2);
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--ink-muted);
-  font-size: var(--text-base);
-  font-weight: var(--weight-medium);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
   text-align: left;
   cursor: pointer;
   transition:
@@ -297,71 +322,76 @@
     color var(--duration-fast) var(--ease-out);
 }
 
-.sidebar[data-collapsed='true'] .sidebar__item {
+.rail[data-collapsed='true'] .rail__item {
   justify-content: center;
   padding: 0;
+  color: var(--ink-muted);
 }
 
-.sidebar__item:hover {
+.rail__item:hover {
   background: var(--surface-active);
-  color: var(--ink);
 }
 
-.sidebar__item[data-active='true'] {
+.rail__item[data-active='true'] {
   background: var(--accent-soft);
   color: var(--accent-ink);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-medium);
 }
 
-/* The active marker is a rail, not just a fill — one more channel carrying the
- * same information, which is the rule this product follows everywhere. */
-.sidebar__item[data-active='true']::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 6px;
-  bottom: 6px;
-  width: 2px;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
-}
-
-.sidebar__item-label {
+.rail__item-label {
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.sidebar__foot {
+.rail__foot {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
   padding: var(--space-2);
   border-top: 1px solid var(--rule);
-  min-width: 0;
 }
 
-.sidebar[data-collapsed='true'] .sidebar__foot {
-  justify-content: center;
-}
-
-.sidebar__company {
-  display: flex;
+.rail[data-collapsed='true'] .rail__foot {
   flex-direction: column;
+}
+
+.rail__backup {
   flex: 1;
-  min-width: 0;
 }
 
-.sidebar__company-name {
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  color: var(--ink);
-}
+/* ---- Status bar ---------------------------------------------------------- */
 
-.sidebar__company-path {
-  font-size: var(--text-2xs);
-  font-family: var(--font-mono);
+/* One line of fact about the open file. It grows to a second line rather than cut the
+ * path: the part an ellipsis removes is the folder, which is the part that matters. */
+.statusbar {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-4);
+  row-gap: 0;
+  min-height: var(--statusbar-height);
+  padding: var(--space-1) var(--space-3);
+  background: var(--chrome);
+  border-top: 1px solid var(--rule);
   color: var(--ink-faint);
-  direction: rtl;
-  text-align: left;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-snug);
+}
+
+.statusbar__path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.statusbar__path .selectable {
+  color: var(--ink-muted);
+}
+
+.statusbar__offline {
+  margin-left: auto;
 }
 
 /* ---- Missing screen ------------------------------------------------------ */
@@ -650,22 +680,11 @@
 }
 
 /* ---- Narrow windows ------------------------------------------------------
- * The floor is 1024px. Below ~1200 the sidebar collapses itself (lib/layout.ts);
- * these rules take the remaining chrome down with it so the content column keeps
- * its width. */
+ * The floor is 1024px. Below ~1200 the rail collapses itself (lib/layout.ts); the
+ * search button narrows with it so the company's name keeps its room. */
 
 @media (max-width: 1200px) {
   .titlebar__search {
-    width: clamp(11rem, 28vw, 20rem);
-  }
-}
-
-@media (max-width: 1100px) {
-  .titlebar__company {
-    display: none;
-  }
-
-  .titlebar__divider {
-    display: none;
+    width: clamp(11rem, 26vw, 20rem);
   }
 }

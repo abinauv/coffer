@@ -142,7 +142,7 @@ body {
   overflow: hidden;
 }
 
-/* Chrome — the title bar, the sidebar, labels — is not selectable text; a stray
+/* Chrome — the title bar, the section bar and rail, labels — is not selectable text; a stray
  * drag across it should not highlight it. Content regions opt back in. */
 body {
   user-select: none;

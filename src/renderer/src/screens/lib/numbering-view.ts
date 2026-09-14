@@ -26,9 +26,13 @@
  * kinds' own words.
  */
 
-import type { AccountingPeriod, DateString, NumberingSeriesRecord } from '@shared/dto'
+import type { NumberingSeriesRecord } from '@shared/dto'
 import { DOCUMENT_KINDS } from '@shared/documents'
 import { RECEIPT_KINDS } from '@shared/receipts'
+
+/* The financial year helpers moved to lib/, because the title bar names the year too and the
+ * shell does not import from screens. Re-exported so this screen's imports did not move. */
+export { currentFiscalYear, fiscalYearsFrom, type FiscalYear } from '@renderer/lib/fiscal-year'
 
 /** Enough of a numbered kind to head a group and name it in a sentence. */
 export interface NumberedKindOption {
@@ -235,59 +239,6 @@ export function previewYearFor(
   fiscalYearLabel: string | null,
 ): string | null {
   return needsFiscalYear(series) ? fiscalYearLabel : null
-}
-
-/** One financial year these books keep, and the days it covers. */
-export interface FiscalYear {
-  /** As the regime spells it — '2026-27' in India. Main's word, never composed here. */
-  label: string
-  from: DateString
-  to: DateString
-}
-
-/**
- * The financial years these books keep, earliest first.
- *
- * Derived from the periods rather than computed from a date, because the label is the
- * regime's and the renderer does not know how a year is named — '2026-27' in India,
- * '2026' where the year is the calendar one. Working one out here would be a second
- * spelling that agrees with main until somebody's books start in July.
- *
- * Dates are `YYYY-MM-DD`, so a string comparison is a date comparison (CONVENTIONS §3).
- */
-export function fiscalYearsFrom(periods: readonly AccountingPeriod[]): readonly FiscalYear[] {
-  const byLabel = new Map<string, FiscalYear>()
-
-  for (const period of periods) {
-    const existing = byLabel.get(period.fiscalYearLabel)
-    if (existing === undefined) {
-      byLabel.set(period.fiscalYearLabel, {
-        label: period.fiscalYearLabel,
-        from: period.startDate,
-        to: period.endDate,
-      })
-      continue
-    }
-    if (period.startDate < existing.from) existing.from = period.startDate
-    if (period.endDate > existing.to) existing.to = period.endDate
-  }
-
-  return [...byLabel.values()].sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : 0))
-}
-
-/**
- * The year a preview should be drawn in when nobody has chosen one.
- *
- * The year today falls in, because that is the year the next document will be raised in.
- * Failing that the latest the books keep — a file whose periods all lie in the past still
- * has a most recent year, and previewing that is more use than previewing nothing.
- *
- * Both ends inclusive: a period's `endDate` is documented as inclusive, and the last day
- * of a financial year is a day on which invoices are raised.
- */
-export function currentFiscalYear(years: readonly FiscalYear[], today: DateString): string | null {
-  const containing = years.find((year) => year.from <= today && today <= year.to)
-  return containing?.label ?? years.at(-1)?.label ?? null
 }
 
 /**

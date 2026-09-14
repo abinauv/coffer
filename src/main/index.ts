@@ -95,6 +95,11 @@ function createWindow(): void {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
+      /* Off, for two reasons. On Linux, Chromium's spellchecker fetches its dictionaries
+       * from Google, and the status bar says this app never connects. And what gets typed
+       * here is party names, GSTINs, HSN codes and item names, which no dictionary knows,
+       * so it would underline nearly every field on the screen. */
+      spellcheck: false,
     },
   })
 

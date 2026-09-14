@@ -49,6 +49,7 @@ import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { makeRoute } from '@renderer/lib/routing'
 import { registerScreens, type ScreenContext } from '@renderer/lib/screens'
+import { useBackup } from '@renderer/store/backup'
 import { useRegisterCommands } from '@renderer/store/commands'
 import { useCompany } from '@renderer/store/company'
 import { useNumberFormat } from '@renderer/store/regime'
@@ -78,7 +79,7 @@ import {
   itemTarget,
   overdueLabel,
 } from '../lib/ageing-view'
-import { describeCreated, describeFileSize, describeLastOpened } from '../lib/dates'
+import { describeCreated, describeLastOpened } from '../lib/dates'
 import { validateChangePassphrase } from '../lib/forms'
 import { formatAmount, formatAmountOrBlank } from '../lib/ledger-format'
 import { failureTitle } from '../lib/messages'
@@ -117,7 +118,7 @@ const LOADING = { state: 'loading' } as const
 export function Overview({ navigate }: ScreenContext): JSX.Element {
   const { company, recoveryCodesRemaining, close } = useCompany()
   const { show } = useToasts()
-  const [isBackingUp, setBackingUp] = useState(false)
+  const { backUp: backup, isBackingUp } = useBackup()
   const [isPassphraseOpen, setPassphraseOpen] = useState(false)
   const [isBusy, setBusy] = useState(false)
 
@@ -192,45 +193,6 @@ export function Overview({ navigate }: ScreenContext): JSX.Element {
     if (isNew) void loadFirstRun()
   }, [isNew, loadFirstRun])
 
-  const backup = useCallback(async () => {
-    setBackingUp(true)
-    try {
-      const folder = await callApi((api) => api.system.chooseDirectory())
-      if (!folder.ok) {
-        show({ tone: 'danger', title: failureTitle(folder.error), body: folder.error.message })
-        return
-      }
-      const directoryPath = folder.data
-      if (directoryPath === null) return
-
-      const result = await callApi((api) => api.companies.backup({ directoryPath }))
-      if (!result.ok) {
-        show({
-          tone: 'danger',
-          title: failureTitle(result.error, 'backup'),
-          body: result.error.message,
-        })
-        return
-      }
-
-      const archivePath = result.data.archivePath
-      show({
-        tone: 'success',
-        title: 'Backup written',
-        body: `${archivePath} · ${describeFileSize(result.data.sizeBytes)}. It holds the database and its vault. Keep a copy somewhere other than this machine.`,
-        durationMs: null,
-        action: {
-          label: 'Show in folder',
-          run: () => {
-            void callApi((api) => api.system.revealInFileManager(archivePath))
-          },
-        },
-      })
-    } finally {
-      setBackingUp(false)
-    }
-  }, [show])
-
   const closeCompany = useCallback(async () => {
     const result = await close()
     if (!result.ok) {
@@ -246,13 +208,6 @@ export function Overview({ navigate }: ScreenContext): JSX.Element {
     useMemo<Command[]>(
       () => [
         {
-          id: 'company.backup',
-          title: 'Back up this company',
-          section: 'Company',
-          keywords: ['archive', 'copy', 'safe'],
-          run: () => void backup(),
-        },
-        {
           id: 'company.change-passphrase',
           title: 'Change the passphrase',
           section: 'Company',
@@ -267,7 +222,7 @@ export function Overview({ navigate }: ScreenContext): JSX.Element {
           run: () => void load(),
         },
       ],
-      [backup, load],
+      [load],
     ),
   )
 
@@ -667,7 +622,7 @@ function Drafts({
             <ActivityTable rows={documentActivity(page.rows)} navigate={navigate} />
             {page.hasMore && (
               <p className="prose prose--muted">
-                The {ATTENTION_LIMIT} most recent are shown. Each register in the sidebar lists the
+                The {ATTENTION_LIMIT} most recent are shown. Each register in the rail lists the
                 rest of its own kind.
               </p>
             )}
@@ -988,7 +943,7 @@ registerScreens([
     id: 'overview',
     title: 'Overview',
     area: 'workspace',
-    nav: { label: 'Overview', icon: 'ledger', group: 'work', order: 0 },
+    nav: { label: 'Overview', icon: 'overview', group: 'accounts', order: 0 },
     render: (context: ScreenContext) => <Overview {...context} />,
   },
 ])

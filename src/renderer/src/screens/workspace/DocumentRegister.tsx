@@ -134,7 +134,7 @@ export function DocumentRegister({
    * TWO COMMANDS PER KIND, AND THE IDS CARRY THE KIND. Every register mounts its own, so
    * ids built from a fixed string would collide the moment two of these screens have
    * been visited — and the palette would offer one "New invoice" that raised a debit
-   * note. The section is the sidebar group, so a purchase command files under Purchases.
+   * note. The section is the rail's section, so a purchase command files under Purchases.
    */
   useRegisterCommands(
     useMemo<Command[]>(
@@ -299,7 +299,7 @@ export function DocumentRegister({
 
 /*
  * FIVE REGISTRATIONS FROM THE KIND TABLE, not five hand-written entries. A sixth kind
- * added to `@shared/documents` gets a register and a sidebar entry with no edit here —
+ * added to `@shared/documents` gets a register and a rail entry with no edit here —
  * which is the same property `DOCUMENT_KINDS` gives the posting engine, arriving in the
  * renderer for the first time.
  */

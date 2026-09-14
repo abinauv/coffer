@@ -22,7 +22,7 @@ import type { ScreenNav } from '@renderer/lib/screens'
 import { definitionOf, isDocumentKind, type TradeSide } from '@shared/documents'
 import type { AgedBucket, AgedItem, AgedPartyRow, DecimalString } from '@shared/dto'
 import { isReceiptKind, receiptDefinitionOf } from '@shared/receipts'
-import { editorScreenId as documentEditorScreenId } from './document-view'
+import { editorScreenId as documentEditorScreenId, sideNavGroup } from './document-view'
 import { editorScreenId as receiptEditorScreenId } from './receipt-view'
 
 // ---- What each side's report is called --------------------------------------
@@ -87,22 +87,23 @@ export function agedScreenId(side: TradeSide): string {
 }
 
 /*
- * UNDER REPORTS, NOT UNDER SALES. An aged report is a control account decomposed, and it
- * belongs beside the balance sheet whose receivables figure it has to equal — putting it
- * in the sidebar next to the statement it ties to is what makes the tie checkable by
- * somebody who did not read the code.
+ * ON ITS OWN SIDE, LAST IN THE RAIL. Aged receivables sits under Sales and aged payables
+ * under Purchases, after the registers and the parties, because the question it answers —
+ * who owes what, and for how long — is asked by whoever is chasing the money on that
+ * side. It still equals the receivables or payables line on the balance sheet, and says so
+ * in its lede and its tie check.
  *
- * The order is taken from the side's position in the kind table rather than written out,
- * so a third side gets a place in the sidebar without an edit here.
+ * The section comes from the side, as a register's does, so a third side places its report
+ * without an edit here.
  */
-const FIRST_AGED_NAV_ORDER = 5
+const AGED_NAV_ORDER = 30
 
-export function agedNav(side: TradeSide, sideIndex: number): ScreenNav {
+export function agedNav(side: TradeSide): ScreenNav {
   return {
     label: SIDE_WORDS[side].navLabel,
-    icon: 'ledger',
-    group: 'reports',
-    order: FIRST_AGED_NAV_ORDER + sideIndex,
+    icon: 'clock',
+    group: sideNavGroup(side),
+    order: AGED_NAV_ORDER,
   }
 }
 

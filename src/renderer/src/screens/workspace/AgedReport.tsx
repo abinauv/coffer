@@ -433,14 +433,14 @@ function AgedItems({
 /*
  * TWO REGISTRATIONS FROM THE SIDE TABLE, the shape every screen registered per kind takes.
  * `TRADE_SIDES` is derived from `DOCUMENT_KINDS`, so a third side gets a report and a
- * sidebar entry with no edit here — and `SIDE_WORDS` fails to compile until somebody has
+ * rail entry with no edit here — and `SIDE_WORDS` fails to compile until somebody has
  * decided what to call it, which is the right order for that to happen in.
  */
-export const agedReportScreens: readonly ScreenDefinition[] = TRADE_SIDES.map((side, index) => ({
+export const agedReportScreens: readonly ScreenDefinition[] = TRADE_SIDES.map((side) => ({
   id: agedScreenId(side),
   title: agedTitle(side),
   area: 'workspace' as const,
-  nav: agedNav(side, index),
+  nav: agedNav(side),
   render: (context: ScreenContext) => <AgedReport {...context} side={side} />,
 }))
 

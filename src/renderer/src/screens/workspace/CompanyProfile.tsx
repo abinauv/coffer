@@ -332,7 +332,7 @@ registerScreens([
     id: 'company-profile',
     title: 'Business details',
     area: 'workspace',
-    nav: { label: 'Business details', icon: 'people', group: 'company', order: 0 },
+    nav: { label: 'Business details', icon: 'building', group: 'company', order: 0 },
     render: () => <CompanyProfile />,
   },
 ])

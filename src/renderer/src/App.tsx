@@ -13,6 +13,8 @@
  *               may not render before the rules that say how it is written.
  *   Navigation  derives its area from Company, so it sits under it.
  *   Commands    contributed by everything, consumed by the palette.
+ *   Backup      the open company's one backup flow, shared by the rail, the Overview
+ *               and the palette. Under Commands because it registers one.
  *
  * No business logic lives here, and no screen is named here. Screens register
  * themselves — see store/screens.ts.
@@ -20,6 +22,7 @@
 
 import type { JSX } from 'react'
 import { AppShell } from './components/shell/AppShell'
+import { BackupProvider } from './store/backup'
 import { CommandProvider } from './store/commands'
 import { CompanyProvider } from './store/company'
 import { DensityProvider } from './store/density'
@@ -39,7 +42,9 @@ export function App(): JSX.Element {
               <OpenCompanyRegime>
                 <NavigationProvider>
                   <CommandProvider>
-                    <AppShell />
+                    <BackupProvider>
+                      <AppShell />
+                    </BackupProvider>
                   </CommandProvider>
                 </NavigationProvider>
               </OpenCompanyRegime>

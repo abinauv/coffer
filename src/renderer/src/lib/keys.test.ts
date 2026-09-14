@@ -85,6 +85,18 @@ describe('shouldIgnoreWhileTyping', () => {
   it('is not confused by lower-case tag names', () => {
     expect(shouldIgnoreWhileTyping(bare, { tagName: 'input' })).toBe(true)
   })
+
+  /* Alt+← is Back. In a field it is a word left on macOS, and Ctrl+← is a word left on
+   * Windows, so a caret key is the field's whatever modifier comes with it. */
+  it('leaves a caret key to the field, even with a modifier held', () => {
+    const back: Shortcut = { key: 'ArrowLeft', alt: true }
+    expect(shouldIgnoreWhileTyping(back, { tagName: 'INPUT' })).toBe(true)
+    expect(shouldIgnoreWhileTyping({ key: 'Home', ctrlOrCmd: true }, { tagName: 'TEXTAREA' })).toBe(
+      true,
+    )
+    expect(shouldIgnoreWhileTyping(back, { tagName: 'BUTTON' })).toBe(false)
+    expect(shouldIgnoreWhileTyping(back, null)).toBe(false)
+  })
 })
 
 describe('formatShortcut', () => {

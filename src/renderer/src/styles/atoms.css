@@ -461,7 +461,10 @@ select.field__control[aria-invalid='true'] {
 }
 
 .tooltip__bubble {
-  position: absolute;
+  /* Fixed, at the point Tooltip.tsx measures; see its header for why not absolute. */
+  position: fixed;
+  top: 0;
+  left: 0;
   z-index: var(--z-tooltip);
   padding: var(--space-1) var(--space-2);
   background: var(--ink);
@@ -481,26 +484,18 @@ select.field__control[aria-invalid='true'] {
 }
 
 .tooltip__bubble--top {
-  bottom: calc(100% + var(--space-2));
-  left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -100%);
 }
 
 .tooltip__bubble--bottom {
-  top: calc(100% + var(--space-2));
-  left: 50%;
   transform: translateX(-50%);
 }
 
 .tooltip__bubble--left {
-  right: calc(100% + var(--space-2));
-  top: 50%;
-  transform: translateY(-50%);
+  transform: translate(-100%, -50%);
 }
 
 .tooltip__bubble--right {
-  left: calc(100% + var(--space-2));
-  top: 50%;
   transform: translateY(-50%);
 }
 

@@ -7,18 +7,18 @@
 
 ## 1. What is decided, and what is a placeholder
 
-| Decided                                                                                                                                | Placeholder, waiting for real design                                          |
-| -------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| The name, **Coffer** — a strongbox, because the books are encrypted at rest                                                            | README screenshots — the README carries a comment marking where they go       |
-| The tagline, _Your books, in your own safe._                                                                                           | Installer artwork: the NSIS sidebar image and the macOS disk-image background |
-| The audience (§2)                                                                                                                      |                                                                               |
-| **Mark:** a square recessed into a square — a coffered ceiling panel, a strongbox lid and a ruled ledger cell at once. Rectangles only |                                                                               |
-| **Wordmark:** the name in IBM Plex Serif SemiBold beside the mark. A serif on the name and a sans in the interface                     |                                                                               |
-| **App icon:** the mark reversed white on Lapis, one flat 1024 × 1024 square with 12% padding, no platform mask                         |                                                                               |
-| **README banner** (1280 × 320) and **GitHub social preview** (1280 × 640, dark), rendered from the bundled fonts                       |                                                                               |
-| Colour: **Paper** (light) and **Slate** (dark), accent **Lapis**. Measured, not asserted — see the header of `tokens.css`              |                                                                               |
-| Type: **IBM Plex** Sans, Serif and Mono, bundled under SIL OFL 1.1, with the Devanagari cut alongside                                  |                                                                               |
-| The layout model: a sidebar, a title bar with a command palette, and one screen at a time                                              |                                                                               |
+| Decided                                                                                                                                                                    | Placeholder, waiting for real design                                          |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| The name, **Coffer** — a strongbox, because the books are encrypted at rest                                                                                                | README screenshots — the README carries a comment marking where they go       |
+| The tagline, _Your books, in your own safe._                                                                                                                               | Installer artwork: the NSIS sidebar image and the macOS disk-image background |
+| The audience (§2)                                                                                                                                                          |                                                                               |
+| **Mark:** a square recessed into a square — a coffered ceiling panel, a strongbox lid and a ruled ledger cell at once. Rectangles only                                     |                                                                               |
+| **Wordmark:** the name in IBM Plex Serif SemiBold beside the mark. A serif on the name and a sans in the interface                                                         |                                                                               |
+| **App icon:** the mark reversed white on Lapis, one flat 1024 × 1024 square with 12% padding, no platform mask                                                             |                                                                               |
+| **README banner** (1280 × 320) and **GitHub social preview** (1280 × 640, dark), rendered from the bundled fonts                                                           |                                                                               |
+| Colour: **Paper** (light) and **Slate** (dark), accent **Lapis**. Measured, not asserted — see the header of `tokens.css`                                                  |                                                                               |
+| Type: **IBM Plex** Sans, Serif and Mono, bundled under SIL OFL 1.1, with the Devanagari cut alongside                                                                      |                                                                               |
+| The layout model: a title bar with the command palette, six sections across a section bar, a rail of the current section’s screens, a status bar, and one screen at a time |                                                                               |
 
 ## 2. Who it is designed for
 
@@ -36,21 +36,22 @@ legally required to keep. Calm and exact beats lively.
 
 ## 3. Where everything lives
 
-| What                                   | Where                                                                                                                                                                                                                                          |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Name, tagline, description             | `src/branding.ts` is the source of truth. `electron-builder.yml` repeats the values by hand, because YAML cannot import it: change both                                                                                                        |
-| The mark                               | `src/shared/brand-mark.ts` holds its construction and small-size rules. Drawn by `components/shell/BrandMark.tsx` and, with the name, `Wordmark.tsx`                                                                                           |
-| App icon                               | `build/icon.png`, 1024 × 1024, committed. Drawn from the mark by `scripts/generate-icon.mjs` (`npm run icon`): rerun it and commit the result after changing the mark or the accent. electron-builder derives every platform's icon from it    |
-| README banner, social preview          | `scripts/render-brand-assets.mjs` (`npm run brand:assets`). The banner is committed at `docs/assets/banner.png`; the social preview goes to `dist/brand/` and is uploaded by hand in the repository settings                                   |
-| Colour, type, spacing, radius, density | `src/renderer/src/styles/tokens.css`, with the palette's reasoning and its measurements in the header                                                                                                                                          |
-| Fonts                                  | `src/renderer/src/assets/fonts/` as local woff2, declared with `@font-face` in `styles/base.css`. Versions, checksums and the OFL notice are in `THIRD-PARTY.md`                                                                               |
-| Element defaults                       | `src/renderer/src/styles/base.css`                                                                                                                                                                                                             |
-| Component styles                       | `styles/atoms.css` (buttons, inputs, badges…), `styles/shell.css` (title bar, sidebar), `screens/screens.css` (screen layouts)                                                                                                                 |
-| Components                             | `src/renderer/src/components/` — `atoms/`, `shell/`, `command-palette/`, `toast/`                                                                                                                                                              |
-| Icons                                  | `src/renderer/src/lib/icons.ts` — 24 × 24 stroke paths drawn by `components/atoms/Icon.tsx`. No icon library                                                                                                                                   |
-| Screens                                | `src/renderer/src/screens/welcome/` (create, pick, unlock, recover a company) and `screens/workspace/` (everything inside an open company)                                                                                                     |
-| Screen building blocks                 | `src/renderer/src/screens/components/` — frames, notices, the passphrase field and strength meter, report lines, `MoneyField`, and the three states every screen ships besides its full one: `EmptyState`, `RegisterSkeleton` and `ErrorState` |
-| Density preference                     | `lib/density.ts` decides, `store/density.tsx` wires it: the `data-density` attribute on `<html>`, stored as `coffer.density`. Chosen from the command palette until Settings exists                                                            |
+| What                                   | Where                                                                                                                                                                                                                                             |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Name, tagline, description             | `src/branding.ts` is the source of truth. `electron-builder.yml` repeats the values by hand, because YAML cannot import it: change both                                                                                                           |
+| The mark                               | `src/shared/brand-mark.ts` holds its construction and small-size rules. Drawn by `components/shell/BrandMark.tsx` and, with the name, `Wordmark.tsx`                                                                                              |
+| App icon                               | `build/icon.png`, 1024 × 1024, committed. Drawn from the mark by `scripts/generate-icon.mjs` (`npm run icon`): rerun it and commit the result after changing the mark or the accent. electron-builder derives every platform's icon from it       |
+| README banner, social preview          | `scripts/render-brand-assets.mjs` (`npm run brand:assets`). The banner is committed at `docs/assets/banner.png`; the social preview goes to `dist/brand/` and is uploaded by hand in the repository settings                                      |
+| Colour, type, spacing, radius, density | `src/renderer/src/styles/tokens.css`, with the palette's reasoning and its measurements in the header                                                                                                                                             |
+| Fonts                                  | `src/renderer/src/assets/fonts/` as local woff2, declared with `@font-face` in `styles/base.css`. Versions, checksums and the OFL notice are in `THIRD-PARTY.md`                                                                                  |
+| Element defaults                       | `src/renderer/src/styles/base.css`                                                                                                                                                                                                                |
+| Component styles                       | `styles/atoms.css` (buttons, inputs, badges…), `styles/shell.css` (title bar, section bar, rail, status bar), `screens/screens.css` (screen layouts)                                                                                              |
+| Components                             | `src/renderer/src/components/` — `atoms/`, `shell/`, `command-palette/`, `toast/`                                                                                                                                                                 |
+| Sections and the rail                  | `lib/screens.ts` holds the six sections (`NAV_GROUPS`) and each screen's `nav` or `navParent`; `lib/sections.ts` decides which section shows and where choosing one lands; `components/shell/` draws the section bar, the rail and the status bar |
+| Icons                                  | `src/renderer/src/lib/icons.ts` — 24 × 24 stroke paths drawn by `components/atoms/Icon.tsx`. No icon library                                                                                                                                      |
+| Screens                                | `src/renderer/src/screens/welcome/` (create, pick, unlock, recover a company) and `screens/workspace/` (everything inside an open company)                                                                                                        |
+| Screen building blocks                 | `src/renderer/src/screens/components/` — frames, notices, the passphrase field and strength meter, report lines, `MoneyField`, and the three states every screen ships besides its full one: `EmptyState`, `RegisterSkeleton` and `ErrorState`    |
+| Density preference                     | `lib/density.ts` decides, `store/density.tsx` wires it: the `data-density` attribute on `<html>`, stored as `coffer.density`. Chosen from the command palette until Settings exists                                                               |
 
 ## 4. Rules a redesign must keep
 
@@ -106,6 +107,30 @@ is a bug, however it looks.
   outweighs the figures in it.
 - **Three themes are a real choice**: follow the system, light, or dark. Light is warm
   "paper"; dark is a cool "slate", not an inversion.
+
+**Navigation**
+
+- **Six sections, one rail at a time.** Sales, Purchases, Inventory, Accounts, Reports and
+  Company sit across the section bar; the rail lists only the screens of the section you
+  are in. The Overview is under Accounts and is still where a company opens. Receipts and
+  payments sit on their own trade side, beside the documents they settle.
+- **The registry is the only list.** A screen joins the rail by declaring `nav` in
+  `lib/screens.ts`. A screen outside the rail, such as an editor, declares `navParent`, and
+  the rail keeps that register marked while it is open. `ContextRail.test.tsx` walks every
+  registered screen and fails if one is more than a section click and a rail click away,
+  or if a screen outside the rail names no parent in it.
+- **Labels wrap, never truncate.** A long rail label takes a second line. The status bar
+  prints the company file's whole path and grows a line rather than cut the folder off.
+- **The status bar's sentences are claims.** "encrypted · SQLCipher" and "offline — this
+  app never connects" are true because of the cipher in `src/main/db/connection.ts`, the
+  renderer's Content Security Policy, and the spellchecker being off in `src/main/index.ts`
+  (on Linux it downloads dictionaries). Anything that makes a request changes the sentence.
+- **Keys:** <kbd>Ctrl</kbd><kbd>]</kbd> and <kbd>Ctrl</kbd><kbd>[</kbd> move to the next and
+  previous section, <kbd>Alt</kbd><kbd>←</kbd> goes back, and <kbd>Ctrl</kbd><kbd>B</kbd>
+  collapses the rail to icons, which narrow windows also do on their own. A shortcut on
+  an arrow, Home or End never fires inside a field, whatever modifier is held: those keys
+  move the caret there.
+- **Appearance and density are chosen from the command palette** until Settings exists.
 
 **Density**
 

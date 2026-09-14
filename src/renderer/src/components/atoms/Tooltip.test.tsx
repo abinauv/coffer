@@ -26,7 +26,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Tooltip } from './Tooltip'
+import { bubblePosition, Tooltip } from './Tooltip'
 
 function bubble(): HTMLElement {
   return screen.getByRole('tooltip')
@@ -271,6 +271,54 @@ describe('hover', () => {
     expect(bubble()).toHaveAttribute('data-visible', 'false')
     advance(1)
     expect(bubble()).toHaveAttribute('data-visible', 'true')
+  })
+})
+
+/*
+ * DRAWN AGAINST THE WINDOW. The bubble is fixed at a measured point, because inside a
+ * scrolling parent (the collapsed rail) an absolutely placed one was clipped out of sight.
+ * happy-dom measures every box as zero, so the arithmetic is pinned as a function and the
+ * wiring by what lands on the element.
+ */
+describe('where the bubble is drawn', () => {
+  const box = { top: 100, right: 156, bottom: 132, left: 100 }
+
+  it('sits 8px off the edge it was placed on, centred along it', () => {
+    expect(bubblePosition('right', box)).toEqual({ top: 116, left: 164 })
+    expect(bubblePosition('left', box)).toEqual({ top: 116, left: 92 })
+    expect(bubblePosition('bottom', box)).toEqual({ top: 140, left: 128 })
+    expect(bubblePosition('top', box)).toEqual({ top: 92, left: 128 })
+  })
+
+  it('carries the measured point once it is shown', async () => {
+    const user = userEvent.setup()
+    render(
+      <Tooltip label="Collapse sidebar" placement="right">
+        <button type="button">Toggle</button>
+      </Tooltip>,
+    )
+    expect(bubble().style.left).toBe('')
+
+    await user.tab()
+
+    expect(bubble().style.left).toBe('8px')
+    expect(bubble().style.top).toBe('0px')
+  })
+
+  /* A fixed bubble does not move with the page, so a scroll would leave it behind. */
+  it('hides when anything scrolls', async () => {
+    const user = userEvent.setup()
+    render(
+      <Tooltip label="Collapse sidebar">
+        <button type="button">Toggle</button>
+      </Tooltip>,
+    )
+    await user.tab()
+    expect(bubble()).toHaveAttribute('data-visible', 'true')
+
+    fireEvent.scroll(document.body)
+
+    expect(bubble()).toHaveAttribute('data-visible', 'false')
   })
 })
 

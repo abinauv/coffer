@@ -177,7 +177,7 @@ registerScreens([
     id: 'balance-sheet',
     title: 'Balance sheet',
     area: 'workspace',
-    nav: { label: 'Balance sheet', icon: 'ledger', group: 'reports', order: 1 },
+    nav: { label: 'Balance sheet', icon: 'columns', group: 'reports', order: 1 },
     render: () => <BalanceSheet />,
   },
 ])

@@ -271,7 +271,7 @@ export function ReceiptRegister({
  * take, and FOUR of them since 0015.
  *
  * THE PREDICTION THIS COMMENT USED TO MAKE CAME TRUE UNCHANGED: "a third kind — a customer
- * refund, which is money out on the sales side — gets a register and a sidebar entry with
+ * refund, which is money out on the sales side — gets a register and a rail entry with
  * no edit here." It did, and so did the fourth. What the batch actually had to change on
  * this side was a nav ORDER for each of them, because that table is keyed by kind and is
  * the one thing here a new row does not fill in by itself.

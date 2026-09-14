@@ -4,7 +4,7 @@
  * A screen is a value: an id, the area it belongs to, optional navigation
  * metadata, and a render function. Adding one to the product is one call to
  * `registerScreens` from a module under `src/renderer/src/screens/`, and nothing
- * in the shell changes. The sidebar builds itself from `nav`, the router resolves
+ * in the shell changes. The section bar and rail build themselves from `nav`, the router resolves
  * `screenId` against `id`, and the command palette gets a "Go to …" command for
  * every navigable screen for free.
  *
@@ -16,9 +16,18 @@ import type { ReactNode } from 'react'
 import type { IconName } from './icons'
 import type { AppArea, Route } from './routing'
 
-/** Sidebar sections, in the order they appear. A screen names one. */
+/*
+ * The six sections, in the order the section bar draws them. A screen names one.
+ *
+ * SIX, AND NO "WORK" SECTION. The dashboard used to be the only screen in a group of its
+ * own, which put a seventh tab across the top holding one item. It lives under Accounts now,
+ * first in that rail, and stays the workspace's home (`AREA_HOME`).
+ *
+ * RECEIPTS AND PAYMENTS SIT ON THEIR TRADE SIDE. A receipt is under Sales beside the invoice
+ * it settles, a payment under Purchases beside the bill. The design's single "Receipts &
+ * payments" item under Accounts assumed one register; there are four, one per kind.
+ */
 export const NAV_GROUPS = [
-  { id: 'work', label: 'Work' },
   { id: 'sales', label: 'Sales' },
   { id: 'purchases', label: 'Purchases' },
   { id: 'inventory', label: 'Inventory' },
@@ -29,8 +38,13 @@ export const NAV_GROUPS = [
 
 export type NavGroupId = (typeof NAV_GROUPS)[number]['id']
 
+/** A section's name as the section bar draws it, for a sentence that points somewhere. */
+export function navGroupLabel(id: NavGroupId): string {
+  return NAV_GROUPS.find((group) => group.id === id)?.label ?? id
+}
+
 export interface ScreenNav {
-  /** Sidebar label. Usually shorter than the screen title. */
+  /** The rail's label. Usually shorter than the screen title. */
   label: string
   icon: IconName
   group: NavGroupId
@@ -49,8 +63,17 @@ export interface ScreenDefinition {
   /** Shown in the title bar and as the screen heading. */
   title: string
   area: AppArea
-  /** Present when the screen should appear in the sidebar. */
+  /** Present when the screen should appear in the rail. */
   nav?: ScreenNav
+  /**
+   * For a screen with no `nav`: the id of the rail screen it is opened from.
+   *
+   * An editor is not in the rail — there is no "the" invoice to land on — but while one is
+   * open the rail still has to say where you are. It highlights this screen, and the section
+   * bar the section this screen is in. Absent on a screen that belongs to no one register,
+   * such as the list of every party; the rail then keeps showing the section you came from.
+   */
+  navParent?: string
   render: (context: ScreenContext) => ReactNode
 }
 
@@ -101,7 +124,7 @@ export function findScreen(
   return screens.find((screen) => screen.area === area && screen.id === screenId)
 }
 
-/** A screen that appears in the sidebar, with its nav metadata proven present. */
+/** A screen that appears in the rail, with its nav metadata proven present. */
 export type NavigableScreen = ScreenDefinition & { nav: ScreenNav }
 
 export interface NavSection {
@@ -110,7 +133,7 @@ export interface NavSection {
   screens: readonly NavigableScreen[]
 }
 
-/** The sidebar, grouped and ordered. Groups with no screens are dropped. */
+/** The sections and their rails, grouped and ordered. Groups with no screens are dropped. */
 export function navSections(
   screens: readonly ScreenDefinition[],
   area: AppArea,
@@ -145,6 +168,9 @@ export function isScreenDefinition(value: unknown): value is ScreenDefinition {
     if (typeof nav.icon !== 'string') return false
     if (typeof nav.order !== 'number') return false
     if (!NAV_GROUPS.some((group) => group.id === nav.group)) return false
+  }
+  if (candidate.navParent !== undefined) {
+    if (typeof candidate.navParent !== 'string' || candidate.navParent === '') return false
   }
   return true
 }

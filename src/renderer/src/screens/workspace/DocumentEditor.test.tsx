@@ -2483,11 +2483,18 @@ describe('the registrations', () => {
     )
   })
 
-  /* An editor is reached from its register or from a row, never from the sidebar — there
+  /* An editor is reached from its register or from a row, never from the rail — there
    * is no such thing as "the" credit note to land on. */
-  it('puts none of them in the sidebar', () => {
+  it('puts none of them in the rail', () => {
     for (const definition of documentEditorScreens) {
       expect(definition.nav).toBeUndefined()
+    }
+  })
+
+  /* But the rail still has to say where you are while one is open: its register. */
+  it('names its own register as the rail entry to mark', () => {
+    for (const definition of documentEditorScreens) {
+      expect(definition.navParent).toBe(`${definition.id}-register`)
     }
   })
 })

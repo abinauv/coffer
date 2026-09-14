@@ -608,23 +608,29 @@ function PartyDialog({
   )
 }
 
+/*
+ * After the documents and receipts on their side, and before its aged report. The rail is
+ * ordered as a day's work goes: what you raise, what you are paid, then who with.
+ */
+const PARTIES_NAV_ORDER = 20
+
 registerScreens([
   {
     id: 'customers',
     title: 'Customers',
     area: 'workspace',
-    nav: { label: 'Customers', icon: 'people', group: 'sales', order: 0 },
+    nav: { label: 'Customers', icon: 'people', group: 'sales', order: PARTIES_NAV_ORDER },
     render: () => <Parties role="customer" />,
   },
   {
     id: 'vendors',
     title: 'Vendors',
     area: 'workspace',
-    nav: { label: 'Vendors', icon: 'truck', group: 'purchases', order: 0 },
+    nav: { label: 'Vendors', icon: 'truck', group: 'purchases', order: PARTIES_NAV_ORDER },
     render: () => <Parties role="vendor" />,
   },
   /*
-   * Not in the sidebar, and reachable from the palette. Two entries for two words the
+   * Not in the rail, and reachable from the palette. Two entries for two words the
    * business uses is the point; a third called `Parties` beside them would be a
    * different name for the same list, which is precisely the confusion the single table
    * exists to avoid. It is registered because the unfiltered list is the right answer
