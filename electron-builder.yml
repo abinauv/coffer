@@ -49,6 +49,17 @@ files:
   - package.json
   - '!**/*.map'
 
+# The bundled IBM Plex fonts are under the SIL OFL, which requires the licence to travel
+# with them. Vite copies the font files into out/ but not the licence beside them, so the
+# notice and the licence are placed next to the executable, where a person can find them
+# without unpacking an asar. A `from` entry under `files` was tried first and also copied
+# the whole fonts folder into the archive a second time.
+extraFiles:
+  - from: THIRD-PARTY.md
+    to: THIRD-PARTY.md
+  - from: src/renderer/src/assets/fonts/OFL.txt
+    to: licenses/ibm-plex/OFL.txt
+
 # Native binaries cannot be loaded from inside an asar archive — the dynamic loader needs
 # real files on disk.
 asarUnpack:

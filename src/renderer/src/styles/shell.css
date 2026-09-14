@@ -109,7 +109,8 @@
 .titlebar__divider {
   width: 1px;
   height: 12px;
-  background: var(--rule-strong);
+  /* A separator, not a control boundary, so not `--rule-strong`. */
+  background: var(--rule-total);
 }
 
 .titlebar__company {

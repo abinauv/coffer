@@ -34,7 +34,7 @@ let mainWindow: BrowserWindow | null = null
  * These must match --titlebar-height and the --chrome / --ink-muted tokens in
  * src/renderer/src/styles. */
 const TITLEBAR_HEIGHT = 38
-const TITLEBAR_OVERLAY = { color: '#eceae4', symbolColor: '#47505f', height: TITLEBAR_HEIGHT }
+const TITLEBAR_OVERLAY = { color: '#ece9e2', symbolColor: '#4a515c', height: TITLEBAR_HEIGHT }
 
 function installHandlers(): void {
   /* Every Electron call the IPC layer needs is adapted in ./ipc/electron.ts — dialogs,
