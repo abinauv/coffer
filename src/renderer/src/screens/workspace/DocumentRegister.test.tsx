@@ -450,7 +450,7 @@ describe('the other four kinds', () => {
 
 describe('the registrations', () => {
   /*
-   * The sidebar is built from these, so a kind missing one is a kind with no way in. The
+   * The rail is built from these, so a kind missing one is a kind with no way in. The
    * count is asserted against the shared table rather than against 5, so adding a kind
    * without a screen fails here rather than in somebody's hands.
    */
@@ -460,7 +460,7 @@ describe('the registrations', () => {
     )
   })
 
-  it('puts every one of them in the sidebar', () => {
+  it('puts every one of them in the rail', () => {
     for (const definition of documentRegisterScreens) {
       expect(definition.nav).toBeDefined()
     }

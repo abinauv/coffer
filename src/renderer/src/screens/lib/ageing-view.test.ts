@@ -90,7 +90,7 @@ describe('the words for a side', () => {
   /*
    * The table is keyed by `TradeSide` so a missing side will not compile — but
    * `TRADE_SIDES` is DERIVED from the kind table at runtime, and this is what proves the
-   * two agree. A side reaching the sidebar with an empty heading is the failure.
+   * two agree. A side reaching the rail with an empty heading is the failure.
    */
   it.each(TRADE_SIDES)('has every word %s needs', (side) => {
     expect(agedTitle(side)).not.toBe('')
@@ -99,14 +99,15 @@ describe('the words for a side', () => {
     expect(agedEmptySentence(side)).not.toBe('')
   })
 
-  it('files both under Reports, beside the statement they tie to', () => {
-    expect(agedNav('sales', 0).group).toBe('reports')
-    expect(agedNav('purchase', 1).group).toBe('reports')
+  it('files each on its own side, with the registers it is chasing', () => {
+    expect(agedNav('sales').group).toBe('sales')
+    expect(agedNav('purchase').group).toBe('purchases')
   })
 
-  it('gives them separate places in the sidebar', () => {
-    expect(agedNav('sales', 0).order).toBe(5)
-    expect(agedNav('purchase', 1).order).toBe(6)
+  /* After the registers (1–5) and the parties (20): last in its rail. */
+  it('puts it last in that rail', () => {
+    expect(agedNav('sales').order).toBe(30)
+    expect(agedNav('purchase').order).toBe(30)
   })
 })
 

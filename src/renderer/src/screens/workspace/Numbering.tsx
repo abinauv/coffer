@@ -798,7 +798,7 @@ registerScreens([
     id: 'numbering',
     title: 'Numbering',
     area: 'workspace',
-    nav: { label: 'Numbering', icon: 'settings', group: 'company', order: 1 },
+    nav: { label: 'Numbering', icon: 'hash', group: 'company', order: 1 },
     render: () => <Numbering />,
   },
 ])

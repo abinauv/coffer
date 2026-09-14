@@ -561,21 +561,22 @@ describe('an empty report', () => {
 
 describe('the registrations', () => {
   /* One per side of the trade, from the shared table. A third side added there gets a
-   * report and a sidebar entry, and fails to compile until it has been named. */
+   * report and a rail entry, and fails to compile until it has been named. */
   it('registers a screen for every side', () => {
     expect(agedReportScreens.map((definition) => definition.id)).toEqual(
       TRADE_SIDES.map((side) => `aged-${side}`),
     )
   })
 
-  it('puts both of them in the sidebar under Reports', () => {
-    for (const definition of agedReportScreens) {
-      expect(definition.nav?.group).toBe('reports')
-    }
+  it('puts each in the rail of its own side', () => {
+    expect(agedReportScreens.map((definition) => definition.nav?.group)).toEqual(
+      TRADE_SIDES.map((side) => (side === 'sales' ? 'sales' : 'purchases')),
+    )
   })
 
-  it('gives them separate places in it', () => {
-    const orders = agedReportScreens.map((definition) => definition.nav?.order)
-    expect(new Set(orders).size).toBe(orders.length)
+  /* One per section now, so no two can collide in a rail. */
+  it('never puts two of them in the same section', () => {
+    const groups = agedReportScreens.map((definition) => definition.nav?.group)
+    expect(new Set(groups).size).toBe(groups.length)
   })
 })

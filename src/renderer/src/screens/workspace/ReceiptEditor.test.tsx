@@ -777,9 +777,15 @@ describe('the registrations', () => {
     expect(receiptEditorScreens.map((definition) => definition.id)).toContain('payment')
   })
 
-  it('puts neither of them in the sidebar', () => {
+  it('puts none of them in the rail', () => {
     for (const definition of receiptEditorScreens) {
       expect(definition.nav).toBeUndefined()
+    }
+  })
+
+  it('names its own register as the rail entry to mark', () => {
+    for (const definition of receiptEditorScreens) {
+      expect(definition.navParent).toBe(`${definition.id}-register`)
     }
   })
 })

@@ -222,7 +222,7 @@ registerScreens([
     id: 'trial-balance',
     title: 'Trial balance',
     area: 'workspace',
-    nav: { label: 'Trial balance', icon: 'ledger', group: 'reports', order: 0 },
+    nav: { label: 'Trial balance', icon: 'scale', group: 'reports', order: 0 },
     render: () => <TrialBalance />,
   },
 ])

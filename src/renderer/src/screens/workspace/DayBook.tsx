@@ -176,7 +176,7 @@ registerScreens([
     id: 'day-book',
     title: 'Day book',
     area: 'workspace',
-    nav: { label: 'Day book', icon: 'ledger', group: 'reports', order: 3 },
+    nav: { label: 'Day book', icon: 'calendar', group: 'accounts', order: 3 },
     render: () => <DayBook />,
   },
 ])

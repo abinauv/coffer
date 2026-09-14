@@ -94,7 +94,7 @@ describe('where each kind lives', () => {
   /*
    * TEN IDS, ALL DIFFERENT. Two screens collide silently: `createScreenRegistry` keys by
    * `area/id` and the second registration simply replaces the first, so a duplicate id
-   * would give one kind two sidebar entries that open the same screen — and nothing would
+   * would give one kind two rail entries that open the same screen — and nothing would
    * throw. Asserted as a set size rather than pairwise, so a sixth kind is covered.
    */
   it('gives every kind a register and an editor, and no two the same', () => {
@@ -111,7 +111,7 @@ describe('where each kind lives', () => {
     }
   })
 
-  it('files a kind under the sidebar group its side names', () => {
+  it('files a kind under the section its side names', () => {
     expect(registerNav('sales-invoice').group).toBe('sales')
     expect(registerNav('credit-note').group).toBe('sales')
     expect(registerNav('purchase-bill').group).toBe('purchases')
@@ -120,7 +120,7 @@ describe('where each kind lives', () => {
 
   /*
    * Two entries in one group sharing an order fall back to the label, which sorts
-   * "Credit notes" above "Sales invoices" — a sidebar that lists the correction before
+   * "Credit notes" above "Sales invoices" — a rail that lists the correction before
    * the thing it corrects. Orders are unique WITHIN a group, and deliberately not across
    * groups: 1 under Sales and 1 under Purchases are different lists.
    */
@@ -133,13 +133,24 @@ describe('where each kind lives', () => {
     }
   })
 
-  it('never takes the top slot, which the parties hold', () => {
+  /* The parties follow the registers at 20 and the aged report at 30 (Parties.tsx,
+   * ageing-view.ts), so a register numbered past them would sink below both. */
+  it('stays above the parties and the aged report', () => {
     for (const kind of KINDS) {
       expect(registerNav(kind).order).toBeGreaterThan(0)
+      expect(registerNav(kind).order).toBeLessThan(20)
     }
   })
 
-  it('labels the sidebar entry with the plural from the shared table', () => {
+  it('puts the sales invoice first, as the document raised every day', () => {
+    const sales = KINDS.map((kind) => ({ kind, nav: registerNav(kind) })).filter(
+      (entry) => entry.nav.group === 'sales',
+    )
+    const first = sales.reduce((a, b) => (b.nav.order < a.nav.order ? b : a))
+    expect(first.kind).toBe('sales-invoice')
+  })
+
+  it('labels the rail entry with the plural from the shared table', () => {
     expect(registerNav('purchase-bill').label).toBe('Purchase bills')
     expect(registerNav('quotation').label).toBe('Quotations')
   })

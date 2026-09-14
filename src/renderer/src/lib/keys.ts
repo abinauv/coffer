@@ -45,18 +45,27 @@ export function matchesShortcut(shortcut: Shortcut, event: KeyStroke, platform: 
   return true
 }
 
+/*
+ * Keys that move the caret, with whatever modifier. Alt+← is a word left on macOS and
+ * Ctrl+← is a word left everywhere else; Cmd+← and Home are the start of the line. Inside a
+ * field every one of them is already spoken for.
+ */
+const CARET_KEYS = new Set(['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'home', 'end'])
+
 /**
  * Whether a shortcut should be ignored because the user is typing.
  *
  * An unmodified letter must never steal a keystroke from a field. A modified one
- * still fires — Cmd+K from inside a search box is exactly what people expect.
+ * still fires — Cmd+K from inside a search box is exactly what people expect —
+ * except on a caret key, which belongs to the field whatever is held with it.
  */
 export function shouldIgnoreWhileTyping(
   shortcut: Shortcut,
   target: { tagName?: string; isContentEditable?: boolean } | null,
 ): boolean {
-  if (shortcut.ctrlOrCmd === true || shortcut.alt === true) return false
   if (!target) return false
+  const isCaretKey = CARET_KEYS.has(shortcut.key.toLowerCase())
+  if (!isCaretKey && (shortcut.ctrlOrCmd === true || shortcut.alt === true)) return false
   if (target.isContentEditable === true) return true
   const tag = (target.tagName ?? '').toUpperCase()
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'

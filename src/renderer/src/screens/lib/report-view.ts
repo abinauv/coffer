@@ -9,18 +9,9 @@
 import type { DecimalString } from '@shared/dto'
 import { isNegativeAmount, isZeroAmount } from './ledger-format'
 
-/** Today as `YYYY-MM-DD`, in the user's own timezone. */
-export function todayISO(now: Date = new Date()): string {
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  /*
-   * Not `toISOString().slice(0, 10)`, which converts to UTC first. For a user in India
-   * that is five and a half hours earlier, so any time before 05:30 local would default
-   * a balance sheet to yesterday — and on the first of the month, to the previous month.
-   */
-  return `${year}-${month}-${day}`
-}
+/* Moved to lib/ for the title bar, which names the current financial year. Re-exported so
+ * the report screens' imports did not move. */
+export { todayISO } from '@renderer/lib/today'
 
 /** What a range covers, in a sentence. */
 export function describeRange(fromDate: string | null, toDate: string | null): string {

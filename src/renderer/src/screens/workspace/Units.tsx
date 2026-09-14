@@ -483,7 +483,7 @@ registerScreens([
     id: 'units',
     title: 'Units of measure',
     area: 'workspace',
-    nav: { label: 'Units', icon: 'settings', group: 'inventory', order: 1 },
+    nav: { label: 'Units of measure', icon: 'ruler', group: 'inventory', order: 1 },
     render: () => <Units />,
   },
 ])

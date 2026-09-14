@@ -40,6 +40,12 @@ export const BRAND = {
   /** Custom protocol scheme, for deep links. */
   protocol: 'coffer',
 
+  /**
+   * How finished the product says it is. Drawn as a badge in the title bar, beside the
+   * version. The README's status badge says the same word by hand: change both.
+   */
+  releaseStage: 'alpha',
+
   /** Copyright holder shown in About and the licence notice. */
   copyrightHolder: 'The Coffer contributors',
 

@@ -61,7 +61,7 @@ describe('where each kind lives', () => {
   /*
    * Two ids per kind, all different. `createScreenRegistry` keys by `area/id` and the
    * second registration silently replaces the first, so a duplicate would give one kind
-   * two sidebar entries opening the same screen — and nothing would throw.
+   * two rail entries opening the same screen — and nothing would throw.
    *
    * COUNTED OFF THE TABLE rather than pinned at eight, so 0015 adding two kinds did not
    * need this number edited — which is the point: an assertion that has to be rewritten
@@ -113,7 +113,7 @@ describe('where each kind lives', () => {
     }
   })
 
-  it('labels the sidebar entry with the plural from the shared table', () => {
+  it('labels the rail entry with the plural from the shared table', () => {
     expect(registerNav('payment').label).toBe('Payments')
     expect(registerNav('receipt').label).toBe('Receipts')
   })

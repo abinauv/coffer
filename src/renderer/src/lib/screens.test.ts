@@ -84,7 +84,10 @@ describe('findScreen', () => {
 
 describe('navSections', () => {
   const screens = [
-    screen({ id: 'overview', nav: { label: 'Overview', icon: 'ledger', group: 'work', order: 1 } }),
+    screen({
+      id: 'overview',
+      nav: { label: 'Overview', icon: 'ledger', group: 'accounts', order: 1 },
+    }),
     screen({
       id: 'invoices',
       nav: { label: 'Invoices', icon: 'ledger', group: 'sales', order: 2 },
@@ -94,7 +97,7 @@ describe('navSections', () => {
     screen({
       id: 'picker',
       area: 'welcome',
-      nav: { label: 'Companies', icon: 'folder', group: 'work', order: 1 },
+      nav: { label: 'Companies', icon: 'folder', group: 'sales', order: 1 },
     }),
   ]
 
@@ -112,10 +115,12 @@ describe('navSections', () => {
     expect(ids).not.toContain('picker')
   })
 
+  /* Overview is registered first and belongs to Accounts, which the bar draws after Sales:
+   * the order comes from NAV_GROUPS, never from registration. */
   it('drops empty groups and keeps the declared group order', () => {
     expect(navSections(screens, 'workspace').map((section) => section.id)).toEqual([
-      'work',
       'sales',
+      'accounts',
     ])
   })
 
@@ -126,8 +131,8 @@ describe('navSections', () => {
 
   it('breaks an order tie alphabetically', () => {
     const tied = [
-      screen({ id: 'b', nav: { label: 'Bravo', icon: 'ledger', group: 'work', order: 1 } }),
-      screen({ id: 'a', nav: { label: 'Alpha', icon: 'ledger', group: 'work', order: 1 } }),
+      screen({ id: 'b', nav: { label: 'Bravo', icon: 'ledger', group: 'sales', order: 1 } }),
+      screen({ id: 'a', nav: { label: 'Alpha', icon: 'ledger', group: 'sales', order: 1 } }),
     ]
     expect(navSections(tied, 'workspace')[0]?.screens.map((entry) => entry.id)).toEqual(['a', 'b'])
   })
@@ -187,8 +192,27 @@ describe('isScreenDefinition', () => {
         title: 'x',
         area: 'workspace',
         render: () => null,
-        nav: { label: 'A', icon: 'ledger', group: 'work' },
+        nav: { label: 'A', icon: 'ledger', group: 'sales' },
       }),
     ).toBe(false)
+  })
+
+  /* The seventh section is gone; a module still naming it is reported, not drawn. */
+  it('rejects the retired Work group', () => {
+    expect(
+      isScreenDefinition({
+        id: 'a',
+        title: 'x',
+        area: 'workspace',
+        render: () => null,
+        nav: { label: 'A', icon: 'ledger', group: 'work', order: 1 },
+      }),
+    ).toBe(false)
+  })
+
+  it('accepts a parent screen id and rejects an empty or non-string one', () => {
+    expect(isScreenDefinition(screen({ id: 'invoice', navParent: 'invoices' }))).toBe(true)
+    expect(isScreenDefinition({ ...screen({ id: 'invoice' }), navParent: '' })).toBe(false)
+    expect(isScreenDefinition({ ...screen({ id: 'invoice' }), navParent: 7 })).toBe(false)
   })
 })

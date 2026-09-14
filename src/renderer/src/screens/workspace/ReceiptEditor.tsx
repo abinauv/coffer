@@ -645,13 +645,15 @@ function Settled({
  * One editor per kind. No `nav` on either: an editor is reached from its register, from a
  * row, or from the document it settles — there is no such thing as "the" payment to land
  * on. The id IS the kind, which is why the invoice screen's route to `workspace/receipt`
- * has resolved since 0012 and still does.
+ * has resolved since 0012 and still does. `navParent` is the kind's register, so the rail
+ * keeps it marked while the editor is open.
  */
 export const receiptEditorScreens: readonly ScreenDefinition[] = RECEIPT_KINDS.map(
   (definition) => ({
     id: definition.kind,
     title: definition.label,
     area: 'workspace' as const,
+    navParent: registerScreenId(definition.kind),
     render: (context: ScreenContext) => <ReceiptEditor {...context} kind={definition.kind} />,
   }),
 )

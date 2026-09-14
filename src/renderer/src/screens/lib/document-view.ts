@@ -11,7 +11,7 @@
  * `main/domain` where the renderer could not reach it; 0013-2 moved it down so that the
  * label on a button and the account a posting rule debits are read off the same row. What
  * is in this file is only what a SCREEN adds to it: where each register sits in the
- * sidebar, what its empty state says, and which word a party goes by on that side.
+ * rail, what its empty state says, and which word a party goes by on that side.
  *
  * Nothing here touches money. A document's total arrives formatted from main and the
  * register prints it — see the note at the top of DocumentRegister.tsx about why there is
@@ -19,7 +19,8 @@
  */
 
 import type { BadgeTone } from '@renderer/components/atoms'
-import type { NavGroupId, ScreenNav } from '@renderer/lib/screens'
+import type { IconName } from '@renderer/lib/icons'
+import { navGroupLabel, type NavGroupId, type ScreenNav } from '@renderer/lib/screens'
 import {
   chargesOnTerms,
   definitionOf,
@@ -63,33 +64,47 @@ export function editorScreenId(kind: DocumentKind): string {
 }
 
 /**
- * Where a kind's register sits in the sidebar.
+ * Where a kind's register sits in the rail.
  *
- * Ordered as a business works: what you send before what you correct, and the parties
- * above both. Receipts and payments come last on their side, because they are what
- * happens to a document rather than a document.
+ * Ordered as a business works: the invoice first, because it is the document raised every
+ * day, then the quotation before it and the note that corrects it. Receipts and payments
+ * follow, because they are what happens to a document rather than a document, and the
+ * parties and the aged report come after all of them.
  */
 const NAV_ORDER: Readonly<Record<DocumentKind, number>> = {
-  quotation: 1,
-  'sales-invoice': 2,
+  'sales-invoice': 1,
+  quotation: 2,
   'credit-note': 3,
   'purchase-bill': 1,
   'debit-note': 2,
 }
 
+/*
+ * The rail's glyph per kind, a record so a new kind does not compile without one. What is
+ * raised is a page with lines; what corrects it carries a minus or a plus; a quotation's
+ * lines are still to be settled.
+ */
+const NAV_ICON: Readonly<Record<DocumentKind, IconName>> = {
+  'sales-invoice': 'invoice',
+  quotation: 'quotation',
+  'credit-note': 'note-minus',
+  'purchase-bill': 'bill',
+  'debit-note': 'note-plus',
+}
+
 /**
- * The sidebar entry for a kind's register.
+ * The rail entry for a kind's register.
  *
  * The group falls out of the side, which is the whole reason `side` is on the shared
  * table: a kind added on the purchase side appears under Purchases without anyone
- * deciding. The label is the plural from the same row, so the sidebar and the register's
+ * deciding. The label is the plural from the same row, so the rail and the register's
  * own heading cannot disagree.
  */
 export function registerNav(kind: DocumentKind): ScreenNav {
   const definition = definitionOf(kind)
   return {
     label: definition.pluralLabel,
-    icon: 'ledger',
+    icon: NAV_ICON[kind],
     group: SIDE_WORDS[definition.side].navGroup,
     order: NAV_ORDER[kind],
   }
@@ -123,7 +138,7 @@ interface SideWords {
   referenceLabel: string
   /** The hint under it. See `partyReferenceHint`. */
   referenceHint: string
-  /** Which sidebar group this side's registers sit in. */
+  /** Which section this side's registers sit in. */
   navGroup: NavGroupId
 }
 
@@ -143,6 +158,11 @@ const SIDE_WORDS: Readonly<Record<TradeSide, SideWords>> = {
       "The number on the supplier's own bill. It is what a return is matched against, so it is worth typing.",
     navGroup: 'purchases',
   },
+}
+
+/** The section a side's registers, parties and aged report sit in. */
+export function sideNavGroup(side: TradeSide): NavGroupId {
+  return SIDE_WORDS[side].navGroup
 }
 
 /**
@@ -218,7 +238,8 @@ export function registerLede(kind: DocumentKind): string {
 export function emptyRegisterSentence(kind: DocumentKind): string {
   const definition = definitionOf(kind)
   const party = partyLabel(definition.side).toLowerCase()
-  return `A ${definition.label.toLowerCase()} needs a ${party} and the business details filled in — both are in the sidebar. Then New ${definition.label.toLowerCase()} starts one.`
+  const section = navGroupLabel(SIDE_WORDS[definition.side].navGroup)
+  return `A ${definition.label.toLowerCase()} needs a ${party} and the business details filled in — the ${party} under ${section}, the business details under Company. Then New ${definition.label.toLowerCase()} starts one.`
 }
 
 // ---- Status -----------------------------------------------------------------

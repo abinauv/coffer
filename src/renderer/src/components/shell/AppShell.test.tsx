@@ -1,11 +1,14 @@
 /*
  * The application shell.
  *
- * TWO LAYOUTS, CHOSEN BY THE AREA OF THE ROUTE AND NOTHING ELSE. `welcome` has no
- * sidebar, because there is nothing to navigate between until a company is unlocked and
- * offering a nav rail would be a lie about what is reachable. `workspace` has one. Both
- * are asserted, in both directions, because "the sidebar is present" is satisfied by a
- * shell that always draws it.
+ * TWO LAYOUTS, CHOSEN BY THE AREA OF THE ROUTE AND NOTHING ELSE. `welcome` has no section
+ * bar, rail or status bar, because there is nothing to navigate between until a company is
+ * unlocked and offering navigation would be a lie about what is reachable. `workspace` has
+ * all three. Both are asserted, in both directions, because "the rail is present" is
+ * satisfied by a shell that always draws it.
+ *
+ * What the section bar and the rail do with a route is ContextRail.test.tsx's; this file
+ * asserts that the frame draws them and owns their commands.
  *
  * AND THE COMMANDS THE FRAME OWNS. Everything keyboard-reachable in Coffer goes through
  * the registry, so the assertions here are on WHAT REACHED THE REGISTRY rather than on
@@ -26,7 +29,8 @@
  * workspace lands on the dashboard, and the dashboard reads the aged reports, the
  * document register and the receipts. That is not a fault in either batch — it is what
  * mounting the whole frame means — and the honest fix is for the frame's own harness to
- * answer them rather than for the dashboard to read less.
+ * answer them rather than for the dashboard to read less. The title bar's read of the
+ * periods, for the financial year, is answered the same way.
  */
 
 import { act, screen, within } from '@testing-library/react'
@@ -43,7 +47,7 @@ import type {
 import { DEFAULT_COMPANY, renderScreen, type BridgeStub } from '@renderer/test/harness'
 import type { Command } from '../../lib/command-registry'
 import { DENSITY_STORAGE_KEY } from '../../lib/density'
-import { SIDEBAR_STORAGE_KEY } from '../../lib/layout'
+import { RAIL_STORAGE_KEY } from '../../lib/layout'
 import { registerScreens } from '../../lib/screens'
 import { THEME_STORAGE_KEY } from '../../lib/theme'
 import { useCommands } from '../../store/commands'
@@ -108,6 +112,7 @@ const BRIDGE: BridgeStub = {
   receipts: { list: () => ok<ReceiptSummary[]>([]) },
   companyProfile: { get: () => ok(null) },
   parties: { list: () => ok([]) },
+  ledger: { listPeriods: () => ok([]) },
 }
 
 function mount({ isCompanyOpen = false } = {}): void {
@@ -148,8 +153,13 @@ function shell(): HTMLElement {
   return app
 }
 
-function sidebar(): HTMLElement | null {
+function sectionBar(): HTMLElement | null {
   return screen.queryByRole('navigation', { name: 'Sections' })
+}
+
+/* Named by its section. The workspace lands on the Overview, which is under Accounts. */
+function rail(): HTMLElement | null {
+  return document.querySelector('nav.rail')
 }
 
 beforeEach(() => {
@@ -158,25 +168,29 @@ beforeEach(() => {
 })
 
 describe('the two layouts', () => {
-  it('draws no sidebar while no company is open', () => {
+  it('draws no section bar, rail or status bar while no company is open', () => {
     mount({ isCompanyOpen: false })
 
     expect(shell()).toHaveAttribute('data-area', 'welcome')
-    expect(sidebar()).toBeNull()
+    expect(sectionBar()).toBeNull()
+    expect(rail()).toBeNull()
+    expect(screen.queryByRole('contentinfo')).toBeNull()
   })
 
-  it('draws one once a company is open', () => {
+  it('draws all three once a company is open, landing on Accounts', () => {
     mount({ isCompanyOpen: true })
 
     expect(shell()).toHaveAttribute('data-area', 'workspace')
-    expect(sidebar()).toBeVisible()
+    expect(sectionBar()).toBeVisible()
+    expect(screen.getByRole('navigation', { name: 'Accounts' })).toBe(rail())
+    expect(screen.getByRole('contentinfo')).toHaveTextContent('/books/acme.coffer')
   })
 
   it('always carries the title bar', () => {
     mount({ isCompanyOpen: false })
 
     expect(document.querySelector('.titlebar')).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Search and commands' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Search or run a command' })).toBeVisible()
   })
 
   it('always carries the notifications region', () => {
@@ -185,7 +199,7 @@ describe('the two layouts', () => {
     expect(screen.getByRole('region', { name: 'Notifications' })).toBeVisible()
   })
 
-  /* A keyboard user must be able to get past the title bar and the whole nav rail in
+  /* A keyboard user must be able to get past the title bar, the section bar and the rail in
    * one keystroke, and the target has to be focusable or the link goes nowhere. */
   it('offers a skip link that points at a focusable main', async () => {
     const user = userEvent.setup()
@@ -210,6 +224,24 @@ describe('the commands the frame owns', () => {
     expect(ids()).toContain('palette.open')
     expect(commandFor('palette.open').shortcut).toEqual({ key: 'k', ctrlOrCmd: true })
     expect(ids()).toContain('nav.back')
+  })
+
+  /* Ctrl [ belongs to the previous section now, as the design's key map has it. */
+  it('puts Back on Alt ←, which every browser and file manager already uses', () => {
+    mount()
+
+    expect(commandFor('nav.back').shortcut).toEqual({ key: 'ArrowLeft', alt: true })
+  })
+
+  it('goes back on Alt ←', async () => {
+    const user = userEvent.setup()
+    mount({ isCompanyOpen: true })
+    run('go.workspace.shell-probe')
+    expect(route).toBe('shell-probe')
+
+    await user.keyboard('{Alt>}{ArrowLeft}{/Alt}')
+
+    expect(route).toBe('overview')
   })
 
   /*
@@ -306,48 +338,75 @@ describe('the commands the frame owns', () => {
 })
 
 /*
- * THE SIDEBAR COMMAND IS REGISTERED BY THE WORKSPACE, not by the shell, so that it
- * cannot fire from the picker where there is no sidebar to collapse.
+ * THE RAIL AND SECTION COMMANDS ARE REGISTERED BY THE WORKSPACE, not by the shell, so that
+ * none of them can fire from the picker where there is nothing to collapse or step through.
  */
-describe('the sidebar command', () => {
-  it('exists in the workspace and not in the welcome area', () => {
+describe('the workspace commands', () => {
+  it('exist in the workspace and not in the welcome area', () => {
     mount({ isCompanyOpen: false })
-    expect(ids()).not.toContain('view.toggle-sidebar')
+    expect(ids()).not.toContain('view.toggle-rail')
+    expect(ids()).not.toContain('nav.section.next')
+    expect(ids()).not.toContain('nav.section.previous')
 
     localStorage.clear()
     mount({ isCompanyOpen: true })
-    expect(ids()).toContain('view.toggle-sidebar')
+    expect(ids()).toContain('view.toggle-rail')
+    expect(ids()).toContain('nav.section.next')
+    expect(ids()).toContain('nav.section.previous')
   })
 
   it('collapses the rail, and says what it will do next', () => {
-    localStorage.setItem(SIDEBAR_STORAGE_KEY, 'expanded')
+    localStorage.setItem(RAIL_STORAGE_KEY, 'expanded')
     mount({ isCompanyOpen: true })
 
-    expect(sidebar()).toHaveAttribute('data-collapsed', 'false')
-    expect(commandFor('view.toggle-sidebar').title).toBe('Collapse the sidebar')
+    expect(rail()).toHaveAttribute('data-collapsed', 'false')
+    expect(commandFor('view.toggle-rail').title).toBe('Collapse the rail to icons')
 
-    run('view.toggle-sidebar')
+    run('view.toggle-rail')
 
-    expect(sidebar()).toHaveAttribute('data-collapsed', 'true')
-    expect(commandFor('view.toggle-sidebar').title).toBe('Expand the sidebar')
+    expect(rail()).toHaveAttribute('data-collapsed', 'true')
+    expect(commandFor('view.toggle-rail').title).toBe('Expand the rail')
   })
 
   /* Once the user has taken a position, the window resizing under them must not
    * silently overrule it — so the toggle always writes an explicit preference. */
   it('remembers the choice rather than leaving it to the viewport', () => {
-    localStorage.setItem(SIDEBAR_STORAGE_KEY, 'expanded')
+    localStorage.setItem(RAIL_STORAGE_KEY, 'expanded')
     mount({ isCompanyOpen: true })
 
-    run('view.toggle-sidebar')
+    run('view.toggle-rail')
 
-    expect(localStorage.getItem(SIDEBAR_STORAGE_KEY)).toBe('collapsed')
+    expect(localStorage.getItem(RAIL_STORAGE_KEY)).toBe('collapsed')
   })
 
   it('takes the stored preference over the viewport on the first paint', () => {
-    localStorage.setItem(SIDEBAR_STORAGE_KEY, 'collapsed')
+    localStorage.setItem(RAIL_STORAGE_KEY, 'collapsed')
     mount({ isCompanyOpen: true })
 
-    expect(sidebar()).toHaveAttribute('data-collapsed', 'true')
+    expect(rail()).toHaveAttribute('data-collapsed', 'true')
+  })
+
+  it('binds the next and previous section to Ctrl ] and Ctrl [', () => {
+    mount({ isCompanyOpen: true })
+
+    expect(commandFor('nav.section.next').shortcut).toEqual({ key: ']', ctrlOrCmd: true })
+    expect(commandFor('nav.section.previous').shortcut).toEqual({ key: '[', ctrlOrCmd: true })
+  })
+
+  /* Between the probe (Reports) and the Overview (Accounts), which is next to it: each
+   * section lands on the screen last open in it, so no other screen is ever drawn. */
+  it('steps through the sections from the keyboard', async () => {
+    const user = userEvent.setup()
+    mount({ isCompanyOpen: true })
+    run('go.workspace.shell-probe')
+
+    await user.keyboard('{Control>}[[{/Control}')
+    expect(route).toBe('overview')
+    expect(screen.getByRole('navigation', { name: 'Accounts' })).toBe(rail())
+
+    await user.keyboard('{Control>}]{/Control}')
+    expect(route).toBe('shell-probe')
+    expect(screen.getByRole('navigation', { name: 'Reports' })).toBe(rail())
   })
 })
 
@@ -356,7 +415,7 @@ describe('the palette', () => {
     const user = userEvent.setup()
     mount({ isCompanyOpen: true })
 
-    await user.click(screen.getByRole('button', { name: 'Search and commands' }))
+    await user.click(screen.getByRole('button', { name: 'Search or run a command' }))
 
     const search = await screen.findByRole('combobox', { name: 'Search commands' })
     expect(search).toBeVisible()

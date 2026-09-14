@@ -315,7 +315,7 @@ describe('the registrations', () => {
     )
   })
 
-  it('puts both of them in the sidebar', () => {
+  it('puts every one of them in the rail', () => {
     for (const definition of receiptRegisterScreens) {
       expect(definition.nav).toBeDefined()
     }

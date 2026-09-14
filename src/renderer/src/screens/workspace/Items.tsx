@@ -812,7 +812,7 @@ registerScreens([
     id: 'items',
     title: 'Items',
     area: 'workspace',
-    nav: { label: 'Items', icon: 'archive', group: 'inventory', order: 0 },
+    nav: { label: 'Items', icon: 'box', group: 'inventory', order: 0 },
     render: (context) => <Items {...context} />,
   },
 ])

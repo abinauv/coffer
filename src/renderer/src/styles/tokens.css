@@ -86,10 +86,10 @@
   --surface-sunken: #ebe8e0;
   --surface-hover: #f5f3ee;
   --surface-active: #ebe8e0;
-  /** Application chrome: the title bar. src/main/index.ts repeats this value for
-   *  the OS window controls' first paint; change both. */
+  /** Application chrome: the title bar and the status bar. src/main/index.ts repeats
+   *  this value for the OS window controls' first paint; change both. */
   --chrome: #ece9e2;
-  /** The navigation column. */
+  /** The section bar and the rail. */
   --sidebar: #f0ede6;
   /** Scrim behind a modal. */
   --overlay: rgba(23, 26, 31, 0.42);
@@ -314,12 +314,13 @@
 
   --titlebar-height: 38px;
   --statusbar-height: 26px;
-  /* The section bar and contextual rail are designed and not yet drawn; these
-   * are their sizes, defined ahead of the shell that will use them. */
+  /* The section bar across the workspace, and the rail of the current section's
+   * screens beside it. Collapsed, the rail is icons only. */
   --sectionbar-height: 40px;
   --rail-width: 208px;
   --rail-width-collapsed: 56px;
-  /* The sidebar the shell draws today, which lists every section at once. */
+  /* A sidebar listing every section at once. Nothing draws one today; the shell
+   * draws the section bar and rail above. */
   --sidebar-width: 232px;
   --sidebar-width-collapsed: 56px;
   /* The cap on a reading column. Ledger tables ignore it and use the width they

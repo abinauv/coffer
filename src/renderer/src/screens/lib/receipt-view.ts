@@ -26,6 +26,7 @@
  */
 
 import type { BadgeTone } from '@renderer/components/atoms'
+import type { IconName } from '@renderer/lib/icons'
 import type { ScreenNav } from '@renderer/lib/screens'
 import { definitionOf, type TradeSide } from '@shared/documents'
 import type { AllocationInput, OpenDocument, ReceiptStatusDto } from '@shared/dto'
@@ -55,7 +56,7 @@ export function editorScreenId(kind: ReceiptKind): string {
 }
 
 /**
- * Where a kind's register sits in the sidebar.
+ * Where a kind's register sits in the rail.
  *
  * Last in its group, after the documents, because a voucher is what happens TO a document
  * rather than a document. `document-view.ts` holds the orders above these.
@@ -67,11 +68,22 @@ const NAV_ORDER: Readonly<Record<ReceiptKind, number>> = {
   'refund-received': 4,
 }
 
+/*
+ * The rail's glyph per kind: money into a tray or out of one, and a refund turning back.
+ * The two refunds share a glyph and never a rail, one per side.
+ */
+const NAV_ICON: Readonly<Record<ReceiptKind, IconName>> = {
+  receipt: 'money-in',
+  payment: 'money-out',
+  refund: 'refund',
+  'refund-received': 'refund',
+}
+
 export function registerNav(kind: ReceiptKind): ScreenNav {
   const definition = receiptDefinitionOf(kind)
   return {
     label: definition.pluralLabel,
-    icon: 'ledger',
+    icon: NAV_ICON[kind],
     group: definition.side === 'sales' ? 'sales' : 'purchases',
     order: NAV_ORDER[kind],
   }

@@ -31,6 +31,7 @@ import type { JSX, ReactNode } from 'react'
 import { ToastViewport } from '@renderer/components/toast/ToastViewport'
 import { makeRoute, type Route } from '@renderer/lib/routing'
 import type { ScreenContext } from '@renderer/lib/screens'
+import { BackupProvider } from '@renderer/store/backup'
 import { CommandProvider } from '@renderer/store/commands'
 import { CompanyProvider, useCompany } from '@renderer/store/company'
 import { DensityProvider } from '@renderer/store/density'
@@ -285,8 +286,10 @@ function Providers({
               <RegimeProvider value={regime}>
                 <NavigationProvider>
                   <CommandProvider>
-                    {children}
-                    {toastViewport && <ToastViewport />}
+                    <BackupProvider>
+                      {children}
+                      {toastViewport && <ToastViewport />}
+                    </BackupProvider>
                   </CommandProvider>
                 </NavigationProvider>
               </RegimeProvider>

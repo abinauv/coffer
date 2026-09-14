@@ -334,7 +334,7 @@ registerScreens([
     id: 'chart-of-accounts',
     title: 'Chart of accounts',
     area: 'workspace',
-    nav: { label: 'Chart of accounts', icon: 'ledger', group: 'accounts', order: 0 },
+    nav: { label: 'Chart of accounts', icon: 'accounts', group: 'accounts', order: 1 },
     render: () => <ChartOfAccounts />,
   },
 ])
