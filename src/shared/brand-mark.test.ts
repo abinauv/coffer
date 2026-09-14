@@ -24,17 +24,26 @@ import {
 const UNIT = MARK_GRID / 8
 
 describe('the construction', () => {
-  it('insets the outer frame 1 unit, 0.6 thick, with a 0.3 corner', () => {
+  it('insets the outer frame 1 unit, 0.5 thick, with a 0.3 corner', () => {
     expect(MARK_OUTER.inset).toBeCloseTo(1 * UNIT)
-    expect(MARK_OUTER.stroke).toBeCloseTo(0.6 * UNIT)
+    expect(MARK_OUTER.stroke).toBeCloseTo(0.5 * UNIT)
     expect(MARK_OUTER.radius).toBeCloseTo(0.3 * UNIT)
   })
 
-  it('insets the inner frame 3 units, 0.6 thick, with a sharper 0.1 corner', () => {
-    expect(MARK_INNER.inset).toBeCloseTo(3 * UNIT)
-    expect(MARK_INNER.stroke).toBeCloseTo(0.6 * UNIT)
+  it('insets the inner frame 2.5 units, 0.5 thick, with a sharper 0.1 corner', () => {
+    expect(MARK_INNER.inset).toBeCloseTo(2.5 * UNIT)
+    expect(MARK_INNER.stroke).toBeCloseTo(0.5 * UNIT)
     expect(MARK_INNER.radius).toBeCloseTo(0.1 * UNIT)
     expect(MARK_INNER.radius).toBeLessThan(MARK_OUTER.radius)
+  })
+
+  /* The proportion the brand sheet's specimens draw: a panel set into a panel. At a third
+   * the opening becomes a pinhole and the mark reads as a target. */
+  it('makes the inner square half the outer one, with an opening a third of it', () => {
+    const { outer, inner } = markShapes(64)
+    if (inner.solid) throw new Error('expected a frame at 64px')
+    expect(inner.outside.size / outer.outside.size).toBeCloseTo(1 / 2)
+    expect(inner.hole.size / outer.outside.size).toBeCloseTo(1 / 3)
   })
 
   it('is centred: every shape is a square the same distance from both edges', () => {
@@ -69,8 +78,12 @@ describe('sizes', () => {
     expect(markShapes(MARK_SOLID_BELOW).inner.solid).toBe(false)
   })
 
-  it('fills the inner square below 20px', () => {
-    expect(markShapes(MARK_SOLID_BELOW - 1).inner.solid).toBe(true)
+  it('fills the inner square below 20px, at the size of its own opening', () => {
+    const small = markShapes(MARK_SOLID_BELOW - 1)
+    const large = markShapes(MARK_SOLID_BELOW)
+    expect(small.inner.solid).toBe(true)
+    if (large.inner.solid) throw new Error('expected a frame at 20px')
+    expect(small.inner.outside.size).toBeCloseTo(large.inner.hole.size)
   })
 
   it('holds the outer frame at two device pixels when small', () => {
