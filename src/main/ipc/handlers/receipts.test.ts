@@ -28,6 +28,7 @@ let handlers: ReturnType<typeof createReceiptsHandlers>
 beforeEach(() => {
   service = {
     list: vi.fn(async () => []),
+    count: vi.fn(async () => 0),
     get: vi.fn(async () => null),
     create: vi.fn(async () => ({}) as never),
     allocate: vi.fn(async () => ({}) as never),
@@ -241,6 +242,23 @@ describe('list', () => {
   })
 })
 
+describe('count', () => {
+  it('takes the list filters and no page', () => {
+    expect(parse('count')).toEqual([{}])
+    const input = first('count', { kind: 'payment', status: 'posted', search: 'UTR', limit: 25 })
+    expect(input).toMatchObject({ kind: 'payment', status: 'posted', search: 'UTR' })
+    expect(input).not.toHaveProperty('limit')
+    rejects('count', { status: 'draft' })
+  })
+
+  it('wraps the number the service answers', async () => {
+    service.count = vi.fn(async () => 7)
+    handlers = createReceiptsHandlers(service)
+
+    await expect(handlers.count.handle({ kind: 'receipt' })).resolves.toEqual({ ok: true, data: 7 })
+  })
+})
+
 /* `settlement` MOVED TO THE `documents` GROUP IN 0016 — it takes a document id, answers
  * about a document, and half of what it returns has no receipt in it. Its boundary tests
  * went with it, and `open` stayed because its argument is a voucher kind. */
@@ -282,6 +300,7 @@ describe('the group as a whole', () => {
     expect(Object.keys(handlers).sort()).toEqual([
       'allocate',
       'cancel',
+      'count',
       'create',
       'get',
       'list',

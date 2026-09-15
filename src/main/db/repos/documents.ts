@@ -58,6 +58,7 @@ import {
 } from '@main/domain/money'
 import { definitionOf, documentTotals, type DocumentLine } from '@main/domain/documents'
 import type {
+  CountDocumentsInput,
   CreateTaxedDocumentInput,
   Document,
   DocumentLineDto,
@@ -99,9 +100,7 @@ export async function listDocuments(
   db: CofferDb,
   input: ListDocumentsInput = {},
 ): Promise<DocumentListRow[]> {
-  let query = db
-    .selectFrom('documents')
-    .innerJoin('parties', 'parties.id', 'documents.party_id')
+  const rows = await filteredDocuments(db, input)
     .select([
       'documents.id as id',
       'documents.kind as kind',
@@ -114,31 +113,6 @@ export async function listDocuments(
       'documents.entry_id as entry_id',
       'parties.name as party_name',
     ])
-
-  if (input.kind !== undefined) query = query.where('documents.kind', '=', input.kind)
-  if (input.status !== undefined) query = query.where('documents.status', '=', input.status)
-  if (input.partyId !== undefined) query = query.where('documents.party_id', '=', input.partyId)
-  if (input.fromDate !== undefined) {
-    query = query.where('documents.document_date', '>=', input.fromDate)
-  }
-  if (input.toDate !== undefined) {
-    query = query.where('documents.document_date', '<=', input.toDate)
-  }
-
-  /* The blank guard is not a rule: the term is built from `.trim()`, so an all-space
-   * search would become '%%' and match everything anyway. It saves three LIKEs. */
-  if (input.search !== undefined && input.search.trim() !== '') {
-    const term = `%${input.search.trim()}%`
-    query = query.where((eb) =>
-      eb.or([
-        eb(sql<string>`COALESCE(documents.number, '') COLLATE NOCASE`, 'like', term),
-        eb(sql<string>`parties.name COLLATE NOCASE`, 'like', term),
-        eb(sql<string>`documents.narration COLLATE NOCASE`, 'like', term),
-      ]),
-    )
-  }
-
-  const rows = await query
     .orderBy('documents.document_date', 'desc')
     .orderBy('documents.number', 'desc')
     .orderBy('documents.created_at', 'desc')
@@ -182,6 +156,53 @@ export async function listDocuments(
     ).grandTotal,
     settlement: settlements.get(row.id) ?? null,
   }))
+}
+
+/**
+ * How many documents the same filters match, for a register's "Showing 1–50 of 184".
+ *
+ * BUILT FROM THE LIST'S OWN QUERY, not a second copy of its filters. A count that searched
+ * the narration while the list did not would tell a user there were 184 when paging could
+ * only ever reach 150, and nothing on screen could explain the difference.
+ */
+export async function countDocuments(
+  db: CofferDb,
+  input: CountDocumentsInput = {},
+): Promise<number> {
+  const row = await filteredDocuments(db, input)
+    .select((eb) => eb.fn.countAll<number>().as('count'))
+    .executeTakeFirstOrThrow()
+  return Number(row.count)
+}
+
+/** The documents a register's filters match, joined to their party, before any select. */
+function filteredDocuments(db: CofferDb, input: CountDocumentsInput) {
+  let query = db.selectFrom('documents').innerJoin('parties', 'parties.id', 'documents.party_id')
+
+  if (input.kind !== undefined) query = query.where('documents.kind', '=', input.kind)
+  if (input.status !== undefined) query = query.where('documents.status', '=', input.status)
+  if (input.partyId !== undefined) query = query.where('documents.party_id', '=', input.partyId)
+  if (input.fromDate !== undefined) {
+    query = query.where('documents.document_date', '>=', input.fromDate)
+  }
+  if (input.toDate !== undefined) {
+    query = query.where('documents.document_date', '<=', input.toDate)
+  }
+
+  /* The blank guard is not a rule: the term is built from `.trim()`, so an all-space
+   * search would become '%%' and match everything anyway. It saves three LIKEs. */
+  if (input.search !== undefined && input.search.trim() !== '') {
+    const term = `%${input.search.trim()}%`
+    query = query.where((eb) =>
+      eb.or([
+        eb(sql<string>`COALESCE(documents.number, '') COLLATE NOCASE`, 'like', term),
+        eb(sql<string>`parties.name COLLATE NOCASE`, 'like', term),
+        eb(sql<string>`documents.narration COLLATE NOCASE`, 'like', term),
+      ]),
+    )
+  }
+
+  return query
 }
 
 /**

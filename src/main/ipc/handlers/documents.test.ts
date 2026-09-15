@@ -23,6 +23,7 @@ let handlers: ReturnType<typeof createDocumentsHandlers>
 beforeEach(() => {
   service = {
     list: vi.fn(async () => []),
+    count: vi.fn(async () => 0),
     get: vi.fn(async () => null),
     create: vi.fn(async () => ({}) as never),
     update: vi.fn(async () => ({}) as never),
@@ -98,6 +99,34 @@ describe('list', () => {
   it('refuses a date that is not one', () => {
     rejects('list', { fromDate: '15-04-2026' })
     rejects('list', { toDate: 20260415 })
+  })
+})
+
+describe('count', () => {
+  it('narrows the same filters the list does', () => {
+    expect(parse('count')).toEqual([{}])
+    expect(first('count', { kind: 'sales-invoice', status: 'draft', search: 'INV' })).toMatchObject(
+      { kind: 'sales-invoice', status: 'draft', search: 'INV' },
+    )
+    rejects('count', { status: 'posted' })
+    rejects('count', { fromDate: '15-04-2026' })
+  })
+
+  /* A count has no page. A limit arriving here would be a caller that thinks it counts one. */
+  it('drops a page it has no use for', () => {
+    expect(first('count', { kind: 'quotation', limit: 50, offset: 100 })).not.toHaveProperty(
+      'limit',
+    )
+  })
+
+  it('wraps the number the service answers', async () => {
+    service.count = vi.fn(async () => 184)
+    handlers = createDocumentsHandlers(service)
+
+    await expect(handlers.count.handle({ kind: 'sales-invoice' })).resolves.toEqual({
+      ok: true,
+      data: 184,
+    })
   })
 })
 
@@ -198,6 +227,29 @@ describe('update', () => {
     expect(input['date']).toBeUndefined()
     expect(input['partyId']).toBeUndefined()
     expect(input['narration']).toBe('Against PO 4471')
+  })
+
+  /*
+   * B20. Both flags reached the service and the repository and were dropped here, so no
+   * screen could set either. Absent stays absent; null clears the export treatment.
+   */
+  it('keeps the reverse-charge flag and the export treatment it is sent', () => {
+    expect(
+      first('update', { id: 'd1', isReverseCharge: true, exportTaxPayment: 'without-payment' }),
+    ).toMatchObject({ isReverseCharge: true, exportTaxPayment: 'without-payment' })
+    expect(first('create', { ...CREATE, isReverseCharge: false })['isReverseCharge']).toBe(false)
+  })
+
+  it('reads a null export treatment as clearing it, and absence as leaving it', () => {
+    expect(first('update', { id: 'd1', exportTaxPayment: null })['exportTaxPayment']).toBeNull()
+    const untouched = first('update', { id: 'd1' })
+    expect(untouched['exportTaxPayment']).toBeUndefined()
+    expect(untouched['isReverseCharge']).toBeUndefined()
+  })
+
+  it('refuses a flag that is not a boolean and a treatment that is not one', () => {
+    rejects('update', { id: 'd1', isReverseCharge: 'yes' })
+    rejects('update', { id: 'd1', exportTaxPayment: 'under-lut' })
   })
 
   it('takes an empty set of lines as an instruction to clear them', () => {

@@ -1037,6 +1037,14 @@ export interface ListDocumentsInput {
   offset?: number
 }
 
+/**
+ * How many documents a register's filters match, for "Showing 1–50 of 184".
+ *
+ * The list's own filters and nothing else, so the count and the page are the same
+ * question: the repository builds both from one filtered query.
+ */
+export type CountDocumentsInput = Omit<ListDocumentsInput, 'limit' | 'offset'>
+
 // ---- Numbering ------------------------------------------------------------
 
 /*
@@ -1518,6 +1526,42 @@ export interface ProfitAndLoss {
   netProfit: DecimalString
 }
 
+/** One account counted as cash or bank on the Overview, with what it held on the day. */
+export interface CashAccountBalance {
+  accountId: string
+  code: string
+  name: string
+  /** Signed in the account's own direction: an overdrawn bank reads negative. */
+  balance: DecimalString
+}
+
+/**
+ * The two figures the Overview leads with that no other report answers on its own.
+ *
+ * NOT A NEW KIND OF NUMBER. Cash and bank is the balance sheet's own sums read for a few
+ * accounts; this month is the profit and loss for a range. They cross already added up
+ * because the renderer may not add them (CONVENTIONS §1.7), and they are derived when
+ * asked and stored nowhere.
+ *
+ * WHICH ACCOUNTS ARE CASH AND BANK is decided in main and listed here, so the card can say
+ * how many it counted and a reader can check which. See `overviewFigures` in
+ * db/repos/reports.ts for the rule.
+ */
+export interface OverviewFigures {
+  asAtDate: DateString
+  cashAndBank: {
+    /** Every account below, summed. */
+    total: DecimalString
+    accounts: CashAccountBalance[]
+  }
+  /** The profit and loss from the first of the as-at date's month to that date. */
+  monthToDate: {
+    fromDate: DateString
+    toDate: DateString
+    netProfit: DecimalString
+  }
+}
+
 /** One movement against an account, carrying the balance as it stood after it. */
 export interface AccountLedgerRow {
   entryId: string
@@ -1849,6 +1893,9 @@ export interface ListReceiptsInput {
   limit?: number
   offset?: number
 }
+
+/** How many vouchers a register's filters match. See `CountDocumentsInput`. */
+export type CountReceiptsInput = Omit<ListReceiptsInput, 'limit' | 'offset'>
 
 /*
  * ---------------------------------------------------------------------------

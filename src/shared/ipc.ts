@@ -31,6 +31,8 @@ import type {
   CloseFiscalYearInput,
   CompanyProfile,
   CompanySummary,
+  CountDocumentsInput,
+  CountReceiptsInput,
   CreateAccountInput,
   CreateCompanyInput,
   CreateDocumentInput,
@@ -40,6 +42,7 @@ import type {
   CreateUnitInput,
   DateRangeInput,
   DayBook,
+  DecimalString,
   Document,
   DocumentListRow,
   CancelDocumentInput,
@@ -65,6 +68,7 @@ import type {
   ListPartiesInput,
   OpenCompanyInput,
   OpenCompanyResult,
+  OverviewFigures,
   PassphraseStrength,
   RegistrationCheck,
   Party,
@@ -353,6 +357,8 @@ export interface CofferApi {
    */
   documents: {
     list(input?: ListDocumentsInput): Promise<Result<DocumentListRow[]>>
+    /** How many the same filters match, for a register's "of 184". Built from the same query. */
+    count(input?: CountDocumentsInput): Promise<Result<number>>
     get(id: string): Promise<Result<Document | null>>
     /** Place of supply absent means "whatever the regime says". Supplying it overrides. */
     create(input: CreateDocumentInput): Promise<Result<Document>>
@@ -412,6 +418,8 @@ export interface CofferApi {
    */
   receipts: {
     list(input?: ListReceiptsInput): Promise<Result<ReceiptSummary[]>>
+    /** How many the same filters match. See `documents.count`. */
+    count(input?: CountReceiptsInput): Promise<Result<number>>
     get(id: string): Promise<Result<Receipt | null>>
     /** Numbers it, posts it and stores it, in one transaction or none of it. */
     create(input: CreateReceiptInput): Promise<Result<Receipt>>
@@ -526,6 +534,11 @@ export interface CofferApi {
    */
   regime: {
     describe(): Promise<Result<RegimeDescription>>
+    /**
+     * A figure in the regime's own words: 'Rupees One Lakh Fifty Three Thousand Four Hundred
+     * Only'. It spells an amount main already computed and decides nothing about it.
+     */
+    amountInWords(amount: DecimalString): Promise<Result<string>>
   }
 
   /**
@@ -561,6 +574,12 @@ export interface CofferApi {
      * whether it does agree, and `controlBalance` is the figure it is agreeing with.
      */
     aged(input: AgedReportInput): Promise<Result<AgedReport>>
+    /**
+     * Cash and bank as at a date, and the month so far — the Overview's two figures that
+     * are not an aged report's. Main decides which accounts count as cash and bank and says
+     * which it counted.
+     */
+    overviewFigures(input: AsAtDateInput): Promise<Result<OverviewFigures>>
   }
 }
 

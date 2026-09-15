@@ -22,12 +22,14 @@
 
 import type {
   CancelDocumentInput,
+  CountDocumentsInput,
   CreateDocumentInput,
   Document,
   DocumentLineInput,
   DocumentListRow,
   DocumentSettlement,
   DocumentStatusDto,
+  ExportTaxPayment,
   IssueDocumentInput,
   ListDocumentsInput,
   OffsetInput,
@@ -57,6 +59,7 @@ import {
  */
 export interface DocumentsService {
   list(input: ListDocumentsInput): Promise<DocumentListRow[]>
+  count(input: CountDocumentsInput): Promise<number>
   get(id: string): Promise<Document | null>
   create(input: CreateDocumentInput): Promise<Document>
   update(input: UpdateDocumentInput): Promise<Document>
@@ -78,6 +81,15 @@ const DOCUMENT_STATUSES = [
   'issued',
   'cancelled',
 ] as const satisfies readonly DocumentStatusDto[]
+
+/**
+ * The export treatments, as values. Duplicated from `ExportTaxPayment` for the reason
+ * `DOCUMENT_STATUSES` is, and pinned to the type the same way.
+ */
+const EXPORT_TAX_PAYMENTS = [
+  'with-payment',
+  'without-payment',
+] as const satisfies readonly ExportTaxPayment[]
 
 /**
  * The same ceiling `receipts.allocate` puts on a set of allocations, for the same reason:
@@ -137,7 +149,8 @@ function parseLines(value: unknown): readonly DocumentLineInput[] | undefined {
   return expectArray(value, 'lines', MAX_LINES).map(parseLine)
 }
 
-function parseList(value: unknown): ListDocumentsInput {
+/** What a register filters by. The list and the count read the same fields the same way. */
+function parseFilter(value: unknown): CountDocumentsInput {
   if (value === undefined || value === null) return {}
   const input = expectRecord(value, 'input')
   return {
@@ -147,6 +160,14 @@ function parseList(value: unknown): ListDocumentsInput {
     fromDate: optional(input['fromDate'], (v) => expectDateString(v, 'fromDate')),
     toDate: optional(input['toDate'], (v) => expectDateString(v, 'toDate')),
     search: optional(input['search'], (v) => text(v, 'search')),
+  }
+}
+
+function parseList(value: unknown): ListDocumentsInput {
+  if (value === undefined || value === null) return {}
+  const input = expectRecord(value, 'input')
+  return {
+    ...parseFilter(input),
     limit: optional(input['limit'], (v) => expectInteger(v, 'limit', 1, MAX_PAGE)),
     offset: optional(input['offset'], (v) =>
       expectInteger(v, 'offset', 0, Number.MAX_SAFE_INTEGER),
@@ -173,8 +194,27 @@ function parseShared(input: Record<string, unknown>) {
     narration: optional(input['narration'], (v) =>
       expectBoundedString(v, 'narration', MAX_NARRATION),
     ),
+    /*
+     * THE TWO FLAGS 0020 ADDED, AND UNTIL 5b THIS PARSE DROPPED BOTH. The service honours
+     * them, the repository stores them and the posting rule reads reverse charge — and a
+     * screen could set neither, because the boundary rebuilt the input without them and
+     * nothing failed. Null clears the export treatment; absent leaves it, as everywhere.
+     */
+    exportTaxPayment: nullableChoice(input, 'exportTaxPayment', EXPORT_TAX_PAYMENTS),
+    isReverseCharge: optional(input['isReverseCharge'], (v) => expectBoolean(v, 'isReverseCharge')),
     lines: parseLines(input['lines']),
   }
+}
+
+/** An optional choice that null clears: absent stays absent, null is null, else one of them. */
+function nullableChoice<T extends string>(
+  input: Record<string, unknown>,
+  field: string,
+  choices: readonly T[],
+): T | null | undefined {
+  if (!(field in input)) return undefined
+  if (input[field] == null) return null
+  return expectOneOf(input[field], field, choices)
 }
 
 function parseCreate(value: unknown): CreateDocumentInput {
@@ -241,6 +281,11 @@ export function createDocumentsHandlers(service: DocumentsService): GroupHandler
     list: {
       parseArgs: (raw): [ListDocumentsInput] => [parseList(raw[0])],
       handle: async (input = {}) => ok(await service.list(input)),
+    },
+
+    count: {
+      parseArgs: (raw): [CountDocumentsInput] => [parseFilter(raw[0])],
+      handle: async (input = {}) => ok(await service.count(input)),
     },
 
     get: {

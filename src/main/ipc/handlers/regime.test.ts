@@ -35,7 +35,10 @@ let service: RegimeService
 let handlers: ReturnType<typeof createRegimeHandlers>
 
 beforeEach(() => {
-  service = { describe: vi.fn(async () => DESCRIPTION) }
+  service = {
+    describe: vi.fn(async () => DESCRIPTION),
+    amountInWords: vi.fn(async () => 'Rupees One Thousand One Hundred Eighty Only'),
+  }
   handlers = createRegimeHandlers(service)
 })
 
@@ -60,5 +63,22 @@ describe('describe', () => {
     await handlers.describe.handle(...(handlers.describe.parseArgs(['pt']) as []))
 
     expect(service.describe).toHaveBeenCalledWith()
+  })
+})
+
+describe('amountInWords', () => {
+  it('takes an amount as a decimal string and wraps the words', async () => {
+    expect(handlers.amountInWords.parseArgs(['1180.00'])).toEqual(['1180.00'])
+    await expect(handlers.amountInWords.handle('1180.00')).resolves.toEqual({
+      ok: true,
+      data: 'Rupees One Thousand One Hundred Eighty Only',
+    })
+  })
+
+  /* A number would be spelled as whatever it rounded to on the way across. */
+  it('refuses an amount that is not a decimal string', () => {
+    expect(() => handlers.amountInWords.parseArgs([1180])).toThrow(/amount/)
+    expect(() => handlers.amountInWords.parseArgs(['eleven eighty'])).toThrow(/amount/)
+    expect(() => handlers.amountInWords.parseArgs([])).toThrow(/amount/)
   })
 })

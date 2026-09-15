@@ -55,6 +55,7 @@ import {
   MAX_RECEIPT_PAGE,
   allocateReceipt,
   cancelReceipt,
+  countReceipts,
   createReceipt,
   getReceipt,
   listReceipts,
@@ -1685,6 +1686,12 @@ describe('the register', () => {
     expect(await listReceipts(db, { kind: 'payment' })).toHaveLength(1)
     expect(await listReceipts(db, { status: 'cancelled' })).toHaveLength(1)
     expect(await listReceipts(db, { partyId: vendor })).toHaveLength(1)
+
+    /* The register's "of N", from the same filters. */
+    expect(await countReceipts(db)).toBe(2)
+    expect(await countReceipts(db, { kind: 'payment' })).toBe(1)
+    expect(await countReceipts(db, { status: 'cancelled' })).toBe(1)
+    expect(await countReceipts(db, { status: 'posted', partyId: vendor })).toBe(1)
   })
 
   it('searches the number, the party, the reference and the narration', async () => {
@@ -1695,6 +1702,8 @@ describe('the register', () => {
     expect(await listReceipts(db, { search: 'bharat' })).toHaveLength(1)
     expect(await listReceipts(db, { search: 'RCT/2026-27' })).toHaveLength(1)
     expect(await listReceipts(db, { search: 'nothing like it' })).toHaveLength(0)
+    expect(await countReceipts(db, { search: 'utr88' })).toBe(1)
+    expect(await countReceipts(db, { search: 'nothing like it' })).toBe(0)
   })
 
   it('bounds a page however large a limit it is asked for', async () => {
@@ -1730,6 +1739,8 @@ describe('the register', () => {
     }
 
     expect(await listReceipts(db, { limit: MAX_RECEIPT_PAGE + 500 })).toHaveLength(MAX_RECEIPT_PAGE)
+    /* The seed and the bulk rows. A count has no page to be capped at. */
+    expect(await countReceipts(db)).toBe(MAX_RECEIPT_PAGE + 1)
   })
 
   it('answers null for a receipt that is not there', async () => {

@@ -1,7 +1,7 @@
 /*
  * The `regime` group.
  *
- * The smallest handler in the application: one method, no arguments, no validation to do.
+ * The smallest handler in the application: two methods, and the first takes no arguments.
  * `parseArgs` returns an empty tuple exactly as `companyProfile.get` does — a method that
  * takes nothing must be *proved* to take nothing, because the registry hands `parseArgs`
  * whatever the renderer sent and a handler that ignored it would pass anything through.
@@ -11,9 +11,10 @@
  * one regime's rates against another regime's tax.
  */
 
-import type { RegimeDescription } from '../../../shared/dto'
+import type { DecimalString, RegimeDescription } from '../../../shared/dto'
 import type { GroupHandlers } from '../registry'
 import { ok } from '../surface'
+import { expectDecimalString } from '../validate'
 
 /**
  * What the IPC layer needs from src/main/regime.
@@ -22,6 +23,7 @@ import { ok } from '../surface'
  */
 export interface RegimeService {
   describe(): Promise<RegimeDescription>
+  amountInWords(amount: DecimalString): Promise<string>
 }
 
 export function createRegimeHandlers(service: RegimeService): GroupHandlers<'regime'> {
@@ -29,6 +31,13 @@ export function createRegimeHandlers(service: RegimeService): GroupHandlers<'reg
     describe: {
       parseArgs: (): [] => [],
       handle: async () => ok(await service.describe()),
+    },
+
+    /* A decimal string and nothing else: the words are for a figure main already computed,
+     * and a float arriving here would be spelled as whatever it rounded to. */
+    amountInWords: {
+      parseArgs: (raw): [DecimalString] => [expectDecimalString(raw[0], 'amount')],
+      handle: async (amount) => ok(await service.amountInWords(amount)),
     },
   }
 }

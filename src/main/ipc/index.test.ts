@@ -179,6 +179,7 @@ beforeEach(() => {
 
   documents = {
     list: vi.fn(async () => []),
+    count: vi.fn(async () => 0),
     get: vi.fn(async () => null),
     create: vi.fn(),
     update: vi.fn(),
@@ -189,6 +190,7 @@ beforeEach(() => {
 
   receipts = {
     list: vi.fn(async () => []),
+    count: vi.fn(async () => 0),
     get: vi.fn(async () => null),
     create: vi.fn(),
     allocate: vi.fn(),
@@ -199,6 +201,7 @@ beforeEach(() => {
 
   regime = {
     describe: vi.fn(),
+    amountInWords: vi.fn(),
   } as unknown as RegimeService
 
   reports = {
@@ -206,6 +209,7 @@ beforeEach(() => {
     profitAndLoss: vi.fn(),
     accountLedger: vi.fn(),
     dayBook: vi.fn(),
+    overviewFigures: vi.fn(),
   } as unknown as ReportService
 })
 

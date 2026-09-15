@@ -28,7 +28,14 @@ import { createAccount, listAccounts, updateAccount } from './accounts'
 import { generateFiscalYear } from './periods'
 import { postEntry, reverseEntry } from './journal'
 import { closeFiscalYear } from './year-end'
-import { accountLedger, balanceSheet, dayBook, profitAndLoss } from './reports'
+import {
+  accountLedger,
+  balanceSheet,
+  dayBook,
+  moneyAccounts,
+  overviewFigures,
+  profitAndLoss,
+} from './reports'
 import { isRepoError, type RepoErrorCode } from './errors'
 
 const KEY = new Uint8Array(DATABASE_KEY_BYTES).fill(0x5e)
@@ -727,6 +734,116 @@ describe('a chart the user has changed', () => {
     const sheet = await balanceSheet(db, '2026-04-30')
     expect(amountAt(sheet.assets, '1150')).toBe('2000.00')
     expect(sheet.balanced).toBe(true)
+  })
+})
+
+// ---- The Overview's own figures -----------------------------------------------
+
+describe('overviewFigures', () => {
+  it('counts the cash and bank accounts, and a second bank filed beside the first', async () => {
+    const second = await createAccount(db, {
+      code: '1220',
+      name: 'Second Bank',
+      type: 'asset',
+      parentId: account['1200']!,
+      isGroup: false,
+    })
+    account['1220'] = second.id
+    await post(entry('1210', '3100', '100000.00', '2026-04-01'))
+    await post(entry('1100', '3100', '5000.00', '2026-04-02'))
+    await post(entry('1220', '3100', '2500.00', '2026-04-03'))
+    /* Receivables and advances are money of a kind, and not cash: they sit in Current Assets
+     * beside the cash account, and that group is not swept in. */
+    await post(entry('1300', '4100', '7000.00', '2026-04-04'))
+    await post(entry('1600', '3100', '900.00', '2026-04-04'))
+
+    const figures = await overviewFigures(db, '2026-04-30')
+
+    expect(figures.cashAndBank.total).toBe('107500.00')
+    expect(figures.cashAndBank.accounts.map((row) => row.code)).toEqual(['1100', '1210', '1220'])
+    expect(figures.cashAndBank.accounts[1]).toMatchObject({
+      name: 'Bank Account',
+      balance: '100000.00',
+    })
+  })
+
+  /* An overdrawn bank is a negative figure on the card, not a missing one. */
+  it('keeps an overdrawn bank negative', async () => {
+    await post(entry('1100', '3100', '1000.00', '2026-04-01'))
+    await post(entry('6200', '1210', '3000.00', '2026-04-02'))
+
+    const figures = await overviewFigures(db, '2026-04-30')
+
+    expect(figures.cashAndBank.total).toBe('-2000.00')
+  })
+
+  it('reads the balances as at the date, and not what came after', async () => {
+    await post(entry('1210', '3100', '100.00', '2026-04-01'))
+    await post(entry('1210', '3100', '900.00', '2026-05-01'))
+
+    expect((await overviewFigures(db, '2026-04-30')).cashAndBank.total).toBe('100.00')
+  })
+
+  it('takes the month so far from the first of the date’s month', async () => {
+    await post(entry('1210', '4100', '9999.00', '2026-08-31'))
+    await post(entry('1210', '4100', '25000.00', '2026-09-01'))
+    await post(entry('6200', '1210', '30000.00', '2026-09-10'))
+    await post(entry('1210', '4100', '500.00', '2026-09-16'))
+
+    const figures = await overviewFigures(db, '2026-09-15')
+
+    expect(figures.monthToDate).toEqual({
+      fromDate: '2026-09-01',
+      toDate: '2026-09-15',
+      netProfit: '-5000.00',
+    })
+  })
+})
+
+describe('moneyAccounts', () => {
+  const asset = (id: string, code: string, parentId: string | null, isGroup = false) => ({
+    id,
+    code,
+    name: code,
+    type: 'asset' as const,
+    parentId,
+    isGroup,
+  })
+
+  /* A bank filed straight into Current Assets beside receivables sweeps nothing in with it:
+   * the group holds another role, so only the role accounts themselves count. */
+  it('does not sweep in a group that holds another role', () => {
+    const chart = [
+      asset('ca', '1000', null, true),
+      asset('cash', '1100', 'ca'),
+      asset('bank', '1110', 'ca'),
+      asset('ar', '1300', 'ca'),
+      asset('deposit', '1600', 'ca'),
+    ]
+    const roles = [
+      { role: 'cash', account_id: 'cash' },
+      { role: 'bank', account_id: 'bank' },
+      { role: 'accounts-receivable', account_id: 'ar' },
+    ]
+
+    expect(moneyAccounts(chart, roles).map((row) => row.code)).toEqual(['1100', '1110'])
+  })
+
+  it('counts nothing where no account fills either role', () => {
+    expect(moneyAccounts([asset('cash', '1100', null)], [])).toEqual([])
+  })
+
+  it('reaches a bank in a group nested inside the bank group', () => {
+    const chart = [
+      asset('banks', '1200', null, true),
+      asset('bank', '1210', 'banks'),
+      asset('current', '1230', 'banks', true),
+      asset('hdfc', '1231', 'current'),
+    ]
+
+    expect(
+      moneyAccounts(chart, [{ role: 'bank', account_id: 'bank' }]).map((row) => row.code),
+    ).toEqual(['1210', '1231'])
   })
 })
 

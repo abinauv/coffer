@@ -38,6 +38,7 @@ import type { ReceiptKind } from '@main/domain/receipts'
 import type {
   AllocateReceiptInput,
   CancelReceiptInput,
+  CountReceiptsInput,
   CreateReceiptInput,
   ListReceiptsInput,
   OpenDocument,
@@ -51,6 +52,7 @@ import { openDocumentsFor } from '../db/repos/outstanding'
 import {
   allocateReceipt,
   cancelReceipt,
+  countReceipts,
   createReceipt,
   getReceipt,
   listReceipts,
@@ -65,6 +67,10 @@ export class ReceiptsService {
 
   async list(input: ListReceiptsInput = {}): Promise<ReceiptSummary[]> {
     return listReceipts(this.books.db(), input)
+  }
+
+  async count(input: CountReceiptsInput = {}): Promise<number> {
+    return countReceipts(this.books.db(), input)
   }
 
   async get(id: string): Promise<Receipt | null> {

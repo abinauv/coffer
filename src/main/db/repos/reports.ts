@@ -43,6 +43,7 @@ import type {
   DateString,
   DayBook,
   DayBookDay,
+  OverviewFigures,
   ProfitAndLoss,
   ReportSection,
 } from '@shared/dto'
@@ -234,6 +235,102 @@ export async function dayBook(db: CofferDb, options: ReportRangeOptions = {}): P
     entryCount: entries.length,
     total: toMoneyString(total),
   }
+}
+
+// ---- The Overview's own figures ------------------------------------------------
+
+/*
+ * The roles that make an account cash or bank. The role map holds one of each, and a
+ * business with four bank accounts has three that fill no role at all — which is what the
+ * group rule below is for.
+ */
+const MONEY_ROLES: ReadonlySet<string> = new Set(['cash', 'bank'])
+
+/**
+ * Cash and bank as at a date, and the profit and loss for the month so far.
+ *
+ * WHICH ACCOUNTS ARE CASH AND BANK. Nothing on an account says so, and a guess from its
+ * name would count "Bank Charges". So the rule is the chart's own structure:
+ *
+ *   1. the accounts filling the `cash` and `bank` roles, and
+ *   2. every other account under the group one of them sits in, where nothing under that
+ *      group fills any other role.
+ *
+ * The seeded chart puts the bank account inside "Bank Accounts", so a second bank added
+ * there counts without anyone saying so. Cash sits in "Current Assets" beside receivables
+ * and stock, which fill roles of their own, so that group is not swept in. A business that
+ * files a bank somewhere else entirely is not guessed at; the card names how many accounts
+ * it counted, and `accounts` says which.
+ *
+ * Archived accounts count, as on every statement: archiving stops new postings, not the
+ * money already there.
+ */
+export async function overviewFigures(
+  db: CofferDb,
+  asAtDate: DateString,
+): Promise<OverviewFigures> {
+  const fromDate = `${asAtDate.slice(0, 8)}01`
+  const [accounts, roles, balances, month] = await Promise.all([
+    reportAccounts(db),
+    db.selectFrom('account_roles').select(['role', 'account_id']).execute(),
+    signedBalances(db, { toDate: asAtDate }),
+    profitAndLoss(db, { fromDate, toDate: asAtDate }),
+  ])
+
+  const counted = moneyAccounts(accounts, roles)
+  let total: Decimal = ZERO
+  const rows = counted.map((account) => {
+    const balance = balances.get(account.id) ?? ZERO
+    total = total.plus(balance)
+    return {
+      accountId: account.id,
+      code: account.code,
+      name: account.name,
+      balance: toMoneyString(balance),
+    }
+  })
+
+  return {
+    asAtDate,
+    cashAndBank: { total: toMoneyString(total), accounts: rows },
+    monthToDate: { fromDate, toDate: asAtDate, netProfit: month.netProfit },
+  }
+}
+
+/** The accounts `overviewFigures` counts, in code order. The rule is written above it. */
+export function moneyAccounts(
+  accounts: readonly ReportAccount[],
+  roles: readonly { role: string; account_id: string }[],
+): ReportAccount[] {
+  const byId = new Map(accounts.map((account) => [account.id, account] as const))
+  const children = new Map<string, ReportAccount[]>()
+  for (const account of accounts) {
+    if (account.parentId === null) continue
+    children.set(account.parentId, [...(children.get(account.parentId) ?? []), account])
+  }
+  const under = (groupId: string): ReportAccount[] =>
+    (children.get(groupId) ?? []).flatMap((child) => [child, ...under(child.id)])
+
+  const otherRoleHolders = new Set(
+    roles.filter((row) => !MONEY_ROLES.has(row.role)).map((row) => row.account_id),
+  )
+  const picked = new Map<string, ReportAccount>()
+
+  for (const row of roles) {
+    if (!MONEY_ROLES.has(row.role)) continue
+    const account = byId.get(row.account_id)
+    if (account === undefined) continue
+    if (!account.isGroup) picked.set(account.id, account)
+
+    if (account.parentId === null) continue
+    const siblings = under(account.parentId)
+    if (siblings.some((sibling) => otherRoleHolders.has(sibling.id))) continue
+    for (const sibling of siblings) {
+      if (!sibling.isGroup) picked.set(sibling.id, sibling)
+    }
+  }
+
+  return [...picked.values()].sort((a, b) => a.code.localeCompare(b.code))
 }
 
 // ---- Shared plumbing -------------------------------------------------------
