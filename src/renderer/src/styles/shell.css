@@ -526,12 +526,32 @@
   cursor: default;
 }
 
-.palette__item-title {
+/* The title, and under it where the command lives (Screens §04). */
+.palette__item-text {
+  display: flex;
   flex: 1;
+  flex-direction: column;
+  gap: 1px;
   min-width: 0;
+}
+
+.palette__item-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.palette__item-location {
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette__item[data-active='true'] .palette__item-location {
+  color: var(--accent-ink);
+  opacity: 0.8;
 }
 
 .palette__item-hint {

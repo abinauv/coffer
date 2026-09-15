@@ -71,17 +71,33 @@
  * end shows the result read-only. Letting either end own the set would mean two screens
  * replacing overlapping sets, and the last one saved would silently drop the other's rows
  * (`SetOffsetsInput`). `Offsets` below is the picker; `Settlement` draws the list.
+ *
+ * THE LAYOUT IS SCREENS §03 SINCE 5b. Everything above the line grid is answered once and
+ * everything in it is typed dozens of times a day, so the header carries the kind, its
+ * status and the three verbs a draft has; the fields sit in one grid; the lines are the
+ * part that scrolls; and the totals are pinned bottom right, where the eye already goes.
+ *
+ * ISSUING ASKS FIRST, AND SAVES FIRST. Issuing is the step that cannot be taken back, so
+ * the button opens a confirmation naming the party and the amount. Where there are unsaved
+ * edits the draft is saved before the question is put, so the figure in the dialog is the
+ * one main just computed for what is on screen — never a total left over from the last
+ * save. A document that has never been saved is saved with Save draft first: creating it
+ * moves to a new route, and a confirmation cannot survive that move.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { JSX } from 'react'
-import { Badge, Button, Input, Select } from '@renderer/components/atoms'
+import { Badge, Button, Dialog, Input, Kbd, Select } from '@renderer/components/atoms'
 import { callApi } from '@renderer/lib/api'
+import type { Command } from '@renderer/lib/command-registry'
+import type { Shortcut } from '@renderer/lib/keys'
 import { makeRoute } from '@renderer/lib/routing'
 import { registerScreens, type ScreenContext, type ScreenDefinition } from '@renderer/lib/screens'
+import { useRegisterCommands } from '@renderer/store/commands'
 import { useNumberFormat, useRegime } from '@renderer/store/regime'
 import { useToasts } from '@renderer/store/toasts'
 import {
+  chargesOnTerms,
   correctsKind,
   definitionOf,
   DOCUMENT_KINDS,
@@ -107,7 +123,8 @@ import { CheckboxField } from '../components/CheckboxField'
 import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
 import { ScreenFrame } from '../components/ScreenFrame'
-import { formatAmount } from '../lib/ledger-format'
+import { formatDate } from '../lib/dates'
+import { formatAmount, isZeroAmount } from '../lib/ledger-format'
 import {
   editorScreenId,
   isStruckStatus,
@@ -126,11 +143,15 @@ import {
   canEdit,
   canIssue,
   clearItem,
+  dueHint,
+  duplicateLine,
   isBlankDraft,
+  issueConsequence,
   itemSideFor,
   lineDraftOf,
   lineFromItem,
   linesFrom,
+  partyDetails,
   postableAccounts,
   readyLines,
   stateSentence,
@@ -143,6 +164,10 @@ import { canOffset, isOffsetEditable, offsetsLabel, toOffsetInputs } from '../li
  * same shapes — `DocumentOffsetDto` satisfies what `draftAllocations` reads, and
  * `settleInFull` copies the figure main sent rather than working one out. */
 import { draftAllocations, settleInFull } from '../lib/receipt-view'
+
+/* The two keys the editor owns (design system §04, Modern map). */
+const ISSUE_SHORTCUT: Shortcut = { key: 'Enter', ctrlOrCmd: true }
+const DUPLICATE_SHORTCUT: Shortcut = { key: 'd', ctrlOrCmd: true }
 
 export function DocumentEditor({
   kind,
@@ -230,6 +255,31 @@ export function DocumentEditor({
   /* Unsaved edits. What makes the totals panel say what it is showing. */
   const [isDirty, setDirty] = useState(false)
 
+  /*
+   * EACH LINE'S AMOUNT FROM THE LAST SAVE, keyed by the row it belongs to.
+   *
+   * A line's taxable amount is main's answer and the grid shows it — but only on a row
+   * nobody has touched since. Editing the quantity makes the stored amount the amount of a
+   * line that no longer exists, so the row loses it and says the figure comes on save. A
+   * new or duplicated row has none. Nothing here multiplies anything.
+   */
+  const [savedAmounts, setSavedAmounts] = useState<Readonly<Record<string, string>>>({})
+
+  /* The two flags 0020 added, sent only when the user changes them — as the place is. */
+  const [isReverseCharge, setReverseCharge] = useState(false)
+  const [reverseTouched, setReverseTouched] = useState(false)
+  const [isExportWithoutTax, setExportWithoutTax] = useState(false)
+  const [exportTouched, setExportTouched] = useState(false)
+
+  /* The chosen party's terms, for the line under Due. Undefined until read. */
+  const [terms, setTerms] = useState<{ partyId: string; days: number | null } | null>(null)
+
+  /* The document the issue confirmation is asking about, as main last saved it. */
+  const [confirming, setConfirming] = useState<Document | null>(null)
+
+  /* The total in the regime's words, for the line under it. */
+  const [words, setWords] = useState<{ amount: string; words: string } | null>(null)
+
   /* What has been receipted against it. Null until asked, and only asked for a document
    * that has posted — a draft has made no movement, so there is nothing to be against. */
   const [settlement, setSettlement] = useState<DocumentSettlement | null>(null)
@@ -303,12 +353,22 @@ export function DocumentEditor({
 
   /** Take main's answer as the truth, and clear the unsaved-edits mark. */
   function adopt(next: Document): void {
+    const drafts = next.lines.map(lineDraftOf)
     setDocument(next)
     setPartyId(next.partyId)
     setDate(next.date)
     setPartyReference(next.partyReference ?? '')
     setNarration(next.narration)
-    setLines(next.lines.length === 0 ? [blankLine()] : next.lines.map(lineDraftOf))
+    setLines(drafts.length === 0 ? [blankLine()] : drafts)
+    setSavedAmounts(
+      Object.fromEntries(
+        drafts.map((draft, index) => [draft.key, next.lines[index]?.taxableAmount ?? '']),
+      ),
+    )
+    setReverseCharge(next.isReverseCharge ?? false)
+    setReverseTouched(false)
+    setExportWithoutTax(next.exportTaxPayment === 'without-payment')
+    setExportTouched(false)
     setOriginalId(next.originalDocumentId ?? '')
     setPlace(next.placeOfSupplyJurisdiction ?? '')
     setPlaceTouched(false)
@@ -432,13 +492,45 @@ export function DocumentEditor({
    */
   const setLine = useCallback(
     <K extends keyof LineDraft>(key: string, field: K, value: LineDraft[K]) =>
-      touch(() =>
+      touch(() => {
+        forgetAmount(key)
         setLines((current) =>
           current.map((line) => (line.key === key ? { ...line, [field]: value } : line)),
-        ),
-      ),
+        )
+      }),
     [touch],
   )
+
+  /* The row no longer says what was saved, so its saved amount is not its amount. */
+  function forgetAmount(key: string): void {
+    setSavedAmounts((current) => {
+      if (!(key in current)) return current
+      const { [key]: _forgotten, ...rest } = current
+      return rest
+    })
+  }
+
+  /*
+   * Ctrl D: a copy of the line the cursor is in, straight after it — or of the last line
+   * when the cursor is not in the grid. The copy has no amount until the draft is saved.
+   */
+  const duplicate = useCallback(() => {
+    const focused =
+      globalThis.document.activeElement?.closest<HTMLElement>('[data-line-key]')?.dataset['lineKey']
+    touch(() =>
+      setLines((current) => {
+        const index = Math.max(
+          0,
+          focused === undefined
+            ? current.length - 1
+            : current.findIndex((line) => line.key === focused),
+        )
+        const source = current[index]
+        if (source === undefined) return current
+        return [...current.slice(0, index + 1), duplicateLine(source), ...current.slice(index + 1)]
+      }),
+    )
+  }, [touch])
 
   /* Looked up by id rather than searched. `.find` over a list is how "the one that
    * matches" quietly becomes "whichever is listed first" (CONVENTIONS §1.9), and a picker
@@ -461,6 +553,7 @@ export function DocumentEditor({
   const chooseItem = useCallback(
     (key: string, itemId: string) => {
       const item = itemsById.get(itemId)
+      forgetAmount(key)
       touch(() =>
         setLines((current) =>
           current.map((line) => {
@@ -512,6 +605,8 @@ export function DocumentEditor({
       lines: DocumentLineInput[]
       placeOfSupplyJurisdiction?: string
       originalDocumentId?: string | null
+      isReverseCharge?: boolean
+      exportTaxPayment?: 'without-payment' | null
     } => ({
       date,
       partyId,
@@ -524,12 +619,30 @@ export function DocumentEditor({
        * an update and this picker's empty option means "it names none". Omitted entirely
        * for a kind that corrects nothing, which 0013's trigger refuses a link on. */
       ...(corrects === null ? {} : { originalDocumentId: originalId === '' ? null : originalId }),
+      /* Only when changed, as the place is: an untouched flag stays what is stored. */
+      ...(reverseTouched ? { isReverseCharge } : {}),
+      ...(exportTouched ? { exportTaxPayment: isExportWithoutTax ? 'without-payment' : null } : {}),
     }),
-    [corrects, date, narration, originalId, partyId, partyReference, place, placeTouched, sendable],
+    [
+      corrects,
+      date,
+      exportTouched,
+      isExportWithoutTax,
+      isReverseCharge,
+      narration,
+      originalId,
+      partyId,
+      partyReference,
+      place,
+      placeTouched,
+      reverseTouched,
+      sendable,
+    ],
   )
 
-  const save = useCallback(async () => {
-    if (!canSave) return
+  /** Create or update the draft and adopt main's answer. Null when main refused. */
+  const persist = useCallback(async (): Promise<Document | null> => {
+    if (!canSave) return null
     setBusy(true)
     setError(null)
 
@@ -542,17 +655,23 @@ export function DocumentEditor({
 
     if (!result.ok) {
       setError(result.error)
-      return
+      return null
     }
-
-    const wasNew = document === null
     adopt(result.data)
+    return result.data
+  }, [canSave, document, kind, payload])
+
+  const save = useCallback(async () => {
+    const wasNew = document === null
+    const saved = await persist()
+    if (saved === null) return
+
     if (wasNew) {
       /* The route now names the draft that exists, so Back and the title bar agree with
        * what is on screen. `ScreenContext.navigate` pushes and takes no mode, so Back
        * from here reaches the empty editor — which is a new-document screen that creates
        * nothing until asked, not a second draft. */
-      navigate(makeRoute('workspace', editorScreenId(kind), { id: result.data.id }))
+      navigate(makeRoute('workspace', editorScreenId(kind), { id: saved.id }))
     }
     show({
       tone: 'success',
@@ -561,7 +680,22 @@ export function DocumentEditor({
         ? 'Nothing is in the books until it is issued.'
         : 'Issuing it will number it and send it. It reaches the books either way — a quotation posts nothing.',
     })
-  }, [canSave, definition.postsToLedger, document, kind, navigate, payload, show])
+  }, [definition.postsToLedger, document, kind, navigate, persist, show])
+
+  /*
+   * The first half of issuing: save what is on screen if it differs from what is stored,
+   * then ask. The confirmation shows the document main just answered with, so the party
+   * and the amount it names are the ones that will be numbered.
+   */
+  const beginIssue = useCallback(async () => {
+    if (document === null || !canIssue(document.status) || confirming !== null) return
+    if (!isDirty) {
+      setConfirming(document)
+      return
+    }
+    const saved = await persist()
+    if (saved !== null) setConfirming(saved)
+  }, [confirming, document, isDirty, persist])
 
   const issue = useCallback(async () => {
     if (document === null) return
@@ -569,6 +703,7 @@ export function DocumentEditor({
     setError(null)
     const result = await callApi((api) => api.documents.issue({ id: document.id }))
     setBusy(false)
+    setConfirming(null)
     if (!result.ok) {
       setError(result.error)
       return
@@ -666,6 +801,78 @@ export function DocumentEditor({
     })
   }, [document, kind, label, offsetDrafts, show])
 
+  /*
+   * THE PARTY'S TERMS, for the line under Due, read when the party changes. Only while the
+   * document is a draft of a kind charged on terms: an issued one shows the date it was
+   * stamped with, and a quotation or a note falls due on no terms at all.
+   */
+  const asksTerms = chargesOnTerms(kind) && isEditable && partyId !== ''
+  useEffect(() => {
+    let current = true
+    if (!asksTerms) return
+    void callApi((api) => api.parties.get(partyId)).then((result) => {
+      if (!current) return
+      setTerms({ partyId, days: result.ok ? (result.data?.paymentTermsDays ?? null) : null })
+    })
+    return () => {
+      current = false
+    }
+  }, [asksTerms, partyId])
+
+  /* The total in words, asked of the regime whenever the saved total changes. */
+  const savedTotal = document?.totals.grandTotal ?? null
+  useEffect(() => {
+    let current = true
+    if (savedTotal === null) return
+    void callApi((api) => api.regime.amountInWords(savedTotal)).then((result) => {
+      if (current && result.ok) setWords({ amount: savedTotal, words: result.data })
+    })
+    return () => {
+      current = false
+    }
+  }, [savedTotal])
+
+  const canBeginIssue =
+    document !== null && canIssue(status) && canSave && !isBusy && confirming === null
+  const section = definition.side === 'sales' ? 'Sales' : 'Purchases'
+
+  /*
+   * THE COMMANDS CALL THROUGH A REF. `beginIssue` is rebuilt whenever anything it saves
+   * changes — every keystroke — and a command list rebuilt with it would re-register on
+   * every render, which updates the registry, which renders this screen again. The list
+   * changes only when what it SAYS changes: whether each command can run.
+   */
+  const actions = useRef({ beginIssue, duplicate })
+  useEffect(() => {
+    actions.current = { beginIssue, duplicate }
+  }, [beginIssue, duplicate])
+
+  useRegisterCommands(
+    useMemo<Command[]>(
+      () => [
+        {
+          id: `documents.${kind}.issue`,
+          title: `Issue this ${label}`,
+          section,
+          keywords: ['issue', 'post', 'number', label],
+          shortcut: ISSUE_SHORTCUT,
+          isDisabled: !canBeginIssue,
+          run: () => void actions.current.beginIssue(),
+        },
+        {
+          id: `documents.${kind}.duplicate-line`,
+          title: 'Duplicate this line',
+          section,
+          keywords: ['copy', 'line', 'repeat'],
+          shortcut: DUPLICATE_SHORTCUT,
+          isDisabled: !isEditable,
+          run: () => actions.current.duplicate(),
+        },
+      ],
+      [canBeginIssue, isEditable, kind, label, section],
+    ),
+  )
+
   if (isReading) {
     return (
       <ScreenFrame isInset width="list" title={definition.label}>
@@ -674,70 +881,77 @@ export function DocumentEditor({
     )
   }
 
+  const chosenParty = parties.find((party) => party.id === partyId)
+  const partyLine = partyDetails(chosenParty, regime?.jurisdictions ?? [])
+  const showsDue = chargesOnTerms(kind)
+  const consequence = issueConsequence(kind)
+
   return (
     <ScreenFrame
       isInset
       width="list"
-      title={document?.number ?? `New ${label}`}
-      lede={stateSentence(kind, status, document?.number ?? null, document?.dueDate ?? null)}
+      title={document?.number ?? definition.label}
+      lede={
+        <span className="editor__state">
+          <Badge tone={statusTone(status)} isStruck={isStruckStatus(status)}>
+            {statusLabel(status)}
+          </Badge>
+          {document?.number == null && (
+            <span className="editor__unnumbered">number assigned on issue</span>
+          )}
+          <span>
+            {stateSentence(
+              kind,
+              status,
+              document?.number ?? null,
+              document?.dueDate == null ? null : formatDate(document.dueDate),
+            )}
+          </span>
+        </span>
+      }
       actions={
         <>
-          <Button
-            variant="ghost"
-            onClick={() => navigate(makeRoute('workspace', registerScreenId(kind)))}
-          >
-            Back to the register
-          </Button>
+          {document !== null && canDelete(status) && (
+            <Button variant="ghost" disabled={isBusy} onClick={() => void remove()}>
+              Discard draft
+            </Button>
+          )}
           {isEditable && (
-            <Button variant="primary" disabled={!canSave} onClick={() => void save()}>
-              {document === null ? 'Create draft' : 'Save'}
+            <Button disabled={!canSave} isBusy={isBusy} onClick={() => void save()}>
+              Save draft
+            </Button>
+          )}
+          {document !== null && canIssue(status) && (
+            <Button
+              variant="primary"
+              disabled={!canBeginIssue}
+              aria-keyshortcuts="Control+Enter"
+              onClick={() => void beginIssue()}
+            >
+              Issue {label}
+              <span className="button__keys" aria-hidden="true">
+                <Kbd shortcut={ISSUE_SHORTCUT} />
+              </span>
+            </Button>
+          )}
+          {document !== null && canCancel(status) && (
+            <Button variant="ghost" disabled={isBusy} onClick={() => void cancel()}>
+              Cancel this {label}
             </Button>
           )}
         </>
       }
     >
-      <div className="stack">
+      <div className="stack editor">
         {error && <FailureNotice error={error} context="ledger" />}
 
-        {document !== null && (
-          <div className="toolbar">
-            <Badge tone={statusTone(status)} isStruck={isStruckStatus(status)}>
-              {statusLabel(status)}
-            </Badge>
-            {canIssue(status) && (
-              <Button variant="primary" disabled={isBusy || isDirty} onClick={() => void issue()}>
-                Issue
-              </Button>
-            )}
-            {canCancel(status) && (
-              <Button variant="ghost" disabled={isBusy} onClick={() => void cancel()}>
-                Cancel this {label}
-              </Button>
-            )}
-            {canDelete(status) && (
-              <Button variant="ghost" disabled={isBusy} onClick={() => void remove()}>
-                Delete draft
-              </Button>
-            )}
-          </div>
-        )}
-
-        {/* Issuing with unsaved edits would number and post the SAVED version, which is
-            not what is on screen. Saying so is better than saving silently. */}
-        {isDirty && document !== null && canIssue(status) && (
-          <Notice tone="info" title="There are unsaved changes">
-            <p>
-              Save them first — issuing would number and{' '}
-              {definition.postsToLedger ? 'post' : 'send'} the {label} as it was last saved.
-            </p>
-          </Notice>
-        )}
-
-        <div className="stack">
+        <div className="editor__fields">
           <Select
             label={partyLabel(definition.side)}
             value={partyId}
             disabled={!isEditable}
+            hint={partyLine ?? undefined}
+            className="editor__party"
             onChange={(event) => touch(() => setPartyId(event.target.value))}
           >
             <option value="">Choose a {partyLabel(definition.side).toLowerCase()}</option>
@@ -747,6 +961,55 @@ export function DocumentEditor({
               </option>
             ))}
           </Select>
+
+          <Input
+            label="Date"
+            type="date"
+            value={date}
+            disabled={!isEditable}
+            onChange={(event) => touch(() => setDate(event.target.value))}
+          />
+
+          {showsDue && (
+            <Input
+              label="Due"
+              value={document?.dueDate == null ? 'Set when issued' : formatDate(document.dueDate)}
+              readOnly
+              hint={
+                isEditable
+                  ? dueHint(
+                      partyId !== '',
+                      terms !== null && terms.partyId === partyId ? terms.days : undefined,
+                    )
+                  : 'Stamped when it was issued, from the party’s terms.'
+              }
+            />
+          )}
+
+          <PlaceOfSupply
+            regime={regime}
+            label={label}
+            value={place}
+            isEditable={isEditable}
+            isTouched={placeTouched}
+            savedTaxes={
+              document === null || isDirty
+                ? []
+                : [...new Set(document.totals.taxSummary.map((tax) => tax.code))]
+            }
+            onChange={(next) => {
+              setPlaceTouched(true)
+              touch(() => setPlace(next))
+            }}
+          />
+
+          <Input
+            label={partyReferenceLabel(definition.side)}
+            value={partyReference}
+            disabled={!isEditable}
+            hint={partyReferenceHint(definition.side)}
+            onChange={(event) => touch(() => setPartyReference(event.target.value))}
+          />
 
           {corrects !== null && (
             <Corrects
@@ -759,55 +1022,17 @@ export function DocumentEditor({
               onChange={(next) => void chooseOriginal(next)}
             />
           )}
-
-          <Input
-            label="Date"
-            type="date"
-            value={date}
-            disabled={!isEditable}
-            onChange={(event) => touch(() => setDate(event.target.value))}
-          />
-
-          <Input
-            label={partyReferenceLabel(definition.side)}
-            value={partyReference}
-            disabled={!isEditable}
-            hint={partyReferenceHint(definition.side)}
-            onChange={(event) => touch(() => setPartyReference(event.target.value))}
-          />
-
-          <PlaceOfSupply
-            regime={regime}
-            label={label}
-            value={place}
-            isEditable={isEditable}
-            isTouched={placeTouched}
-            onChange={(next) => {
-              setPlaceTouched(true)
-              touch(() => setPlace(next))
-            }}
-          />
-
-          <Input
-            label="Narration"
-            value={narration}
-            disabled={!isEditable}
-            hint={
-              definition.postsToLedger
-                ? 'What the day book will say about the entry this posts.'
-                : 'A note for whoever reads it. This posts nothing, so it reaches no day book.'
-            }
-            onChange={(event) => touch(() => setNarration(event.target.value))}
-          />
         </div>
 
         <Lines
           lines={lines}
+          savedAmounts={savedAmounts}
           rates={regime?.taxRates ?? []}
           items={items}
           units={units}
           accounts={accounts}
           isEditable={isEditable}
+          format={format}
           onChange={setLine}
           onChooseItem={chooseItem}
           onAdd={() => touch(() => setLines((current) => [...current, blankLine()]))}
@@ -821,7 +1046,64 @@ export function DocumentEditor({
           }
         />
 
-        {document !== null && <Totals document={document} isStale={isDirty} format={format} />}
+        <div className="editor__foot">
+          <div className="editor__notes">
+            <Input
+              label="Narration"
+              value={narration}
+              disabled={!isEditable}
+              hint={
+                definition.postsToLedger
+                  ? 'What the day book will say about the entry this posts.'
+                  : 'A note for whoever reads it. This posts nothing, so it reaches no day book.'
+              }
+              onChange={(event) => touch(() => setNarration(event.target.value))}
+            />
+            {definition.postsToLedger && (
+              <div className="editor__flags">
+                <CheckboxField
+                  isChecked={isReverseCharge}
+                  isDisabled={!isEditable}
+                  hint="The buyer pays the tax on this supply to the government, not the seller."
+                  onChange={(isChecked) =>
+                    touch(() => {
+                      setReverseTouched(true)
+                      setReverseCharge(isChecked)
+                    })
+                  }
+                >
+                  Reverse charge
+                </CheckboxField>
+                {definition.side === 'sales' && (
+                  <CheckboxField
+                    isChecked={isExportWithoutTax}
+                    isDisabled={!isEditable}
+                    hint="Only for a supply that leaves the country, sent under an undertaking."
+                    onChange={(isChecked) =>
+                      touch(() => {
+                        setExportTouched(true)
+                        setExportWithoutTax(isChecked)
+                      })
+                    }
+                  >
+                    Export, without tax paid
+                  </CheckboxField>
+                )}
+              </div>
+            )}
+          </div>
+
+          <Totals
+            document={document}
+            isStale={isDirty}
+            format={format}
+            words={
+              document !== null && words !== null && words.amount === document.totals.grandTotal
+                ? words.words
+                : null
+            }
+          />
+        </div>
 
         {offsetId !== null && openCharges !== null && (
           <Offsets
@@ -855,6 +1137,39 @@ export function DocumentEditor({
           />
         )}
       </div>
+
+      {/*
+       * THE ONE IRREVERSIBLE STEP, SAID BEFORE IT HAPPENS. The party and the amount are the
+       * saved document's — `beginIssue` saved first where there were edits — so the figure
+       * here is main's for exactly what will be numbered.
+       */}
+      <Dialog
+        isOpen={confirming !== null}
+        onClose={() => setConfirming(null)}
+        title={`Issue this ${label}?`}
+        footer={
+          <>
+            <Button onClick={() => setConfirming(null)}>Keep it a draft</Button>
+            <Button variant="primary" isBusy={isBusy} onClick={() => void issue()}>
+              Yes, issue it
+            </Button>
+          </>
+        }
+      >
+        {confirming !== null && (
+          <div className="stack stack--tight">
+            <p className="prose">
+              To <strong>{confirming.partyName}</strong>, for{' '}
+              <strong className="figure">
+                {formatAmount(confirming.totals.grandTotal, format)}
+              </strong>
+              , dated {formatDate(confirming.date)}.
+            </p>
+            <p className="prose prose--muted">{consequence.does}</p>
+            <p className="prose prose--muted">{consequence.afterwards}</p>
+          </div>
+        )}
+      </Dialog>
     </ScreenFrame>
   )
 }
@@ -1180,6 +1495,7 @@ function PlaceOfSupply({
   value,
   isEditable,
   isTouched,
+  savedTaxes,
   onChange,
 }: {
   regime: RegimeDescription | null
@@ -1187,6 +1503,8 @@ function PlaceOfSupply({
   value: string
   isEditable: boolean
   isTouched: boolean
+  /** The tax codes the last save came to, for saying what the place decided. Main's words. */
+  savedTaxes: readonly string[]
   onChange: (next: string) => void
 }): JSX.Element {
   return (
@@ -1197,7 +1515,9 @@ function PlaceOfSupply({
       hint={
         isTouched
           ? `Overridden for this ${label}. Choose "Wherever the regime decides" to let it decide again.`
-          : 'Left alone, this follows the party and your own registration. Change it only for a supply that happens somewhere else — a hotel room, goods delivered to a third state.'
+          : savedTaxes.length > 0
+            ? `Taxed as ${savedTaxes.join(' + ')} at the last save. Left alone, this follows the party and your own registration.`
+            : 'Left alone, this follows the party and your own registration. Change it only for a supply that happens somewhere else — a hotel room, goods delivered to a third state.'
       }
       onChange={(event) => onChange(event.target.value)}
     >
@@ -1244,23 +1564,28 @@ function PlaceOfSupply({
 
 function Lines({
   lines,
+  savedAmounts,
   rates,
   items,
   units,
   accounts,
   isEditable,
+  format,
   onChange,
   onChooseItem,
   onAdd,
   onRemove,
 }: {
   lines: readonly LineDraft[]
+  /** Each untouched row's amount from the last save. Absent for a row edited since. */
+  savedAmounts: Readonly<Record<string, string>>
   rates: RegimeDescription['taxRates']
   items: readonly ItemSummary[]
   units: readonly UnitOfMeasure[]
   /** Already narrowed to what a line may post to — see `postableAccounts`. */
   accounts: readonly Account[]
   isEditable: boolean
+  format: Parameters<typeof formatAmount>[1]
   onChange: <K extends keyof LineDraft>(key: string, field: K, value: LineDraft[K]) => void
   onChooseItem: (key: string, itemId: string) => void
   onAdd: () => void
@@ -1271,191 +1596,214 @@ function Lines({
   const listedAccounts = useMemo(() => new Set(accounts.map((account) => account.id)), [accounts])
 
   return (
-    <div className="stack">
-      <table className="ledger-table ledger-table--figures">
-        <thead>
-          <tr>
-            <th scope="col">Item</th>
-            <th scope="col">Description</th>
-            <th scope="col">HSN / SAC</th>
-            <th scope="col">Quantity</th>
-            <th scope="col">Unit</th>
-            <th scope="col">Unit price</th>
-            <th scope="col">Discount</th>
-            <th scope="col">Tax rate</th>
-            <th scope="col">Posts to</th>
-            <th scope="col">
-              <span className="visually-hidden">Actions</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {lines.map((line, index) => (
-            <tr key={line.key} className="ledger-table__row">
-              <td>
-                {/*
-                 * THE PICKER SEEDS AND THEN LETS GO. `onChooseItem` fills the row from the
-                 * item's own defaults; nothing here re-reads it afterwards, and nothing
-                 * else on the row writes to `itemId`. So editing the description next door
-                 * does not unpick the item, and clearing this does not empty the
-                 * description — see `lineFromItem` and `clearItem`.
-                 */}
-                <Select
-                  label={`Item, line ${String(index + 1)}`}
-                  isLabelHidden
-                  value={line.itemId}
-                  disabled={!isEditable}
-                  onChange={(event) => onChooseItem(line.key, event.target.value)}
-                >
-                  <option value="">None — type the line yourself</option>
-                  {items.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.code === null ? item.name : `${item.code} — ${item.name}`}
-                    </option>
-                  ))}
-                  {line.itemId !== '' && !listedItems.has(line.itemId) && (
-                    <option value={line.itemId}>An item that is no longer listed</option>
-                  )}
-                </Select>
-              </td>
-              <td>
-                <Input
-                  label={`Description, line ${String(index + 1)}`}
-                  isLabelHidden
-                  value={line.description}
-                  disabled={!isEditable}
-                  onChange={(event) => onChange(line.key, 'description', event.target.value)}
-                />
-              </td>
-              <td>
-                <Input
-                  label={`HSN or SAC, line ${String(index + 1)}`}
-                  isLabelHidden
-                  value={line.classificationCode}
-                  disabled={!isEditable}
-                  onChange={(event) => onChange(line.key, 'classificationCode', event.target.value)}
-                />
-              </td>
-              <td>
-                <Input
-                  label={`Quantity, line ${String(index + 1)}`}
-                  isLabelHidden
-                  value={line.quantity}
-                  disabled={!isEditable}
-                  onChange={(event) => onChange(line.key, 'quantity', event.target.value)}
-                />
-              </td>
-              <td>
-                {/*
-                 * NO UNIT IS A COMPLETE LINE, and an empty list is a first-run company
-                 * rather than a broken control — `setUpBooks` seeds none at all. So the
-                 * empty option is not a placeholder waiting to be replaced: it is an
-                 * answer, and it is the answer every line has until somebody sets units
-                 * up. The note under the table says where they come from.
-                 */}
-                <Select
-                  label={`Unit, line ${String(index + 1)}`}
-                  isLabelHidden
-                  value={line.unitCode}
-                  disabled={!isEditable}
-                  onChange={(event) => onChange(line.key, 'unitCode', event.target.value)}
-                >
-                  <option value="">No unit</option>
-                  {units.map((unit) => (
-                    <option key={unit.code} value={unit.code}>
-                      {unit.code} — {unit.name}
-                    </option>
-                  ))}
-                  {line.unitCode !== '' && !listedUnits.has(line.unitCode) && (
-                    <option value={line.unitCode}>{line.unitCode}</option>
-                  )}
-                </Select>
-              </td>
-              <td>
-                <Input
-                  label={`Unit price, line ${String(index + 1)}`}
-                  isLabelHidden
-                  value={line.unitPrice}
-                  disabled={!isEditable}
-                  onChange={(event) => onChange(line.key, 'unitPrice', event.target.value)}
-                />
-              </td>
-              <td>
-                <Input
-                  label={`Discount, line ${String(index + 1)}`}
-                  isLabelHidden
-                  value={line.discount}
-                  disabled={!isEditable}
-                  onChange={(event) => onChange(line.key, 'discount', event.target.value)}
-                />
-              </td>
-              <td>
-                {/*
-                 * A LIST AND A BOX, NOT A CLOSED PICKER. The slabs come from the regime
-                 * and are advisory: rates change by notification and this build's copy of
-                 * them is bundled, so a list gone stale must not stand between a user and
-                 * a document they are required to raise. The datalist offers; the field
-                 * accepts anything.
-                 */}
-                <Input
-                  label={`Tax rate, line ${String(index + 1)}`}
-                  isLabelHidden
-                  list="document-tax-rates"
-                  value={line.ratePct}
-                  disabled={!isEditable}
-                  placeholder="18"
-                  onChange={(event) => onChange(line.key, 'ratePct', event.target.value)}
-                />
-              </td>
-              <td>
-                {/*
-                 * THE USER'S WORDS, NOT THE FIELD'S. `isCharge` is what the column is
-                 * called in the contract; what a person is looking at is the freight line
-                 * on a bill. It says nothing about whether the line is taxed — a charge
-                 * that should not be taxed carries a rate of nil, which is a decision on
-                 * the row where anybody can see it (regimes/in-gst/tax.ts).
-                 *
-                 * The line number is on the label and not on screen, so twenty rows are
-                 * twenty distinct controls to a screen reader and one column to everyone
-                 * else.
-                 */}
-                <CheckboxField
-                  isChecked={line.isCharge}
-                  isDisabled={!isEditable}
-                  onChange={(isChecked) => onChange(line.key, 'isCharge', isChecked)}
-                >
-                  Freight or packing
-                  <span className="visually-hidden">, line {String(index + 1)}</span>
-                </CheckboxField>
-                <Select
-                  label={`Account, line ${String(index + 1)}`}
-                  isLabelHidden
-                  value={line.accountId}
-                  disabled={!isEditable}
-                  onChange={(event) => onChange(line.key, 'accountId', event.target.value)}
-                >
-                  <option value="">Wherever this line normally posts</option>
-                  {accounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.code} — {account.name}
-                    </option>
-                  ))}
-                  {line.accountId !== '' && !listedAccounts.has(line.accountId) && (
-                    <option value={line.accountId}>An account that is no longer listed</option>
-                  )}
-                </Select>
-              </td>
-              <td>
-                {isEditable && (
-                  <Button variant="ghost" size="sm" onClick={() => onRemove(line.key)}>
-                    Remove
-                  </Button>
-                )}
-              </td>
+    <div className="editor__grid">
+      {/* THE ONLY PART OF THE SCREEN THAT SCROLLS (Screens §03): everything above it is
+          answered once, and the totals below must not move while lines are typed. */}
+      <div className="editor__lines">
+        <table className="ledger-table ledger-table--figures editor__table">
+          <thead>
+            <tr>
+              <th scope="col" className="editor__line-number">
+                #
+              </th>
+              <th scope="col">Item</th>
+              <th scope="col">Description</th>
+              <th scope="col">HSN / SAC</th>
+              <th scope="col">Quantity</th>
+              <th scope="col">Unit</th>
+              <th scope="col">Unit price</th>
+              <th scope="col">Discount</th>
+              <th scope="col">Tax rate</th>
+              <th scope="col" className="ledger-table__figure">
+                Amount
+              </th>
+              <th scope="col">Posts to</th>
+              <th scope="col">
+                <span className="visually-hidden">Actions</span>
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {lines.map((line, index) => (
+              <tr key={line.key} className="ledger-table__row" data-line-key={line.key}>
+                <td className="editor__line-number">{index + 1}</td>
+                <td>
+                  {/*
+                   * THE PICKER SEEDS AND THEN LETS GO. `onChooseItem` fills the row from the
+                   * item's own defaults; nothing here re-reads it afterwards, and nothing
+                   * else on the row writes to `itemId`. So editing the description next door
+                   * does not unpick the item, and clearing this does not empty the
+                   * description — see `lineFromItem` and `clearItem`.
+                   */}
+                  <Select
+                    label={`Item, line ${String(index + 1)}`}
+                    isLabelHidden
+                    value={line.itemId}
+                    disabled={!isEditable}
+                    onChange={(event) => onChooseItem(line.key, event.target.value)}
+                  >
+                    <option value="">None — type the line yourself</option>
+                    {items.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.code === null ? item.name : `${item.code} — ${item.name}`}
+                      </option>
+                    ))}
+                    {line.itemId !== '' && !listedItems.has(line.itemId) && (
+                      <option value={line.itemId}>An item that is no longer listed</option>
+                    )}
+                  </Select>
+                </td>
+                <td>
+                  <Input
+                    label={`Description, line ${String(index + 1)}`}
+                    isLabelHidden
+                    value={line.description}
+                    disabled={!isEditable}
+                    onChange={(event) => onChange(line.key, 'description', event.target.value)}
+                  />
+                </td>
+                <td>
+                  <Input
+                    label={`HSN or SAC, line ${String(index + 1)}`}
+                    isLabelHidden
+                    value={line.classificationCode}
+                    disabled={!isEditable}
+                    onChange={(event) =>
+                      onChange(line.key, 'classificationCode', event.target.value)
+                    }
+                  />
+                </td>
+                <td>
+                  <Input
+                    label={`Quantity, line ${String(index + 1)}`}
+                    isLabelHidden
+                    value={line.quantity}
+                    disabled={!isEditable}
+                    onChange={(event) => onChange(line.key, 'quantity', event.target.value)}
+                  />
+                </td>
+                <td>
+                  {/*
+                   * NO UNIT IS A COMPLETE LINE, and an empty list is a first-run company
+                   * rather than a broken control — `setUpBooks` seeds none at all. So the
+                   * empty option is not a placeholder waiting to be replaced: it is an
+                   * answer, and it is the answer every line has until somebody sets units
+                   * up. The note under the table says where they come from.
+                   */}
+                  <Select
+                    label={`Unit, line ${String(index + 1)}`}
+                    isLabelHidden
+                    value={line.unitCode}
+                    disabled={!isEditable}
+                    onChange={(event) => onChange(line.key, 'unitCode', event.target.value)}
+                  >
+                    <option value="">No unit</option>
+                    {units.map((unit) => (
+                      <option key={unit.code} value={unit.code}>
+                        {unit.code} — {unit.name}
+                      </option>
+                    ))}
+                    {line.unitCode !== '' && !listedUnits.has(line.unitCode) && (
+                      <option value={line.unitCode}>{line.unitCode}</option>
+                    )}
+                  </Select>
+                </td>
+                <td>
+                  <Input
+                    label={`Unit price, line ${String(index + 1)}`}
+                    isLabelHidden
+                    value={line.unitPrice}
+                    disabled={!isEditable}
+                    onChange={(event) => onChange(line.key, 'unitPrice', event.target.value)}
+                  />
+                </td>
+                <td>
+                  <Input
+                    label={`Discount, line ${String(index + 1)}`}
+                    isLabelHidden
+                    value={line.discount}
+                    disabled={!isEditable}
+                    onChange={(event) => onChange(line.key, 'discount', event.target.value)}
+                  />
+                </td>
+                <td>
+                  {/*
+                   * A LIST AND A BOX, NOT A CLOSED PICKER. The slabs come from the regime
+                   * and are advisory: rates change by notification and this build's copy of
+                   * them is bundled, so a list gone stale must not stand between a user and
+                   * a document they are required to raise. The datalist offers; the field
+                   * accepts anything.
+                   */}
+                  <Input
+                    label={`Tax rate, line ${String(index + 1)}`}
+                    isLabelHidden
+                    list="document-tax-rates"
+                    value={line.ratePct}
+                    disabled={!isEditable}
+                    placeholder="18"
+                    onChange={(event) => onChange(line.key, 'ratePct', event.target.value)}
+                  />
+                </td>
+                {/* Main's figure for the row as it was saved, or a dash until the next save. */}
+                <td className="ledger-table__figure editor__amount">
+                  {savedAmounts[line.key] === undefined ? (
+                    <span className="editor__pending" title="Worked out when the draft is saved">
+                      —
+                    </span>
+                  ) : (
+                    formatAmount(savedAmounts[line.key] ?? '', format)
+                  )}
+                </td>
+                <td>
+                  {/*
+                   * THE USER'S WORDS, NOT THE FIELD'S. `isCharge` is what the column is
+                   * called in the contract; what a person is looking at is the freight line
+                   * on a bill. It says nothing about whether the line is taxed — a charge
+                   * that should not be taxed carries a rate of nil, which is a decision on
+                   * the row where anybody can see it (regimes/in-gst/tax.ts).
+                   *
+                   * The line number is on the label and not on screen, so twenty rows are
+                   * twenty distinct controls to a screen reader and one column to everyone
+                   * else.
+                   */}
+                  <CheckboxField
+                    isChecked={line.isCharge}
+                    isDisabled={!isEditable}
+                    onChange={(isChecked) => onChange(line.key, 'isCharge', isChecked)}
+                  >
+                    Freight or packing
+                    <span className="visually-hidden">, line {String(index + 1)}</span>
+                  </CheckboxField>
+                  <Select
+                    label={`Account, line ${String(index + 1)}`}
+                    isLabelHidden
+                    value={line.accountId}
+                    disabled={!isEditable}
+                    onChange={(event) => onChange(line.key, 'accountId', event.target.value)}
+                  >
+                    <option value="">Wherever this line normally posts</option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.code} — {account.name}
+                      </option>
+                    ))}
+                    {line.accountId !== '' && !listedAccounts.has(line.accountId) && (
+                      <option value={line.accountId}>An account that is no longer listed</option>
+                    )}
+                  </Select>
+                </td>
+                <td>
+                  {isEditable && (
+                    <Button variant="ghost" size="sm" onClick={() => onRemove(line.key)}>
+                      Remove
+                    </Button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <datalist id="document-tax-rates">
         {rates.map((rate) => (
@@ -1484,69 +1832,89 @@ function Lines({
         send that one somewhere else — which is how a bill records an expense.
       </p>
 
-      {isEditable && (
-        <div className="toolbar">
+      <div className="editor__hints">
+        {isEditable && (
           <Button icon="plus" variant="ghost" size="sm" onClick={onAdd}>
             Add a line
           </Button>
-        </div>
-      )}
+        )}
+        {isEditable && (
+          <span className="editor__hint">
+            <Kbd shortcut={DUPLICATE_SHORTCUT} /> duplicate line
+          </span>
+        )}
+        <span className="editor__count">
+          {lines.length} {lines.length === 1 ? 'line' : 'lines'}
+        </span>
+      </div>
     </div>
   )
 }
 
 // ---- The foot ---------------------------------------------------------------
 
+/**
+ * The foot of the document: main's figures for the version that is stored.
+ *
+ * SAID, NOT HIDDEN. The renderer cannot recompute these and will not pretend to, so the
+ * panel is headed "last saved" and, while there are unsaved edits, says which version its
+ * figures belong to. A new document has none until it is saved.
+ */
 function Totals({
   document,
   isStale,
   format,
+  words,
 }: {
-  document: Document
+  document: Document | null
   isStale: boolean
   format: Parameters<typeof formatAmount>[1]
+  /** The total in the regime's words, once it has been asked. */
+  words: string | null
 }): JSX.Element {
-  const { totals } = document
-
   return (
-    <div className="stack stack--tight">
-      {/*
-       * SAID, NOT HIDDEN. These are the figures main computed for the version of this
-       * document that is stored. The renderer cannot recompute them and will not pretend
-       * to, so when there are unsaved edits it says which version they belong to.
-       */}
-      {isStale && (
-        <Notice tone="info" title="These figures are from the last saved version">
-          <p>
-            Tax is worked out in the main process, against the regime these books use. Save to see
-            what it now comes to.
-          </p>
-        </Notice>
-      )}
+    <section className="totals" aria-label="Totals">
+      <p className="totals__title caps-label">Totals — last saved</p>
 
-      <table className="ledger-table ledger-table--figures">
-        <tbody>
-          <tr>
-            <td>Taxable value</td>
-            <td className="ledger-table__figure">{formatAmount(totals.taxableValue, format)}</td>
-          </tr>
-          {totals.taxSummary.map((tax) => (
-            <tr key={`${tax.code}-${tax.ratePct}`}>
-              <td>{tax.label}</td>
-              <td className="ledger-table__figure">{formatAmount(tax.amount, format)}</td>
-            </tr>
-          ))}
-          <tr>
-            <td>Total tax</td>
-            <td className="ledger-table__figure">{formatAmount(totals.totalTax, format)}</td>
-          </tr>
-          <tr>
-            <td>Grand total</td>
-            <td className="ledger-table__figure">{formatAmount(totals.grandTotal, format)}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+      {document === null ? (
+        <p className="prose prose--muted">
+          Nothing is worked out until the draft is saved. Save it to see the tax and the total.
+        </p>
+      ) : (
+        <>
+          <dl className="totals__rows">
+            <div className="totals__row">
+              <dt>Taxable value</dt>
+              <dd>{formatAmount(document.totals.taxableValue, format)}</dd>
+            </div>
+            {document.totals.taxSummary.map((tax) => (
+              <div key={`${tax.code}-${tax.ratePct}`} className="totals__row">
+                <dt>{tax.label}</dt>
+                <dd>{formatAmount(tax.amount, format)}</dd>
+              </div>
+            ))}
+            {!isZeroAmount(document.totals.roundOff) && (
+              <div className="totals__row">
+                <dt>Round off</dt>
+                <dd>{formatAmount(document.totals.roundOff, format)}</dd>
+              </div>
+            )}
+            <div className="totals__row totals__row--total">
+              <dt>Total</dt>
+              <dd>{formatAmount(document.totals.grandTotal, format)}</dd>
+            </div>
+          </dl>
+
+          {isStale && (
+            <Notice tone="warning" title="These figures are from the last saved version">
+              <p>Coffer works them out when it saves — the screen never adds up money itself.</p>
+            </Notice>
+          )}
+
+          {words !== null && <p className="totals__words">{words}</p>}
+        </>
+      )}
+    </section>
   )
 }
 

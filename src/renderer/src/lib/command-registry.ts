@@ -27,6 +27,18 @@ export interface Command {
   keywords?: readonly string[]
   /** A short right-aligned note: the current value, the target, a caveat. */
   hint?: string
+  /**
+   * Where the command lives, as a sentence points at it: "Company → Numbering". Drawn under
+   * the title so a result says which screen it acts on. A screen's commands are given their
+   * screen's place by `useRegisterCommands`; one that names its own keeps it.
+   */
+  location?: string
+  /**
+   * Offered only once something has been typed. A party is a result worth finding and not
+   * a command worth listing: five hundred customers under an empty query would bury every
+   * command in the palette.
+   */
+  isSearchOnly?: boolean
   shortcut?: Shortcut
   /** Listed but not runnable, e.g. an action the current state forbids. */
   isDisabled?: boolean
@@ -109,7 +121,9 @@ export function searchCommands(
 ): readonly CommandMatch[] {
   const trimmed = query.trim()
   if (trimmed === '') {
-    return commands.map((command) => ({ command, score: 0, ranges: [] }))
+    return commands
+      .filter((command) => command.isSearchOnly !== true)
+      .map((command) => ({ command, score: 0, ranges: [] }))
   }
 
   const matches: { match: CommandMatch; index: number }[] = []

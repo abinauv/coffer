@@ -26,7 +26,7 @@ import {
 } from '../../lib/layout'
 import { useMediaQuery } from '../../lib/hooks'
 import { makeRoute } from '../../lib/routing'
-import { navSections } from '../../lib/screens'
+import { describeLocation, navSections } from '../../lib/screens'
 import { browserStore, readPreference, writePreference } from '../../lib/storage'
 import type { Command } from '../../lib/command-registry'
 import { useCommands, useRegisterCommands } from '../../store/commands'
@@ -179,6 +179,7 @@ function ShellCommands(): JSX.Element {
         title: `Go to ${screen.nav?.label ?? screen.title}`,
         section: 'Go to',
         keywords: [section.label, screen.title],
+        location: describeLocation(screens, screen.area, screen.id) ?? section.label,
         run: () => navigate(makeRoute(screen.area, screen.id)),
       })),
     )

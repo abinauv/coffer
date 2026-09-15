@@ -8,7 +8,8 @@
 
 import type { JSX } from 'react'
 import type { Route } from '../../lib/routing'
-import { findScreen } from '../../lib/screens'
+import { describeLocation, findScreen } from '../../lib/screens'
+import { CommandLocation } from '../../store/commands'
 import { useNavigation } from '../../store/navigation'
 import { useScreens } from '../../store/screens'
 import { Icon } from '../atoms'
@@ -23,7 +24,11 @@ export function ScreenHost(): JSX.Element {
   return (
     <>
       <div key={screenKey(route)} className="screen">
-        {screen.render({ route, navigate })}
+        <CommandLocation
+          location={describeLocation(screens, route.area, route.screenId) ?? screen.title}
+        >
+          {screen.render({ route, navigate })}
+        </CommandLocation>
       </div>
     </>
   )

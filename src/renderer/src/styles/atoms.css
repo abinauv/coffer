@@ -537,6 +537,21 @@ select.field__control[aria-invalid='true'] {
   line-height: var(--leading-snug);
 }
 
+/* A keycap inside a button names the key that presses it. It is decoration beside the
+ * label (the button carries `aria-keyshortcuts`), so on a filled button it takes the
+ * button's own ink rather than a cap drawn on the page's ground. */
+.button__keys {
+  display: inline-flex;
+  margin-inline-start: var(--space-1);
+}
+
+.button--primary .button__keys .kbd__key {
+  background: transparent;
+  border-color: currentColor;
+  color: inherit;
+  opacity: 0.8;
+}
+
 /* ---- Badge ---------------------------------------------------------------
  * A squared tag, not a pill: the design sets status like a stamp on a ledger line. Every
  * badge carries a word; the tone is the second signal, never the first. Each tone draws

@@ -208,3 +208,25 @@ describe('groupMatches', () => {
     expect(groupMatches([])).toEqual([])
   })
 })
+
+describe('a search-only command', () => {
+  const party: Command = {
+    id: 'parties.open.1',
+    title: 'Kaveri Polymers',
+    section: 'Parties',
+    isSearchOnly: true,
+    run: () => {},
+  }
+  const plain: Command = { id: 'a', title: 'New journal entry', section: 'Ledger', run: () => {} }
+
+  /* Five hundred customers under an empty query would bury every command in the palette. */
+  it('is not listed before anything is typed', () => {
+    expect(searchCommands([plain, party], '').map((match) => match.command.id)).toEqual(['a'])
+  })
+
+  it('is found once its name is typed', () => {
+    expect(searchCommands([plain, party], 'kaveri').map((match) => match.command.id)).toEqual([
+      'parties.open.1',
+    ])
+  })
+})

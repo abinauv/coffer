@@ -49,6 +49,7 @@ import type {
   DocumentStatusDto,
   ItemSummary,
   OpenDocument,
+  Party,
   PartySummary,
   Result,
   UnitOfMeasure,
@@ -297,6 +298,20 @@ function bridgeFor(
   return {
     parties: {
       list: () => Promise.resolve<Result<PartySummary[]>>({ ok: true, data: CUSTOMERS }),
+      /* The chosen party's terms, for the line under Due. Thirty days, unless a test says. */
+      get: () =>
+        Promise.resolve<Result<Party | null>>({
+          ok: true,
+          data: { ...CUSTOMERS[0], paymentTermsDays: 30 } as Party,
+        }),
+    },
+    /* The line under the total. The words are the regime's; the screen only prints them. */
+    regime: {
+      amountInWords: () =>
+        Promise.resolve<Result<string>>({
+          ok: true,
+          data: 'Rupees One Thousand One Hundred Eighty Only',
+        }),
     },
     /*
      * THE THREE LISTS A LINE IS PICKED FROM, ANSWERED HERE FOR THE REASON `openForOffset`
@@ -373,7 +388,7 @@ describe('the place of supply', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
     await user.selectOptions(screen.getByLabelText('Customer'), 'party-2')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     expect(sentTo(bridge, 'documents:update')).not.toHaveProperty('placeOfSupplyJurisdiction')
@@ -390,7 +405,7 @@ describe('the place of supply', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
     await user.selectOptions(screen.getByLabelText('Place of supply'), '29')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     expect(sentTo(bridge, 'documents:update')?.['placeOfSupplyJurisdiction']).toBe('29')
@@ -416,9 +431,41 @@ describe('the figures', () => {
       bridge: bridgeFor(document()),
     })
 
-    expect(await screen.findByText('1,180.00')).toBeInTheDocument()
-    expect(screen.getByText('CGST @ 9%')).toBeInTheDocument()
-    expect(screen.getByText('1,000.00')).toBeInTheDocument()
+    const totals = within(await screen.findByRole('region', { name: 'Totals' }))
+    expect(await totals.findByText('1,180.00')).toBeInTheDocument()
+    expect(totals.getByText('CGST @ 9%')).toBeInTheDocument()
+    expect(totals.getByText('1,000.00')).toBeInTheDocument()
+  })
+
+  it('writes the total in the regime’s words, under the figure', async () => {
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    expect(
+      await screen.findByText('Rupees One Thousand One Hundred Eighty Only'),
+    ).toBeInTheDocument()
+    expect(bridge.lastCallTo('regime:amountInWords')?.args[0]).toBe('1180.00')
+  })
+
+  /*
+   * EACH LINE'S AMOUNT IS MAIN'S, AND ONLY WHILE THE LINE IS WHAT WAS SAVED. Editing the
+   * quantity makes the stored amount belong to a line that no longer exists, so the row
+   * gives it up rather than showing a figure that is no longer true.
+   */
+  it('shows a saved line’s amount, and gives it up once the line is edited', async () => {
+    const user = userEvent.setup()
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    const row = (await screen.findByLabelText('Quantity, line 1')).closest('tr') as HTMLElement
+    await waitFor(() => expect(within(row).getByText('1,000.00')).toBeInTheDocument())
+
+    await user.type(screen.getByLabelText('Quantity, line 1'), '5')
+
+    expect(within(row).queryByText('1,000.00')).toBeNull()
+    expect(within(row).getByTitle('Worked out when the draft is saved')).toBeInTheDocument()
   })
 
   /*
@@ -451,7 +498,7 @@ describe('the figures', () => {
 
     await screen.findByText('1,180.00')
     await user.type(screen.getByLabelText('Narration'), 'Against PO 4471')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(screen.queryByText(/from the last saved version/)).toBeNull())
   })
@@ -465,7 +512,7 @@ describe('what a line sends', () => {
     })
 
     await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     const sent = sentTo(bridge, 'documents:update')?.['lines'] as Record<string, unknown>[]
@@ -488,7 +535,7 @@ describe('what a line sends', () => {
     const rate = await screen.findByLabelText('Tax rate, line 1')
     await user.clear(rate)
     await user.type(rate, '17.5')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     const sent = sentTo(bridge, 'documents:update')?.['lines'] as Record<string, unknown>[]
@@ -503,7 +550,7 @@ describe('what a line sends', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
     await user.click(screen.getByRole('button', { name: 'Add a line' }))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     expect(sentTo(bridge, 'documents:update')?.['lines']).toHaveLength(1)
@@ -539,7 +586,7 @@ describe('what a stored line keeps when nothing is touched', () => {
     })
 
     await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     expect(linesSentTo(bridge, 'documents:update')[0]?.['itemId']).toBe('item-2')
@@ -552,7 +599,7 @@ describe('what a stored line keeps when nothing is touched', () => {
     })
 
     await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     expect(linesSentTo(bridge, 'documents:update')[0]?.['unitCode']).toBe('KGS')
@@ -568,7 +615,7 @@ describe('what a stored line keeps when nothing is touched', () => {
     })
 
     await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     expect(linesSentTo(bridge, 'documents:update')[0]).toMatchObject({
@@ -586,7 +633,7 @@ describe('what a stored line keeps when nothing is touched', () => {
     })
 
     await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     const sent = linesSentTo(bridge, 'documents:update')[0]
@@ -649,7 +696,7 @@ describe('the item a line is', () => {
     expect(screen.getByLabelText('Unit, line 1')).toHaveValue('KGS')
     expect(screen.getByLabelText('Unit price, line 1')).toHaveValue('90.00')
 
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     expect(linesSentTo(bridge, 'documents:update')[0]).toMatchObject({
@@ -679,7 +726,7 @@ describe('the item a line is', () => {
     const description = screen.getByLabelText('Description, line 1')
     await user.clear(description)
     await user.type(description, 'Oil seal, as agreed on the phone')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     expect(linesSentTo(bridge, 'documents:update')[0]).toMatchObject({
@@ -704,7 +751,7 @@ describe('the item a line is', () => {
     await user.selectOptions(screen.getByLabelText('Item, line 1'), 'item-3')
     expect(screen.getByLabelText('Unit price, line 1')).toHaveValue('500.00')
 
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     expect(linesSentTo(bridge, 'documents:update')[0]).toMatchObject({
@@ -725,7 +772,7 @@ describe('the item a line is', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
     await user.selectOptions(screen.getByLabelText('Item, line 1'), '')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     const sent = linesSentTo(bridge, 'documents:update')[0]
@@ -751,7 +798,7 @@ describe('the item a line is', () => {
       within(cellOf(picker)).getByRole('option', { name: 'An item that is no longer listed' }),
     ).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     expect(linesSentTo(bridge, 'documents:update')[0]?.['itemId']).toBe('item-archived')
   })
@@ -779,7 +826,7 @@ describe('the unit a quantity is counted in', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
     await user.selectOptions(screen.getByLabelText('Unit, line 1'), 'KGS')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     expect(linesSentTo(bridge, 'documents:update')[0]?.['unitCode']).toBe('KGS')
@@ -820,7 +867,7 @@ describe('the unit a quantity is counted in', () => {
     })
 
     await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     const sent = linesSentTo(bridge, 'documents:update')
@@ -845,7 +892,7 @@ describe('a charge line', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
     await user.click(screen.getByLabelText('Freight or packing, line 1'))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     expect(linesSentTo(bridge, 'documents:update')[0]?.['isCharge']).toBe(true)
@@ -897,7 +944,7 @@ describe('the account a line posts to', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
     await user.selectOptions(screen.getByLabelText('Account, line 1'), 'acc-courier')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     expect(linesSentTo(bridge, 'documents:update')[0]?.['accountId']).toBe('acc-courier')
@@ -924,7 +971,7 @@ describe('creating one', () => {
       bridge: bridgeFor(null),
     })
 
-    expect(await screen.findByRole('button', { name: 'Create draft' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Save draft' })).toBeDisabled()
   })
 
   /*
@@ -939,7 +986,7 @@ describe('creating one', () => {
       bridge: bridgeFor(null, document({ id: 'doc-9' })),
     })
 
-    const create = await screen.findByRole('button', { name: 'Create draft' })
+    const create = await screen.findByRole('button', { name: 'Save draft' })
     expect(create).toBeDisabled()
 
     await user.selectOptions(screen.getByLabelText('Customer'), 'party-1')
@@ -978,7 +1025,7 @@ describe('creating one', () => {
     await user.type(screen.getByLabelText('Date'), '2026-04-15')
     await user.type(screen.getByLabelText('Description, line 1'), 'Ball bearing 6203')
     await user.type(screen.getByLabelText('Unit price, line 1'), '500.00')
-    await user.click(screen.getByRole('button', { name: 'Create draft' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:create')).toHaveLength(1))
     expect(sentTo(bridge, 'documents:create')?.['kind']).toBe('sales-invoice')
@@ -994,8 +1041,8 @@ describe('the four verbs', () => {
       bridge: bridgeFor(document()),
     })
 
-    expect(await screen.findByRole('button', { name: 'Issue' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Delete draft' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Issue sales invoice' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Discard draft' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Cancel this sales invoice' })).toBeNull()
   })
 
@@ -1013,9 +1060,9 @@ describe('the four verbs', () => {
     expect(
       await screen.findByRole('button', { name: 'Cancel this sales invoice' }),
     ).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Delete draft' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Issue' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Discard draft' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Issue sales invoice' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Save draft' })).toBeNull()
     expect(screen.getByLabelText('Customer')).toBeDisabled()
     expect(screen.getByLabelText('Description, line 1')).toBeDisabled()
   })
@@ -1037,7 +1084,8 @@ describe('the four verbs', () => {
       bridge: bridgeFor(issued),
     })
 
-    expect(await screen.findByText(/Due 2026-05-15/)).toBeInTheDocument()
+    expect(await screen.findByText(/Due 15 May 2026/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Due')).toHaveValue('15 May 2026')
   })
 
   it('offers nothing at all on a cancelled one', async () => {
@@ -1047,9 +1095,9 @@ describe('the four verbs', () => {
     })
 
     await screen.findByText(/Cancelled\./)
-    expect(screen.queryByRole('button', { name: 'Issue' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Issue sales invoice' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Cancel this sales invoice' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Delete draft' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Discard draft' })).toBeNull()
   })
 
   it('issues, and says what the number is and how to undo it', async () => {
@@ -1059,7 +1107,10 @@ describe('the four verbs', () => {
       bridge: bridgeFor(document(), issued),
     })
 
-    await user.click(await screen.findByRole('button', { name: 'Issue' }))
+    await user.click(await screen.findByRole('button', { name: 'Issue sales invoice' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Issue this sales invoice?' })
+    expect(bridge.callsTo('documents:issue')).toHaveLength(0)
+    await user.click(within(dialog).getByRole('button', { name: 'Yes, issue it' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:issue')).toHaveLength(1))
     expect(await screen.findByText(/INV\/2026-27\/0001 is in the books/)).toBeInTheDocument()
@@ -1067,21 +1118,97 @@ describe('the four verbs', () => {
   })
 
   /*
-   * Issuing numbers and posts the SAVED version, which is not what is on screen when
-   * there are unsaved edits. Saying so beats silently saving first — the user pressed
-   * Issue, not Save, and the two are not the same decision.
+   * THE CONFIRMATION NAMES THE PARTY AND THE AMOUNT, and says what the way back is. The
+   * credit note is read off the kind table — the kind that corrects an invoice.
    */
-  it('will not issue while there are unsaved edits, and says why', async () => {
+  it('asks first, naming the party, the amount and how it is corrected afterwards', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Issue sales invoice' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Issue this sales invoice?' })
+
+    expect(dialog).toHaveTextContent('To Sunrise Components, for 1,180.00, dated 15 Apr 2026.')
+    expect(dialog).toHaveTextContent(/A correction is a credit note raised against it/)
+
+    await user.click(within(dialog).getByRole('button', { name: 'Keep it a draft' }))
+    expect(bridge.callsTo('documents:issue')).toHaveLength(0)
+  })
+
+  /*
+   * Issuing numbers and posts the SAVED version. With unsaved edits on screen, the draft is
+   * saved first and the confirmation shows what that save came to — so the figure the user
+   * confirms is main's for exactly what will be numbered, never last save's total under
+   * this screen's lines.
+   */
+  it('saves unsaved edits before it asks, and asks about what was saved', async () => {
+    const user = userEvent.setup()
+    const resaved = document({ narration: 'Against PO 4471', grandTotal: '2360.00' })
+    resaved.totals = { ...resaved.totals, grandTotal: '2360.00' }
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document(), resaved),
+    })
+
+    await screen.findByRole('button', { name: 'Issue sales invoice' })
+    await user.type(screen.getByLabelText('Narration'), 'Against PO 4471')
+    await user.click(screen.getByRole('button', { name: 'Issue sales invoice' }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Issue this sales invoice?' })
+    expect(bridge.callsTo('documents:update')).toHaveLength(1)
+    expect(sentTo(bridge, 'documents:update')?.['narration']).toBe('Against PO 4471')
+    expect(dialog).toHaveTextContent('2,360.00')
+    expect(bridge.callsTo('documents:issue')).toHaveLength(0)
+  })
+
+  it('does not ask at all when the save before it is refused', async () => {
+    const user = userEvent.setup()
+    const base = bridgeFor(document())
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: {
+        ...base,
+        documents: {
+          ...base.documents,
+          update: () =>
+            Promise.resolve<Result<Document>>({
+              ok: false,
+              error: { code: 'PERIOD_CLOSED', message: 'April is closed.' },
+            }),
+        },
+      },
+    })
+
+    await screen.findByRole('button', { name: 'Issue sales invoice' })
+    await user.type(screen.getByLabelText('Narration'), 'Against PO 4471')
+    await user.click(screen.getByRole('button', { name: 'Issue sales invoice' }))
+
+    expect(await screen.findByText(/April is closed/)).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Issue this sales invoice?' })).toBeNull()
+  })
+
+  /* Ctrl ⏎ is the only key that issues, and it opens the same question the button does. */
+  it('asks on Ctrl Enter, from inside a field', async () => {
     const user = userEvent.setup()
     renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
       bridge: bridgeFor(document()),
     })
 
-    await screen.findByRole('button', { name: 'Issue' })
-    await user.type(screen.getByLabelText('Narration'), 'Against PO 4471')
+    await screen.findByRole('button', { name: 'Issue sales invoice' })
+    await user.click(screen.getByLabelText('Narration'))
+    await user.keyboard('{Control>}{Enter}{/Control}')
 
-    expect(screen.getByRole('button', { name: 'Issue' })).toBeDisabled()
-    expect(screen.getByText('There are unsaved changes')).toBeInTheDocument()
+    expect(await screen.findByRole('dialog', { name: 'Issue this sales invoice?' })).toBeVisible()
+  })
+
+  it('draws the key beside the label without making it part of the name', async () => {
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    const button = await screen.findByRole('button', { name: 'Issue sales invoice' })
+    expect(button).toHaveAttribute('aria-keyshortcuts', 'Control+Enter')
+    expect(button.querySelector('.kbd')).not.toBeNull()
   })
 
   it('cancels, and says the number is kept', async () => {
@@ -1120,7 +1247,7 @@ describe('the four verbs', () => {
       { bridge: bridgeFor(document()) },
     )
 
-    await user.click(await screen.findByRole('button', { name: 'Delete draft' }))
+    await user.click(await screen.findByRole('button', { name: 'Discard draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:delete')).toHaveLength(1))
     expect(navigate).toHaveBeenCalledWith(
@@ -1149,7 +1276,10 @@ describe('when main refuses', () => {
       },
     })
 
-    await user.click(await screen.findByRole('button', { name: 'Issue' }))
+    await user.click(await screen.findByRole('button', { name: 'Issue sales invoice' }))
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Yes, issue it' }),
+    )
 
     expect(await screen.findByText(/Fill in the business details/)).toBeInTheDocument()
   })
@@ -1539,7 +1669,7 @@ describe('a purchase bill', () => {
 
     await user.clear(screen.getByLabelText('Unit price, line 1'))
     await user.type(screen.getByLabelText('Unit price, line 1'), '84.50')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     expect(linesSentTo(bridge, 'documents:update')[0]).toMatchObject({
@@ -1586,7 +1716,7 @@ describe('a purchase bill', () => {
     await user.type(screen.getByLabelText('Date'), '2026-04-15')
     await user.type(screen.getByLabelText('Description, line 1'), 'Ball bearing 6203')
     await user.type(screen.getByLabelText('Unit price, line 1'), '500.00')
-    await user.click(screen.getByRole('button', { name: 'Create draft' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:create')).toHaveLength(1))
     expect(sentTo(bridge, 'documents:create')?.['kind']).toBe('purchase-bill')
@@ -1609,7 +1739,7 @@ describe('a purchase bill', () => {
       { bridge: bridgeFor(bill()) },
     )
 
-    await user.click(await screen.findByRole('button', { name: 'Delete draft' }))
+    await user.click(await screen.findByRole('button', { name: 'Discard draft' }))
 
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledWith(
@@ -1775,7 +1905,7 @@ describe('a credit note', () => {
     await screen.findByRole('option', { name: /INV\/2026-27\/0001/ })
     await waitFor(() => expect(screen.getByLabelText(/this corrects/)).toHaveValue('inv-1'))
     await user.selectOptions(screen.getByLabelText(/this corrects/), '')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     expect(sentTo(bridge, 'documents:update')?.['originalDocumentId']).toBeNull()
@@ -1789,7 +1919,7 @@ describe('a credit note', () => {
 
     await screen.findByRole('option', { name: /INV\/2026-27\/0001/ })
     await user.selectOptions(screen.getByLabelText(/this corrects/), 'inv-1')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
     expect(sentTo(bridge, 'documents:update')?.['originalDocumentId']).toBe('inv-1')
@@ -2237,7 +2367,7 @@ describe('what a credit note settles', () => {
       bridge: noteBridge(noteSettlement(), [openInvoice()], document({ kind: 'credit-note' })),
     })
 
-    await screen.findByRole('button', { name: 'Issue' })
+    await screen.findByRole('button', { name: 'Issue credit note' })
     await act(async () => {})
 
     expect(bridge.callsTo('documents:openForOffset')).toHaveLength(0)
@@ -2394,7 +2524,10 @@ describe('a quotation', () => {
       bridge: bridgeFor(quote(), quote({ status: 'issued', number: 'QTN/2026-27/0001' })),
     })
 
-    await user.click(await screen.findByRole('button', { name: 'Issue' }))
+    await user.click(await screen.findByRole('button', { name: 'Issue quotation' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Issue this quotation?' })
+    expect(dialog).toHaveTextContent(/A quotation puts nothing in the books/)
+    await user.click(within(dialog).getByRole('button', { name: 'Yes, issue it' }))
 
     await waitFor(() => expect(bridge.callsTo('documents:issue')).toHaveLength(1))
     const toasts = within(screen.getByRole('region', { name: 'Notifications' }))
@@ -2473,6 +2606,114 @@ describe('a document of another kind', () => {
     await waitFor(() => expect(screen.getByLabelText('Customer')).toHaveValue('party-1'))
     expect(screen.getByLabelText('Description, line 1')).toHaveValue('Ball bearing 6203')
     expect(screen.queryByText(/not a credit note/)).toBeNull()
+  })
+})
+
+describe('the layout of Screens §03', () => {
+  /* Ctrl D copies the row the cursor is in, straight after it, with no amount of its own. */
+  it('duplicates the line the cursor is in on Ctrl D', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    await user.click(await screen.findByLabelText('Description, line 1'))
+    await user.keyboard('{Control>}d{/Control}')
+
+    expect(screen.getByLabelText('Description, line 2')).toHaveValue('Ball bearing 6203')
+    expect(screen.getByLabelText('Quantity, line 2')).toHaveValue('2.000')
+    expect(screen.getByText('2 lines')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
+    expect(linesSentTo(bridge, 'documents:update')).toHaveLength(2)
+  })
+
+  it('does not duplicate a line on an issued document', async () => {
+    const user = userEvent.setup()
+    const issued = document({ status: 'issued', number: 'INV/2026-27/0001', entryId: 'entry-1' })
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(issued),
+    })
+
+    await screen.findByRole('button', { name: 'Cancel this sales invoice' })
+    await user.keyboard('{Control>}d{/Control}')
+
+    expect(screen.queryByLabelText('Description, line 2')).toBeNull()
+  })
+
+  /* B20's other half: the flags reach main, and only when they were changed. */
+  it('sends reverse charge and the export treatment only when they are changed', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    await user.type(await screen.findByLabelText('Narration'), ' ')
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
+    expect(sentTo(bridge, 'documents:update')).not.toHaveProperty('isReverseCharge')
+    expect(sentTo(bridge, 'documents:update')).not.toHaveProperty('exportTaxPayment')
+
+    await user.click(screen.getByLabelText('Reverse charge'))
+    await user.click(screen.getByLabelText('Export, without tax paid'))
+    await user.click(screen.getByRole('button', { name: 'Save draft' }))
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(2))
+    expect(sentTo(bridge, 'documents:update')).toMatchObject({
+      isReverseCharge: true,
+      exportTaxPayment: 'without-payment',
+    })
+  })
+
+  it('shows the flags the document was saved with', async () => {
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document({ isReverseCharge: true, exportTaxPayment: 'without-payment' })),
+    })
+
+    await waitFor(() => expect(screen.getByLabelText('Reverse charge')).toBeChecked())
+    expect(screen.getByLabelText('Export, without tax paid')).toBeChecked()
+  })
+
+  it('offers no export treatment on the purchase side', async () => {
+    renderScreen(
+      <DocumentEditor
+        {...screenContext({ route: testRoute('purchase-bill', { id: 'doc-1' }) })}
+        kind="purchase-bill"
+      />,
+      { bridge: bridgeFor(document({ kind: 'purchase-bill' })) },
+    )
+
+    expect(await screen.findByLabelText('Reverse charge')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Export, without tax paid')).toBeNull()
+  })
+
+  /* A draft has no due date; it shows the terms it will be stamped with, read from the party. */
+  it('says the party’s terms under Due while it is a draft', async () => {
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    expect(await screen.findByText('Net 30, from the party. Set when it is issued.')).toBeVisible()
+    expect(screen.getByLabelText('Due')).toHaveValue('Set when issued')
+    expect(bridge.lastCallTo('parties:get')?.args[0]).toBe('party-1')
+  })
+
+  it('names the party’s registration and state under the picker', async () => {
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    expect(await screen.findByText(/^33AABCC1234D1ZI/)).toBeInTheDocument()
+  })
+
+  it('says what a new document’s totals are waiting for', async () => {
+    renderScreen(<DocumentEditor {...creating()} kind="sales-invoice" />, {
+      bridge: bridgeFor(null),
+    })
+
+    const totals = within(await screen.findByRole('region', { name: 'Totals' }))
+    expect(totals.getByText(/Nothing is worked out until the draft is saved/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Issue sales invoice' })).toBeNull()
   })
 })
 

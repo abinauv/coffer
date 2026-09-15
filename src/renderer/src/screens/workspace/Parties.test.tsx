@@ -671,6 +671,18 @@ describe('adding', () => {
 })
 
 describe('editing', () => {
+  /* The palette's party results land here with the record's id in the route. */
+  it('opens the record the route names, once', async () => {
+    const get = vi.fn((id: string) =>
+      Promise.resolve({ ok: true as const, data: full({ name: id, city: 'Coimbatore' }) }),
+    )
+    renderScreen(<Parties role="customer" openId="Bharat Steel" />, { bridge: listing({ get }) })
+
+    expect(await screen.findByLabelText('City')).toHaveValue('Coimbatore')
+    expect(get).toHaveBeenCalledTimes(1)
+    expect(get).toHaveBeenCalledWith('Bharat Steel')
+  })
+
   it('reads the whole record before opening, and sends an id when saving', async () => {
     const user = userEvent.setup()
     const update = vi.fn((input: UpdatePartyInput) =>

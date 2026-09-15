@@ -26,6 +26,8 @@ import type { CompanySummary, Result } from '@shared/dto'
 import { renderScreen, type BridgeStub } from '@renderer/test/harness'
 import { registerScreens } from '../../lib/screens'
 import { makeRoute, type NavigationMode, type Route } from '../../lib/routing'
+import type { Command } from '../../lib/command-registry'
+import { useCommands, useRegisterCommands } from '../../store/commands'
 import { useNavigation } from '../../store/navigation'
 import { ScreenHost } from './ScreenHost'
 
@@ -66,7 +68,27 @@ function Counting({ route }: { route: Route }): JSX.Element {
   )
 }
 
+const seen: Command[] = []
+
+const OWN_COMMANDS: readonly Command[] = [
+  { id: 'probe.plain', title: 'Plain', section: 'Probe', run: () => {} },
+  { id: 'probe.own', title: 'Own', section: 'Probe', location: 'Somewhere else', run: () => {} },
+]
+
+/* Registers two commands and reports what the registry then holds. */
+function Commanding(): JSX.Element {
+  useRegisterCommands(OWN_COMMANDS)
+  seen.splice(0, seen.length, ...useCommands().commands)
+  return <p>commanding</p>
+}
+
 registerScreens([
+  {
+    id: 'host-commands',
+    title: 'Commanding probe',
+    area: 'welcome',
+    render: () => <Commanding />,
+  },
   {
     id: 'host-probe',
     title: 'Host probe',
@@ -351,5 +373,21 @@ describe('a route nothing answers', () => {
     goTo('overview')
 
     expect(screen.getByRole('heading', { name: /No screen registered/ })).toBeVisible()
+  })
+})
+
+describe('where a screen’s commands live', () => {
+  /*
+   * Screens §04: a palette result says which screen it acts on. A screen's commands are
+   * given the screen's place by the host, so no call site spells its own — and one that
+   * names a place of its own keeps it. A welcome screen has no rail place, so it is placed
+   * by its title.
+   */
+  it('gives the commands a screen registers its place, and keeps one they name', () => {
+    goTo('host-commands')
+
+    expect(screen.getByText('commanding')).toBeInTheDocument()
+    expect(seen.find((command) => command.id === 'probe.plain')?.location).toBe('Commanding probe')
+    expect(seen.find((command) => command.id === 'probe.own')?.location).toBe('Somewhere else')
   })
 })

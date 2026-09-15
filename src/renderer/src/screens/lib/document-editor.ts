@@ -17,7 +17,13 @@
  * says it is stale is honest. A fresh-looking figure the renderer worked out is not.
  */
 
-import { definitionOf, type DocumentKind, type TradeSide } from '@shared/documents'
+import {
+  correctsKind,
+  definitionOf,
+  DOCUMENT_KINDS,
+  type DocumentKind,
+  type TradeSide,
+} from '@shared/documents'
 import type {
   Account,
   Document,
@@ -234,6 +240,18 @@ export function lineFromItem(line: LineDraft, item: ItemSummary, side: TradeSide
 }
 
 /**
+ * A copy of a line, as Ctrl D makes one: every field the user typed or picked, under a key
+ * of its own so React treats it as a new row.
+ *
+ * NOTHING IS WORKED OUT. The copy is what the row SAYS, not what it came to — its amount is
+ * main's answer on the next save, like any other line that has not been saved.
+ */
+export function duplicateLine(line: LineDraft): LineDraft {
+  nextKey += 1
+  return { ...line, key: `line-${String(nextKey)}` }
+}
+
+/**
  * A line that is no longer an item, with everything it printed left where it is.
  *
  * The inverse of the rule above rather than an undo: what was seeded became the line's
@@ -391,6 +409,67 @@ export function stateSentence(
   return posts
     ? 'A draft. Nothing is in the books until it is issued.'
     : 'A draft. Issuing it allocates its number and nothing else — a quotation never reaches the books.'
+}
+
+// ---- Issuing, said before it happens -----------------------------------------
+
+/**
+ * What the issue confirmation says will happen, and what the way back is afterwards.
+ *
+ * ISSUE IS THE STEP THAT CANNOT BE TAKEN BACK, AND THE DIALOG SAYS SO (Screens §03). It
+ * names the party and the amount elsewhere; these two sentences say what issuing does to
+ * the books and how a mistake is corrected once it has. The correction is read off the
+ * kind table — the kind whose `corrects` is this one — so a purchase bill is corrected by
+ * a debit note without anyone writing that down here.
+ */
+export function issueConsequence(kind: DocumentKind): { does: string; afterwards: string } {
+  const definition = definitionOf(kind)
+  const label = definition.label.toLowerCase()
+  const correction = DOCUMENT_KINDS.find((candidate) => correctsKind(candidate.kind) === kind)
+
+  const does = definition.postsToLedger
+    ? 'Issuing gives it the next number in its series and posts it to the books, in one step.'
+    : `Issuing gives it the next number in its series. A ${label} puts nothing in the books.`
+
+  const afterwards =
+    correction === undefined
+      ? `After this it cannot be edited. To undo it, cancel it — the number is kept.`
+      : `After this it cannot be edited. A correction is a ${correction.label.toLowerCase()} raised against it.`
+
+  return { does, afterwards }
+}
+
+/**
+ * The line under Due while a document is a draft: the terms it will be stamped with.
+ *
+ * A DRAFT HAS NO DUE DATE, and does not get one here. It is stamped from the party's terms
+ * when the document is issued (migration 0014), so what a draft can honestly show is the
+ * terms, not a date worked out from them.
+ */
+export function dueHint(hasParty: boolean, paymentTermsDays: number | null | undefined): string {
+  if (!hasParty) return 'Set when it is issued, from the party’s terms.'
+  if (paymentTermsDays === undefined) return 'Set when it is issued, from the party’s terms.'
+  if (paymentTermsDays === null || paymentTermsDays === 0) {
+    return 'The party has no terms, so it falls due the day it is issued.'
+  }
+  return `Net ${String(paymentTermsDays)}, from the party. Set when it is issued.`
+}
+
+/**
+ * The line under the party: their registration and the state it places them in, which is
+ * what decides the place of supply. Null when the party is not chosen.
+ */
+export function partyDetails(
+  party: { registrationNumber: string | null; jurisdictionCode: string | null } | undefined,
+  jurisdictions: ReadonlyArray<{ code: string; name: string }>,
+): string | null {
+  if (party === undefined) return null
+  const place =
+    party.jurisdictionCode === null
+      ? null
+      : `${jurisdictions.find((entry) => entry.code === party.jurisdictionCode)?.name ?? 'State'} (${party.jurisdictionCode})`
+  const registration = party.registrationNumber ?? 'Not registered'
+  return place === null ? registration : `${registration} · ${place}`
 }
 
 // ---- Correcting a document --------------------------------------------------

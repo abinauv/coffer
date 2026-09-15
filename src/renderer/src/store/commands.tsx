@@ -104,5 +104,34 @@ export function useCommands(): CommandContextValue {
  */
 export function useRegisterCommands(commands: readonly Command[]): void {
   const { registry } = useCommands()
-  useEffect(() => registry.register(commands), [registry, commands])
+  const location = useContext(CommandLocationContext)
+  const placed = useMemo(
+    () =>
+      location === null
+        ? commands
+        : commands.map((command) =>
+            command.location === undefined ? { ...command, location } : command,
+          ),
+    [commands, location],
+  )
+  useEffect(() => registry.register(placed), [registry, placed])
+}
+
+/*
+ * WHERE THE COMMANDS REGISTERED BELOW HERE LIVE. The screen host sets it to the screen on
+ * show ("Sales → Sales invoices"), so every command a screen contributes says in the palette
+ * which screen it acts on, without forty call sites each spelling their own place out.
+ */
+const CommandLocationContext = createContext<string | null>(null)
+
+export function CommandLocation({
+  location,
+  children,
+}: {
+  location: string | null
+  children: ReactNode
+}): JSX.Element {
+  return (
+    <CommandLocationContext.Provider value={location}>{children}</CommandLocationContext.Provider>
+  )
 }

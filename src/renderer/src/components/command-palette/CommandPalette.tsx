@@ -154,8 +154,13 @@ export function CommandPalette(): JSX.Element {
                         if (!isDisabled) run(command)
                       }}
                     >
-                      <span className="palette__item-title">
-                        <Highlighted text={command.title} ranges={match.ranges} />
+                      <span className="palette__item-text">
+                        <span className="palette__item-title">
+                          <Highlighted text={command.title} ranges={match.ranges} />
+                        </span>
+                        {command.location !== undefined && (
+                          <span className="palette__item-location">{command.location}</span>
+                        )}
                       </span>
                       {command.hint !== undefined && (
                         <span className="palette__item-hint truncate">{command.hint}</span>
