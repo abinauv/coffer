@@ -36,22 +36,22 @@ legally required to keep. Calm and exact beats lively.
 
 ## 3. Where everything lives
 
-| What                                   | Where                                                                                                                                                                                                                                                                           |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Name, tagline, description             | `src/branding.ts` is the source of truth. `electron-builder.yml` repeats the values by hand, because YAML cannot import it: change both                                                                                                                                         |
-| The mark                               | `src/shared/brand-mark.ts` holds its construction and small-size rules. Drawn by `components/shell/BrandMark.tsx` and, with the name, `Wordmark.tsx`                                                                                                                            |
-| App icon                               | `build/icon.png`, 1024 × 1024, committed. Drawn from the mark by `scripts/generate-icon.mjs` (`npm run icon`): rerun it and commit the result after changing the mark or the accent. electron-builder derives every platform's icon from it                                     |
-| README banner, social preview          | `scripts/render-brand-assets.mjs` (`npm run brand:assets`). The banner is committed at `docs/assets/banner.png`; the social preview goes to `dist/brand/` and is uploaded by hand in the repository settings                                                                    |
-| Colour, type, spacing, radius, density | `src/renderer/src/styles/tokens.css`, with the palette's reasoning and its measurements in the header                                                                                                                                                                           |
-| Fonts                                  | `src/renderer/src/assets/fonts/` as local woff2, declared with `@font-face` in `styles/base.css`. Versions, checksums and the OFL notice are in `THIRD-PARTY.md`                                                                                                                |
-| Element defaults                       | `src/renderer/src/styles/base.css`                                                                                                                                                                                                                                              |
-| Component styles                       | `styles/atoms.css` (buttons, inputs, badges…), `styles/shell.css` (title bar, section bar, rail, status bar), `screens/screens.css` (screen layouts)                                                                                                                            |
-| Components                             | `src/renderer/src/components/` — `atoms/`, `shell/`, `command-palette/`, `toast/`                                                                                                                                                                                               |
-| Sections and the rail                  | `lib/screens.ts` holds the six sections (`NAV_GROUPS`) and each screen's `nav` or `navParent`; `lib/sections.ts` decides which section shows and where choosing one lands; `components/shell/` draws the section bar, the rail and the status bar                               |
-| Icons                                  | `src/renderer/src/lib/icons.ts` — 24 × 24 stroke paths drawn by `components/atoms/Icon.tsx`. No icon library                                                                                                                                                                    |
-| Screens                                | `src/renderer/src/screens/welcome/` (create, pick, unlock, recover a company) and `screens/workspace/` (everything inside an open company)                                                                                                                                      |
-| Screen building blocks                 | `src/renderer/src/screens/components/` — frames, notices, the passphrase field and strength meter, report lines, `MoneyField`, `StepFrame` for a flow in steps, and the three states every screen ships besides its full one: `EmptyState`, `RegisterSkeleton` and `ErrorState` |
-| Density preference                     | `lib/density.ts` decides, `store/density.tsx` wires it: the `data-density` attribute on `<html>`, stored as `coffer.density`. Chosen from the command palette until Settings exists                                                                                             |
+| What                                   | Where                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Name, tagline, description             | `src/branding.ts` is the source of truth. `electron-builder.yml` repeats the values by hand, because YAML cannot import it: change both                                                                                                                                                                                                               |
+| The mark                               | `src/shared/brand-mark.ts` holds its construction and small-size rules. Drawn by `components/shell/BrandMark.tsx` and, with the name, `Wordmark.tsx`                                                                                                                                                                                                  |
+| App icon                               | `build/icon.png`, 1024 × 1024, committed. Drawn from the mark by `scripts/generate-icon.mjs` (`npm run icon`): rerun it and commit the result after changing the mark or the accent. electron-builder derives every platform's icon from it                                                                                                           |
+| README banner, social preview          | `scripts/render-brand-assets.mjs` (`npm run brand:assets`). The banner is committed at `docs/assets/banner.png`; the social preview goes to `dist/brand/` and is uploaded by hand in the repository settings                                                                                                                                          |
+| Colour, type, spacing, radius, density | `src/renderer/src/styles/tokens.css`, with the palette's reasoning and its measurements in the header                                                                                                                                                                                                                                                 |
+| Fonts                                  | `src/renderer/src/assets/fonts/` as local woff2, declared with `@font-face` in `styles/base.css`. Versions, checksums and the OFL notice are in `THIRD-PARTY.md`                                                                                                                                                                                      |
+| Element defaults                       | `src/renderer/src/styles/base.css`                                                                                                                                                                                                                                                                                                                    |
+| Component styles                       | `styles/atoms.css` (buttons, inputs, badges…), `styles/shell.css` (title bar, section bar, rail, status bar), `screens/screens.css` (screen layouts)                                                                                                                                                                                                  |
+| Components                             | `src/renderer/src/components/` — `atoms/`, `shell/`, `command-palette/`, `toast/`                                                                                                                                                                                                                                                                     |
+| Sections and the rail                  | `lib/screens.ts` holds the six sections (`NAV_GROUPS`) and each screen's `nav` or `navParent`; `lib/sections.ts` decides which section shows and where choosing one lands; `components/shell/` draws the section bar, the rail and the status bar                                                                                                     |
+| Icons                                  | `src/renderer/src/lib/icons.ts` — 24 × 24 stroke paths drawn by `components/atoms/Icon.tsx`. No icon library                                                                                                                                                                                                                                          |
+| Screens                                | `src/renderer/src/screens/welcome/` (create, pick, unlock, recover a company) and `screens/workspace/` (everything inside an open company)                                                                                                                                                                                                            |
+| Screen building blocks                 | `src/renderer/src/screens/components/` — frames, notices, the passphrase field and strength meter, report lines, `MoneyField`, `StepFrame` for a flow in steps, a register's `RegisterToolbar`, `RegisterSearch` and `RegisterPager`, and the three states every screen ships besides its full one: `EmptyState`, `RegisterSkeleton` and `ErrorState` |
+| Density preference                     | `lib/density.ts` decides, `store/density.tsx` wires it: the `data-density` attribute on `<html>`, stored as `coffer.density`. Chosen from the command palette until Settings exists                                                                                                                                                                   |
 
 ## 4. Rules a redesign must keep
 
@@ -65,7 +65,14 @@ is a bug, however it looks.
   than adding up lines as you type; a design that wants a live running total needs a
   round trip to main, not arithmetic in a component.
 - **A register has no page total.** A sum across one page of rows changes when you press
-  Next and means nothing either way.
+  Next and means nothing either way. Its foot says where on the list the page is ("Showing
+  1–50 of 184", from `documents.count` and `receipts.count`) and nothing more.
+- **A line's amount is shown only while the line is what was saved.** The editor's grid
+  shows each line's taxable amount from the last save and gives it up the moment that line
+  is edited; a new or copied line has none until the draft is saved again.
+- **The Overview adds nothing up.** Its four figures are main's: the two aged reports'
+  totals, and cash and bank and the month so far from `reports.overviewFigures`, which
+  names the accounts it counted. Its lists count and order; they do not sum.
 - **Negative money is never shown by colour alone.** It carries a sign, and
   `--figure-negative` is deliberately the darkest, heaviest figure colour.
 - **Number grouping comes from the regime.** India groups `1,00,000`; other regimes group
@@ -131,6 +138,13 @@ is a bug, however it looks.
   an arrow, Home or End never fires inside a field, whatever modifier is held: those keys
   move the caret there.
 - **Appearance and density are chosen from the command palette** until Settings exists.
+- **Every palette result says where it lives,** under its title. A screen's commands are given
+  the screen's place by the screen host (`CommandLocation`), so no call site spells its own.
+  Parties are results too, read when the palette opens and offered only once something is
+  typed (`Command.isSearchOnly`); choosing one opens its record.
+- **The company's housekeeping is not on a business screen.** The file path is in the status
+  bar, Back up now in the rail, and changing the passphrase and closing the company are
+  palette commands on every workspace screen.
 
 **Density**
 
@@ -163,7 +177,15 @@ is a bug, however it looks.
   a `MoneyField`,** which takes the currency symbol from the regime and hands back exactly
   what was typed — it never groups, rounds or parses.
 - **Every screen ships an empty, a loading and an error state,** and a register loads as a
-  skeleton at its real column widths, never behind a spinner.
+  skeleton at its real column widths, never behind a spinner. An empty register says which
+  of two things it is: nothing yet (with the action that starts one), or nothing matching
+  the filter (with the action that clears it).
+- **A register row wears one badge,** the answer a reader scans for: Paid, Part paid or
+  Overdue where there is a settlement to name, otherwise the document's status.
+- **A search box is as wide as its placeholder** (`RegisterSearch`), so the sentence saying
+  what it searches is never cut off.
+- **Figures sit right in a column,** under a header that sits right too
+  (`.ledger-table .ledger-table__figure`).
 
 **Language**
 
@@ -195,6 +217,10 @@ is a bug, however it looks.
   back only when the passphrase was the problem.
 - **The welcome's four promises are facts.** No account, no subscription, no telemetry, works
   with the internet off. One that stops being true comes off the screen.
+- **Issuing asks first, and saves first.** The button and <kbd>Ctrl</kbd><kbd>⏎</kbd> open a
+  confirmation naming the party, the amount and the correction that follows (a credit note
+  against an invoice). Unsaved edits are saved before it asks, so the amount confirmed is
+  main's for exactly what will be numbered.
 - **A registration number typed while creating a company is advisory.** It is checked as it
   is typed (`companies.checkRegistration`), which refuses nothing, and saved into Business
   details as the books open, where it is checked again. A save that fails says so and never

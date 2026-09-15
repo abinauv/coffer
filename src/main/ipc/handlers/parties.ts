@@ -118,10 +118,17 @@ function parseOptionalFields(
         : undefined,
     /* A credit limit is money, so it crosses as a decimal string like every other amount
      * and never as a number (CONVENTIONS §1.7). Null is no limit at all, which is a
-     * different answer from '0.00'. */
+     * different answer from '0.00'.
+     *
+     * B21: A BLANK BOX IS NO LIMIT, AND THIS REFUSED IT. The party dialog sends every field
+     * as typed, so a customer added with the credit limit left empty arrived as '', and
+     * `expectDecimalString` refused it — no party could be added without a limit, while the
+     * repository's `creditLimitOf` had always read blank as null. Blank is read as null here
+     * too; anything else still has to be a decimal string. */
     creditLimit:
       'creditLimit' in input
-        ? input['creditLimit'] == null
+        ? input['creditLimit'] == null ||
+          (typeof input['creditLimit'] === 'string' && input['creditLimit'].trim() === '')
           ? null
           : expectDecimalString(input['creditLimit'], 'creditLimit')
         : undefined,

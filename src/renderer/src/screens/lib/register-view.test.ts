@@ -1,3 +1,6 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { searchWidth, showingLabel } from './register-view'
 
@@ -27,5 +30,32 @@ describe('searchWidth', () => {
     expect(searchWidth('Search by number, customer or narration')).toBe(
       'calc(39ch + var(--space-10))',
     )
+  })
+})
+
+/*
+ * Two layout bugs that no rendered test can see, because no stylesheet loads in one. Each
+ * test reads the rule that fixed it, so deleting or weakening the rule fails here.
+ */
+describe('the stylesheet', () => {
+  const css = readFileSync(resolve('src/renderer/src/screens/screens.css'), 'utf8')
+
+  const rule = (selector: string): string => {
+    const start = css.indexOf(`${selector} {`)
+    if (start < 0) throw new Error(`No rule for ${selector}`)
+    return css.slice(start, css.indexOf('}', start))
+  }
+
+  /* B22: `.ledger-table td` set `start` and outranked the bare figure class. */
+  it('right-aligns a figure column with a selector that outranks the cell rule', () => {
+    expect(rule('.ledger-table .ledger-table__figure')).toMatch(/text-align:\s*end/)
+    expect(css).not.toMatch(/\n\.ledger-table__figure \{[^}]*text-align/)
+  })
+
+  /* The editor's visually hidden line labels escaped the grid's scroll box and gave the
+   * whole window a sideways scrollbar. A positioned box contains them. */
+  it('contains what is inside the line grid', () => {
+    expect(rule('.editor__lines')).toMatch(/position:\s*relative/)
+    expect(rule('.editor__lines')).toMatch(/overflow:\s*auto/)
   })
 })
