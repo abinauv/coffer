@@ -352,6 +352,9 @@ describe('what recording refuses', () => {
   })
 
   it('refuses an archived account', async () => {
+    /* The seeded chart gives it a role, and an account the software posts through cannot be
+     * archived until the role is let go (accounts.ts, `assertFillsNoRole`). */
+    await db.deleteFrom('account_roles').where('account_id', '=', cash).execute()
     await updateAccount(db, { id: cash, isArchived: true })
     const failure = await failureOf(() => createReceipt(db, receiptInput({ accountId: cash }), NOW))
     expect(failure.code).toBe('RECEIPT_ACCOUNT_INVALID')

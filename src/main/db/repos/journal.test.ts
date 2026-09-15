@@ -498,6 +498,9 @@ describe('where an entry may land', () => {
   })
 
   it('refuses a posting to an archived account, naming it', async () => {
+    /* The seeded chart gives it a role, and an account the software posts through cannot be
+     * archived until the role is let go (accounts.ts, `assertFillsNoRole`). */
+    await db.deleteFrom('account_roles').where('account_id', '=', account['1210']!).execute()
     await updateAccount(db, { id: account['1210']!, isArchived: true })
     const failure = await failureOf(() => postEntry(db, sale('100.00')))
 
@@ -726,6 +729,9 @@ describe('reversing', () => {
 
   it('reverses an entry whose account has since been archived', async () => {
     const original = await postEntry(db, sale('750.00'))
+    /* The seeded chart gives it a role, and an account the software posts through cannot be
+     * archived until the role is let go (accounts.ts, `assertFillsNoRole`). */
+    await db.deleteFrom('account_roles').where('account_id', '=', account['1210']!).execute()
     await updateAccount(db, { id: account['1210']!, isArchived: true })
 
     await expect(
@@ -1043,6 +1049,20 @@ describe('the trial balance', () => {
     expect(codes).toEqual([...codes].sort())
     expect(codes).not.toContain('1000')
     expect(codes).not.toContain('2000')
+  })
+
+  /* B23: the screen summed these itself. Main sends them, in the order accounts are read,
+   * and only for a type that has a row. */
+  it('subtotals each account type from the balance columns', async () => {
+    const tb = await trialBalance(db)
+
+    expect(tb.sections).toEqual([
+      /* 1210 nets to 85,000.00 after the rent went out of it; its gross debits do not count. */
+      { type: 'asset', debitTotal: '108600.00', creditTotal: '0.00' },
+      { type: 'equity', debitTotal: '0.00', creditTotal: '100000.00' },
+      { type: 'income', debitTotal: '0.00', creditTotal: '23600.00' },
+      { type: 'expense', debitTotal: '15000.00', creditTotal: '0.00' },
+    ])
   })
 
   it('ties for any date range', async () => {

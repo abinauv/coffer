@@ -243,6 +243,7 @@ export async function updateAccount(db: CofferDb, input: UpdateAccountInput): Pr
     changes.description = input.description?.trim() ?? null
   }
   if (input.isArchived !== undefined) {
+    if (input.isArchived && existing.is_archived === 0) await assertFillsNoRole(db, input.id)
     changes.is_archived = input.isArchived ? 1 : 0
   }
   if (input.parentId !== undefined) {
@@ -299,6 +300,28 @@ export async function deleteAccount(db: CofferDb, id: string): Promise<void> {
     )
   }
 
+  await assertFillsNoRole(db, id)
+
+  const result = await db.deleteFrom('accounts').where('id', '=', id).executeTakeFirst()
+  if (result.numDeletedRows === 0n) {
+    throw new RepoError('ACCOUNT_NOT_FOUND', 'That account is not in this chart of accounts.', {
+      id,
+    })
+  }
+}
+
+// ---- Roles -----------------------------------------------------------------
+
+/**
+ * Refuses to take an account out of use while the software depends on it.
+ *
+ * Deleting one that fills a role was always refused. ARCHIVING ONE WAS NOT, and it is the
+ * same break reached by the reversible door: an archived account accepts no posting, so
+ * archiving the receivables account would make every invoice fail to issue with a sentence
+ * about an account nobody on the invoice screen can see. Once the chart of accounts could
+ * archive (5c), that door was a click away.
+ */
+async function assertFillsNoRole(db: CofferDb, id: string): Promise<void> {
   const role = await db
     .selectFrom('account_roles')
     .select('role')
@@ -311,16 +334,7 @@ export async function deleteAccount(db: CofferDb, id: string): Promise<void> {
       { id, role: role.role },
     )
   }
-
-  const result = await db.deleteFrom('accounts').where('id', '=', id).executeTakeFirst()
-  if (result.numDeletedRows === 0n) {
-    throw new RepoError('ACCOUNT_NOT_FOUND', 'That account is not in this chart of accounts.', {
-      id,
-    })
-  }
 }
-
-// ---- Roles -----------------------------------------------------------------
 
 async function loadRoles(db: CofferDb): Promise<Map<string, string[]>> {
   const rows = await db.selectFrom('account_roles').select(['role', 'account_id']).execute()
