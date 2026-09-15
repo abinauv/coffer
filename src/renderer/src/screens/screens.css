@@ -1443,10 +1443,26 @@
   border-bottom: 1px solid var(--rule-total);
 }
 
-/* Codes and amounts are read down the column, so every digit is the same width. */
-.ledger-table__code,
+/* Amounts are read down the column, so every digit is the same width. */
 .ledger-table__figure {
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: var(--numeric-figures);
+}
+
+/* An account code, a registration number, a document or entry number: the identifier face,
+ * as in a field and on a register's number, because it is read aloud and retyped. A date is
+ * not one — it takes `.ledger-table__date`. */
+.ledger-table__code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: var(--numeric-identifier);
+  white-space: nowrap;
+}
+
+/* A date the app writes (`13 Sep 2026`): quieter than what it dates, and never broken. */
+.ledger-table__date {
+  color: var(--ink-muted);
+  font-variant-numeric: var(--numeric-figures);
+  white-space: nowrap;
 }
 
 /* Scoped to the table (B22). `.ledger-table th, .ledger-table td` above sets `start` with a
@@ -1458,12 +1474,32 @@
   white-space: nowrap;
 }
 
+/* A figure never breaks; the heading over it may. "Less on account" held on one line made the
+ * aged report wider than a 1024 px window and pushed Total, the figure it exists for, out of
+ * view. */
+.ledger-table thead .ledger-table__figure {
+  white-space: normal;
+}
+
+/* Negative money: the sign main sent, and the darkest, heaviest figure ink (`FigureCell`). The
+ * colour never travels alone. */
+.ledger-table .ledger-table__figure--negative {
+  color: var(--figure-negative);
+  font-weight: var(--weight-medium);
+}
+
 .ledger-table__muted {
   color: var(--ink-muted);
 }
 
 .ledger-table__row--group td {
   font-weight: var(--weight-medium);
+}
+
+/* A group's name that opens it is a button, which sets its own weight; the chart still has to
+ * read as a tree of totals and leaves. */
+.ledger-table__row--group .register__name .button {
+  font-weight: var(--weight-semibold);
 }
 
 .ledger-table__row--archived td {
@@ -1509,12 +1545,15 @@
   min-width: 12rem;
 }
 
-.toolbar__toggle {
-  display: flex;
+/* A list's search and "Show archived" (`ListToolbar`). Centred, not bottom-aligned (B17): the
+ * search's label is hidden, so lining up bottom edges put the checkbox below its text line. */
+.list__toolbar {
   align-items: center;
-  gap: var(--space-2);
-  color: var(--ink-muted);
-  font-size: var(--text-sm);
+  column-gap: var(--space-5);
+}
+
+.list__toolbar > .checkbox {
+  flex: 0 0 auto;
 }
 
 /* ---- The document editor (Screens §03) -------------------------------------------
@@ -1732,9 +1771,10 @@
   line-height: var(--leading-relaxed);
 }
 
-/* ---- The registers (Screens §04) ------------------------------------------------
+/* ---- The registers (Screens §04), and every list and report drawn like one --------
  * A search box sized to its sentence (B12), the status filters beside it, a table in a
- * card, and a foot that says where on the list the page is. */
+ * card, and a foot that says where on the list the page is. The lists of masters and the
+ * reports put their tables in the same card. */
 
 .register__toolbar {
   align-items: center;
@@ -1752,8 +1792,11 @@
   gap: var(--space-1);
 }
 
+/* Scrolls rather than clips: at 1024 px a list's last column (Archive, Delete) was cut off by
+ * `overflow: hidden`, with nothing to say it was there. Any overflow but `visible` still clips
+ * to the rounded corners. */
 .register {
-  overflow: hidden;
+  overflow-x: auto;
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--radius-md);
@@ -1769,19 +1812,35 @@
   padding-inline-end: var(--space-4);
 }
 
-/* The number opens the record: pulled back by the button's own padding so it lines up with
- * the heading above it. */
-.register__number .button {
+/* The number, or on a list the name, opens the record: pulled back by the button's own
+ * padding so it lines up with the heading above it. */
+.register__number .button,
+.register__name .button {
   margin-inline-start: calc(var(--space-2) * -1);
 }
 
 /* Names wrap rather than truncate: a firm's name cut off is a different firm. */
-.register__party {
+.register__party,
+.register__name {
   overflow-wrap: anywhere;
 }
 
-.register__date {
-  color: var(--ink-muted);
+/* On a list the name is the button that opens the record, and a button holds one line: a long
+ * item or firm name pushed the row's Archive and Delete out of a 1024 px window. It wraps like
+ * the name it is, and grows with its lines rather than keeping a control's height. */
+.register__name .button {
+  height: auto;
+  min-height: var(--control-height-sm);
+  padding-block: var(--space-1);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-snug);
+  text-align: start;
+  white-space: normal;
+}
+
+/* A row's own verbs — Archive, Delete — at the end of it, on one line. */
+.ledger-table .register__actions {
+  text-align: end;
   white-space: nowrap;
 }
 
@@ -1867,6 +1926,20 @@
   margin-bottom: var(--space-2);
 }
 
+/* Every entry is its own table, so without fixed columns each one sized itself and the debit
+ * and credit columns zigzagged down the day. */
+.day-book__entry table {
+  table-layout: fixed;
+}
+
+.day-book__code {
+  width: 8rem;
+}
+
+.day-book__figure {
+  width: 11rem;
+}
+
 /* ---- The aged report ----------------------------------------------------- */
 
 /*
@@ -1880,6 +1953,11 @@
  * Sunken and inset, so it is visibly UNDER the row rather than beside it — the indent is
  * what says which party's items these are once the table has scrolled.
  */
+.aged__table th:first-child,
+.aged__table td:first-child {
+  min-width: 10rem;
+}
+
 .aged__drill > td {
   padding: 0 0 var(--space-3) var(--space-6);
   background: var(--surface-sunken);

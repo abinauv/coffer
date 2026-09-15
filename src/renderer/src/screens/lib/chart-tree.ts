@@ -85,6 +85,26 @@ export function parentsForType(accounts: readonly Account[], type: string): Acco
   return possibleParents(accounts).filter((account) => account.type === type)
 }
 
+/**
+ * Groups an existing account may be moved under: its own type, never itself, and never
+ * anything beneath it — a group inside its own child is a loop the database refuses. The
+ * group it sits in now is kept even when archived, so the picker shows where it is.
+ */
+export function parentsForAccount(accounts: readonly Account[], account: Account): Account[] {
+  const beneath = new Set<string>([account.id])
+  /* Flattened in tree order, so a child always comes after its parent: one pass finds them. */
+  for (const candidate of accounts) {
+    if (candidate.parentId !== null && beneath.has(candidate.parentId)) beneath.add(candidate.id)
+  }
+  return accounts.filter(
+    (candidate) =>
+      candidate.isGroup &&
+      candidate.type === account.type &&
+      !beneath.has(candidate.id) &&
+      (!candidate.isArchived || candidate.id === account.parentId),
+  )
+}
+
 /** How a row is labelled for a screen reader and a picker: '1210 · Bank Account'. */
 export function accountLabel(account: Account): string {
   return `${account.code} · ${account.name}`

@@ -1,8 +1,11 @@
 /*
- * A register's search box: typed into freely, sent to main when it is submitted.
+ * A register's or a list's search box.
  *
- * Typing is not searching. A query per keystroke would put a read of the books on every
- * letter of a customer's name, so the box holds what is typed and `onSubmit` is what asks.
+ * On a register, typing is not searching. A query per keystroke would put a read of the books
+ * on every letter of a customer's name, so the box holds what is typed and `onSubmit` is what
+ * asks. A list of masters is already in memory and filters as it is typed, so it passes no
+ * `onSubmit` and Enter does nothing.
+ *
  * Its width comes from its placeholder (B12), so the sentence it shows is never cut off.
  */
 
@@ -14,7 +17,7 @@ interface RegisterSearchProps {
   placeholder: string
   value: string
   onChange: (value: string) => void
-  onSubmit: () => void
+  onSubmit?: () => void
 }
 
 export function RegisterSearch({
@@ -29,7 +32,7 @@ export function RegisterSearch({
       role="search"
       onSubmit={(event) => {
         event.preventDefault()
-        onSubmit()
+        onSubmit?.()
       }}
     >
       <Input

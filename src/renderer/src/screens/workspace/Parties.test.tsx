@@ -275,8 +275,7 @@ describe('adding', () => {
     await user.type(screen.getByLabelText('Legal name'), 'BS Pvt Ltd')
     await user.type(screen.getByLabelText('Registration number'), '33AABCC1234D1ZI')
     await user.selectOptions(screen.getByLabelText('State or region'), '33')
-    await user.clear(screen.getByLabelText('Country'))
-    await user.type(screen.getByLabelText('Country'), 'in')
+    await user.selectOptions(screen.getByLabelText('Country'), 'in')
     await user.click(screen.getByLabelText(/We buy from them/))
     await user.type(screen.getByLabelText('Payment terms (days)'), '30')
     await user.type(screen.getByLabelText('Credit limit'), '1000')
@@ -382,8 +381,7 @@ describe('adding', () => {
     const { user } = await opened('customer')
 
     await screen.findByText('Nothing here says where they are')
-    await user.clear(screen.getByLabelText('Country'))
-    await user.type(screen.getByLabelText('Country'), 'sg')
+    await user.selectOptions(screen.getByLabelText('Country'), 'sg')
 
     await waitFor(() => {
       expect(screen.queryByText('Nothing here says where they are')).not.toBeInTheDocument()
@@ -498,7 +496,7 @@ describe('adding', () => {
 
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
 
-    await user.clear(screen.getByLabelText('Country'))
+    await user.selectOptions(screen.getByLabelText('Country'), '')
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
 
     await user.type(screen.getByLabelText('Name'), '   ')
@@ -507,7 +505,7 @@ describe('adding', () => {
     await user.type(screen.getByLabelText('Name'), 'Bharat Steel')
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
 
-    await user.type(screen.getByLabelText('Country'), 'in')
+    await user.selectOptions(screen.getByLabelText('Country'), 'in')
     expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled()
 
     await user.click(screen.getByLabelText(/We sell to them/))
@@ -889,5 +887,72 @@ describe('archiving', () => {
     await waitFor(() => {
       expect(archive).toHaveBeenCalledWith({ id: 'Old Account', archived: false })
     })
+  })
+})
+
+/* B25: the header has always said a party nothing was posted against can be deleted. */
+describe('deleting', () => {
+  it('asks in a dialog that repeats the name, and deletes only on Delete', async () => {
+    const user = userEvent.setup()
+    const remove = vi.fn(() => Promise.resolve({ ok: true as const, data: undefined }))
+    const { bridge } = renderScreen(<Parties role="customer" />, {
+      bridge: listing({ delete: remove }),
+    })
+
+    const row = await rowFor('Bharat Steel')
+    await user.click(within(row).getByRole('button', { name: 'Delete' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).getByRole('heading', { name: 'Delete Bharat Steel?' }),
+    ).toBeInTheDocument()
+    expect(remove).not.toHaveBeenCalled()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(remove).toHaveBeenCalledWith('Bharat Steel'))
+    expect(await screen.findByText(/Bharat Steel is gone/)).toBeInTheDocument()
+    await waitFor(() => expect(bridge.callsTo('parties:list')).toHaveLength(2))
+  })
+
+  it('keeps the dialog open with main’s refusal for a party with postings', async () => {
+    const user = userEvent.setup()
+    renderScreen(<Parties role="customer" />, {
+      bridge: listing({
+        delete: () =>
+          Promise.resolve({
+            ok: false,
+            error: { code: 'PARTY_IN_USE', message: 'Bharat Steel has documents. Archive them.' },
+          }),
+      }),
+    })
+
+    await user.click(within(await rowFor('Bharat Steel')).getByRole('button', { name: 'Delete' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+    expect(await within(dialog).findByText(/has documents/)).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Keep it' })).toBeInTheDocument()
+  })
+})
+
+describe('the list’s states', () => {
+  /* No spinner on a list: bars at the table's columns, and one sentence for a screen reader. */
+  it('holds the table’s shape while the list is read', async () => {
+    renderScreen(<Parties role="customer" />, {
+      bridge: listing({ list: () => new Promise<Result<PartySummary[]>>(() => undefined) }),
+    })
+    expect(await screen.findByRole('status')).toHaveTextContent('Loading customers')
+  })
+
+  it('offers to clear a search that matches nothing', async () => {
+    const user = userEvent.setup()
+    renderScreen(<Parties role="customer" />, { bridge: listing() })
+    await rowFor('Bharat Steel')
+
+    await user.type(screen.getByPlaceholderText(/Search by name/), 'zzz')
+    await user.click(await screen.findByRole('button', { name: 'Clear the search' }))
+
+    expect(await screen.findByRole('button', { name: 'Bharat Steel' })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/Search by name/)).toHaveValue('')
   })
 })

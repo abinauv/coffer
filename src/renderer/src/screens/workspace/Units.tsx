@@ -31,9 +31,13 @@ import { registerScreens } from '@renderer/lib/screens'
 import { useRegisterCommands } from '@renderer/store/commands'
 import { useToasts } from '@renderer/store/toasts'
 import type { AppError, UnitOfMeasure } from '@shared/dto'
+import { DeleteDialog } from '../components/DeleteDialog'
 import { FailureNotice } from '../components/FailureNotice'
-import { Notice } from '../components/Notice'
+import { ListToolbar } from '../components/ListToolbar'
+import { RegisterEmpty } from '../components/RegisterToolbar'
+import { RegisterSkeleton, type SkeletonColumn } from '../components/RegisterSkeleton'
 import { ScreenFrame } from '../components/ScreenFrame'
+import { archivedNote } from '../lib/register-view'
 import {
   DECIMAL_PLACES_CHOICES,
   DEFAULT_DECIMAL_PLACES,
@@ -41,6 +45,15 @@ import {
   unitCodeHint,
   unitErrorField,
 } from '../lib/unit-view'
+
+/* Code, name, decimals, reports as, actions. */
+const COLUMNS: readonly SkeletonColumn[] = [
+  { width: '8rem' },
+  { width: '1fr' },
+  { width: '5rem', align: 'end' },
+  { width: '7rem' },
+  { width: '9rem', align: 'end' },
+]
 
 export function Units(): JSX.Element {
   const { show } = useToasts()
@@ -151,97 +164,87 @@ export function Units(): JSX.Element {
       <div className="stack">
         {error && <FailureNotice error={error} context="ledger" />}
 
-        <div className="toolbar">
-          <Input
-            label="Search"
-            isLabelHidden
-            icon="search"
-            placeholder="Search by code or name"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <label className="toolbar__toggle">
-            <input
-              type="checkbox"
-              checked={includeArchived}
-              onChange={(event) => setIncludeArchived(event.target.checked)}
-            />
-            Show archived
-          </label>
-        </div>
+        <ListToolbar
+          placeholder="Search by code or name"
+          query={query}
+          onQueryChange={setQuery}
+          includeArchived={includeArchived}
+          onIncludeArchivedChange={setIncludeArchived}
+        />
 
         {units === null ? (
-          <p className="prose prose--muted">Reading the list…</p>
+          error === null && <RegisterSkeleton label="units of measure" columns={COLUMNS} />
         ) : rows.length === 0 ? (
-          <Notice
-            tone="info"
-            title={query.trim() === '' ? 'No units yet' : 'Nothing matches that'}
-            actions={
-              query.trim() === '' ? (
-                <Button size="sm" variant="primary" onClick={() => setEditing('new')}>
-                  Add the first unit
-                </Button>
-              ) : undefined
-            }
-          >
-            <p>
-              {query.trim() === ''
-                ? 'Nothing was seeded for you, on purpose — a guessed default is a default that ends up on invoices. Add the ones your paperwork already uses: KGS, NOS, BUNDLE, whatever they are.'
-                : `No unit has ${query.trim()} in its code or its name.`}
-              {!includeArchived && ' Archived units are hidden — turn them on to include them.'}
-            </p>
-          </Notice>
+          <RegisterEmpty
+            plural="units"
+            isFiltered={query.trim() !== ''}
+            sentence={`Nothing was seeded for you, on purpose — a guessed default is a default that ends up on invoices. Add the ones your paperwork already uses: KGS, NOS, BUNDLE, whatever they are.`}
+            newLabel="Add the first unit"
+            onNew={() => setEditing('new')}
+            filteredSentence={`No unit has ${query.trim()} in its code or its name.${archivedNote(includeArchived)}`}
+            clearLabel="Clear the search"
+            onClear={() => setQuery('')}
+          />
         ) : (
-          <table className="ledger-table">
-            <thead>
-              <tr>
-                <th scope="col">Code</th>
-                <th scope="col">Name</th>
-                <th scope="col">Decimals</th>
-                <th scope="col">Reports as</th>
-                <th scope="col">
-                  <span className="visually-hidden">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((unit) => (
-                <tr
-                  key={unit.code}
-                  className={`ledger-table__row${unit.isArchived ? ' ledger-table__row--archived' : ''}`}
-                >
-                  <td>
-                    <Button variant="ghost" size="sm" onClick={() => void openEditor(unit.code)}>
-                      {unit.code}
-                    </Button>
-                    {unit.isArchived && (
-                      <>
-                        {' '}
-                        <Badge tone="neutral">Archived</Badge>
-                      </>
-                    )}
-                  </td>
-                  <td>{unit.name}</td>
-                  <td className="ledger-table__figure">{unit.decimalPlaces}</td>
-                  {/* Nothing is mapped until Phase 5 fills it in, so a dash rather than a
-                      gap that reads as a field somebody forgot. */}
-                  <td className="ledger-table__code">{unit.regimeCode ?? '—'}</td>
-                  <td>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => void setArchived(unit, !unit.isArchived)}
-                    >
-                      {unit.isArchived ? 'Restore' : 'Archive'}
-                    </Button>{' '}
-                    <Button variant="ghost" size="sm" onClick={() => setDeleting(unit)}>
-                      Delete
-                    </Button>
-                  </td>
+          <div className="register">
+            <table className="ledger-table register__table">
+              <thead>
+                <tr>
+                  <th scope="col">Code</th>
+                  <th scope="col">Name</th>
+                  <th scope="col" className="ledger-table__figure">
+                    Decimals
+                  </th>
+                  <th scope="col">Reports as</th>
+                  <th scope="col">
+                    <span className="visually-hidden">Actions</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((unit) => (
+                  <tr
+                    key={unit.code}
+                    className={`ledger-table__row${unit.isArchived ? ' ledger-table__row--archived' : ''}`}
+                  >
+                    <td className="register__name">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        isIdentifier
+                        onClick={() => void openEditor(unit.code)}
+                      >
+                        {unit.code}
+                      </Button>
+                      {unit.isArchived && (
+                        <>
+                          {' '}
+                          <Badge tone="neutral">Archived</Badge>
+                        </>
+                      )}
+                    </td>
+                    <td>{unit.name}</td>
+                    <td className="ledger-table__figure">{unit.decimalPlaces}</td>
+                    {/* Nothing is mapped until Phase 5 fills it in, so a dash rather than a
+                        gap that reads as a field somebody forgot. */}
+                    <td className="ledger-table__code">{unit.regimeCode ?? '—'}</td>
+                    <td className="register__actions">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void setArchived(unit, !unit.isArchived)}
+                      >
+                        {unit.isArchived ? 'Restore' : 'Archive'}
+                      </Button>{' '}
+                      <Button variant="ghost" size="sm" onClick={() => setDeleting(unit)}>
+                        Delete
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -268,16 +271,23 @@ export function Units(): JSX.Element {
         }}
       />
 
-      <DeleteUnitDialog
+      <DeleteDialog
         key={deleting === null ? 'delete:closed' : `delete:${deleting.code}`}
-        unit={deleting}
+        name={deleting?.code ?? null}
+        sentence="This removes the unit from these books entirely. It is refused if any item is measured in it — archive it instead, and everything already issued keeps printing it."
+        onConfirm={() =>
+          deleting === null
+            ? Promise.resolve({ ok: true, data: undefined })
+            : callApi((api) => api.units.delete(deleting.code))
+        }
         onClose={() => setDeleting(null)}
-        onDeleted={(unit) => {
+        onDeleted={() => {
+          const code = deleting?.code ?? ''
           setDeleting(null)
           show({
             tone: 'success',
             title: 'Deleted',
-            body: `${unit.code} is gone. No item was measured in it.`,
+            body: `${code} is gone. No item was measured in it.`,
           })
           void load()
         }}
@@ -377,6 +387,7 @@ function UnitDialog({ isOpen, unit, onClose, onSaved }: UnitDialogProps): JSX.El
 
         <Input
           label="Code"
+          isIdentifier
           value={code}
           readOnly={!isNew}
           error={field === 'code' ? error?.message : undefined}
@@ -409,70 +420,12 @@ function UnitDialog({ isOpen, unit, onClose, onSaved }: UnitDialogProps): JSX.El
 
         <Input
           label="Reports as"
+          isIdentifier
           value={regimeCode}
           hint="What this unit is called in a return, where the regime fixes a list. Leave it empty until you know — nothing depends on it yet."
           maxLength={16}
           onChange={(event) => setRegimeCode(event.target.value)}
         />
-      </div>
-    </Dialog>
-  )
-}
-
-// ---- Deleting ---------------------------------------------------------------
-
-interface DeleteUnitDialogProps {
-  /** Null when nothing is being deleted. */
-  unit: UnitOfMeasure | null
-  onClose: () => void
-  onDeleted: (unit: UnitOfMeasure) => void
-}
-
-/**
- * Removing a unit entirely, which is only ever right for one nothing uses.
- *
- * The refusal is shown HERE rather than as a toast, because it is the answer to the
- * question the dialog asked and it names the item standing in the way. A toast slides
- * past; this stays until it has been read, with `Archive it instead` still on screen.
- */
-function DeleteUnitDialog({ unit, onClose, onDeleted }: DeleteUnitDialogProps): JSX.Element {
-  const [isBusy, setBusy] = useState(false)
-  const [error, setError] = useState<AppError | null>(null)
-
-  const submit = useCallback(async () => {
-    if (unit === null) return
-    setBusy(true)
-    setError(null)
-    const result = await callApi((api) => api.units.delete(unit.code))
-    setBusy(false)
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    onDeleted(unit)
-  }, [onDeleted, unit])
-
-  return (
-    <Dialog
-      isOpen={unit !== null}
-      onClose={onClose}
-      size="sm"
-      title={unit === null ? 'Delete this unit?' : `Delete ${unit.code}?`}
-      footer={
-        <>
-          <Button onClick={onClose}>Keep it</Button>
-          <Button variant="danger" onClick={() => void submit()} isBusy={isBusy}>
-            Delete
-          </Button>
-        </>
-      }
-    >
-      <div className="stack">
-        {error && <FailureNotice error={error} context="ledger" />}
-        <p className="prose">
-          This removes the unit from these books entirely. It is refused if any item is measured in
-          it — archive it instead, and everything already issued keeps printing it.
-        </p>
       </div>
     </Dialog>
   )

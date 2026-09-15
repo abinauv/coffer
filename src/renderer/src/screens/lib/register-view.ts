@@ -31,3 +31,13 @@ export function showingLabel(offset: number, rowsOnPage: number, total: number |
 export function searchWidth(placeholder: string): string {
   return `calc(${String(placeholder.length)}ch + var(--space-10))`
 }
+
+/**
+ * The sentence a search that matched nothing ends on while archived records are hidden, and
+ * nothing once they are shown: the record somebody is looking for may be archived. Not said
+ * on an empty list with no search — on day one it is noise, and "Show archived" is right
+ * above.
+ */
+export function archivedNote(includeArchived: boolean): string {
+  return includeArchived ? '' : ' Archived records are hidden — show them to include them.'
+}
