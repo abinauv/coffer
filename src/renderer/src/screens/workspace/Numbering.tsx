@@ -65,7 +65,9 @@ import type {
 } from '@shared/dto'
 import { CheckboxField } from '../components/CheckboxField'
 import { FailureNotice } from '../components/FailureNotice'
+import { ListToolbar } from '../components/ListToolbar'
 import { Notice } from '../components/Notice'
+import { RegisterSkeleton, type SkeletonColumn } from '../components/RegisterSkeleton'
 import { ScreenFrame } from '../components/ScreenFrame'
 import {
   NUMBERED_KINDS,
@@ -97,6 +99,17 @@ const RESET_LABELS: Record<NumberingReset, string> = {
  * `Object.keys` losing what the record's type already said.
  */
 const RESET_OPTIONS = Object.keys(RESET_LABELS) as NumberingReset[]
+
+/* Series, prefix, width, next number, next in sequence, default, actions. */
+const COLUMNS: readonly SkeletonColumn[] = [
+  { width: 'minmax(8rem, 1fr)' },
+  { width: '6rem' },
+  { width: '4rem', align: 'end' },
+  { width: '10rem' },
+  { width: '6rem', align: 'end' },
+  { width: '5rem' },
+  { width: '10rem', align: 'end' },
+]
 
 /** The name the repair carries in both places it is offered, so it is one button. */
 const REPAIR_LABEL = 'Create the missing series'
@@ -328,21 +341,12 @@ export function Numbering(): JSX.Element {
           </Notice>
         )}
 
-        <div className="toolbar">
-          <label className="toolbar__toggle">
-            <input
-              type="checkbox"
-              checked={includeArchived}
-              onChange={(event) => setIncludeArchived(event.target.checked)}
-            />
-            Show archived
-          </label>
-
+        <ListToolbar includeArchived={includeArchived} onIncludeArchivedChange={setIncludeArchived}>
           {years.length > 0 && (
             <Select
               label="Preview in"
               value={year ?? ''}
-              hint="Which financial year the numbers below are drawn in. A series that neither prints the year nor restarts on it ignores this."
+              hint="The financial year the next numbers are drawn in."
               onChange={(event) => setYear(event.target.value)}
             >
               {years.map((option) => (
@@ -352,108 +356,114 @@ export function Numbering(): JSX.Element {
               ))}
             </Select>
           )}
-        </div>
+        </ListToolbar>
 
         {series === null ? (
-          <p className="prose prose--muted">Reading the numbering series…</p>
+          error === null && <RegisterSkeleton label="numbering series" columns={COLUMNS} />
         ) : (
-          <table className="ledger-table">
-            <thead>
-              <tr>
-                <th scope="col">Series</th>
-                <th scope="col">Prefix</th>
-                <th scope="col">Width</th>
-                <th scope="col">Next number</th>
-                <th scope="col">Next in sequence</th>
-                <th scope="col">Default</th>
-                <th scope="col">
-                  <span className="visually-hidden">Actions</span>
-                </th>
-              </tr>
-            </thead>
+          <div className="register">
+            <table className="ledger-table register__table">
+              <thead>
+                <tr>
+                  <th scope="col">Series</th>
+                  <th scope="col">Prefix</th>
+                  <th scope="col" className="ledger-table__figure">
+                    Width
+                  </th>
+                  <th scope="col">Next number</th>
+                  <th scope="col" className="ledger-table__figure">
+                    Next in sequence
+                  </th>
+                  <th scope="col">Default</th>
+                  <th scope="col">
+                    <span className="visually-hidden">Actions</span>
+                  </th>
+                </tr>
+              </thead>
 
-            {groups.map((group) => {
-              const warning = groupWarning(group)
-              return (
-                <tbody key={group.kind}>
-                  <tr className="ledger-table__section">
-                    <th scope="rowgroup" colSpan={7}>
-                      {group.pluralLabel}
-                    </th>
-                  </tr>
-
-                  {warning !== null && (
-                    <tr className="ledger-table__row--context">
-                      <td colSpan={7} className="ledger-table__muted">
-                        {warning}
-                      </td>
+              {groups.map((group) => {
+                const warning = groupWarning(group)
+                return (
+                  <tbody key={group.kind}>
+                    <tr className="ledger-table__section">
+                      <th scope="rowgroup" colSpan={7}>
+                        {group.pluralLabel}
+                      </th>
                     </tr>
-                  )}
 
-                  {group.series.map((record) => {
-                    const preview = previews[record.id]
-                    return (
-                      <tr
-                        key={record.id}
-                        className={record.isArchived ? 'ledger-table__row--archived' : undefined}
-                      >
-                        <td>
-                          <Button variant="ghost" size="sm" onClick={() => setEditing(record)}>
-                            {record.label}
-                          </Button>
-                          {record.isArchived && (
-                            <>
-                              {' '}
-                              <Badge tone="neutral">Archived</Badge>
-                            </>
-                          )}
+                    {warning !== null && (
+                      <tr className="ledger-table__row--context">
+                        <td colSpan={7} className="ledger-table__muted">
+                          {warning}
                         </td>
-                        {/* A series with no prefix is an ordinary one — a dash rather than
+                      </tr>
+                    )}
+
+                    {group.series.map((record) => {
+                      const preview = previews[record.id]
+                      return (
+                        <tr
+                          key={record.id}
+                          className={record.isArchived ? 'ledger-table__row--archived' : undefined}
+                        >
+                          <td className="register__name">
+                            <Button variant="ghost" size="sm" onClick={() => setEditing(record)}>
+                              {record.label}
+                            </Button>
+                            {record.isArchived && (
+                              <>
+                                {' '}
+                                <Badge tone="neutral">Archived</Badge>
+                              </>
+                            )}
+                          </td>
+                          {/* A series with no prefix is an ordinary one — a dash rather than
                             a gap that reads as a field somebody forgot to fill in. */}
-                        <td className="ledger-table__code">
-                          {record.prefix === '' ? '—' : record.prefix}
-                        </td>
-                        <td className="ledger-table__figure">{record.width}</td>
-                        <td className="ledger-table__code">{preview?.preview ?? '—'}</td>
-                        <td className="ledger-table__figure">{preview?.nextSequence ?? '—'}</td>
-                        <td>
-                          {/*
-                           * ARCHIVED AND DEFAULT AT ONCE IS A REAL ROW, and it is not the
-                           * default. An archived series keeps the flag it went in with as a
-                           * record of what it once was — 0007's partial unique index leaves
-                           * it out, and `defaultSeriesFor` will not have it — so showing the
-                           * badge would tell somebody a new invoice takes a number from a
-                           * series that numbers nothing.
-                           */}
-                          {record.isDefault && !record.isArchived && (
-                            <Badge tone="accent">Default</Badge>
-                          )}
-                        </td>
-                        <td>
-                          {!record.isArchived && !record.isDefault && (
+                          <td className="ledger-table__code">
+                            {record.prefix === '' ? '—' : record.prefix}
+                          </td>
+                          <td className="ledger-table__figure">{record.width}</td>
+                          <td className="ledger-table__code">{preview?.preview ?? '—'}</td>
+                          <td className="ledger-table__figure">{preview?.nextSequence ?? '—'}</td>
+                          <td>
+                            {/*
+                             * ARCHIVED AND DEFAULT AT ONCE IS A REAL ROW, and it is not the
+                             * default. An archived series keeps the flag it went in with as a
+                             * record of what it once was — 0007's partial unique index leaves
+                             * it out, and `defaultSeriesFor` will not have it — so showing the
+                             * badge would tell somebody a new invoice takes a number from a
+                             * series that numbers nothing.
+                             */}
+                            {record.isDefault && !record.isArchived && (
+                              <Badge tone="accent">Default</Badge>
+                            )}
+                          </td>
+                          <td className="register__actions">
+                            {!record.isArchived && !record.isDefault && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => void makeDefault(record)}
+                              >
+                                Make default
+                              </Button>
+                            )}{' '}
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => void makeDefault(record)}
+                              onClick={() => void setArchived(record, !record.isArchived)}
                             >
-                              Make default
+                              {record.isArchived ? 'Restore' : 'Archive'}
                             </Button>
-                          )}{' '}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => void setArchived(record, !record.isArchived)}
-                          >
-                            {record.isArchived ? 'Restore' : 'Archive'}
-                          </Button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              )
-            })}
-          </table>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                )
+              })}
+            </table>
+          </div>
         )}
 
         {/*
@@ -702,22 +712,23 @@ function SeriesDialog({
 
         <Input
           label="Prefix"
+          isIdentifier
           value={prefix}
           onChange={(event) => setPrefix(event.target.value)}
           hint="What comes before the number, e.g. INV. Left exactly as typed — a trailing space is somebody's format, not a mistake."
-          placeholder="INV"
         />
 
         <Input
           label="Separator"
+          isIdentifier
           value={separator}
           onChange={(event) => setSeparator(event.target.value)}
           hint="What joins the parts, e.g. / or -. Leave it empty for a number that runs on, like INV0042."
-          placeholder="/"
         />
 
         <Input
           label="Suffix"
+          isIdentifier
           value={suffix}
           onChange={(event) => setSuffix(event.target.value)}
           hint="What comes after the number. Usually nothing."
@@ -730,7 +741,6 @@ function SeriesDialog({
           inputMode="numeric"
           error={isWidthReadable ? undefined : 'A width is a whole number of digits, or nothing.'}
           hint="How many digits the count is padded to: 4 gives 0001. A count that outgrows it gets longer rather than starting again. Leave it empty to take the standard width."
-          placeholder="4"
         />
 
         <CheckboxField

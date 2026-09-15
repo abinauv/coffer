@@ -62,10 +62,14 @@ interface RegisterEmptyProps {
   isFiltered: boolean
   /** What an unfiltered empty register says it needs. */
   sentence: string
-  /** The button that starts the first one: "New sales invoice". */
-  newLabel: string
-  onNew: () => void
+  /** The button that starts the first one: "New sales invoice". Absent, no button. */
+  newLabel?: string
+  onNew?: () => void
   onClear: () => void
+  /** What a filtered empty register says. A register's own sentence unless given. */
+  filteredSentence?: string
+  /** The button that clears the filter. "Clear the search and filter" unless given. */
+  clearLabel?: string
 }
 
 /**
@@ -83,23 +87,27 @@ export function RegisterEmpty({
   newLabel,
   onNew,
   onClear,
+  filteredSentence,
+  clearLabel = 'Clear the search and filter',
 }: RegisterEmptyProps): JSX.Element {
   return isFiltered ? (
     <EmptyState
       title="Nothing matches that"
       titleAs="h2"
-      action={<Button onClick={onClear}>Clear the search and filter</Button>}
+      action={<Button onClick={onClear}>{clearLabel}</Button>}
     >
-      <p>No {plural} match the search and status chosen.</p>
+      <p>{filteredSentence ?? `No ${plural} match the search and status chosen.`}</p>
     </EmptyState>
   ) : (
     <EmptyState
       title={`No ${plural} yet`}
       titleAs="h2"
       action={
-        <Button variant="primary" icon="plus" onClick={onNew}>
-          {newLabel}
-        </Button>
+        newLabel === undefined || onNew === undefined ? undefined : (
+          <Button variant="primary" icon="plus" onClick={onNew}>
+            {newLabel}
+          </Button>
+        )
       }
     >
       <p>{sentence}</p>

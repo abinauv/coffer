@@ -3,6 +3,7 @@ import type { Account } from '@shared/dto'
 import {
   accountLabel,
   filterChart,
+  parentsForAccount,
   parentsForType,
   possibleParents,
   postableAccounts,
@@ -152,6 +153,24 @@ describe('choosing a parent', () => {
 
   it('returns nothing when the chart has no group of that type', () => {
     expect(parentsForType(CHART, 'liability')).toEqual([])
+  })
+})
+
+describe('moving an account', () => {
+  it('offers groups of its own type, and never itself or a group beneath it', () => {
+    /* 1000 is the group being moved: 1200 sits inside it, so moving 1000 into 1200 is a loop. */
+    expect(parentsForAccount(CHART, CHART[0]!).map((a) => a.code)).toEqual([])
+    expect(parentsForAccount(CHART, CHART[3]!).map((a) => a.code)).toEqual(['1000', '1200'])
+    expect(parentsForAccount(CHART, CHART[5]!).map((a) => a.code)).toEqual(['4000'])
+  })
+
+  it('keeps the group it sits in now even when that group is archived', () => {
+    const chart = [
+      account({ id: 'g', code: '1900', name: 'Old', isGroup: true, isArchived: true }),
+      account({ id: 'h', code: '1910', name: 'Under old', parentId: 'g', depth: 1 }),
+      account({ id: 'i', code: '1800', name: 'Retired', isGroup: true, isArchived: true }),
+    ]
+    expect(parentsForAccount(chart, chart[1]!).map((a) => a.code)).toEqual(['1900'])
   })
 })
 

@@ -45,10 +45,15 @@ import type {
   UnitOfMeasure,
 } from '@shared/dto'
 import { CheckboxField } from '../components/CheckboxField'
+import { DeleteDialog } from '../components/DeleteDialog'
 import { FailureNotice } from '../components/FailureNotice'
+import { ListToolbar } from '../components/ListToolbar'
 import { Notice } from '../components/Notice'
+import { RegisterEmpty } from '../components/RegisterToolbar'
+import { RegisterSkeleton, type SkeletonColumn } from '../components/RegisterSkeleton'
 import { ScreenFrame } from '../components/ScreenFrame'
 import { formatAmount } from '../lib/ledger-format'
+import { archivedNote } from '../lib/register-view'
 import {
   accountOptions,
   classificationHint,
@@ -60,6 +65,19 @@ import {
   parseItemKind,
   unitOptions,
 } from '../lib/item-view'
+
+/* Item, code, kind, side, unit, classification, rate, sale price, actions. */
+const COLUMNS: readonly SkeletonColumn[] = [
+  { width: 'minmax(9rem, 2fr)' },
+  { width: '6rem' },
+  { width: '5rem' },
+  { width: '5rem' },
+  { width: '4rem' },
+  { width: '6rem' },
+  { width: '4rem', align: 'end' },
+  { width: '7rem', align: 'end' },
+  { width: '9rem', align: 'end' },
+]
 
 export function Items({ navigate }: ScreenContext): JSX.Element {
   const { show } = useToasts()
@@ -185,117 +203,104 @@ export function Items({ navigate }: ScreenContext): JSX.Element {
       <div className="stack">
         {error && <FailureNotice error={error} context="ledger" />}
 
-        <div className="toolbar">
-          <Input
-            label="Search"
-            isLabelHidden
-            icon="search"
-            placeholder="Search by name, code or classification"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <label className="toolbar__toggle">
-            <input
-              type="checkbox"
-              checked={includeArchived}
-              onChange={(event) => setIncludeArchived(event.target.checked)}
-            />
-            Show archived
-          </label>
-        </div>
+        <ListToolbar
+          placeholder="Search by name, code or classification"
+          query={query}
+          onQueryChange={setQuery}
+          includeArchived={includeArchived}
+          onIncludeArchivedChange={setIncludeArchived}
+        />
 
         {items === null ? (
-          <p className="prose prose--muted">Reading the list…</p>
+          error === null && <RegisterSkeleton label="items" columns={COLUMNS} />
         ) : rows.length === 0 ? (
-          <Notice
-            tone="info"
-            title={query.trim() === '' ? 'No items yet' : 'Nothing matches that'}
-            actions={
-              query.trim() === '' ? (
-                <Button size="sm" variant="primary" onClick={() => setEditing('new')}>
-                  Add the first item
-                </Button>
-              ) : undefined
-            }
-          >
-            <p>
-              {query.trim() === ''
-                ? 'Add the first one and it can be put on an invoice or a bill.'
-                : `No item has ${query.trim()} in its name, its code or its classification code.`}
-              {!includeArchived && ' Archived items are hidden — turn them on to include them.'}
-            </p>
-          </Notice>
+          <RegisterEmpty
+            plural="items"
+            isFiltered={query.trim() !== ''}
+            sentence="Add the first one and it can be put on an invoice or a bill."
+            newLabel="Add the first item"
+            onNew={() => setEditing('new')}
+            filteredSentence={`No item has ${query.trim()} in its name, its code or its classification code.${archivedNote(includeArchived)}`}
+            clearLabel="Clear the search"
+            onClear={() => setQuery('')}
+          />
         ) : (
-          <table className="ledger-table">
-            <thead>
-              <tr>
-                <th scope="col">Item</th>
-                <th scope="col">Code</th>
-                <th scope="col">Kind</th>
-                <th scope="col">Side</th>
-                <th scope="col">Unit</th>
-                <th scope="col">Classification</th>
-                <th scope="col">Rate</th>
-                <th scope="col">Sale price</th>
-                <th scope="col">
-                  <span className="visually-hidden">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((item) => (
-                <tr
-                  key={item.id}
-                  className={`ledger-table__row${item.isArchived ? ' ledger-table__row--archived' : ''}`}
-                >
-                  <td>
-                    <Button variant="ghost" size="sm" onClick={() => void openEditor(item.id)}>
-                      {item.name}
-                    </Button>
-                    {item.isCharge && (
-                      <>
-                        {' '}
-                        <Badge tone="accent">Charge</Badge>
-                      </>
-                    )}
-                    {item.isArchived && (
-                      <>
-                        {' '}
-                        <Badge tone="neutral">Archived</Badge>
-                      </>
-                    )}
-                  </td>
-                  {/* A dash rather than a gap: an item with no SKU, no unit or no
-                      classification is ordinary, not a field somebody forgot. */}
-                  <td className="ledger-table__code">{item.code ?? '—'}</td>
-                  <td className="ledger-table__muted">{itemKindLabel(item.kind)}</td>
-                  <td className="ledger-table__muted">{itemSideLabel(item)}</td>
-                  <td className="ledger-table__code">{item.unitCode ?? '—'}</td>
-                  <td className="ledger-table__code">{item.classificationCode ?? '—'}</td>
-                  {/* The rate arrives as main spells it — three places, because 0.25%
-                      halves to 0.125%. Nothing here rounds it. */}
-                  <td className="ledger-table__figure">
-                    {item.taxRatePct === null ? '—' : `${item.taxRatePct}%`}
-                  </td>
-                  <td className="ledger-table__figure">
-                    {item.salePrice === null ? '—' : formatAmount(item.salePrice, format)}
-                  </td>
-                  <td>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => void setArchived(item, !item.isArchived)}
-                    >
-                      {item.isArchived ? 'Restore' : 'Archive'}
-                    </Button>{' '}
-                    <Button variant="ghost" size="sm" onClick={() => setDeleting(item)}>
-                      Delete
-                    </Button>
-                  </td>
+          <div className="register">
+            <table className="ledger-table register__table">
+              <thead>
+                <tr>
+                  <th scope="col">Item</th>
+                  <th scope="col">Code</th>
+                  <th scope="col">Kind</th>
+                  <th scope="col">Side</th>
+                  <th scope="col">Unit</th>
+                  <th scope="col">Classification</th>
+                  <th scope="col" className="ledger-table__figure">
+                    Rate
+                  </th>
+                  <th scope="col" className="ledger-table__figure">
+                    Sale price
+                  </th>
+                  <th scope="col">
+                    <span className="visually-hidden">Actions</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((item) => (
+                  <tr
+                    key={item.id}
+                    className={`ledger-table__row${item.isArchived ? ' ledger-table__row--archived' : ''}`}
+                  >
+                    <td className="register__name">
+                      <Button variant="ghost" size="sm" onClick={() => void openEditor(item.id)}>
+                        {item.name}
+                      </Button>
+                      {item.isCharge && (
+                        <>
+                          {' '}
+                          <Badge tone="accent">Charge</Badge>
+                        </>
+                      )}
+                      {item.isArchived && (
+                        <>
+                          {' '}
+                          <Badge tone="neutral">Archived</Badge>
+                        </>
+                      )}
+                    </td>
+                    {/* A dash rather than a gap: an item with no SKU, no unit or no
+                        classification is ordinary, not a field somebody forgot. */}
+                    <td className="ledger-table__code">{item.code ?? '—'}</td>
+                    <td className="ledger-table__muted">{itemKindLabel(item.kind)}</td>
+                    <td className="ledger-table__muted">{itemSideLabel(item)}</td>
+                    <td className="ledger-table__code">{item.unitCode ?? '—'}</td>
+                    <td className="ledger-table__code">{item.classificationCode ?? '—'}</td>
+                    {/* The rate arrives as main spells it — three places, because 0.25%
+                        halves to 0.125%. Nothing here rounds it. */}
+                    <td className="ledger-table__figure">
+                      {item.taxRatePct === null ? '—' : `${item.taxRatePct}%`}
+                    </td>
+                    <td className="ledger-table__figure">
+                      {item.salePrice === null ? '—' : formatAmount(item.salePrice, format)}
+                    </td>
+                    <td className="register__actions">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void setArchived(item, !item.isArchived)}
+                      >
+                        {item.isArchived ? 'Restore' : 'Archive'}
+                      </Button>{' '}
+                      <Button variant="ghost" size="sm" onClick={() => setDeleting(item)}>
+                        Delete
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -326,16 +331,23 @@ export function Items({ navigate }: ScreenContext): JSX.Element {
         }}
       />
 
-      <DeleteItemDialog
+      <DeleteDialog
         key={deleting === null ? 'delete:closed' : `delete:${deleting.id}`}
-        item={deleting}
+        name={deleting?.name ?? null}
+        sentence="This removes the item from these books entirely. It is refused once the item appears on any document — archive it instead, and everything already issued is untouched."
+        onConfirm={() =>
+          deleting === null
+            ? Promise.resolve({ ok: true, data: undefined })
+            : callApi((api) => api.items.delete(deleting.id))
+        }
         onClose={() => setDeleting(null)}
-        onDeleted={(item) => {
+        onDeleted={() => {
+          const name = deleting?.name ?? ''
           setDeleting(null)
           show({
             tone: 'success',
             title: 'Deleted',
-            body: `${item.name} is gone. It was on no document.`,
+            body: `${name} is gone. It was on no document.`,
           })
           void load()
         }}
@@ -506,6 +518,7 @@ function ItemDialog({
 
         <Input
           label="Item code"
+          isIdentifier
           value={code}
           error={field === 'code' ? error?.message : undefined}
           hint="Your own SKU, if you use one. Two items may not carry the same code."
@@ -545,6 +558,7 @@ function ItemDialog({
         {regime !== null && regime.classification.code !== null && (
           <Input
             label={regime.classification.label}
+            isIdentifier
             value={classificationCode}
             error={field === 'classificationCode' ? error?.message : undefined}
             hint={classificationHint(regime.classification)}
@@ -559,7 +573,6 @@ function ItemDialog({
           label="Tax rate"
           list="item-tax-rates"
           value={taxRatePct}
-          placeholder="18"
           hint="The rate this item is usually charged at. A line takes it as a starting point and may be changed."
           onChange={(event) => setTaxRatePct(event.target.value)}
         />
@@ -745,65 +758,6 @@ function AccountField({
         </option>
       ))}
     </Select>
-  )
-}
-
-// ---- Deleting ---------------------------------------------------------------
-
-interface DeleteItemDialogProps {
-  /** Null when nothing is being deleted. */
-  item: ItemSummary | null
-  onClose: () => void
-  onDeleted: (item: ItemSummary) => void
-}
-
-/**
- * Removing an item entirely, which is only ever right for one that has reached no
- * document.
- *
- * The refusal is shown here rather than as a toast, because it is the answer to the
- * question this dialog asked and `Archive it instead` is the next thing to do.
- */
-function DeleteItemDialog({ item, onClose, onDeleted }: DeleteItemDialogProps): JSX.Element {
-  const [isBusy, setBusy] = useState(false)
-  const [error, setError] = useState<AppError | null>(null)
-
-  const submit = useCallback(async () => {
-    if (item === null) return
-    setBusy(true)
-    setError(null)
-    const result = await callApi((api) => api.items.delete(item.id))
-    setBusy(false)
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    onDeleted(item)
-  }, [item, onDeleted])
-
-  return (
-    <Dialog
-      isOpen={item !== null}
-      onClose={onClose}
-      size="sm"
-      title={item === null ? 'Delete this item?' : `Delete ${item.name}?`}
-      footer={
-        <>
-          <Button onClick={onClose}>Keep it</Button>
-          <Button variant="danger" onClick={() => void submit()} isBusy={isBusy}>
-            Delete
-          </Button>
-        </>
-      }
-    >
-      <div className="stack">
-        {error && <FailureNotice error={error} context="ledger" />}
-        <p className="prose">
-          This removes the item from these books entirely. It is refused once the item appears on
-          any document — archive it instead, and everything already issued is untouched.
-        </p>
-      </div>
-    </Dialog>
   )
 }
 

@@ -53,9 +53,15 @@ import { useRegime } from '@renderer/store/regime'
 import { useToasts } from '@renderer/store/toasts'
 import type { AppError, JurisdictionOption, Party, PartyRole, PartySummary } from '@shared/dto'
 import { CheckboxField } from '../components/CheckboxField'
+import { CountrySelect } from '../components/CountrySelect'
+import { DeleteDialog } from '../components/DeleteDialog'
 import { FailureNotice } from '../components/FailureNotice'
+import { ListToolbar } from '../components/ListToolbar'
 import { Notice } from '../components/Notice'
+import { RegisterEmpty } from '../components/RegisterToolbar'
+import { RegisterSkeleton, type SkeletonColumn } from '../components/RegisterSkeleton'
 import { ScreenFrame } from '../components/ScreenFrame'
+import { archivedNote } from '../lib/register-view'
 import {
   blankDraft,
   copyFor,
@@ -69,6 +75,15 @@ import {
   partyKindLabel,
   type PartyDraft,
 } from '../lib/party-view'
+
+/* The skeleton holds the table's own columns: name, registration, city, kind, actions. */
+const COLUMNS: readonly SkeletonColumn[] = [
+  { width: 'minmax(10rem, 2fr)' },
+  { width: '11rem' },
+  { width: '1fr' },
+  { width: '6rem' },
+  { width: '9rem', align: 'end' },
+]
 
 interface PartiesProps {
   /** Which side this screen was entered from. Null lists everybody. */
@@ -90,6 +105,7 @@ export function Parties({ role = null, openId }: PartiesProps): JSX.Element {
   const [query, setQuery] = useState('')
   const [includeArchived, setIncludeArchived] = useState(false)
   const [editing, setEditing] = useState<Party | 'new' | null>(null)
+  const [deleting, setDeleting] = useState<PartySummary | null>(null)
 
   /*
    * WHERE A NEW PARTY'S COUNTRY COMES FROM.
@@ -195,6 +211,7 @@ export function Parties({ role = null, openId }: PartiesProps): JSX.Element {
   )
 
   const rows = useMemo(() => filterParties(parties ?? [], query), [parties, query])
+  const searched = query.trim()
 
   return (
     <ScreenFrame
@@ -211,89 +228,106 @@ export function Parties({ role = null, openId }: PartiesProps): JSX.Element {
       <div className="stack">
         {error && <FailureNotice error={error} context="ledger" />}
 
-        <div className="toolbar">
-          <Input
-            label="Search"
-            isLabelHidden
-            icon="search"
-            placeholder="Search by name, registration number or city"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          <label className="toolbar__toggle">
-            <input
-              type="checkbox"
-              checked={includeArchived}
-              onChange={(event) => setIncludeArchived(event.target.checked)}
-            />
-            Show archived
-          </label>
-        </div>
+        <ListToolbar
+          placeholder="Search by name, registration number or city"
+          query={query}
+          onQueryChange={setQuery}
+          includeArchived={includeArchived}
+          onIncludeArchivedChange={setIncludeArchived}
+        />
 
         {parties === null ? (
-          <p className="prose prose--muted">Reading the list…</p>
+          error === null && <RegisterSkeleton label={copy.title.toLowerCase()} columns={COLUMNS} />
         ) : rows.length === 0 ? (
-          <Notice
-            tone="info"
-            title={query.trim() === '' ? copy.emptyTitle : 'Nothing matches that'}
-          >
-            <p>
-              {query.trim() === ''
-                ? copy.emptyBody
-                : `No ${copy.noun} has ${query.trim()} in their name, registration number or city.`}
-              {!includeArchived && ' Archived records are hidden — turn them on to include them.'}
-            </p>
-          </Notice>
+          <RegisterEmpty
+            plural={copy.title.toLowerCase()}
+            isFiltered={searched !== ''}
+            sentence={copy.emptyBody}
+            newLabel={`Add the first ${copy.noun}`}
+            onNew={() => setEditing('new')}
+            filteredSentence={`No ${copy.noun} has ${searched} in their name, registration number or city.${archivedNote(includeArchived)}`}
+            clearLabel="Clear the search"
+            onClear={() => setQuery('')}
+          />
         ) : (
-          <table className="ledger-table">
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Registration</th>
-                <th scope="col">City</th>
-                <th scope="col">Kind</th>
-                <th scope="col">
-                  <span className="visually-hidden">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((party) => (
-                <tr
-                  key={party.id}
-                  className={`ledger-table__row${party.isArchived ? ' ledger-table__row--archived' : ''}`}
-                >
-                  <td>
-                    <Button variant="ghost" size="sm" onClick={() => void openEditor(party.id)}>
-                      {party.name}
-                    </Button>
-                    {party.isArchived && (
-                      <>
-                        {' '}
-                        <Badge tone="neutral">Archived</Badge>
-                      </>
-                    )}
-                  </td>
-                  {/* An unregistered party is ordinary — a dash, not a gap that reads
-                      as a field somebody forgot to fill in. */}
-                  <td className="ledger-table__code">{party.registrationNumber ?? '—'}</td>
-                  <td className="ledger-table__muted">{party.city ?? '—'}</td>
-                  <td className="ledger-table__muted">{partyKindLabel(party)}</td>
-                  <td>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => void setArchived(party, !party.isArchived)}
-                    >
-                      {party.isArchived ? 'Restore' : 'Archive'}
-                    </Button>
-                  </td>
+          <div className="register">
+            <table className="ledger-table register__table">
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Registration</th>
+                  <th scope="col">City</th>
+                  <th scope="col">Kind</th>
+                  <th scope="col">
+                    <span className="visually-hidden">Actions</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((party) => (
+                  <tr
+                    key={party.id}
+                    className={`ledger-table__row${party.isArchived ? ' ledger-table__row--archived' : ''}`}
+                  >
+                    <td className="register__name">
+                      <Button variant="ghost" size="sm" onClick={() => void openEditor(party.id)}>
+                        {party.name}
+                      </Button>
+                      {party.isArchived && (
+                        <>
+                          {' '}
+                          <Badge tone="neutral">Archived</Badge>
+                        </>
+                      )}
+                    </td>
+                    {/* An unregistered party is ordinary — a dash, not a gap that reads
+                        as a field somebody forgot to fill in. */}
+                    <td className="ledger-table__code">{party.registrationNumber ?? '—'}</td>
+                    <td className="ledger-table__muted">{party.city ?? '—'}</td>
+                    <td className="ledger-table__muted">{partyKindLabel(party)}</td>
+                    <td className="register__actions">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void setArchived(party, !party.isArchived)}
+                      >
+                        {party.isArchived ? 'Restore' : 'Archive'}
+                      </Button>{' '}
+                      <Button variant="ghost" size="sm" onClick={() => setDeleting(party)}>
+                        Delete
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
+
+      {/* B25: the header above has always said a party nothing was posted against can be
+          deleted, and nothing on the screen could. Main refuses the rest in words. */}
+      <DeleteDialog
+        key={deleting === null ? 'delete:closed' : `delete:${deleting.id}`}
+        name={deleting?.name ?? null}
+        sentence="This removes them from these books entirely. It is refused once anything has been raised or posted against them — archive them instead, and everything already in the books stays as it is."
+        onConfirm={() =>
+          deleting === null
+            ? Promise.resolve({ ok: true, data: undefined })
+            : callApi((api) => api.parties.delete(deleting.id))
+        }
+        onClose={() => setDeleting(null)}
+        onDeleted={() => {
+          const name = deleting?.name ?? ''
+          setDeleting(null)
+          show({
+            tone: 'success',
+            title: 'Deleted',
+            body: `${name} is gone. Nothing was posted against them.`,
+          })
+          void load()
+        }}
+      />
 
       {/*
        * MOUNTED WHEN IT OPENS, and that is what makes the country default reliable: the
@@ -473,7 +507,6 @@ function PartyDialog({
             value={draft.legalName}
             onChange={(event) => set('legalName', event.target.value)}
             hint="Only if they are registered under a different name from the one you call them by. That is the one an invoice has to carry."
-            placeholder="Bharat Steel Private Limited"
           />
 
           <CheckboxField
@@ -499,6 +532,7 @@ function PartyDialog({
         <FieldGroup title="Registration and place of supply">
           <Input
             label="Registration number"
+            isIdentifier
             value={draft.registrationNumber}
             onChange={(event) => set('registrationNumber', event.target.value)}
             hint="GSTIN, if they have one. Its first two digits say which state they are in, and that decides the tax on every invoice."
@@ -525,13 +559,10 @@ function PartyDialog({
             ))}
           </Select>
 
-          <Input
-            label="Country"
+          <CountrySelect
             value={draft.countryCode}
-            onChange={(event) => set('countryCode', event.target.value)}
-            hint="Two-letter country code, lower case. Starts as the country in your business details — change it for somebody you export to."
-            placeholder="in"
-            maxLength={2}
+            onChange={(code) => set('countryCode', code)}
+            hint="Starts as the country in your business details — change it for somebody you export to."
           />
 
           {isPlaceOfSupplyUnknown(draft, homeCountryCode) && (
@@ -561,23 +592,23 @@ function PartyDialog({
             value={draft.creditLimit}
             onChange={(event) => set('creditLimit', event.target.value)}
             hint="Blank means no limit. Nought is not the same answer — that is a limit of nothing, which is how a business says this one pays up front."
-            placeholder="50000"
           />
         </FieldGroup>
 
+        {/* No sample values as placeholders (B13, which named the business details and is the
+            same mistake here): on an empty form "14 Anna Salai" reads as an address already
+            entered. */}
         <FieldGroup title="Address and contact">
           <Input
             label="Address"
             value={draft.addressLine1}
             onChange={(event) => set('addressLine1', event.target.value)}
-            placeholder="14 Anna Salai"
           />
           <Input
             label="Address, continued"
             isLabelHidden
             value={draft.addressLine2}
             onChange={(event) => set('addressLine2', event.target.value)}
-            placeholder="Teynampet"
           />
           <Input
             label="City"
@@ -589,7 +620,6 @@ function PartyDialog({
             label="Postal code"
             value={draft.postalCode}
             onChange={(event) => set('postalCode', event.target.value)}
-            placeholder="600018"
           />
           <Input
             label="Email"

@@ -73,7 +73,7 @@ describe('books nobody has filled in yet', () => {
     await user.type(field('Legal name'), 'Acme Traders Private Limited')
     expect(save).toBeEnabled()
 
-    await user.clear(field('Country'))
+    await user.selectOptions(field('Country'), '')
     expect(save).toBeDisabled()
   })
 
@@ -97,6 +97,37 @@ describe('books nobody has filled in yet', () => {
 
     await screen.findByText('Nothing here yet')
     expect(field('Country').value).toBe('')
+  })
+
+  /* B13: sample values in empty boxes read as details already entered, in dark above all. */
+  it('puts no sample values in the empty boxes', async () => {
+    renderScreen(<CompanyProfile />, { bridge: bridgeWith(null) })
+
+    await screen.findByText('Nothing here yet')
+    const withPlaceholder = [...document.querySelectorAll('input')].filter(
+      (input) => input.placeholder !== '',
+    )
+    expect(withPlaceholder.map((input) => input.labels?.[0]?.textContent)).toEqual([])
+  })
+
+  /* B13: Country asked for "two-letter country code, lower case". It offers names now, and
+   * the books still hold the code. */
+  it('names the countries and sends the code', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<CompanyProfile />, { bridge: bridgeWith(null, profile()) })
+
+    await screen.findByText('Nothing here yet')
+    expect(screen.getByRole('option', { name: 'India', selected: true })).toBeInTheDocument()
+
+    await user.type(field('Legal name'), 'Lisboa Metais')
+    await user.selectOptions(field('Country'), 'Portugal')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(bridge.lastCallTo('companyProfile:save')?.args[0]).toMatchObject({
+        countryCode: 'pt',
+      }),
+    )
   })
 })
 

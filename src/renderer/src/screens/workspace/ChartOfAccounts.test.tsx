@@ -396,3 +396,116 @@ describe('ChartOfAccounts', () => {
     expect(within(second).getByLabelText('Code')).toHaveValue('')
   })
 })
+
+/*
+ * B24: the lede has always said an account could be renamed, renumbered or archived, and
+ * nothing on the screen did any of it.
+ */
+describe('changing an account', () => {
+  it('opens an account by its name and sends every field it edits', async () => {
+    const user = userEvent.setup()
+    const updateAccount = vi.fn(() =>
+      Promise.resolve({
+        ok: true as const,
+        data: account({ code: '1211', name: 'Main Account', type: 'asset', parentId: '1000' }),
+      }),
+    )
+    const { bridge } = renderScreen(<ChartOfAccounts />, {
+      bridge: { ledger: { ...listing().ledger, updateAccount } },
+    })
+
+    await user.click(await screen.findByRole('button', { name: 'Current Account' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).getByRole('heading', { name: 'Edit 1210 · Current Account' }),
+    ).toBeInTheDocument()
+    /* The type is a fact, not a field. */
+    expect(within(dialog).queryByLabelText('Type')).toBeNull()
+
+    await user.clear(within(dialog).getByLabelText('Code'))
+    await user.type(within(dialog).getByLabelText('Code'), ' 1211 ')
+    await user.clear(within(dialog).getByLabelText('Name'))
+    await user.type(within(dialog).getByLabelText('Name'), 'Main Account')
+    await user.selectOptions(within(dialog).getByLabelText('Inside'), '1000')
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(updateAccount).toHaveBeenCalledWith({
+        id: '1210',
+        code: '1211',
+        name: 'Main Account',
+        parentId: '1000',
+        description: null,
+      }),
+    )
+    expect(await screen.findByText('1211 · Main Account is up to date.')).toBeInTheDocument()
+    await waitFor(() => expect(bridge.callsTo('ledger:listAccounts')).toHaveLength(2))
+  })
+
+  it('never offers to move a group inside itself or its own children', async () => {
+    const user = userEvent.setup()
+    renderScreen(<ChartOfAccounts />, { bridge: listing() })
+
+    await user.click(await screen.findByRole('button', { name: 'Assets' }))
+    const parent = within(await screen.findByRole('dialog')).getByLabelText('Inside')
+    expect(within(parent).queryByRole('option', { name: /1000/ })).toBeNull()
+    expect(within(parent).queryByRole('option', { name: /1200/ })).toBeNull()
+    expect(within(parent).queryByRole('option', { name: /2000/ })).toBeNull()
+  })
+
+  it('archives from the row, and shows a refusal from main in its own words', async () => {
+    const user = userEvent.setup()
+    const updateAccount = vi.fn(() =>
+      Promise.resolve({
+        ok: false as const,
+        error: {
+          code: 'ACCOUNT_IN_USE',
+          message: 'Something in these books still needs this group.',
+        },
+      }),
+    )
+    renderScreen(<ChartOfAccounts />, {
+      bridge: { ledger: { ...listing().ledger, updateAccount } },
+    })
+
+    await user.click(within(await rowFor('1200')).getByRole('button', { name: 'Archive' }))
+
+    await waitFor(() =>
+      expect(updateAccount).toHaveBeenCalledWith({ id: '1200', isArchived: true }),
+    )
+    expect(await screen.findByText(/still needs this group/)).toBeInTheDocument()
+  })
+
+  /* Main refuses it, and nothing yet moves a role, so the button would be a dead end. */
+  it('does not offer to archive an account the software posts through, and says why', async () => {
+    const user = userEvent.setup()
+    renderScreen(<ChartOfAccounts />, { bridge: listing() })
+
+    expect(within(await rowFor('1210')).queryByRole('button', { name: 'Archive' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Current Account' }))
+    expect(
+      await within(await screen.findByRole('dialog')).findByText(
+        /posts through it as default-bank/,
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('offers Restore on an archived account', async () => {
+    const user = userEvent.setup()
+    const updateAccount = vi.fn(() =>
+      Promise.resolve({
+        ok: true as const,
+        data: account({ code: '9000', name: 'Suspense', type: 'asset' }),
+      }),
+    )
+    renderScreen(<ChartOfAccounts />, {
+      bridge: { ledger: { ...listing().ledger, updateAccount } },
+    })
+
+    await user.click(within(await rowFor('9000')).getByRole('button', { name: 'Restore' }))
+    await waitFor(() =>
+      expect(updateAccount).toHaveBeenCalledWith({ id: '9000', isArchived: false }),
+    )
+    expect(await screen.findByText('9000 · Suspense can be posted to again.')).toBeInTheDocument()
+  })
+})

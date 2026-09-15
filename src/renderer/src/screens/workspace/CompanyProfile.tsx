@@ -17,6 +17,11 @@
  * shape have to be read together, and the test at the bottom of CompanyProfile.test.tsx
  * says so by asserting the whole payload rather than the fields it happens to care about.
  *
+ * NO SAMPLE VALUES AS PLACEHOLDERS (B13). "Acme Traders Private Limited" and a whole GSTIN sat
+ * in the empty boxes, and on an empty form — in dark above all, where a placeholder and a value
+ * are one ink step apart — they read as details already filled in. The hints say what goes in
+ * each box instead, and Country is a picker of names rather than a box asking for a code.
+ *
  * WHAT IS NOT VALIDATED HERE. Whether `33AABCC1234D1ZI` is a real GSTIN is the regime's
  * question, asked in the main process, and its answer is a sentence written for the user.
  * The renderer does not know that an Indian registration number encodes a state, and must
@@ -33,6 +38,7 @@ import { registerScreens } from '@renderer/lib/screens'
 import { useRegime } from '@renderer/store/regime'
 import { useToasts } from '@renderer/store/toasts'
 import type { AppError, CompanyProfile as Profile, RegimeDescription } from '@shared/dto'
+import { CountrySelect } from '../components/CountrySelect'
 import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
 import { ScreenFrame } from '../components/ScreenFrame'
@@ -212,7 +218,6 @@ export function CompanyProfile(): JSX.Element {
               value={draft.legalName}
               onChange={(event) => set('legalName', event.target.value)}
               hint="As it appears on the registration. This is what prints on a tax invoice."
-              placeholder="Acme Traders Private Limited"
               required
             />
 
@@ -221,11 +226,11 @@ export function CompanyProfile(): JSX.Element {
               value={draft.tradeName}
               onChange={(event) => set('tradeName', event.target.value)}
               hint="Only if the business trades under a different name."
-              placeholder="Acme"
             />
 
             <Input
               label="Registration number"
+              isIdentifier
               value={draft.registrationNumber}
               onChange={(event) => set('registrationNumber', event.target.value)}
               hint={
@@ -233,7 +238,6 @@ export function CompanyProfile(): JSX.Element {
                   ? 'Leave blank if the business is not registered.'
                   : `${regime.label}. Leave blank if the business is not registered — that is an ordinary state, not a missing field.`
               }
-              placeholder="33AABCC1234D1ZI"
             />
 
             {/*
@@ -261,21 +265,16 @@ export function CompanyProfile(): JSX.Element {
               ))}
             </Select>
 
-            <Input
-              label="Country"
+            <CountrySelect
               value={draft.countryCode}
-              onChange={(event) => set('countryCode', event.target.value)}
-              hint="Two-letter country code, lower case."
-              placeholder="in"
-              maxLength={2}
-              required
+              onChange={(code) => set('countryCode', code)}
+              hint="Where the business is. Every party starts in this country."
             />
 
             <Input
               label="Address"
               value={draft.addressLine1}
               onChange={(event) => set('addressLine1', event.target.value)}
-              placeholder="14 Anna Salai"
             />
 
             <Input
@@ -283,21 +282,18 @@ export function CompanyProfile(): JSX.Element {
               isLabelHidden
               value={draft.addressLine2}
               onChange={(event) => set('addressLine2', event.target.value)}
-              placeholder="Teynampet"
             />
 
             <Input
               label="City"
               value={draft.city}
               onChange={(event) => set('city', event.target.value)}
-              placeholder="Chennai"
             />
 
             <Input
               label="Postal code"
               value={draft.postalCode}
               onChange={(event) => set('postalCode', event.target.value)}
-              placeholder="600018"
             />
 
             <Input
@@ -305,14 +301,12 @@ export function CompanyProfile(): JSX.Element {
               type="email"
               value={draft.email}
               onChange={(event) => set('email', event.target.value)}
-              placeholder="accounts@acme.example"
             />
 
             <Input
               label="Phone"
               value={draft.phone}
               onChange={(event) => set('phone', event.target.value)}
-              placeholder="+91 44 4000 0000"
             />
 
             <div className="toolbar">
