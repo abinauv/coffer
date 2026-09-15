@@ -57,6 +57,7 @@ describe('API_SURFACE', () => {
       'forget',
       'rename',
       'checkPassphrase',
+      'checkRegistration',
     ])
   })
 

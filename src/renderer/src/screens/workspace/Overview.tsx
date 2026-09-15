@@ -48,9 +48,10 @@ import { Badge, Button, Dialog } from '@renderer/components/atoms'
 import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { makeRoute } from '@renderer/lib/routing'
-import { registerScreens, type ScreenContext } from '@renderer/lib/screens'
+import { describeLocation, registerScreens, type ScreenContext } from '@renderer/lib/screens'
 import { useBackup } from '@renderer/store/backup'
 import { useRegisterCommands } from '@renderer/store/commands'
+import { useScreens } from '@renderer/store/screens'
 import { useCompany } from '@renderer/store/company'
 import { useNumberFormat } from '@renderer/store/regime'
 import { useToasts } from '@renderer/store/toasts'
@@ -96,6 +97,7 @@ import {
   documentActivity,
   firstRunSteps,
   isNewCompany,
+  nextFirstRunStep,
   LINKED_SCREENS,
   mostOverdue,
   outstandingLinkLabel,
@@ -746,9 +748,14 @@ function ActivityTable({
  *
  * SHOWN INSTEAD OF THE FIGURES, NOT BESIDE THEM. Six zeroes and four empty tables is an
  * accurate description of a company file made this morning and a useless first
- * impression of one. Each step says whether it is already done, so a user who has
- * entered their business details is not told to do it again — and a step whose read
- * failed says it does not know rather than guessing.
+ * impression of one. It says the empty state is the right one, and the main button is the
+ * next thing to do.
+ *
+ * THE ORDER IS THE BOOKS', NOT THE DESIGN'S. The design leads with "Raise the first
+ * invoice", and on day one that screen cannot work: a document needs the business details
+ * and a party first (`firstRunSteps`). So the button offers the first step not yet done,
+ * and the cards below say which are done — a step whose read failed says it does not know
+ * rather than guessing. Each card names where its screen lives, from the registry.
  */
 function FirstRun({
   profile,
@@ -761,30 +768,55 @@ function FirstRun({
   documents: Panel<readonly DocumentSummary[]>
   navigate: ScreenContext['navigate']
 }): JSX.Element {
+  const screens = useScreens()
   const steps = firstRunSteps({
     profile: stepState(profile, (value) => value !== null),
     parties: stepState(parties, (value) => value.length > 0),
     documents: stepState(documents, (value) => value.length > 0),
   })
+  const next = nextFirstRunStep(steps)
 
   return (
     <DashboardPanel title="Start here">
-      <EmptyState title="Nothing has been raised in these books yet" titleAs="p">
+      <EmptyState
+        title="The books are empty, which is the correct state on day one"
+        titleAs="p"
+        action={
+          next === null ? undefined : (
+            <Button
+              variant="primary"
+              iconEnd="arrow-right"
+              onClick={() => navigate(makeRoute('workspace', next.screenId))}
+            >
+              {next.title}
+            </Button>
+          )
+        }
+      >
         <p>
-          Which is exactly where a new set of books starts. Three things have to happen before the
-          figures on this screen mean anything, and they have to happen in this order.
+          A chart of accounts is already in place. Fill in the business details, add a customer and
+          raise the first invoice, in that order, and the trial balance and the ledger fill
+          themselves in from there.
         </p>
       </EmptyState>
 
-      <ol className="stack">
+      <ol className="next-steps">
         {steps.map((step) => (
-          <li key={step.id} className="stack stack--tight">
-            <p className="prose">
-              <strong>{step.title}</strong>{' '}
-              <Badge tone={stepTone(step.state)}>{stepLabel(step.state)}</Badge>
+          <li key={step.id} className="next-step">
+            <p className="next-step__title">
+              {step.title} <Badge tone={stepTone(step.state)}>{stepLabel(step.state)}</Badge>
             </p>
-            <p className="prose prose--muted">{step.body}</p>
-            <PanelLink label={step.actionLabel} screenId={step.screenId} navigate={navigate} />
+            <p className="next-step__body">{step.body}</p>
+            <div className="next-step__action">
+              <Button
+                variant="ghost"
+                size="sm"
+                iconEnd="arrow-right"
+                onClick={() => navigate(makeRoute('workspace', step.screenId))}
+              >
+                {describeLocation(screens, 'workspace', step.screenId) ?? step.actionLabel}
+              </Button>
+            </div>
           </li>
         ))}
       </ol>

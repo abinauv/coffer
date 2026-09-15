@@ -14,7 +14,10 @@ import type { PassphraseStrength } from '@shared/dto'
 /** Segments in the bar. Five, so score 0 still lights one and reads as "very weak". */
 export const METER_SEGMENTS = 5
 
-export type MeterTone = 'empty' | 'negative' | 'warning' | 'positive'
+/** Every tone the meter writes to `data-tone`. screens.css has a selector for each but empty. */
+export const METER_TONES = ['empty', 'negative', 'warning', 'positive'] as const
+
+export type MeterTone = (typeof METER_TONES)[number]
 
 export interface MeterView {
   segments: number

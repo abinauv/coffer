@@ -114,6 +114,7 @@ beforeEach(() => {
     forget: vi.fn(),
     rename: vi.fn(),
     checkPassphrase: vi.fn(),
+    checkRegistration: vi.fn(),
   } as unknown as CompanyService
   ledger = {
     listAccounts: vi.fn(async () => []),

@@ -27,6 +27,7 @@ import type {
   BackupInput,
   BackupResult,
   ChangePassphraseInput,
+  CheckRegistrationInput,
   CloseFiscalYearInput,
   CompanyProfile,
   CompanySummary,
@@ -65,6 +66,7 @@ import type {
   OpenCompanyInput,
   OpenCompanyResult,
   PassphraseStrength,
+  RegistrationCheck,
   Party,
   PartySummary,
   PostOpeningBalancesInput,
@@ -190,6 +192,13 @@ export interface CofferApi {
      * ARCHITECTURE §6.3.1 for why refusing a passphrase is not an option here.
      */
     checkPassphrase(passphrase: string): Promise<Result<PassphraseStrength>>
+
+    /**
+     * A registration number put to the regime a new company would follow, for the hint
+     * under the create screen's GSTIN box. Needs no open company and refuses nothing; the
+     * number is checked again, and decided, when the profile is saved.
+     */
+    checkRegistration(input: CheckRegistrationInput): Promise<Result<RegistrationCheck>>
   }
 
   /**

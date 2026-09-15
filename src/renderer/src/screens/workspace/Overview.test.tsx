@@ -854,7 +854,9 @@ describe('a company with nothing in it yet', () => {
     mount({ books: empty })
     const panel = await findPanel('Start here')
 
-    expect(within(panel).getByText('Nothing has been raised in these books yet')).toBeVisible()
+    expect(
+      within(panel).getByText('The books are empty, which is the correct state on day one'),
+    ).toBeVisible()
     expect(screen.queryByRole('region', { name: 'What customers owe you' })).toBeNull()
     expect(screen.queryByRole('region', { name: 'Lately' })).toBeNull()
   })
@@ -906,17 +908,34 @@ describe('a company with nothing in it yet', () => {
     expect(await stepBadges(panel)).toEqual(['Not checked', 'To do', 'To do'])
   })
 
-  it('sends the first step to the business details', async () => {
+  it('sends the first step to the business details, and says where they live', async () => {
     const user = userEvent.setup()
     const { navigate } = mount({ books: empty })
     const panel = await findPanel('Start here')
 
-    await user.click(within(panel).getByRole('button', { name: 'Business details' }))
+    await user.click(within(panel).getByRole('button', { name: 'Company → Business details' }))
     expect(navigate).toHaveBeenCalledWith({
       area: 'workspace',
       screenId: 'company-profile',
       params: {},
     })
+  })
+
+  /* Not "Raise the first invoice": on day one that screen refuses to issue anything. */
+  it('offers the next step not yet done as the main action', async () => {
+    const user = userEvent.setup()
+    const { navigate } = mount({ books: { ...empty, profile: () => ok(PROFILE) } })
+    const panel = await findPanel('Start here')
+
+    await user.click(await within(panel).findByRole('button', { name: 'Add your first customer' }))
+    expect(navigate).toHaveBeenCalledWith({ area: 'workspace', screenId: 'customers', params: {} })
+  })
+
+  it('places the invoice editor under the register it opens from', async () => {
+    mount({ books: empty })
+    const panel = await findPanel('Start here')
+
+    expect(within(panel).getByRole('button', { name: 'Sales → Sales invoices' })).toBeVisible()
   })
 
   it('still offers the backup, because an empty company is still encrypted', async () => {

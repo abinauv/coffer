@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  codeRows,
-  recoverySheetText,
-  remainingCodesNotice,
-  sheetDate,
-  sheetFileName,
-} from './recovery-sheet'
+import { recoverySheetText, remainingCodesNotice, sheetDate, sheetFileName } from './recovery-sheet'
 
 const CODES = [
   'A1B2C-3D4E5-F6G7H-8J9K0',
@@ -78,15 +72,6 @@ describe('sheetFileName', () => {
 describe('sheetDate', () => {
   it('pads to a sortable ISO day', () => {
     expect(sheetDate(new Date(2026, 0, 5))).toBe('2026-01-05')
-  })
-})
-
-describe('codeRows', () => {
-  it('lays five codes out in three rows of two', () => {
-    const rows = codeRows(CODES)
-    expect(rows).toHaveLength(3)
-    expect(rows[2]).toHaveLength(1)
-    expect(rows.flat()).toEqual(CODES)
   })
 })
 

@@ -36,22 +36,22 @@ legally required to keep. Calm and exact beats lively.
 
 ## 3. Where everything lives
 
-| What                                   | Where                                                                                                                                                                                                                                             |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Name, tagline, description             | `src/branding.ts` is the source of truth. `electron-builder.yml` repeats the values by hand, because YAML cannot import it: change both                                                                                                           |
-| The mark                               | `src/shared/brand-mark.ts` holds its construction and small-size rules. Drawn by `components/shell/BrandMark.tsx` and, with the name, `Wordmark.tsx`                                                                                              |
-| App icon                               | `build/icon.png`, 1024 × 1024, committed. Drawn from the mark by `scripts/generate-icon.mjs` (`npm run icon`): rerun it and commit the result after changing the mark or the accent. electron-builder derives every platform's icon from it       |
-| README banner, social preview          | `scripts/render-brand-assets.mjs` (`npm run brand:assets`). The banner is committed at `docs/assets/banner.png`; the social preview goes to `dist/brand/` and is uploaded by hand in the repository settings                                      |
-| Colour, type, spacing, radius, density | `src/renderer/src/styles/tokens.css`, with the palette's reasoning and its measurements in the header                                                                                                                                             |
-| Fonts                                  | `src/renderer/src/assets/fonts/` as local woff2, declared with `@font-face` in `styles/base.css`. Versions, checksums and the OFL notice are in `THIRD-PARTY.md`                                                                                  |
-| Element defaults                       | `src/renderer/src/styles/base.css`                                                                                                                                                                                                                |
-| Component styles                       | `styles/atoms.css` (buttons, inputs, badges…), `styles/shell.css` (title bar, section bar, rail, status bar), `screens/screens.css` (screen layouts)                                                                                              |
-| Components                             | `src/renderer/src/components/` — `atoms/`, `shell/`, `command-palette/`, `toast/`                                                                                                                                                                 |
-| Sections and the rail                  | `lib/screens.ts` holds the six sections (`NAV_GROUPS`) and each screen's `nav` or `navParent`; `lib/sections.ts` decides which section shows and where choosing one lands; `components/shell/` draws the section bar, the rail and the status bar |
-| Icons                                  | `src/renderer/src/lib/icons.ts` — 24 × 24 stroke paths drawn by `components/atoms/Icon.tsx`. No icon library                                                                                                                                      |
-| Screens                                | `src/renderer/src/screens/welcome/` (create, pick, unlock, recover a company) and `screens/workspace/` (everything inside an open company)                                                                                                        |
-| Screen building blocks                 | `src/renderer/src/screens/components/` — frames, notices, the passphrase field and strength meter, report lines, `MoneyField`, and the three states every screen ships besides its full one: `EmptyState`, `RegisterSkeleton` and `ErrorState`    |
-| Density preference                     | `lib/density.ts` decides, `store/density.tsx` wires it: the `data-density` attribute on `<html>`, stored as `coffer.density`. Chosen from the command palette until Settings exists                                                               |
+| What                                   | Where                                                                                                                                                                                                                                                                           |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Name, tagline, description             | `src/branding.ts` is the source of truth. `electron-builder.yml` repeats the values by hand, because YAML cannot import it: change both                                                                                                                                         |
+| The mark                               | `src/shared/brand-mark.ts` holds its construction and small-size rules. Drawn by `components/shell/BrandMark.tsx` and, with the name, `Wordmark.tsx`                                                                                                                            |
+| App icon                               | `build/icon.png`, 1024 × 1024, committed. Drawn from the mark by `scripts/generate-icon.mjs` (`npm run icon`): rerun it and commit the result after changing the mark or the accent. electron-builder derives every platform's icon from it                                     |
+| README banner, social preview          | `scripts/render-brand-assets.mjs` (`npm run brand:assets`). The banner is committed at `docs/assets/banner.png`; the social preview goes to `dist/brand/` and is uploaded by hand in the repository settings                                                                    |
+| Colour, type, spacing, radius, density | `src/renderer/src/styles/tokens.css`, with the palette's reasoning and its measurements in the header                                                                                                                                                                           |
+| Fonts                                  | `src/renderer/src/assets/fonts/` as local woff2, declared with `@font-face` in `styles/base.css`. Versions, checksums and the OFL notice are in `THIRD-PARTY.md`                                                                                                                |
+| Element defaults                       | `src/renderer/src/styles/base.css`                                                                                                                                                                                                                                              |
+| Component styles                       | `styles/atoms.css` (buttons, inputs, badges…), `styles/shell.css` (title bar, section bar, rail, status bar), `screens/screens.css` (screen layouts)                                                                                                                            |
+| Components                             | `src/renderer/src/components/` — `atoms/`, `shell/`, `command-palette/`, `toast/`                                                                                                                                                                                               |
+| Sections and the rail                  | `lib/screens.ts` holds the six sections (`NAV_GROUPS`) and each screen's `nav` or `navParent`; `lib/sections.ts` decides which section shows and where choosing one lands; `components/shell/` draws the section bar, the rail and the status bar                               |
+| Icons                                  | `src/renderer/src/lib/icons.ts` — 24 × 24 stroke paths drawn by `components/atoms/Icon.tsx`. No icon library                                                                                                                                                                    |
+| Screens                                | `src/renderer/src/screens/welcome/` (create, pick, unlock, recover a company) and `screens/workspace/` (everything inside an open company)                                                                                                                                      |
+| Screen building blocks                 | `src/renderer/src/screens/components/` — frames, notices, the passphrase field and strength meter, report lines, `MoneyField`, `StepFrame` for a flow in steps, and the three states every screen ships besides its full one: `EmptyState`, `RegisterSkeleton` and `ErrorState` |
+| Density preference                     | `lib/density.ts` decides, `store/density.tsx` wires it: the `data-density` attribute on `<html>`, stored as `coffer.density`. Chosen from the command palette until Settings exists                                                                                             |
 
 ## 4. Rules a redesign must keep
 
@@ -185,9 +185,20 @@ is a bug, however it looks.
   the OFL, and the icon set stays inline path data.
 - **The recovery-codes screen has no Back, no Skip and no Escape.** The company is already
   created, and the codes are shown exactly once.
-- **Unlock failures are four different screens**, not one "wrong passphrase" message: an
-  invalid passphrase, a missing database, a missing vault, and keys that belong to a
-  different file.
+- **Opening the books takes a typed code, not a tick.** The last step of creating a company
+  names one of the recovery codes and asks for it back; the tick box beside it carries a
+  sentence worth reading, and is not the gate. People tick boxes to make screens go away.
+- **Unlock failures are four different states**, not one "wrong passphrase" message: the
+  passphrase does not fit, the file is not where it was, the vault beside it is missing, and
+  the keys belong to another file. Each says its cause, then its fix, then offers only the
+  actions that could fix it (`screens/lib/unlock-failures.ts`), and the passphrase field comes
+  back only when the passphrase was the problem.
+- **The welcome's four promises are facts.** No account, no subscription, no telemetry, works
+  with the internet off. One that stops being true comes off the screen.
+- **A registration number typed while creating a company is advisory.** It is checked as it
+  is typed (`companies.checkRegistration`), which refuses nothing, and saved into Business
+  details as the books open, where it is checked again. A save that fails says so and never
+  holds the books shut.
 
 **Tests**
 

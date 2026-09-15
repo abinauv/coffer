@@ -82,15 +82,6 @@ export function recoverySheetText(input: SheetInput): string {
   return `${lines.join('\n')}\n`
 }
 
-/** Codes laid out in the pairs the printed sheet uses. Two columns read better than one. */
-export function codeRows(codes: readonly string[], perRow = 2): readonly (readonly string[])[] {
-  const rows: string[][] = []
-  for (let index = 0; index < codes.length; index += perRow) {
-    rows.push([...codes.slice(index, index + perRow)])
-  }
-  return rows
-}
-
 /** What to say about the codes that are left, after one has been spent. */
 export function remainingCodesNotice(remaining: number): { title: string; body: string } {
   if (remaining <= 0) {

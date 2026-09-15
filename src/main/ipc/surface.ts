@@ -51,6 +51,7 @@ export const API_SURFACE: ApiSurface = {
     forget: true,
     rename: true,
     checkPassphrase: true,
+    checkRegistration: true,
   },
   ledger: {
     listAccounts: true,

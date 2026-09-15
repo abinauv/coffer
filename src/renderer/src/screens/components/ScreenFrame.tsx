@@ -50,7 +50,9 @@ export function ScreenFrame({
             {back.label}
           </Button>
         )}
-        <div className="page__heading">
+        {/* `page__titles`, not `page__heading`: that class was a heading's, so every lede
+            under it rendered semibold with a heading's tracking (B7). */}
+        <div className="page__titles">
           <h1 className="page__title">{title}</h1>
           {lede !== undefined && <p className="page__lede">{lede}</p>}
         </div>

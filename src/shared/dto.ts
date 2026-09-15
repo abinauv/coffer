@@ -109,6 +109,34 @@ export interface PassphraseStrength {
   isWeak: boolean
 }
 
+/**
+ * A registration number put to a regime before any company exists — the GSTIN box on the
+ * create screen.
+ *
+ * Advisory in the way `PassphraseStrength` is: it refuses nothing. What is saved goes
+ * through `companyProfile.save`, which checks the number again and is the only check that
+ * decides anything.
+ */
+export interface CheckRegistrationInput {
+  registrationNumber: string
+  /** The regime the company will be created under. The default one, like `create`. */
+  regimeId?: string
+}
+
+export interface RegistrationCheck {
+  /** What the regime calls the number: 'GSTIN / UIN'. Answered for a blank one too. */
+  label: string
+  /** Blank is its own answer: a business below the threshold has no number, correctly. */
+  status: 'blank' | 'valid' | 'invalid'
+  /** The regime's spelling of a valid number. Null otherwise. */
+  normalised: string | null
+  /** The jurisdiction a valid number encodes, where the format encodes one. */
+  jurisdictionCode: string | null
+  jurisdictionName: string | null
+  /** Why an invalid number is invalid, for the user. Null otherwise. */
+  message: string | null
+}
+
 // ---- Company operations ---------------------------------------------------
 
 export interface CreateCompanyInput {

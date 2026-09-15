@@ -19,12 +19,14 @@ import type {
   BackupInput,
   BackupResult,
   ChangePassphraseInput,
+  CheckRegistrationInput,
   CompanySummary,
   CreateCompanyInput,
   OpenCompanyInput,
   OpenCompanyResult,
   PassphraseStrength,
   RecoverCompanyInput,
+  RegistrationCheck,
   RestoreInput,
 } from '../../../shared/dto'
 import type { PathAllowlist } from '../path-access'
@@ -32,6 +34,7 @@ import type { GroupHandlers } from '../registry'
 import { ok } from '../surface'
 import {
   expectAbsolutePath,
+  expectBoundedString,
   expectNonEmptyString,
   expectRecord,
   expectString,
@@ -65,6 +68,8 @@ export interface CompanyService {
    * Scoring a passphrase needs no I/O, so an implementation is free to be synchronous.
    */
   checkPassphrase(passphrase: string): PassphraseStrength | Promise<PassphraseStrength>
+  /** Advisory, like `checkPassphrase`, and needs no I/O either. */
+  checkRegistration(input: CheckRegistrationInput): RegistrationCheck | Promise<RegistrationCheck>
 }
 
 /*
@@ -79,6 +84,19 @@ function parseCreateInput(value: unknown): CreateCompanyInput {
     displayName: expectNonEmptyString(input['displayName'], 'displayName'),
     directoryPath: expectAbsolutePath(input['directoryPath'], 'directoryPath'),
     passphrase: expectString(input['passphrase'], 'passphrase'),
+  }
+}
+
+/*
+ * Bounded, because it arrives on every keystroke in a box meant for fifteen characters. A
+ * blank one is legal: it is the regime's label, with nothing to check, that comes back.
+ */
+function parseCheckRegistrationInput(value: unknown): CheckRegistrationInput {
+  const input = expectRecord(value, 'input')
+  const regimeId = input['regimeId']
+  return {
+    registrationNumber: expectBoundedString(input['registrationNumber'], 'registrationNumber', 64),
+    ...(regimeId === undefined ? {} : { regimeId: expectNonEmptyString(regimeId, 'regimeId') }),
   }
 }
 
@@ -229,6 +247,11 @@ export function createCompaniesHandlers(
     checkPassphrase: {
       parseArgs: (raw): [string] => [expectString(raw[0], 'passphrase')],
       handle: async (passphrase) => ok(await service.checkPassphrase(passphrase)),
+    },
+
+    checkRegistration: {
+      parseArgs: (raw): [CheckRegistrationInput] => [parseCheckRegistrationInput(raw[0])],
+      handle: async (input) => ok(await service.checkRegistration(input)),
     },
   }
 }
