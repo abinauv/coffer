@@ -18,12 +18,23 @@ import { registerScreens } from '@renderer/lib/screens'
 import { useRegisterCommands } from '@renderer/store/commands'
 import { useNumberFormat } from '@renderer/store/regime'
 import type { AppError, DayBook as Book, JournalEntry } from '@shared/dto'
+import { EmptyState } from '../components/EmptyState'
 import { FailureNotice } from '../components/FailureNotice'
-import { Notice } from '../components/Notice'
+import { FigureCell } from '../components/FigureCell'
 import { RangeToolbar } from '../components/ReportLines'
+import { RegisterSkeleton, type SkeletonColumn } from '../components/RegisterSkeleton'
 import { ScreenFrame } from '../components/ScreenFrame'
-import { formatAmount, formatAmountOrBlank } from '../lib/ledger-format'
+import { formatDate } from '../lib/dates'
+import { formatAmount } from '../lib/ledger-format'
 import { describeRange } from '../lib/report-view'
+
+/* Code, account, debit, credit. */
+const COLUMNS: readonly SkeletonColumn[] = [
+  { width: '6rem' },
+  { width: '1fr' },
+  { width: '9rem', align: 'end' },
+  { width: '9rem', align: 'end' },
+]
 
 export function DayBook(): JSX.Element {
   const format = useNumberFormat()
@@ -102,11 +113,11 @@ export function DayBook(): JSX.Element {
         />
 
         {book === null ? (
-          <p className="prose prose--muted">Reading the journal…</p>
+          error === null && <RegisterSkeleton label="the day book" columns={COLUMNS} />
         ) : book.days.length === 0 ? (
-          <Notice tone="info" title="Nothing has been posted yet">
+          <EmptyState title="Nothing has been posted yet" titleAs="h2">
             <p>{describeRange(book.fromDate, book.toDate)} — and no entry falls in it.</p>
-          </Notice>
+          </EmptyState>
         ) : (
           <>
             <p className="prose prose--muted">
@@ -118,7 +129,7 @@ export function DayBook(): JSX.Element {
             {book.days.map((day) => (
               <section key={day.date} className="stack stack--tight">
                 <h2 className="day-book__date">
-                  {day.date}
+                  {formatDate(day.date)}
                   <span className="day-book__total">{formatAmount(day.total, format)}</span>
                 </h2>
                 {day.entries.map((entry) => (
@@ -137,37 +148,45 @@ export function DayBook(): JSX.Element {
 function EntryTable({ entry }: { entry: JournalEntry }): JSX.Element {
   const format = useNumberFormat()
   return (
-    <table className="ledger-table ledger-table--figures day-book__entry">
-      <thead>
-        <tr>
-          <th scope="col" colSpan={2}>
-            {entry.entryNumber} · {entry.narration}
-            {entry.reversesEntryId !== null && (
-              <span className="ledger-table__muted"> · a reversal</span>
-            )}
-            {entry.reversedByEntryId !== null && (
-              <span className="ledger-table__muted"> · reversed</span>
-            )}
-          </th>
-          <th scope="col" className="ledger-table__figure">
-            Debit
-          </th>
-          <th scope="col" className="ledger-table__figure">
-            Credit
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {entry.lines.map((line) => (
-          <tr key={line.id}>
-            <td className="ledger-table__code">{line.accountCode}</td>
-            <td>{line.accountName}</td>
-            <td className="ledger-table__figure">{formatAmountOrBlank(line.debit, format)}</td>
-            <td className="ledger-table__figure">{formatAmountOrBlank(line.credit, format)}</td>
+    <div className="register day-book__entry">
+      <table className="ledger-table ledger-table--figures register__table">
+        <colgroup>
+          <col className="day-book__code" />
+          <col />
+          <col className="day-book__figure" />
+          <col className="day-book__figure" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th scope="col" colSpan={2}>
+              {entry.entryNumber} · {entry.narration}
+              {entry.reversesEntryId !== null && (
+                <span className="ledger-table__muted"> · a reversal</span>
+              )}
+              {entry.reversedByEntryId !== null && (
+                <span className="ledger-table__muted"> · reversed</span>
+              )}
+            </th>
+            <th scope="col" className="ledger-table__figure">
+              Debit
+            </th>
+            <th scope="col" className="ledger-table__figure">
+              Credit
+            </th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {entry.lines.map((line) => (
+            <tr key={line.id}>
+              <td className="ledger-table__code">{line.accountCode}</td>
+              <td>{line.accountName}</td>
+              <FigureCell amount={line.debit} format={format} isBlankWhenZero />
+              <FigureCell amount={line.credit} format={format} isBlankWhenZero />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 

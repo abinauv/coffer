@@ -129,7 +129,7 @@ describe('ProfitAndLoss', () => {
       bridge: bridgeReturning(statement({ fromDate: '2026-04-01', toDate: '2027-03-31' })),
     })
 
-    expect(await screen.findByText('2026-04-01 to 2027-03-31')).toBeInTheDocument()
+    expect(await screen.findByText('1 Apr 2026 to 31 Mar 2027')).toBeInTheDocument()
   })
 
   it('shows a failure from main instead of a blank statement', async () => {

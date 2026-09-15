@@ -1313,7 +1313,7 @@ function Offsets({
           {charges.map((charge) => (
             <tr key={charge.id} className="ledger-table__row">
               <td className="ledger-table__code">{charge.number}</td>
-              <td className="ledger-table__code">{charge.date}</td>
+              <td className="ledger-table__date">{formatDate(charge.date)}</td>
               <td className="ledger-table__figure">{formatAmount(charge.grandTotal, format)}</td>
               <td className="ledger-table__figure">{formatAmount(charge.outstanding, format)}</td>
               <td className="ledger-table__figure">
@@ -1439,7 +1439,7 @@ function Settlement({
             {settlement.receipts.map((receipt) => (
               <tr key={receipt.receiptId} className="ledger-table__row">
                 <td className="ledger-table__code">{receipt.number}</td>
-                <td className="ledger-table__code">{receipt.date}</td>
+                <td className="ledger-table__date">{formatDate(receipt.date)}</td>
                 <td className="ledger-table__figure">{formatAmount(receipt.amount, format)}</td>
               </tr>
             ))}
@@ -1468,7 +1468,7 @@ function Settlement({
             {settlement.offsets.map((offset) => (
               <tr key={offset.offsetId} className="ledger-table__row">
                 <td className="ledger-table__code">{offset.documentNumber}</td>
-                <td className="ledger-table__code">{offset.documentDate}</td>
+                <td className="ledger-table__date">{formatDate(offset.documentDate)}</td>
                 <td className="ledger-table__figure">{formatAmount(offset.amount, format)}</td>
               </tr>
             ))}

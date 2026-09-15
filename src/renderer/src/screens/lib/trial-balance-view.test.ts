@@ -1,6 +1,9 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { TrialBalance, TrialBalanceRow } from '@shared/dto'
-import { describeRange, sectionsOf, sumAmounts } from './trial-balance-view'
+import { sectionsOf } from './trial-balance-view'
 
 function row(
   over: Partial<TrialBalanceRow> & Pick<TrialBalanceRow, 'code' | 'type'>,
@@ -21,42 +24,13 @@ function report(rows: TrialBalanceRow[], over: Partial<TrialBalance> = {}): Tria
     fromDate: null,
     toDate: null,
     rows,
+    sections: [],
     totalDebit: '0.00',
     totalCredit: '0.00',
     balanced: true,
     ...over,
   }
 }
-
-describe('sumAmounts', () => {
-  /* The reason this is not `reduce((a, b) => a + Number(b), 0)`. */
-  it('adds tenths without drifting', () => {
-    expect(sumAmounts(Array.from({ length: 10 }, () => '0.10'))).toBe('1.00')
-  })
-
-  it('gets the case floating point gets wrong', () => {
-    expect(sumAmounts(['0.07', '0.07', '0.07', '1234567.89', '0.01'])).toBe('1234568.11')
-    /* What a float would have said, for the record. */
-    expect(
-      ['0.07', '0.07', '0.07', '1234567.89', '0.01'].reduce((a, b) => a + Number(b), 0),
-    ).not.toBe(1234568.11)
-  })
-
-  it('handles negatives and an empty list', () => {
-    expect(sumAmounts([])).toBe('0.00')
-    expect(sumAmounts(['100.00', '-40.50'])).toBe('59.50')
-    expect(sumAmounts(['-100.00', '100.00'])).toBe('0.00')
-    expect(sumAmounts(['-1.00', '-2.00'])).toBe('-3.00')
-  })
-
-  it('stays exact past what a JS number represents', () => {
-    expect(sumAmounts(['9007199254740992.00', '0.01'])).toBe('9007199254740992.01')
-  })
-
-  it('ignores anything that is not an amount rather than producing NaN', () => {
-    expect(sumAmounts(['1.00', 'nonsense'])).toBe('1.00')
-  })
-})
 
 describe('sectionsOf', () => {
   const rows = [
@@ -67,8 +41,15 @@ describe('sectionsOf', () => {
     row({ code: '3100', type: 'equity', creditBalance: '100000.00' }),
   ]
 
-  it('orders the balance sheet before the profit and loss', () => {
-    expect(sectionsOf(report(rows)).map((section) => section.type)).toEqual([
+  const sections: TrialBalance['sections'] = [
+    { type: 'asset', debitTotal: '108600.00', creditTotal: '0.00' },
+    { type: 'equity', debitTotal: '0.00', creditTotal: '100000.00' },
+    { type: 'income', debitTotal: '0.00', creditTotal: '23600.00' },
+    { type: 'expense', debitTotal: '15000.00', creditTotal: '0.00' },
+  ]
+
+  it('draws main’s sections in main’s order', () => {
+    expect(sectionsOf(report(rows, { sections })).map((section) => section.type)).toEqual([
       'asset',
       'equity',
       'income',
@@ -77,22 +58,20 @@ describe('sectionsOf', () => {
   })
 
   it('keeps the rows of a section in the order they arrived', () => {
-    const assets = sectionsOf(report(rows)).find((section) => section.type === 'asset')
+    const assets = sectionsOf(report(rows, { sections })).find((s) => s.type === 'asset')
     expect(assets?.rows.map((r) => r.code)).toEqual(['1210', '1300'])
   })
 
-  it('totals each section exactly', () => {
-    const assets = sectionsOf(report(rows)).find((section) => section.type === 'asset')
-    expect(assets?.debitTotal).toBe('108600.00')
-    expect(assets?.creditTotal).toBe('0.00')
-  })
-
-  it('drops a heading with nothing under it', () => {
-    expect(sectionsOf(report(rows)).map((s) => s.type)).not.toContain('liability')
+  /* B23. Deliberately NOT the sum of the rows: what is shown is what main said. */
+  it('carries main’s subtotals rather than adding up the rows', () => {
+    const wrong = [{ type: 'asset' as const, debitTotal: '1.00', creditTotal: '2.00' }]
+    const [assets] = sectionsOf(report(rows, { sections: wrong }))
+    expect(assets?.debitTotal).toBe('1.00')
+    expect(assets?.creditTotal).toBe('2.00')
   })
 
   it('gives each section a plural heading', () => {
-    expect(sectionsOf(report(rows)).map((s) => s.label)).toEqual([
+    expect(sectionsOf(report(rows, { sections })).map((s) => s.label)).toEqual([
       'Assets',
       'Equity',
       'Income',
@@ -109,27 +88,20 @@ describe('sectionsOf', () => {
    * second opinion about the one fact this report exists to state.
    */
   it('does not recompute whether the report balances', () => {
-    const sections = sectionsOf(report(rows, { balanced: false }))
-    expect(sections).not.toHaveProperty('balanced')
-    for (const section of sections) {
+    const drawn = sectionsOf(report(rows, { sections, balanced: false }))
+    for (const section of drawn) {
       expect(section).not.toHaveProperty('balanced')
     }
   })
-})
 
-describe('describeRange', () => {
-  it('says so when the range is everything', () => {
-    expect(describeRange(report([]))).toBe('Everything in the books')
-  })
-
-  it('describes each half-open range', () => {
-    expect(describeRange(report([], { fromDate: '2026-04-01' }))).toBe('From 2026-04-01')
-    expect(describeRange(report([], { toDate: '2027-03-31' }))).toBe('Up to 2027-03-31')
-  })
-
-  it('describes a closed range', () => {
-    expect(describeRange(report([], { fromDate: '2026-04-01', toDate: '2027-03-31' }))).toBe(
-      '2026-04-01 to 2027-03-31',
+  /* The adder is gone, and the file says why; a second one must not grow back. */
+  it('holds no arithmetic on amounts', () => {
+    const source = readFileSync(
+      resolve('src/renderer/src/screens/lib/trial-balance-view.ts'),
+      'utf8',
     )
+    /* The header says what used to be here; only the code is held to it. */
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+    expect(code).not.toMatch(/bigint|BigInt|paise|parseFloat|Number\(|\+=/)
   })
 })

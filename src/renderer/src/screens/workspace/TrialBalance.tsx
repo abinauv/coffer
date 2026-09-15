@@ -16,18 +16,31 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { JSX } from 'react'
-import { Button, Input } from '@renderer/components/atoms'
+import { Button } from '@renderer/components/atoms'
 import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { registerScreens } from '@renderer/lib/screens'
 import { useRegisterCommands } from '@renderer/store/commands'
 import { useNumberFormat } from '@renderer/store/regime'
 import type { AppError, TrialBalance as TrialBalanceReport } from '@shared/dto'
+import { EmptyState } from '../components/EmptyState'
 import { FailureNotice } from '../components/FailureNotice'
+import { FigureCell } from '../components/FigureCell'
 import { Notice } from '../components/Notice'
+import { RangeToolbar } from '../components/ReportLines'
+import { RegisterSkeleton, type SkeletonColumn } from '../components/RegisterSkeleton'
 import { ScreenFrame } from '../components/ScreenFrame'
-import { formatAmount, formatAmountOrBlank } from '../lib/ledger-format'
-import { describeRange, sectionsOf } from '../lib/trial-balance-view'
+import { formatAmount } from '../lib/ledger-format'
+import { describeRange } from '../lib/report-view'
+import { sectionsOf } from '../lib/trial-balance-view'
+
+/* Code, account, debit, credit. */
+const COLUMNS: readonly SkeletonColumn[] = [
+  { width: '6rem' },
+  { width: '1fr' },
+  { width: '9rem', align: 'end' },
+  { width: '9rem', align: 'end' },
+]
 
 export function TrialBalance(): JSX.Element {
   const format = useNumberFormat()
@@ -98,44 +111,29 @@ export function TrialBalance(): JSX.Element {
       <div className="stack">
         {error && <FailureNotice error={error} context="ledger" />}
 
-        <div className="toolbar">
-          <Input
-            label="From"
-            type="date"
-            value={fromDate}
-            onChange={(event) => setFromDate(event.target.value)}
-          />
-          <Input
-            label="To"
-            type="date"
-            value={toDate}
-            onChange={(event) => setToDate(event.target.value)}
-          />
-          <Button onClick={() => void load()} isBusy={isBusy}>
-            Apply
-          </Button>
-          {(fromDate !== '' || toDate !== '') && (
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setFromDate('')
-                setToDate('')
-                void loadRange('', '')
-              }}
-            >
-              Clear
-            </Button>
-          )}
-        </div>
+        <RangeToolbar
+          fromDate={fromDate}
+          toDate={toDate}
+          onFromChange={setFromDate}
+          onToChange={setToDate}
+          onApply={() => void load()}
+          onClear={() => {
+            setFromDate('')
+            setToDate('')
+            void loadRange('', '')
+          }}
+          isBusy={isBusy}
+        />
 
         {report === null ? (
-          <p className="prose prose--muted">Summing the ledger…</p>
+          error === null && <RegisterSkeleton label="the trial balance" columns={COLUMNS} />
         ) : report.rows.length === 0 ? (
-          <Notice tone="info" title="Nothing has been posted yet">
+          <EmptyState title="Nothing has been posted yet" titleAs="h2">
             <p>
-              {describeRange(report)} — and no entry falls in it. Post a journal and this fills in.
+              {describeRange(report.fromDate, report.toDate)} — and no entry falls in it. Post a
+              journal and this fills in.
             </p>
-          </Notice>
+          </EmptyState>
         ) : (
           <>
             {!report.balanced && (
@@ -149,67 +147,57 @@ export function TrialBalance(): JSX.Element {
               </Notice>
             )}
 
-            <p className="prose prose--muted">{describeRange(report)}</p>
+            <p className="prose prose--muted">{describeRange(report.fromDate, report.toDate)}</p>
 
-            <table className="ledger-table ledger-table--figures">
-              <thead>
-                <tr>
-                  <th scope="col">Code</th>
-                  <th scope="col">Account</th>
-                  <th scope="col" className="ledger-table__figure">
-                    Debit
-                  </th>
-                  <th scope="col" className="ledger-table__figure">
-                    Credit
-                  </th>
-                </tr>
-              </thead>
-
-              {sections.map((section) => (
-                <tbody key={section.type}>
-                  <tr className="ledger-table__section">
-                    <th scope="rowgroup" colSpan={4}>
-                      {section.label}
+            <div className="register">
+              <table className="ledger-table ledger-table--figures register__table">
+                <thead>
+                  <tr>
+                    <th scope="col">Code</th>
+                    <th scope="col">Account</th>
+                    <th scope="col" className="ledger-table__figure">
+                      Debit
+                    </th>
+                    <th scope="col" className="ledger-table__figure">
+                      Credit
                     </th>
                   </tr>
-                  {section.rows.map((row) => (
-                    <tr key={row.accountId}>
-                      <td className="ledger-table__code">{row.code}</td>
-                      <td>{row.name}</td>
-                      <td className="ledger-table__figure">
-                        {formatAmountOrBlank(row.debitBalance, format)}
-                      </td>
-                      <td className="ledger-table__figure">
-                        {formatAmountOrBlank(row.creditBalance, format)}
-                      </td>
-                    </tr>
-                  ))}
-                  <tr className="ledger-table__subtotal">
-                    <td />
-                    <td>Total {section.label.toLowerCase()}</td>
-                    <td className="ledger-table__figure">
-                      {formatAmountOrBlank(section.debitTotal, format)}
-                    </td>
-                    <td className="ledger-table__figure">
-                      {formatAmountOrBlank(section.creditTotal, format)}
-                    </td>
-                  </tr>
-                </tbody>
-              ))}
+                </thead>
 
-              <tfoot>
-                <tr className="ledger-table__total">
-                  <td />
-                  <td>Total</td>
-                  <td className="ledger-table__figure">
-                    {formatAmount(report.totalDebit, format)}
-                  </td>
-                  <td className="ledger-table__figure">
-                    {formatAmount(report.totalCredit, format)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+                {sections.map((section) => (
+                  <tbody key={section.type}>
+                    <tr className="ledger-table__section">
+                      <th scope="rowgroup" colSpan={4}>
+                        {section.label}
+                      </th>
+                    </tr>
+                    {section.rows.map((row) => (
+                      <tr key={row.accountId}>
+                        <td className="ledger-table__code">{row.code}</td>
+                        <td>{row.name}</td>
+                        <FigureCell amount={row.debitBalance} format={format} isBlankWhenZero />
+                        <FigureCell amount={row.creditBalance} format={format} isBlankWhenZero />
+                      </tr>
+                    ))}
+                    <tr className="ledger-table__subtotal">
+                      <td />
+                      <td>Total {section.label.toLowerCase()}</td>
+                      <FigureCell amount={section.debitTotal} format={format} isBlankWhenZero />
+                      <FigureCell amount={section.creditTotal} format={format} isBlankWhenZero />
+                    </tr>
+                  </tbody>
+                ))}
+
+                <tfoot>
+                  <tr className="ledger-table__total">
+                    <td />
+                    <td>Total</td>
+                    <FigureCell amount={report.totalDebit} format={format} />
+                    <FigureCell amount={report.totalCredit} format={format} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </>
         )}
       </div>

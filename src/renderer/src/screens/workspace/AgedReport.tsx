@@ -36,8 +36,11 @@ import { useRegisterCommands } from '@renderer/store/commands'
 import { useNumberFormat } from '@renderer/store/regime'
 import { TRADE_SIDES, type TradeSide } from '@shared/documents'
 import type { AgedPartyRow, AgedReport as Report, AppError } from '@shared/dto'
+import { EmptyState } from '../components/EmptyState'
 import { FailureNotice } from '../components/FailureNotice'
+import { FigureCell } from '../components/FigureCell'
 import { Notice } from '../components/Notice'
+import { RegisterSkeleton, type SkeletonColumn } from '../components/RegisterSkeleton'
 import { ScreenFrame } from '../components/ScreenFrame'
 import {
   agedEmptySentence,
@@ -59,9 +62,16 @@ import {
   rowKey,
   UNATTRIBUTED_NOTE,
 } from '../lib/ageing-view'
+import { formatDate } from '../lib/dates'
 import { partyLabel } from '../lib/document-view'
-import { formatAmount, formatAmountOrBlank } from '../lib/ledger-format'
+import { formatAmount } from '../lib/ledger-format'
 import { todayISO } from '../lib/report-view'
+
+/* Party, five buckets, on account, total. */
+const COLUMNS: readonly SkeletonColumn[] = [
+  { width: 'minmax(9rem, 2fr)' },
+  ...Array.from({ length: 7 }, () => ({ width: '1fr', align: 'end' as const })),
+]
 
 export function AgedReport({ side, navigate }: ScreenContext & { side: TradeSide }): JSX.Element {
   const [report, setReport] = useState<Report | null>(null)
@@ -149,7 +159,9 @@ export function AgedReport({ side, navigate }: ScreenContext & { side: TradeSide
         </div>
 
         {report === null ? (
-          <p className="prose prose--muted">Reading the account…</p>
+          error === null && (
+            <RegisterSkeleton label={agedTitle(side).toLowerCase()} columns={COLUMNS} />
+          )
         ) : (
           <>
             {!report.ties && <TieNotice report={report} />}
@@ -160,13 +172,13 @@ export function AgedReport({ side, navigate }: ScreenContext & { side: TradeSide
             )}
 
             <p className="prose prose--muted">
-              As at {report.asAtDate} · {report.accountCode} · {report.accountName}
+              As at {formatDate(report.asAtDate)} · {report.accountCode} · {report.accountName}
             </p>
 
             {report.parties.length === 0 ? (
-              <Notice tone="info" title="Nothing outstanding">
+              <EmptyState title="Nothing outstanding" titleAs="h2">
                 <p>{agedEmptySentence(side)}</p>
-              </Notice>
+              </EmptyState>
             ) : (
               <AgedTable
                 report={report}
@@ -196,9 +208,9 @@ function TieNotice({ report }: { report: Report }): JSX.Element {
       <p>
         The rows below come to {formatAmount(report.totals.total, format)}, and {report.accountCode}{' '}
         · {report.accountName} stands at {formatAmount(report.controlBalance, format)} as at{' '}
-        {report.asAtDate}. Every line on that account is meant to be here, so the two cannot differ
-        — please report it, with a backup if you can. The rows are still shown below, because the
-        difference is somewhere among them.
+        {formatDate(report.asAtDate)}. Every line on that account is meant to be here, so the two
+        cannot differ — please report it, with a backup if you can. The rows are still shown below,
+        because the difference is somewhere among them.
       </p>
     </Notice>
   )
@@ -225,59 +237,58 @@ function AgedTable({ report, side, open, onToggle, navigate }: TableProps): JSX.
   const format = useNumberFormat()
 
   return (
-    <table className="ledger-table ledger-table--figures">
-      <thead>
-        <tr>
-          <th scope="col">{partyLabel(side)}</th>
-          {report.buckets.map((bucket, index) => (
-            <th
-              key={index}
-              scope="col"
-              className="ledger-table__figure"
-              title={bucketRangeSentence(bucket)}
-            >
-              {bucket.label}
+    <div className="register">
+      <table className="ledger-table ledger-table--figures register__table aged__table">
+        <thead>
+          <tr>
+            <th scope="col">{partyLabel(side)}</th>
+            {report.buckets.map((bucket, index) => (
+              <th
+                key={index}
+                scope="col"
+                className="ledger-table__figure"
+                title={bucketRangeSentence(bucket)}
+              >
+                {bucket.label}
+              </th>
+            ))}
+            <th scope="col" className="ledger-table__figure">
+              Less on account
             </th>
+            <th scope="col" className="ledger-table__figure">
+              Total
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {report.parties.map((row) => (
+            <PartyRows
+              key={rowKey(row)}
+              report={report}
+              row={row}
+              isOpen={open.has(rowKey(row))}
+              onToggle={() => onToggle(rowKey(row))}
+              navigate={navigate}
+            />
           ))}
-          <th scope="col" className="ledger-table__figure">
-            Less on account
-          </th>
-          <th scope="col" className="ledger-table__figure">
-            Total
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {report.parties.map((row) => (
-          <PartyRows
-            key={rowKey(row)}
-            report={report}
-            row={row}
-            isOpen={open.has(rowKey(row))}
-            onToggle={() => onToggle(rowKey(row))}
-            navigate={navigate}
-          />
-        ))}
-      </tbody>
-      <tfoot>
-        <tr className="ledger-table__subtotal">
-          <td>{agedTotalLabel(side)}</td>
-          <Figures report={report} figures={report.totals.buckets} />
-          <td className="ledger-table__figure">
-            {formatAmountOrBlank(report.totals.onAccount, format)}
-          </td>
-          <td className="ledger-table__figure">{formatAmount(report.totals.total, format)}</td>
-        </tr>
-        {/* The claim, made where it can be checked. */}
-        <tr className="ledger-table__total">
-          <td>
-            Balance on {report.accountCode} · {report.accountName}
-          </td>
-          <td colSpan={report.buckets.length + 1} />
-          <td className="ledger-table__figure">{formatAmount(report.controlBalance, format)}</td>
-        </tr>
-      </tfoot>
-    </table>
+        </tbody>
+        <tfoot>
+          <tr className="ledger-table__subtotal">
+            <td>{agedTotalLabel(side)}</td>
+            <Figures report={report} figures={report.totals.buckets} />
+            <FigureCell amount={report.totals.onAccount} format={format} isBlankWhenZero />
+            <FigureCell amount={report.totals.total} format={format} />
+          </tr>
+          {/* The claim, made where it can be checked. */}
+          <tr className="ledger-table__total">
+            <td colSpan={report.buckets.length + 2}>
+              Balance on {report.accountCode} · {report.accountName}
+            </td>
+            <FigureCell amount={report.controlBalance} format={format} />
+          </tr>
+        </tfoot>
+      </table>
+    </div>
   )
 }
 
@@ -294,10 +305,10 @@ function Figures({ report, figures }: { report: Report; figures: readonly string
     <>
       {report.buckets.map((_bucket, index) => {
         const figure = columnFigure(figures, index)
-        return (
-          <td key={index} className="ledger-table__figure">
-            {figure === null ? '' : formatAmountOrBlank(figure, format)}
-          </td>
+        return figure === null ? (
+          <td key={index} className="ledger-table__figure" />
+        ) : (
+          <FigureCell key={index} amount={figure} format={format} isBlankWhenZero />
         )
       })}
     </>
@@ -342,8 +353,8 @@ function PartyRows({ report, row, isOpen, onToggle, navigate }: PartyRowsProps):
           {isUnattributed(row) && <Badge tone="warning">No party</Badge>}
         </td>
         <Figures report={report} figures={row.buckets} />
-        <td className="ledger-table__figure">{formatAmountOrBlank(row.onAccount, format)}</td>
-        <td className="ledger-table__figure">{formatAmount(row.total, format)}</td>
+        <FigureCell amount={row.onAccount} format={format} isBlankWhenZero />
+        <FigureCell amount={row.total} format={format} />
       </tr>
       {isOpen && (
         <tr className="aged__drill">
@@ -407,6 +418,7 @@ function AgedItems({
                   <Button
                     variant="ghost"
                     size="sm"
+                    isIdentifier
                     onClick={() => navigate(makeRoute('workspace', target.screenId, target.params))}
                   >
                     {itemNumberLabel(item)}
@@ -414,14 +426,14 @@ function AgedItems({
                 )}
               </td>
               <td>{itemSourceLabel(item)}</td>
-              <td className="ledger-table__code">{item.date}</td>
+              <td className="ledger-table__date">{formatDate(item.date)}</td>
               {/* A dash where nothing falls due. See `dueDateFor`. */}
-              <td className="ledger-table__code">{due ?? '—'}</td>
+              <td className="ledger-table__date">{due === null ? '—' : formatDate(due)}</td>
               <td>
                 <span className="aged__age">{bucketNameIn(report.buckets, item.bucket)}</span>
                 {late !== null && <Badge tone="negative">{late}</Badge>}
               </td>
-              <td className="ledger-table__figure">{formatAmount(item.amount, format)}</td>
+              <FigureCell amount={item.amount} format={format} />
             </tr>
           )
         })}

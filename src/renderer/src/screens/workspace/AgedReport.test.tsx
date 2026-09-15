@@ -255,12 +255,13 @@ describe('the foot', () => {
       'tr',
     ) as HTMLElement
     const cells = within(foot).getAllByRole('cell')
-    /* Three cells: the name, one spanning every column it is not in, and the figure. The
-     * span is what puts the balance under Total — directly beneath the figure it claims
-     * to equal, which is the only place the two can be compared by eye. */
-    expect(cells).toHaveLength(3)
-    expect(cells[1]).toHaveAttribute('colspan', String(BUCKETS.length + 1))
-    expect(figureIn(cells[2])).toBe('1,18,000.00')
+    /* Two cells: the name, spanning every column but Total, and the figure. The span is what
+     * puts the balance under Total — directly beneath the figure it claims to equal, which is
+     * the only place the two can be compared by eye. The name takes the span rather than an
+     * empty cell beside it, so it does not wrap to three lines in a narrow party column. */
+    expect(cells).toHaveLength(2)
+    expect(cells[0]).toHaveAttribute('colspan', String(BUCKETS.length + 2))
+    expect(figureIn(cells[1])).toBe('1,18,000.00')
   })
 
   it("totals the report under the debt's own name", async () => {
@@ -399,7 +400,7 @@ describe('a party opened up', () => {
 
     const row = (await screen.findByText('INV/2026-27/0001')).closest('tr') as HTMLElement
     expect(within(row).getByText('Sales invoice')).toBeInTheDocument()
-    expect(within(row).getByText('2026-05-01')).toBeInTheDocument()
+    expect(within(row).getByText('1 May 2026')).toBeInTheDocument()
     expect(within(row).getByText('31-60 days')).toBeInTheDocument()
     expect(within(row).getByText('1,18,000.00')).toBeInTheDocument()
   })
