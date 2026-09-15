@@ -227,9 +227,7 @@ export function ReceiptRegister({
                       </Button>
                     </td>
                     <td className="register__party">{receipt.partyName}</td>
-                    <td className="ledger-table__code register__date">
-                      {formatDate(receipt.date)}
-                    </td>
+                    <td className="ledger-table__date">{formatDate(receipt.date)}</td>
                     <td>
                       <Badge
                         tone={statusTone(receipt.status)}

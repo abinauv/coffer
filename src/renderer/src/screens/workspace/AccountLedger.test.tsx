@@ -93,7 +93,9 @@ describe('AccountLedger', () => {
 
     await screen.findByLabelText('Account')
     expect(fake.callsTo('reports:accountLedger')).toHaveLength(0)
-    expect(screen.getByText('Choose an account to see its ledger.')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Choose an account to see its ledger' }),
+    ).toBeInTheDocument()
   })
 
   /* A group takes no postings, so its ledger is empty by construction and offering it
@@ -267,7 +269,9 @@ describe('AccountLedger', () => {
 
     await user.selectOptions(screen.getByLabelText('Account'), '')
 
-    expect(await screen.findByText('Choose an account to see its ledger.')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Choose an account to see its ledger' }),
+    ).toBeInTheDocument()
     expect(fake.callsTo('reports:accountLedger')).toHaveLength(1)
   })
 })

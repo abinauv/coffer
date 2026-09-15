@@ -13,20 +13,34 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { JSX } from 'react'
-import { Button } from '@renderer/components/atoms'
+import { Button, Select } from '@renderer/components/atoms'
 import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { registerScreens } from '@renderer/lib/screens'
 import { useRegisterCommands } from '@renderer/store/commands'
 import { useNumberFormat } from '@renderer/store/regime'
 import type { Account, AccountLedger as Ledger, AppError } from '@shared/dto'
+import { EmptyState } from '../components/EmptyState'
 import { FailureNotice } from '../components/FailureNotice'
+import { FigureCell } from '../components/FigureCell'
 import { Notice } from '../components/Notice'
 import { RangeToolbar } from '../components/ReportLines'
+import { RegisterSkeleton, type SkeletonColumn } from '../components/RegisterSkeleton'
 import { ScreenFrame } from '../components/ScreenFrame'
 import { accountLabel, postableAccounts } from '../lib/chart-tree'
-import { formatAmount, formatAmountOrBlank } from '../lib/ledger-format'
+import { formatDate } from '../lib/dates'
+import { formatAmount } from '../lib/ledger-format'
 import { describeRange } from '../lib/report-view'
+
+/* Date, entry, particulars, debit, credit, balance. */
+const COLUMNS: readonly SkeletonColumn[] = [
+  { width: '7rem' },
+  { width: '8rem' },
+  { width: '1fr' },
+  { width: '8rem', align: 'end' },
+  { width: '8rem', align: 'end' },
+  { width: '9rem', align: 'end' },
+]
 
 export function AccountLedger(): JSX.Element {
   const format = useNumberFormat()
@@ -118,24 +132,21 @@ export function AccountLedger(): JSX.Element {
         {error && <FailureNotice error={error} context="ledger" />}
 
         <div className="toolbar">
-          <label className="field">
-            <span className="field__label">Account</span>
-            <select
-              className="field__control"
-              value={accountId}
-              onChange={(event) => {
-                setAccountId(event.target.value)
-                void loadFor(event.target.value, fromDate, toDate)
-              }}
-            >
-              <option value="">Choose an account</option>
-              {choices.map((choice) => (
-                <option key={choice.id} value={choice.id}>
-                  {accountLabel(choice)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Select
+            label="Account"
+            value={accountId}
+            onChange={(event) => {
+              setAccountId(event.target.value)
+              void loadFor(event.target.value, fromDate, toDate)
+            }}
+          >
+            <option value="">Choose an account</option>
+            {choices.map((choice) => (
+              <option key={choice.id} value={choice.id}>
+                {accountLabel(choice)}
+              </option>
+            ))}
+          </Select>
         </div>
 
         <RangeToolbar
@@ -153,9 +164,11 @@ export function AccountLedger(): JSX.Element {
         />
 
         {accountId === '' ? (
-          <p className="prose prose--muted">Choose an account to see its ledger.</p>
+          <EmptyState title="Choose an account to see its ledger" titleAs="h2">
+            <p>Every movement through it, with the balance after each entry.</p>
+          </EmptyState>
         ) : ledger === null ? (
-          <p className="prose prose--muted">Reading the ledger…</p>
+          error === null && <RegisterSkeleton label="the ledger" columns={COLUMNS} />
         ) : (
           <>
             <p className="prose prose--muted">
@@ -171,65 +184,55 @@ export function AccountLedger(): JSX.Element {
               </Notice>
             )}
 
-            <table className="ledger-table ledger-table--figures">
-              <thead>
-                <tr>
-                  <th scope="col">Date</th>
-                  <th scope="col">Entry</th>
-                  <th scope="col">Particulars</th>
-                  <th scope="col" className="ledger-table__figure">
-                    Debit
-                  </th>
-                  <th scope="col" className="ledger-table__figure">
-                    Credit
-                  </th>
-                  <th scope="col" className="ledger-table__figure">
-                    Balance
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="ledger-table__row--context">
-                  <td colSpan={5}>Opening balance</td>
-                  <td className="ledger-table__figure">
-                    {formatAmount(ledger.openingBalance, format)}
-                  </td>
-                </tr>
-                {ledger.rows.map((row) => (
-                  <tr key={`${row.entryId}-${row.date}-${row.balance}`}>
-                    <td>{row.date}</td>
-                    <td className="ledger-table__code">{row.entryNumber}</td>
-                    <td>
-                      {row.contra}
-                      {row.narration !== '' && (
-                        <span className="ledger-table__muted"> · {row.narration}</span>
-                      )}
-                    </td>
-                    <td className="ledger-table__figure">
-                      {formatAmountOrBlank(row.debit, format)}
-                    </td>
-                    <td className="ledger-table__figure">
-                      {formatAmountOrBlank(row.credit, format)}
-                    </td>
-                    <td className="ledger-table__figure">{formatAmount(row.balance, format)}</td>
+            <div className="register">
+              <table className="ledger-table ledger-table--figures register__table">
+                <thead>
+                  <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">Entry</th>
+                    <th scope="col">Particulars</th>
+                    <th scope="col" className="ledger-table__figure">
+                      Debit
+                    </th>
+                    <th scope="col" className="ledger-table__figure">
+                      Credit
+                    </th>
+                    <th scope="col" className="ledger-table__figure">
+                      Balance
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="ledger-table__total">
-                  <td colSpan={3}>Closing balance</td>
-                  <td className="ledger-table__figure">
-                    {formatAmount(ledger.totalDebit, format)}
-                  </td>
-                  <td className="ledger-table__figure">
-                    {formatAmount(ledger.totalCredit, format)}
-                  </td>
-                  <td className="ledger-table__figure">
-                    {formatAmount(ledger.closingBalance, format)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+                </thead>
+                <tbody>
+                  <tr className="ledger-table__row--context">
+                    <td colSpan={5}>Opening balance</td>
+                    <FigureCell amount={ledger.openingBalance} format={format} />
+                  </tr>
+                  {ledger.rows.map((row) => (
+                    <tr key={`${row.entryId}-${row.date}-${row.balance}`}>
+                      <td className="ledger-table__date">{formatDate(row.date)}</td>
+                      <td className="ledger-table__code">{row.entryNumber}</td>
+                      <td>
+                        {row.contra}
+                        {row.narration !== '' && (
+                          <span className="ledger-table__muted"> · {row.narration}</span>
+                        )}
+                      </td>
+                      <FigureCell amount={row.debit} format={format} isBlankWhenZero />
+                      <FigureCell amount={row.credit} format={format} isBlankWhenZero />
+                      <FigureCell amount={row.balance} format={format} />
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="ledger-table__total">
+                    <td colSpan={3}>Closing balance</td>
+                    <FigureCell amount={ledger.totalDebit} format={format} />
+                    <FigureCell amount={ledger.totalCredit} format={format} />
+                    <FigureCell amount={ledger.closingBalance} format={format} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </>
         )}
       </div>

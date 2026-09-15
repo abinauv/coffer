@@ -21,9 +21,13 @@ import { useNumberFormat } from '@renderer/store/regime'
 import type { AppError, ProfitAndLoss as Statement } from '@shared/dto'
 import { FailureNotice } from '../components/FailureNotice'
 import { RangeToolbar, ReportSectionTable } from '../components/ReportLines'
+import { RegisterSkeleton, type SkeletonColumn } from '../components/RegisterSkeleton'
 import { ScreenFrame } from '../components/ScreenFrame'
 import { formatAmount } from '../lib/ledger-format'
 import { describeRange, resultLabel, resultTone } from '../lib/report-view'
+
+/* An account and its figure. */
+const COLUMNS: readonly SkeletonColumn[] = [{ width: '1fr' }, { width: '10rem', align: 'end' }]
 
 export function ProfitAndLoss(): JSX.Element {
   const format = useNumberFormat()
@@ -102,7 +106,7 @@ export function ProfitAndLoss(): JSX.Element {
         />
 
         {statement === null ? (
-          <p className="prose prose--muted">Summing the ledger…</p>
+          error === null && <RegisterSkeleton label="the profit and loss" columns={COLUMNS} />
         ) : (
           <>
             <p className="prose prose--muted">
@@ -112,18 +116,20 @@ export function ProfitAndLoss(): JSX.Element {
             <ReportSectionTable section={statement.income} totalLabel="Total income" />
             <ReportSectionTable section={statement.expenses} totalLabel="Total expenses" />
 
-            <table className="ledger-table ledger-table--figures report-table">
-              <tfoot>
-                <tr
-                  className={`ledger-table__total ledger-table__total--${resultTone(statement.netProfit)}`}
-                >
-                  <td>{resultLabel(statement.netProfit)}</td>
-                  <td className="ledger-table__figure">
-                    {formatAmount(statement.netProfit, format)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+            <div className="register">
+              <table className="ledger-table ledger-table--figures register__table report-table">
+                <tfoot>
+                  <tr
+                    className={`ledger-table__total ledger-table__total--${resultTone(statement.netProfit)}`}
+                  >
+                    <td>{resultLabel(statement.netProfit)}</td>
+                    <td className="ledger-table__figure">
+                      {formatAmount(statement.netProfit, format)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </>
         )}
       </div>

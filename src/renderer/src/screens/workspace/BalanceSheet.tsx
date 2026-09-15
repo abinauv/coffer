@@ -21,11 +21,17 @@ import { useRegisterCommands } from '@renderer/store/commands'
 import { useNumberFormat } from '@renderer/store/regime'
 import type { AppError, BalanceSheet as Sheet } from '@shared/dto'
 import { FailureNotice } from '../components/FailureNotice'
+import { FigureCell } from '../components/FigureCell'
 import { Notice } from '../components/Notice'
 import { ReportSectionTable } from '../components/ReportLines'
+import { RegisterSkeleton, type SkeletonColumn } from '../components/RegisterSkeleton'
 import { ScreenFrame } from '../components/ScreenFrame'
+import { formatDate } from '../lib/dates'
 import { formatAmount } from '../lib/ledger-format'
 import { todayISO } from '../lib/report-view'
+
+/* An account and its figure. */
+const COLUMNS: readonly SkeletonColumn[] = [{ width: '1fr' }, { width: '10rem', align: 'end' }]
 
 export function BalanceSheet(): JSX.Element {
   const format = useNumberFormat()
@@ -96,7 +102,7 @@ export function BalanceSheet(): JSX.Element {
         </div>
 
         {sheet === null ? (
-          <p className="prose prose--muted">Summing the ledger…</p>
+          error === null && <RegisterSkeleton label="the balance sheet" columns={COLUMNS} />
         ) : (
           <>
             {!sheet.balanced && (
@@ -110,7 +116,7 @@ export function BalanceSheet(): JSX.Element {
               </Notice>
             )}
 
-            <p className="prose prose--muted">As at {sheet.asAtDate}</p>
+            <p className="prose prose--muted">As at {formatDate(sheet.asAtDate)}</p>
 
             <div className="report-columns">
               <ReportSectionTable section={sheet.assets} totalLabel="Total assets" />
@@ -121,22 +127,20 @@ export function BalanceSheet(): JSX.Element {
               </div>
             </div>
 
-            <table className="ledger-table ledger-table--figures report-table">
-              <tfoot>
-                <tr className="ledger-table__total">
-                  <td>Total assets</td>
-                  <td className="ledger-table__figure">
-                    {formatAmount(sheet.totalAssets, format)}
-                  </td>
-                </tr>
-                <tr className="ledger-table__total">
-                  <td>Total liabilities and equity</td>
-                  <td className="ledger-table__figure">
-                    {formatAmount(sheet.totalLiabilitiesAndEquity, format)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+            <div className="register">
+              <table className="ledger-table ledger-table--figures register__table report-table">
+                <tfoot>
+                  <tr className="ledger-table__total">
+                    <td>Total assets</td>
+                    <FigureCell amount={sheet.totalAssets} format={format} />
+                  </tr>
+                  <tr className="ledger-table__total">
+                    <td>Total liabilities and equity</td>
+                    <FigureCell amount={sheet.totalLiabilitiesAndEquity} format={format} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </>
         )}
       </div>
@@ -160,14 +164,16 @@ function EquityTable({ sheet }: { sheet: Sheet }): JSX.Element {
         heading="Equity and reserves"
         totalLabel="Total capital accounts"
       />
-      <table className="ledger-table ledger-table--figures report-table">
-        <tbody>
-          <tr>
-            <td>Profit for the period, not yet closed</td>
-            <td className="ledger-table__figure">{formatAmount(sheet.profitForPeriod, format)}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div className="register">
+        <table className="ledger-table ledger-table--figures register__table report-table">
+          <tbody>
+            <tr>
+              <td>Profit for the period, not yet closed</td>
+              <FigureCell amount={sheet.profitForPeriod} format={format} />
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

@@ -571,7 +571,7 @@ function Allocations({
           {open.map((document) => (
             <tr key={document.id} className="ledger-table__row">
               <td className="ledger-table__code">{document.number}</td>
-              <td className="ledger-table__code register__date">{formatDate(document.date)}</td>
+              <td className="ledger-table__date">{formatDate(document.date)}</td>
               <td className="ledger-table__figure">{formatAmount(document.grandTotal, format)}</td>
               <td className="ledger-table__figure">{formatAmount(document.outstanding, format)}</td>
               <td className="ledger-table__figure">

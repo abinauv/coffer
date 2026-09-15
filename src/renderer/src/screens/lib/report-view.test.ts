@@ -13,13 +13,14 @@ describe('describeRange', () => {
     expect(describeRange(null, null)).toBe('Everything in the books')
   })
 
+  /* A report writes its dates the way the rest of the app does: `1 Apr 2026`, not ISO. */
   it('describes each half-open range', () => {
-    expect(describeRange('2026-04-01', null)).toBe('From 2026-04-01')
-    expect(describeRange(null, '2027-03-31')).toBe('Up to 2027-03-31')
+    expect(describeRange('2026-04-01', null)).toBe('From 1 Apr 2026')
+    expect(describeRange(null, '2027-03-31')).toBe('Up to 31 Mar 2027')
   })
 
   it('describes a closed range', () => {
-    expect(describeRange('2026-04-01', '2027-03-31')).toBe('2026-04-01 to 2027-03-31')
+    expect(describeRange('2026-04-01', '2027-03-31')).toBe('1 Apr 2026 to 31 Mar 2027')
   })
 })
 

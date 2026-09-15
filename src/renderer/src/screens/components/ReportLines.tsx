@@ -10,8 +10,8 @@ import type { JSX } from 'react'
 import { Button, Input } from '@renderer/components/atoms'
 import { useNumberFormat } from '@renderer/store/regime'
 import type { DecimalString, NumberFormat, ReportSection } from '@shared/dto'
-import { formatAmount } from '../lib/ledger-format'
 import { isContraBalance, sectionHeading } from '../lib/report-view'
+import { FigureCell } from './FigureCell'
 
 interface ReportSectionTableProps {
   section: ReportSection
@@ -30,41 +30,40 @@ export function ReportSectionTable({
   const title = heading ?? sectionHeading(section.type)
 
   return (
-    <table className="ledger-table ledger-table--figures report-table">
-      <thead>
-        <tr>
-          <th scope="col" colSpan={2}>
-            {title}
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {section.lines.length === 0 ? (
-          <tr className="ledger-table__row--context">
-            <td colSpan={2}>Nothing has been posted here.</td>
+    <div className="register">
+      <table className="ledger-table ledger-table--figures register__table report-table">
+        <thead>
+          <tr>
+            <th scope="col" colSpan={2}>
+              {title}
+            </th>
           </tr>
-        ) : (
-          section.lines.map((line) => (
-            <tr
-              key={line.accountId}
-              className={line.isGroup ? 'ledger-table__row--group' : undefined}
-            >
-              <td>
-                <span style={{ paddingInlineStart: `${line.depth * 1.25}rem` }}>
-                  {line.code} · {line.name}
-                </span>
-              </td>
-              <td className="ledger-table__figure">
-                <Figure amount={line.amount} format={format} />
-              </td>
+        </thead>
+        <tbody>
+          {section.lines.length === 0 ? (
+            <tr className="ledger-table__row--context">
+              <td colSpan={2}>Nothing has been posted here.</td>
             </tr>
-          ))
-        )}
-      </tbody>
-      <tfoot>
-        <tr className="ledger-table__total">
-          <td>{totalLabel ?? `Total ${title.toLowerCase()}`}</td>
-          {/* The foot is marked on exactly the same rule as the lines above it. It was
+          ) : (
+            section.lines.map((line) => (
+              <tr
+                key={line.accountId}
+                className={line.isGroup ? 'ledger-table__row--group' : undefined}
+              >
+                <td>
+                  <span style={{ paddingInlineStart: `${line.depth * 1.25}rem` }}>
+                    {line.code} · {line.name}
+                  </span>
+                </td>
+                <Figure amount={line.amount} format={format} />
+              </tr>
+            ))
+          )}
+        </tbody>
+        <tfoot>
+          <tr className="ledger-table__total">
+            <td>{totalLabel ?? `Total ${title.toLowerCase()}`}</td>
+            {/* The foot is marked on exactly the same rule as the lines above it. It was
               bare until 0016, so a section entirely in credit footed with a lone
               `-15,000.00` under a column where every abnormal figure carried the word —
               which teaches the reader that the word means something and then withholds
@@ -73,17 +72,16 @@ export function ReportSectionTable({
               facing the other way is the block as a whole being the wrong way round.
               (The net profit line is NOT this — a loss is an ordinary outcome, not an
               abnormal balance, and ProfitAndLoss.tsx names it in words of its own.) */}
-          <td className="ledger-table__figure">
             <Figure amount={section.total} format={format} />
-          </td>
-        </tr>
-      </tfoot>
-    </table>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
   )
 }
 
 /**
- * One figure in the figure column, with the word for a balance facing the wrong way.
+ * One figure cell, with the word for a balance facing the wrong way.
  *
  * A negative on a statement is real and is never hidden — the sign arrives from main and
  * is never flipped here (CONVENTIONS §1.7) — but an asset in credit is an overdraft, and
@@ -94,10 +92,9 @@ export function ReportSectionTable({
  */
 function Figure({ amount, format }: { amount: DecimalString; format: NumberFormat }): JSX.Element {
   return (
-    <>
-      {formatAmount(amount, format)}
+    <FigureCell amount={amount} format={format}>
       {isContraBalance(amount) && <span className="ledger-table__muted"> (contra)</span>}
-    </>
+    </FigureCell>
   )
 }
 

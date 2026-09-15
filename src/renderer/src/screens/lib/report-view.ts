@@ -7,18 +7,19 @@
  */
 
 import type { DecimalString } from '@shared/dto'
+import { formatDate } from './dates'
 import { isNegativeAmount, isZeroAmount } from './ledger-format'
 
 /* Moved to lib/ for the title bar, which names the current financial year. Re-exported so
  * the report screens' imports did not move. */
 export { todayISO } from '@renderer/lib/today'
 
-/** What a range covers, in a sentence. */
+/** What a range covers, in a sentence, with its dates written as the app writes one. */
 export function describeRange(fromDate: string | null, toDate: string | null): string {
   if (fromDate === null && toDate === null) return 'Everything in the books'
-  if (fromDate === null) return `Up to ${toDate}`
-  if (toDate === null) return `From ${fromDate}`
-  return `${fromDate} to ${toDate}`
+  if (fromDate === null) return `Up to ${formatDate(toDate ?? '')}`
+  if (toDate === null) return `From ${formatDate(fromDate)}`
+  return `${formatDate(fromDate)} to ${formatDate(toDate)}`
 }
 
 /**

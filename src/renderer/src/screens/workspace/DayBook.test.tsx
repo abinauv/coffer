@@ -84,7 +84,7 @@ describe('DayBook', () => {
 
     const sections = [...document.querySelectorAll('section')]
     expect(sections).toHaveLength(2)
-    expect(sections[0]?.textContent).toContain('2026-04-01')
+    expect(sections[0]?.textContent).toContain('1 Apr 2026')
     expect(sections[0]?.textContent).toContain('JV-a')
     expect(sections[0]?.textContent).toContain('JV-b')
     expect(sections[0]?.textContent).not.toContain('JV-c')
@@ -202,7 +202,7 @@ describe('DayBook', () => {
 
     expect(await screen.findByText('Nothing has been posted yet')).toBeInTheDocument()
     expect(
-      screen.getByText(/2026-04-01 to 2026-04-30 — and no entry falls in it/),
+      screen.getByText(/1 Apr 2026 to 30 Apr 2026 — and no entry falls in it/),
     ).toBeInTheDocument()
   })
 

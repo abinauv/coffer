@@ -248,9 +248,7 @@ export function DocumentRegister({
                         </Button>
                       </td>
                       <td className="register__party">{document.partyName}</td>
-                      <td className="ledger-table__code register__date">
-                        {formatDate(document.date)}
-                      </td>
+                      <td className="ledger-table__date">{formatDate(document.date)}</td>
                       <td>
                         {settled === null ? (
                           <Badge

@@ -51,11 +51,21 @@ const ROWS = [
   line('3100', 'Capital', 'equity', '0.00', '100000.00'),
 ]
 
+/* Main's subtotals for ROWS, in the order accounts are read. */
+const SECTIONS: Report['sections'] = [
+  { type: 'asset', debitTotal: '172500.50', creditTotal: '0.00' },
+  { type: 'liability', debitTotal: '0.00', creditTotal: '32000.00' },
+  { type: 'equity', debitTotal: '0.00', creditTotal: '100000.00' },
+  { type: 'income', debitTotal: '0.00', creditTotal: '58000.50' },
+  { type: 'expense', debitTotal: '17500.00', creditTotal: '0.00' },
+]
+
 function report(over: Partial<Report> = {}): Report {
   return {
     fromDate: null,
     toDate: null,
     rows: ROWS,
+    sections: SECTIONS,
     totalDebit: '190000.50',
     totalCredit: '190000.50',
     balanced: true,
@@ -179,7 +189,7 @@ describe('TrialBalance', () => {
 
     /* A report with no dates on it is a report that cannot be checked against anything
      * later. Whatever range was summed has to be on the page with the figures. */
-    expect(await screen.findByText('2026-04-01 to 2027-03-31')).toBeInTheDocument()
+    expect(await screen.findByText('1 Apr 2026 to 31 Mar 2027')).toBeInTheDocument()
   })
 
   it('says so when the range is the whole ledger', async () => {
@@ -187,14 +197,39 @@ describe('TrialBalance', () => {
     expect(await screen.findByText('Everything in the books')).toBeInTheDocument()
   })
 
-  it('subtotals each section', async () => {
-    renderScreen(<TrialBalance />, { bridge: bridgeReturning(report()) })
+  /* B23: main's subtotal, not one added up here. Deliberately not the sum of the rows. */
+  it('subtotals each section with the figure main sent', async () => {
+    renderScreen(<TrialBalance />, {
+      bridge: bridgeReturning(
+        report({
+          sections: [
+            { type: 'asset', debitTotal: '99.00', creditTotal: '0.00' },
+            ...SECTIONS.slice(1),
+          ],
+        }),
+      ),
+    })
     await screen.findByText('Bank')
 
     const assets = screen.getByText('Total assets').closest('tr')
     expect(assets).not.toBeNull()
-    /* 1,25,000.00 + 47,500.50 — and the reason `sumAmounts` counts in paise. */
-    expect(within(assets as HTMLElement).getByText('1,72,500.50')).toBeInTheDocument()
+    expect(figuresOf(assets as HTMLElement)).toEqual(['99.00', ''])
+  })
+
+  it('draws a credit balance in the negative ink only when main sent it signed', async () => {
+    renderScreen(<TrialBalance />, {
+      bridge: bridgeReturning(
+        report({
+          rows: [line('1200', 'Bank', 'asset', '-250.00', '0.00')],
+          sections: SECTIONS.slice(0, 1),
+        }),
+      ),
+    })
+    const bank = await rowFor('1200')
+    const [debit] = [...bank.querySelectorAll('td.ledger-table__figure')]
+    expect(debit).toHaveTextContent('-250.00')
+    expect(debit).toHaveClass('ledger-table__figure--negative')
+    expect(bank.querySelectorAll('.ledger-table__figure--negative')).toHaveLength(1)
   })
 
   it('shows the totals it was given rather than re-adding the rows', async () => {
@@ -283,7 +318,9 @@ describe('TrialBalance', () => {
 
   it('says the books are empty rather than drawing an empty table', async () => {
     renderScreen(<TrialBalance />, {
-      bridge: bridgeReturning(report({ rows: [], totalDebit: '0.00', totalCredit: '0.00' })),
+      bridge: bridgeReturning(
+        report({ rows: [], sections: [], totalDebit: '0.00', totalCredit: '0.00' }),
+      ),
     })
 
     expect(await screen.findByText('Nothing has been posted yet')).toBeInTheDocument()

@@ -1366,7 +1366,7 @@ describe('what has been received against it', () => {
     })
 
     const row = (await screen.findByText('RCT/2026-27/0001')).closest('tr') as HTMLElement
-    expect(within(row).getByText('2026-04-20')).toBeInTheDocument()
+    expect(within(row).getByText('20 Apr 2026')).toBeInTheDocument()
     expect(within(row).getByText('500.00')).toBeInTheDocument()
   })
 
@@ -1523,7 +1523,7 @@ describe('what has been offset against it', () => {
     expect(await screen.findByRole('columnheader', { name: 'Credit note' })).toBeInTheDocument()
     const row = (await screen.findByText('CRN/2026-27/0001')).closest('tr') as HTMLElement
     const cells = within(row).getAllByRole('cell')
-    expect(cells[1]).toHaveTextContent(/^2026-04-20$/)
+    expect(cells[1]).toHaveTextContent(/^20 Apr 2026$/)
     expect(cells[2]).toHaveTextContent(/^300\.00$/)
   })
 
