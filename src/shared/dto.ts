@@ -1437,6 +1437,21 @@ export interface TrialBalanceRow {
   creditBalance: DecimalString
 }
 
+/**
+ * One of the five headings a trial balance is read under, with its own two subtotals.
+ *
+ * Added up in main like every other figure on the report (B23). The screen used to sum a
+ * section's rows itself, exactly and in paise, and it was still the renderer computing
+ * money — a second opinion about figures main had already totalled.
+ */
+export interface TrialBalanceSection {
+  type: AccountType
+  /** The section's rows' `debitBalance`, summed. */
+  debitTotal: DecimalString
+  /** The section's rows' `creditBalance`, summed. */
+  creditTotal: DecimalString
+}
+
 export interface TrialBalance {
   /** Inclusive. Null means from the first entry in the books. */
   fromDate: DateString | null
@@ -1444,6 +1459,11 @@ export interface TrialBalance {
   toDate: DateString | null
   /** Accounts with movement in the range, in code order. Groups never appear. */
   rows: TrialBalanceRow[]
+  /**
+   * Every type that has a row, in the order accounts are read — assets, liabilities,
+   * equity, income, expenses. A type with no row has no section.
+   */
+  sections: TrialBalanceSection[]
   totalDebit: DecimalString
   totalCredit: DecimalString
   /**

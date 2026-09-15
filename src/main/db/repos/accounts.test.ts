@@ -507,6 +507,24 @@ describe('roles', () => {
     expect(await codeOf(() => setAccountRole(db, 'cash', cash.id))).toBe('ACCOUNT_ARCHIVED')
   })
 
+  /* The same break as deleting it, through the reversible door: nothing could post there. */
+  it('will not archive an account that fills a role', async () => {
+    await setAccountRole(db, 'cash', cash.id)
+    expect(await codeOf(() => updateAccount(db, { id: cash.id, isArchived: true }))).toBe(
+      'ACCOUNT_IN_USE',
+    )
+    expect((await listAccounts(db)).find((a) => a.id === cash.id)?.isArchived).toBe(false)
+  })
+
+  it('still renames an account that fills a role, and restores one that is archived', async () => {
+    await setAccountRole(db, 'cash', cash.id)
+    expect((await updateAccount(db, { id: cash.id, name: 'Cash in hand' })).name).toBe(
+      'Cash in hand',
+    )
+    await updateAccount(db, { id: bank.id, isArchived: true })
+    expect((await updateAccount(db, { id: bank.id, isArchived: false })).isArchived).toBe(false)
+  })
+
   it('refuses an account that does not exist', async () => {
     expect(await codeOf(() => setAccountRole(db, 'cash', 'nope'))).toBe('ACCOUNT_NOT_FOUND')
   })

@@ -288,6 +288,9 @@ describe('balanceSheet', () => {
   it('includes an archived account that still holds money', async () => {
     await post(entry('1210', '3100', '100000.00', '2026-04-01'))
     await post(entry('1100', '1210', '5000.00', '2026-04-02'))
+    /* The seeded chart gives it a role, and an account the software posts through cannot be
+     * archived until the role is let go (accounts.ts, `assertFillsNoRole`). */
+    await db.deleteFrom('account_roles').where('account_id', '=', account['1100']!).execute()
     await updateAccount(db, { id: account['1100']!, isArchived: true })
 
     const sheet = await balanceSheet(db, '2026-04-30')

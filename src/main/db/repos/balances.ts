@@ -34,7 +34,7 @@
  */
 
 import { D, ZERO, toMoneyString, type Decimal } from '@main/domain/money'
-import { normalBalanceOf, signedEffect } from '@main/domain/ledger'
+import { ACCOUNT_TYPES, normalBalanceOf, signedEffect } from '@main/domain/ledger'
 import { sql, type RawBuilder } from 'kysely'
 
 import type {
@@ -43,6 +43,7 @@ import type {
   DateString,
   TrialBalance,
   TrialBalanceRow,
+  TrialBalanceSection,
 } from '@shared/dto'
 
 import type { CofferDb } from '../kysely'
@@ -116,10 +117,28 @@ export async function trialBalance(
     fromDate: options.fromDate ?? null,
     toDate: options.toDate ?? null,
     rows: result,
+    sections: sectionsOf(result),
     totalDebit: toMoneyString(totalDebit),
     totalCredit: toMoneyString(totalCredit),
     balanced: totalDebit.equals(totalCredit),
   }
+}
+
+/**
+ * A subtotal pair per account type, in the order the five are read.
+ *
+ * Summed from the rows' own balance columns rather than from `debit` and `credit`, because
+ * the subtotal sits under those columns and has to be their sum: an account with movement
+ * on both sides shows only its net, and so does its section.
+ */
+function sectionsOf(rows: readonly TrialBalanceRow[]): TrialBalanceSection[] {
+  return ACCOUNT_TYPES.flatMap((type) => {
+    const ofType = rows.filter((row) => row.type === type)
+    if (ofType.length === 0) return []
+    const debit = ofType.reduce((sum, row) => sum.plus(D(row.debitBalance)), ZERO)
+    const credit = ofType.reduce((sum, row) => sum.plus(D(row.creditBalance)), ZERO)
+    return [{ type, debitTotal: toMoneyString(debit), creditTotal: toMoneyString(credit) }]
+  })
 }
 
 /** One account's balance, positive in its own normal direction. */
