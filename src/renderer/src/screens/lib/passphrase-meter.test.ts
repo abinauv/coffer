@@ -1,6 +1,15 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { PassphraseStrength } from '@shared/dto'
-import { METER_SEGMENTS, meterView, NO_RESET_WARNING, weakConfirmBody } from './passphrase-meter'
+import {
+  METER_SEGMENTS,
+  METER_TONES,
+  meterView,
+  NO_RESET_WARNING,
+  weakConfirmBody,
+} from './passphrase-meter'
 
 function strength(
   score: PassphraseStrength['score'],
@@ -53,6 +62,41 @@ describe('meterView', () => {
 
   it('announces the verdict in words, not only in colour', () => {
     expect(meterView(strength(1, 'Weak', true), 'x').valueText).toBe('Weak passphrase')
+  })
+})
+
+/*
+ * THE TONES AND THE STYLESHEET, HELD TOGETHER (B9). The meter wrote negative, warning and
+ * positive while screens.css styled weak, fair and strong, so no bar ever filled and the
+ * label said "Very strong" over five grey dashes. Read from disk: vitest hands a stylesheet
+ * import back empty, and this is a claim about the file.
+ */
+describe('the stylesheet', () => {
+  /* From the repository root, where vitest runs: under happy-dom `import.meta.url` is not a
+   * file URL. */
+  const css = readFileSync(resolve('src/renderer/src/screens/screens.css'), 'utf8')
+
+  it('fills the bar for every tone the meter can write', () => {
+    for (const tone of METER_TONES.filter((name) => name !== 'empty')) {
+      expect(css, tone).toContain(
+        `.strength__bar[data-tone='${tone}'] .strength__segment[data-filled='true']`,
+      )
+    }
+  })
+
+  it('styles no tone the meter never writes', () => {
+    const styled = [...css.matchAll(/\.strength__bar\[data-tone='([a-z]+)'\]/g)].map((m) => m[1])
+    for (const tone of styled) {
+      expect(METER_TONES as readonly string[], String(tone)).toContain(tone)
+    }
+  })
+
+  it('writes the tones the stylesheet expects from real strengths', () => {
+    const tones = ([0, 2, 4] as const).map(
+      (score) =>
+        meterView({ score, label: 'x', suggestion: null, isWeak: score < 2 }, 'typed').tone,
+    )
+    expect(tones).toEqual(['negative', 'warning', 'positive'])
   })
 })
 

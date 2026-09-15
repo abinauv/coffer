@@ -44,12 +44,14 @@ import type {
   BackupInput,
   BackupResult,
   ChangePassphraseInput,
+  CheckRegistrationInput,
   CompanySummary,
   CreateCompanyInput,
   OpenCompanyInput,
   OpenCompanyResult,
   PassphraseStrength,
   RecoverCompanyInput,
+  RegistrationCheck,
   RestoreInput,
 } from '@shared/dto'
 import { randomUUID } from 'node:crypto'
@@ -532,6 +534,41 @@ export class CompanyService {
    */
   checkPassphrase(passphrase: string): PassphraseStrength {
     return scorePassphrase(passphrase)
+  }
+
+  /**
+   * A registration number, put to the regime a company would be created under.
+   *
+   * For the hint on the create screen, before there are any books to save it into. It
+   * decides nothing: the profile service checks the number again when it is saved, with
+   * the jurisdiction beside it (src/main/books/registration.ts).
+   */
+  checkRegistration(input: CheckRegistrationInput): RegistrationCheck {
+    const regime = requireRegime(input.regimeId)
+    const label = regime.registrationLabel
+    const blank: RegistrationCheck = {
+      label,
+      status: 'blank',
+      normalised: null,
+      jurisdictionCode: null,
+      jurisdictionName: null,
+      message: null,
+    }
+    /* No number is a correct answer for a business below the threshold, not a wrong one. */
+    if (input.registrationNumber.trim() === '') return blank
+
+    const result = regime.validateRegistrationNumber(input.registrationNumber)
+    if (!result.isValid) {
+      return { ...blank, status: 'invalid', message: result.message }
+    }
+    const code = result.derivedJurisdictionCode ?? null
+    return {
+      ...blank,
+      status: 'valid',
+      normalised: result.normalisedValue ?? input.registrationNumber.trim(),
+      jurisdictionCode: code,
+      jurisdictionName: code === null ? null : regime.jurisdictionName(code),
+    }
   }
 
   // ---- Beyond the IPC contract, for the rest of the main process ----------

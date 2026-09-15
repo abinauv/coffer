@@ -212,7 +212,7 @@ export function firstRunSteps(states: {
     },
     {
       id: 'parties',
-      title: 'Add a customer or a supplier',
+      title: 'Add your first customer',
       body: 'One record covers both — the firm you buy transport from can be the firm you sell to. Their state decides the place of supply, so it is worth typing in full.',
       actionLabel: 'Customers',
       screenId: LINKED_SCREENS.customers,
@@ -227,6 +227,16 @@ export function firstRunSteps(states: {
       state: states.documents,
     },
   ]
+}
+
+/**
+ * The step the day-one screen's main button offers: the first not yet known to be done.
+ *
+ * A step whose read failed counts as not done. Offering it again costs a click; skipping it
+ * would send somebody to raise an invoice their books cannot issue yet.
+ */
+export function nextFirstRunStep(steps: readonly FirstRunStep[]): FirstRunStep | null {
+  return steps.find((step) => step.state !== 'done') ?? null
 }
 
 // ---- What is owed, each way -------------------------------------------------

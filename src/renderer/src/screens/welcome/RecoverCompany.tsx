@@ -25,6 +25,7 @@ import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
 import { PassphraseField } from '../components/PassphraseField'
 import { ScreenFrame } from '../components/ScreenFrame'
+import { StepCard } from '../components/StepFrame'
 import { StrengthMeter } from '../components/StrengthMeter'
 import { validateRecover } from '../lib/forms'
 import { NO_RESET_WARNING } from '../lib/passphrase-meter'
@@ -134,78 +135,86 @@ export function RecoverCompany(): JSX.Element {
 
   return (
     <ScreenFrame
+      width="list"
       title={`Recover ${company.displayName}`}
       lede="A recovery code opens this company without the passphrase, once. It is then spent, and you choose the passphrase you will use from now on."
       back={back}
     >
-      <div className="stack">
-        {error && (
-          <FailureNotice
-            error={error}
-            context="recover"
-            onAction={{
-              restore: toCompanies,
-              'add-existing': toCompanies,
-            }}
+      <div className="split">
+        <div className="stack">
+          {error && (
+            <FailureNotice
+              error={error}
+              context="recover"
+              onAction={{
+                restore: toCompanies,
+                'add-existing': toCompanies,
+              }}
+            />
+          )}
+
+          <Input
+            label="Recovery code"
+            isIdentifier
+            value={recoveryCode}
+            error={form.errors.recoveryCode}
+            hint="From the sheet you saved when this company was created. Hyphens, spaces and lower case are all fine."
+            placeholder="A1B2C-3D4E5-F6G7H-8J9K0"
+            autoComplete="off"
+            spellCheck={false}
+            autoFocus
+            onChange={(event) => setRecoveryCode(event.target.value)}
           />
-        )}
 
-        <Input
-          label="Recovery code"
-          value={recoveryCode}
-          error={form.errors.recoveryCode}
-          hint="From the sheet you saved when this company was created. Hyphens, spaces and lower case are all fine."
-          placeholder="A1B2C-3D4E5-F6G7H-8J9K0"
-          autoComplete="off"
-          spellCheck={false}
-          autoFocus
-          onChange={(event) => setRecoveryCode(event.target.value)}
-        />
-
-        <PassphraseField
-          label="New passphrase"
-          value={newPassphrase}
-          onChange={setNewPassphrase}
-          error={form.errors.newPassphrase}
-          hint="This replaces the passphrase you could not use. The books themselves are not re-encrypted, so this is quick."
-          isDisabled={isBusy}
-          onSubmit={() => void submit()}
-        >
-          <StrengthMeter strength={strength} passphrase={newPassphrase} />
-        </PassphraseField>
-
-        <PassphraseField
-          label="New passphrase again"
-          value={confirmation}
-          onChange={(value) => {
-            setConfirmation(value)
-            setTouchedConfirmation(true)
-          }}
-          error={form.errors.confirmation}
-          isDisabled={isBusy}
-          onSubmit={() => void submit()}
-        />
-
-        <Notice tone="warning" title="The code you use is gone afterwards">
-          <p>
-            Each code works exactly once. The others on your sheet keep working, and Coffer cannot
-            issue replacements for a company that already exists — so cross this one off the sheet
-            once it has worked.
-          </p>
-          <p>{NO_RESET_WARNING}</p>
-        </Notice>
-
-        <div className="actions">
-          <Button
-            variant="primary"
-            icon="lock"
-            onClick={() => void submit()}
-            disabled={!form.canSubmit}
-            isBusy={isBusy}
+          <PassphraseField
+            label="New passphrase"
+            value={newPassphrase}
+            onChange={setNewPassphrase}
+            error={form.errors.newPassphrase}
+            hint="This replaces the passphrase you could not use. The books themselves are not re-encrypted, so this is quick."
+            isDisabled={isBusy}
+            onSubmit={() => void submit()}
           >
-            Recover and open
-          </Button>
+            <StrengthMeter strength={strength} passphrase={newPassphrase} />
+          </PassphraseField>
+
+          <PassphraseField
+            label="Type it again"
+            value={confirmation}
+            onChange={(value) => {
+              setConfirmation(value)
+              setTouchedConfirmation(true)
+            }}
+            error={form.errors.confirmation}
+            isDisabled={isBusy}
+            onSubmit={() => void submit()}
+          />
+
+          <div className="actions">
+            <Button
+              variant="primary"
+              icon="lock"
+              onClick={() => void submit()}
+              disabled={!form.canSubmit}
+              isBusy={isBusy}
+            >
+              Recover and open
+            </Button>
+          </div>
         </div>
+
+        <aside className="split__aside">
+          <StepCard title="The code you use is gone afterwards" tone="warning">
+            <p>
+              Each code works exactly once. The others on your sheet keep working, and Coffer cannot
+              issue replacements for a company that already exists — so cross this one off the sheet
+              once it has worked.
+            </p>
+          </StepCard>
+          <StepCard title="There is no back door">
+            <p>{NO_RESET_WARNING}</p>
+          </StepCard>
+        </aside>
       </div>
     </ScreenFrame>
   )

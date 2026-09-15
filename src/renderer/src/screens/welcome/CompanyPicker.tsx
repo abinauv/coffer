@@ -6,15 +6,21 @@
  * have been here already). Nothing on this screen reads a single figure from anybody's
  * books, because nothing has been decrypted yet.
  *
+ * WITH NO COMPANIES, IT IS THE WELCOME. A first launch has nothing to list, so instead of
+ * an empty list it says what Coffer is in one sentence, offers the two ways in — create a
+ * company, or open a file already on disk — and the two ways back to books that exist
+ * somewhere: a recovery code for a file whose passphrase is lost, and a backup.
+ *
  * ONE RULE WORTH STATING. "Forget" removes a row from a list. It never deletes a file,
  * and the confirmation says so in those words — a user who reads "remove" as "delete" and
  * hesitates has been failed by the copy, and one who reads it the other way round has
  * been failed much worse.
  */
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { JSX } from 'react'
 import { Badge, Button, Dialog, Icon, Input } from '@renderer/components/atoms'
+import { BrandMark } from '@renderer/components/shell/BrandMark'
 import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { makeRoute } from '@renderer/lib/routing'
@@ -23,11 +29,12 @@ import { useNavigation } from '@renderer/store/navigation'
 import { registerScreens } from '@renderer/lib/screens'
 import { useToasts } from '@renderer/store/toasts'
 import type { CompanySummary } from '@shared/dto'
-import { EmptyState } from '../components/EmptyState'
+import { BRAND } from '../../../../branding'
 import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
 import { PathField } from '../components/PathField'
 import { ScreenFrame } from '../components/ScreenFrame'
+import { TitleBarSync } from '../components/TitleBarSync'
 import { describeAvailability } from '../lib/availability'
 import { describeCreated, describeLastOpened } from '../lib/dates'
 import { failureTitle } from '../lib/messages'
@@ -41,45 +48,78 @@ export function CompanyPicker(): JSX.Element {
 
   const [renaming, setRenaming] = useState<CompanySummary | null>(null)
   const [forgetting, setForgetting] = useState<CompanySummary | null>(null)
-  /* A screen that could not restore a backup itself sends the user here asking for the
-   * dialog — `route.params.action`. Read once, at mount: the picker is remounted on the
-   * way in, and the dialog must not spring open again when it is dismissed. */
-  const [isRestoreOpen, setRestoreOpen] = useState(() => route.params['action'] === 'restore')
+  /* A screen that cannot do something itself sends the user here asking for it —
+   * `route.params.action`: restore a backup, find a file, or remove an entry. Read once, at
+   * mount: the picker is remounted on the way in, and nothing may spring open again after
+   * it has been dismissed. */
+  const [requested] = useState(() => ({
+    action: route.params['action'],
+    id: route.params['id'],
+  }))
+  const [isRestoreOpen, setRestoreOpen] = useState(() => requested.action === 'restore')
+  const [hasActedOnRequest, setActedOnRequest] = useState(false)
   const [isAdding, setAdding] = useState(false)
 
   const goCreate = useCallback(() => navigate(makeRoute('welcome', 'create')), [navigate])
 
-  /** Point Coffer at a company file that is already on disk. */
-  const addExisting = useCallback(async () => {
+  /**
+   * Point Coffer at a company file that is already on disk. Answers the entry it added, or
+   * null when nothing was — the dialog closed, or the file was refused and a toast said why.
+   */
+  const chooseAndAdd = useCallback(async (): Promise<CompanySummary | null> => {
     setAdding(true)
     try {
       const chosen = await callApi((api) => api.system.chooseCompanyFile())
       if (!chosen.ok) {
         show({ tone: 'danger', title: failureTitle(chosen.error), body: chosen.error.message })
-        return
+        return null
       }
       /* Null is the user closing the dialog. Not an error, and not worth a toast. */
       const filePath = chosen.data
-      if (filePath === null) return
+      if (filePath === null) return null
 
       const added = await callApi((api) => api.companies.addExisting(filePath))
       if (!added.ok) {
         show({ tone: 'danger', title: failureTitle(added.error), body: added.error.message })
-        return
+        return null
       }
       await refresh()
-      show({
-        tone: 'success',
-        title: `${added.data.displayName} is on your list`,
-        body:
-          added.data.availability === 'vault-missing'
-            ? 'Its keys are not beside it, so it cannot be opened yet. The list explains what to do.'
-            : 'Open it with its passphrase whenever you need it.',
-      })
+      return added.data
     } finally {
       setAdding(false)
     }
   }, [refresh, show])
+
+  const addExisting = useCallback(async () => {
+    const added = await chooseAndAdd()
+    if (added === null) return
+    show({
+      tone: 'success',
+      title: `${added.displayName} is on your list`,
+      body:
+        added.availability === 'vault-missing'
+          ? 'Its keys are not beside it, so it cannot be opened yet. The list explains what to do.'
+          : 'Open it with its passphrase whenever you need it.',
+    })
+  }, [chooseAndAdd, show])
+
+  /* From the welcome, where there is no list to pick from: the file first, then the code. */
+  const recoverFromFile = useCallback(async () => {
+    const added = await chooseAndAdd()
+    if (added !== null) navigate(makeRoute('welcome', 'recover', { id: added.id }))
+  }, [chooseAndAdd, navigate])
+
+  /* The removal asked for waits for the list, because it names a company on it. */
+  useEffect(() => {
+    if (hasActedOnRequest || companies === null) return
+    if (requested.action === 'add-existing') {
+      setActedOnRequest(true)
+      void addExisting()
+    } else if (requested.action === 'forget') {
+      setActedOnRequest(true)
+      setForgetting(companies.find((company) => company.id === requested.id) ?? null)
+    }
+  }, [hasActedOnRequest, companies, requested, addExisting])
 
   useRegisterCommands(
     useMemo<Command[]>(
@@ -102,6 +142,31 @@ export function CompanyPicker(): JSX.Element {
       [goCreate, addExisting],
     ),
   )
+
+  const restoreDialog = (
+    <RestoreDialog isOpen={isRestoreOpen} onClose={() => setRestoreOpen(false)} onDone={refresh} />
+  )
+
+  /* Nothing until the list has answered. Drawing "Your companies" while it loads would flash
+   * a list screen at a first launch before the welcome replaced it. */
+  if (error === null && companies === null) {
+    return <div className="welcome" aria-busy="true" />
+  }
+
+  if (error === null && companies !== null && companies.length === 0) {
+    return (
+      <>
+        <Welcome
+          isAdding={isAdding}
+          onCreate={goCreate}
+          onOpenFile={() => void addExisting()}
+          onRecover={() => void recoverFromFile()}
+          onRestore={() => setRestoreOpen(true)}
+        />
+        {restoreDialog}
+      </>
+    )
+  }
 
   return (
     <ScreenFrame
@@ -128,8 +193,6 @@ export function CompanyPicker(): JSX.Element {
       {error && (
         <FailureNotice error={error} context="list" onAction={{ refresh: () => void refresh() }} />
       )}
-
-      {companies !== null && companies.length === 0 && <NoCompanies onCreate={goCreate} />}
 
       {companies !== null && companies.length > 0 && (
         <ul className="company-list">
@@ -158,11 +221,7 @@ export function CompanyPicker(): JSX.Element {
         onDone={refresh}
       />
       <ForgetDialog company={forgetting} onClose={() => setForgetting(null)} onDone={refresh} />
-      <RestoreDialog
-        isOpen={isRestoreOpen}
-        onClose={() => setRestoreOpen(false)}
-        onDone={refresh}
-      />
+      {restoreDialog}
     </ScreenFrame>
   )
 }
@@ -260,23 +319,73 @@ function CompanyRow({
   )
 }
 
-function NoCompanies({ onCreate }: { onCreate: () => void }): JSX.Element {
+// ---- The welcome -----------------------------------------------------------
+
+interface WelcomeProps {
+  isAdding: boolean
+  onCreate: () => void
+  onOpenFile: () => void
+  onRecover: () => void
+  onRestore: () => void
+}
+
+/**
+ * The first thing a first launch shows.
+ *
+ * Four promises at the foot, and each is a fact about this build rather than a slogan:
+ * there is no account and no subscription because there is no server, no telemetry because
+ * nothing is sent, and it works offline because the Content Security Policy forbids every
+ * remote origin (docs/design.md). A promise that stops being true comes off the list.
+ */
+function Welcome({
+  isAdding,
+  onCreate,
+  onOpenFile,
+  onRecover,
+  onRestore,
+}: WelcomeProps): JSX.Element {
   return (
-    <EmptyState
-      title="No companies yet"
-      titleAs="h2"
-      action={
-        <Button variant="primary" icon="plus" onClick={onCreate}>
-          Create a company
-        </Button>
-      }
-    >
-      <p>
-        A company is one encrypted file plus the vault holding its keys, kept wherever you choose —
-        a folder on this machine, or a drive you can lock in a cupboard. Create one to start, or add
-        a file you already have.
-      </p>
-    </EmptyState>
+    <div className="welcome">
+      <TitleBarSync />
+      <div className="welcome__main">
+        <span className="welcome__icon" aria-hidden="true">
+          <BrandMark size={40} />
+        </span>
+        <div className="welcome__titles">
+          <h1 className="welcome__title">Welcome to {BRAND.name}</h1>
+          <p className="welcome__lede">
+            Your books are kept encrypted, in files on this computer. There is no account to create
+            and nothing to sign in to. Start by making a company.
+          </p>
+        </div>
+        <div className="welcome__actions">
+          <Button variant="primary" icon="plus" isFullWidth onClick={onCreate}>
+            Create a company
+          </Button>
+          <Button icon="folder" isFullWidth isBusy={isAdding} onClick={onOpenFile}>
+            Open an existing company file…
+          </Button>
+        </div>
+        <p className="welcome__links">
+          <span>
+            Lost your passphrase?{' '}
+            <Button variant="ghost" size="sm" onClick={onRecover} disabled={isAdding}>
+              Use a recovery code
+            </Button>
+          </span>
+          <span aria-hidden="true">·</span>
+          <Button variant="ghost" size="sm" onClick={onRestore}>
+            Restore from a backup
+          </Button>
+        </p>
+      </div>
+      <ul className="welcome__promises" aria-label="What Coffer does without">
+        <li>No account</li>
+        <li>No subscription</li>
+        <li>No telemetry</li>
+        <li>Works with the internet off</li>
+      </ul>
+    </div>
   )
 }
 

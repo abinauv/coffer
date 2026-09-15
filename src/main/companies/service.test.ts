@@ -399,6 +399,58 @@ describe('create sets up the books', () => {
   })
 })
 
+/*
+ * The GSTIN box on the create screen asks before any books exist, so this answers from the
+ * regime alone and touches no file. It decides nothing: the profile service checks again.
+ */
+describe('checkRegistration', () => {
+  it('names the number the regime’s way for a blank box, and checks nothing', async () => {
+    const now = await fixture()
+
+    expect(now.service.checkRegistration({ registrationNumber: '   ' })).toEqual({
+      label: 'GSTIN / UIN',
+      status: 'blank',
+      normalised: null,
+      jurisdictionCode: null,
+      jurisdictionName: null,
+      message: null,
+    })
+  })
+
+  it('spells a valid number the regime’s way and names the state it encodes', async () => {
+    const now = await fixture()
+
+    expect(now.service.checkRegistration({ registrationNumber: ' 33aabcc1234d1zi ' })).toEqual({
+      label: 'GSTIN / UIN',
+      status: 'valid',
+      normalised: '33AABCC1234D1ZI',
+      jurisdictionCode: '33',
+      jurisdictionName: 'Tamil Nadu',
+      message: null,
+    })
+  })
+
+  it('says why an invalid number is invalid', async () => {
+    const now = await fixture()
+    const check = now.service.checkRegistration({ registrationNumber: '33AABCC1234D1ZX' })
+
+    expect(check.status).toBe('invalid')
+    expect(check.message).not.toBeNull()
+    expect(check.normalised).toBeNull()
+  })
+
+  it('refuses a regime it does not have, as create does', async () => {
+    const now = await fixture()
+
+    expect(
+      await codeOf(async () =>
+        now.service.checkRegistration({ registrationNumber: '', regimeId: 'xx' }),
+      ),
+    ).toBe('COMPANY_REGIME_UNKNOWN')
+    expect(await now.service.list()).toEqual([])
+  })
+})
+
 describe('open', () => {
   it('reopens a company and finds what was written to it', async () => {
     const now = await fixture()

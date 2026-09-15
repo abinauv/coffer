@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   createScreenRegistry,
+  describeLocation,
   findScreen,
   isScreenDefinition,
   navSections,
@@ -139,6 +140,36 @@ describe('navSections', () => {
 
   it('is empty when nothing is registered', () => {
     expect(navSections([], 'workspace')).toEqual([])
+  })
+})
+
+describe('describeLocation', () => {
+  const screens = [
+    screen({
+      id: 'company-profile',
+      nav: { label: 'Business details', icon: 'building', group: 'company', order: 0 },
+    }),
+    screen({
+      id: 'invoices',
+      nav: { label: 'Sales invoices', icon: 'ledger', group: 'sales', order: 1 },
+    }),
+    screen({ id: 'invoice', navParent: 'invoices' }),
+    screen({ id: 'parties' }),
+  ]
+
+  it('names the section and the rail entry', () => {
+    expect(describeLocation(screens, 'workspace', 'company-profile')).toBe(
+      'Company → Business details',
+    )
+  })
+
+  it('places a screen outside the rail by the entry it opens from', () => {
+    expect(describeLocation(screens, 'workspace', 'invoice')).toBe('Sales → Sales invoices')
+  })
+
+  it('invents nothing for a screen the rail cannot place', () => {
+    expect(describeLocation(screens, 'workspace', 'parties')).toBeNull()
+    expect(describeLocation(screens, 'workspace', 'nowhere')).toBeNull()
   })
 })
 

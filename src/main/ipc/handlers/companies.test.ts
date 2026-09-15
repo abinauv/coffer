@@ -5,6 +5,7 @@ import type {
   CompanySummary,
   OpenCompanyResult,
   PassphraseStrength,
+  RegistrationCheck,
 } from '../../../shared/dto'
 import { IpcError } from '../errors'
 import { type PathAllowlist, createPathAllowlist } from '../path-access'
@@ -34,6 +35,15 @@ const BACKUP: BackupResult = {
 }
 
 const STRENGTH: PassphraseStrength = { score: 4, label: 'Strong', suggestion: null, isWeak: false }
+
+const REGISTRATION: RegistrationCheck = {
+  label: 'GSTIN / UIN',
+  status: 'valid',
+  normalised: '33AABCC1234D1ZI',
+  jurisdictionCode: '33',
+  jurisdictionName: 'Tamil Nadu',
+  message: null,
+}
 
 async function call(spec: any, ...args: unknown[]): Promise<unknown> {
   return spec.handle(...spec.parseArgs(args))
@@ -71,6 +81,7 @@ beforeEach(() => {
     forget: vi.fn(async () => undefined),
     rename: vi.fn(async () => SUMMARY),
     checkPassphrase: vi.fn(async () => STRENGTH),
+    checkRegistration: vi.fn(async () => REGISTRATION),
   }
   allowlist = createPathAllowlist()
   handlers = createCompaniesHandlers(service, allowlist)
@@ -282,6 +293,37 @@ describe('companies:rename', () => {
 
     expect(error.code).toBe('INVALID_ARGUMENT')
     expect(service.rename).not.toHaveBeenCalled()
+  })
+})
+
+describe('companies:checkRegistration', () => {
+  it('returns what the regime said', async () => {
+    await expect(
+      call(handlers.checkRegistration, { registrationNumber: '33aabcc1234d1zi' }),
+    ).resolves.toEqual({ ok: true, data: REGISTRATION })
+    expect(service.checkRegistration).toHaveBeenCalledWith({
+      registrationNumber: '33aabcc1234d1zi',
+    })
+  })
+
+  /* A blank box is asked about on purpose: the answer carries the regime's label. */
+  it('accepts a blank number and passes a regime through', async () => {
+    await call(handlers.checkRegistration, { registrationNumber: '', regimeId: 'in' })
+
+    expect(service.checkRegistration).toHaveBeenCalledWith({
+      registrationNumber: '',
+      regimeId: 'in',
+    })
+  })
+
+  it('refuses a number longer than any registration, and a missing one', async () => {
+    const long = { registrationNumber: 'X'.repeat(65) }
+    expect((await rejection(() => call(handlers.checkRegistration, long))).code).toBe(
+      'INVALID_ARGUMENT',
+    )
+    expect((await rejection(() => call(handlers.checkRegistration, {}))).code).toBe(
+      'INVALID_ARGUMENT',
+    )
   })
 })
 

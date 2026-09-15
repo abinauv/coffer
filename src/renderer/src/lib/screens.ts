@@ -124,6 +124,29 @@ export function findScreen(
   return screens.find((screen) => screen.area === area && screen.id === screenId)
 }
 
+/**
+ * Where a screen lives, as a sentence points at it: "Company → Business details".
+ *
+ * A screen outside the rail is placed by the rail entry it opens from — the invoice editor
+ * lives at "Sales → Sales invoices". Null for a screen the rail cannot place, which a caller
+ * should say some other way rather than invent a path for.
+ */
+export function describeLocation(
+  screens: readonly ScreenDefinition[],
+  area: AppArea,
+  screenId: string,
+): string | null {
+  const screen = findScreen(screens, area, screenId)
+  const placed =
+    screen?.nav !== undefined
+      ? screen
+      : screen?.navParent === undefined
+        ? undefined
+        : findScreen(screens, area, screen.navParent)
+  if (placed?.nav === undefined) return null
+  return `${navGroupLabel(placed.nav.group)} → ${placed.nav.label}`
+}
+
 /** A screen that appears in the rail, with its nav metadata proven present. */
 export type NavigableScreen = ScreenDefinition & { nav: ScreenNav }
 

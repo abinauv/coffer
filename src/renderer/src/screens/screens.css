@@ -46,12 +46,20 @@
 .page__head {
   display: flex;
   flex-direction: column;
+  /* Start, not the default stretch: a flex column stretches its children across the page,
+   * which centred the back link's label in a full-width button (B8). */
+  align-items: flex-start;
   gap: var(--space-2);
   margin-bottom: var(--space-6);
 }
 
-.page__title,
-.page__heading {
+.page__titles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.page__title {
   margin: 0;
   color: var(--ink-strong);
   font-size: var(--text-2xl);
@@ -61,16 +69,18 @@
   text-wrap: balance;
 }
 
-.page__heading {
-  font-size: var(--text-xl);
-}
-
 .page__lede {
   margin: 0;
   max-width: 60ch;
   color: var(--ink-muted);
   font-size: var(--text-md);
   line-height: var(--leading-relaxed);
+}
+
+/* A path in a lede is an identifier, set a step smaller so it does not outweigh the title. */
+.page__lede .selectable {
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
 }
 
 .page__body {
@@ -117,6 +127,7 @@
 }
 
 .prose__icon {
+  display: inline-block;
   vertical-align: -0.15em;
   margin-right: var(--space-1);
   color: var(--ink-faint);
@@ -208,6 +219,10 @@
 }
 
 .checkbox__label {
+  /* Shrinks beside the box rather than wrapping to a row of its own: a long sentence, such
+   * as the one confirming the recovery codes are saved, otherwise fell under the box. */
+  flex: 1 1 0;
+  min-width: 0;
   color: var(--ink);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
@@ -228,7 +243,11 @@
 /* ---- Strength meter ------------------------------------------------------ */
 
 /* Advisory and visibly so. Tone is carried by `data-tone`, but never by colour
- * alone — the label beside it always says the verdict in words. */
+ * alone — the label beside it always says the verdict in words.
+ *
+ * The tone names are `METER_TONES` in lib/passphrase-meter.ts. These selectors once said
+ * weak, fair and strong while the meter wrote negative, warning and positive, so the bars
+ * never filled (B9); lib/passphrase-meter.test.ts now reads this file to hold them together. */
 
 .strength {
   display: flex;
@@ -255,15 +274,15 @@
   }
 }
 
-.strength__bar[data-tone='weak'] .strength__segment[data-filled='true'] {
+.strength__bar[data-tone='negative'] .strength__segment[data-filled='true'] {
   background: var(--negative);
 }
 
-.strength__bar[data-tone='fair'] .strength__segment[data-filled='true'] {
+.strength__bar[data-tone='warning'] .strength__segment[data-filled='true'] {
   background: var(--warning);
 }
 
-.strength__bar[data-tone='strong'] .strength__segment[data-filled='true'] {
+.strength__bar[data-tone='positive'] .strength__segment[data-filled='true'] {
   background: var(--positive);
 }
 
@@ -601,6 +620,394 @@
   gap: var(--space-2);
   margin-top: var(--space-1);
 }
+/* ---- The welcome ---------------------------------------------------------- */
+
+/* What a first launch shows: the icon, one sentence, the two ways in and the two ways back,
+ * and four promises along the foot. Centred, because there is nothing else on the canvas. */
+.welcome {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 44rem;
+  min-height: min(38rem, 100%);
+}
+
+.welcome__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+}
+
+/* The app icon's own drawing: the mark reversed on the accent, as the packaged icon is. */
+.welcome__icon {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  border-radius: var(--radius-xl);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-md);
+}
+
+.welcome__icon .brand-mark {
+  color: var(--on-accent);
+}
+
+.welcome__titles {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* The serif is for the name, and this heading is the name's first appearance. */
+.welcome__title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-3xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-wordmark);
+  line-height: var(--leading-tight);
+  color: var(--ink-strong);
+}
+
+.welcome__lede {
+  margin: 0;
+  max-width: 50ch;
+  color: var(--ink-muted);
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+  text-wrap: pretty;
+}
+
+.welcome__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 26rem;
+}
+
+.welcome__links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: var(--text-sm);
+}
+
+.welcome__promises {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2) var(--space-8);
+  margin: 0;
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--rule);
+  list-style: none;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+/* ---- A flow in steps ------------------------------------------------------ */
+
+/* Creating a company: the steps across the top, the step's content with its cards beside,
+ * and a footer holding the way back and the way on. */
+.step-frame {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 64rem;
+  background: var(--ground);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.step-frame__steps {
+  padding: var(--space-4) var(--space-8);
+  border-bottom: 1px solid var(--rule);
+}
+
+.step-frame__list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step-frame__step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+/* The chevron between steps is decoration; the list already says they are in order. */
+.step-frame__step + .step-frame__step::before {
+  content: '›' / '';
+  margin-inline: calc(var(--space-3) * -1) var(--space-1);
+  color: var(--ink-faint);
+}
+
+.step-frame__number {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: var(--numeric-figures);
+}
+
+.step-frame__step[data-state='current'] {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: var(--weight-medium);
+}
+
+.step-frame__step[data-state='current'] .step-frame__number {
+  background: var(--on-accent);
+  color: var(--accent);
+}
+
+.step-frame__step[data-state='done'] {
+  background: var(--positive-soft);
+  color: var(--positive-ink);
+}
+
+.step-frame__body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18rem;
+  gap: var(--space-10);
+  padding: var(--space-6) var(--space-8) var(--space-8);
+}
+
+/* Narrow canvases put the cards under the step, where they are still read before the
+ * footer's button. */
+@media (max-width: 900px) {
+  .step-frame__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.step-frame__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.step-frame__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.step-frame__done {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--positive-ink);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.step-frame__done svg {
+  flex: none;
+  margin-top: 0.15em;
+}
+
+.step-frame__aside,
+.split__aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  align-self: start;
+}
+
+.step-frame__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-8);
+  background: var(--chrome);
+  border-top: 1px solid var(--rule);
+}
+
+.step-frame__forward {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-4);
+  margin-inline-start: auto;
+}
+
+.step-frame__hint {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+/* A card beside a step. One may warn, and one may say there is no way back. */
+.step-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+}
+
+.step-card[data-tone='warning'] {
+  background: var(--warning-soft);
+  border-color: var(--warning-line);
+}
+
+.step-card[data-tone='danger'] {
+  background: var(--negative-soft);
+  border-color: var(--negative-line);
+}
+
+.step-card__title {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.step-card[data-tone='warning'] .step-card__title {
+  color: var(--warning-ink);
+}
+
+.step-card[data-tone='danger'] .step-card__title {
+  color: var(--negative-ink);
+}
+
+.step-card__body,
+.step-card__list {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.step-card__body p {
+  margin: 0;
+}
+
+.step-card__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 0;
+  list-style: none;
+  counter-reset: step-card;
+}
+
+/* Numbered in a small accent disc, as the steps above are; the number is the list's own
+ * order, so it is decoration to a screen reader, which hears a numbered list already. */
+.step-card__list > li {
+  position: relative;
+  padding-inline-start: calc(20px + var(--space-3));
+  counter-increment: step-card;
+}
+
+.step-card__list > li::before {
+  content: counter(step-card) / '';
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0.1em;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: var(--numeric-figures);
+}
+
+/* A form with explanation beside it, outside a flow: using a recovery code. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18rem;
+  gap: var(--space-10);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- Day one ---------------------------------------------------------------- */
+
+/* The three steps a new company needs, as cards beside each other. */
+.next-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.next-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+}
+
+.next-step__title {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.next-step__body {
+  flex: 1;
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.next-step__action {
+  margin-inline-start: calc(var(--space-2) * -1);
+}
+
 /* ---- Facts --------------------------------------------------------------- */
 
 .facts {
@@ -646,9 +1053,18 @@
   line-height: var(--leading-relaxed);
 }
 
-.confirm__input {
-  max-width: 22rem;
-  font-family: var(--font-mono);
+/* The sentence to tick, in a box that turns positive once it is ticked: the second signal
+ * beside the tick itself. */
+.confirm__box {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.confirm__box[data-checked='true'] {
+  border-color: var(--positive);
+  background: var(--positive-soft);
 }
 
 /* ---- The recovery-code sheet --------------------------------------------- */
@@ -710,18 +1126,12 @@
 }
 
 .sheet__codes {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
   gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-.sheet__row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-  gap: var(--space-3);
 }
 
 .sheet__code {
@@ -795,7 +1205,6 @@
   }
 
   .sheet,
-  .sheet__row,
   .sheet__code {
     break-inside: avoid;
   }

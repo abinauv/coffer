@@ -34,6 +34,7 @@ import {
   documentActivity,
   DRAFT_NUMBER_LABEL,
   firstRunSteps,
+  nextFirstRunStep,
   isNewCompany,
   mostOverdue,
   outstandingLinkLabel,
@@ -253,6 +254,17 @@ describe('firstRunSteps', () => {
     /* The invitation is "raise one", so it opens a new document. The register would be a
      * list of the nothing this company has. */
     expect(steps[2]?.screenId).toBe('sales-invoice')
+  })
+
+  it('offers the first step not yet known to be done', () => {
+    expect(nextFirstRunStep(steps)?.id).toBe('parties')
+    expect(
+      nextFirstRunStep(firstRunSteps({ profile: 'unknown', parties: 'done', documents: 'todo' }))
+        ?.id,
+    ).toBe('profile')
+    expect(
+      nextFirstRunStep(firstRunSteps({ profile: 'done', parties: 'done', documents: 'done' })),
+    ).toBeNull()
   })
 
   it('names the screen each step goes to', () => {
