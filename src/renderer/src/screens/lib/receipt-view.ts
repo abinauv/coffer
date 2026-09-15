@@ -151,6 +151,14 @@ export function accountHint(kind: ReceiptKind): string {
 }
 
 /**
+ * What a register's search box says it searches. A reference is what is on a statement,
+ * so it is named; the narration is searched as well and left off to keep the line short.
+ */
+export function registerSearchPlaceholder(side: TradeSide): string {
+  return `Search by number, ${partyLabel(side).toLowerCase()} or reference`
+}
+
+/**
  * What an empty register says, when nothing has been filtered out.
  *
  * MONEY ON ACCOUNT IS NOT AN UNFINISHED JOB, and this sentence is where a user learns it.

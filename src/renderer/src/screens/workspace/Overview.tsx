@@ -1,170 +1,131 @@
 /*
  * The workspace landing screen — the first thing anybody sees after unlocking their books.
  *
- * IT WAS A PLACEHOLDER AND IT SAID SO, promising accounts, invoices, purchases and
- * reports "in the next phase". All of that shipped, so the notice was a lie printed on
- * the one screen every session starts on. What is here now is a dashboard: the four
- * questions a small business actually opens its books to ask, in the order they are
- * asked.
+ * FOUR FIGURES, THEN THE TWO LISTS THAT MAKE TOMORROW'S WORK (Screens §02). What is owed
+ * to the business, what it owes, what is in the bank, and how the month is going; then who
+ * has owed the longest, and the handful of things that need somebody's attention. Nothing
+ * here is a chart for the sake of one.
  *
- *   WHAT AM I OWED, AND WHAT DO I OWE. Both sides of `reports.aged`, as at today, with
- *   the report's own columns. For most users this IS the dashboard.
- *   WHAT NEEDS ATTENTION. What is late, worst first, across both sides; and the drafts
- *   nobody has issued. Every row opens the thing itself.
- *   WHAT HAS HAPPENED LATELY. The last few documents and vouchers as one sequence.
- *   AND THE COMPANY'S OWN STATE, which is what this screen has always been for.
+ * NOT ONE FIGURE ON THIS PAGE IS WORKED OUT HERE (CONVENTIONS §1.7). "Owed to you" is the
+ * sales aged report's own total, "You owe" the purchase one's, and "Cash and bank" and
+ * "This month, net" come from `reports.overviewFigures`, which exists because no other
+ * channel answered them. Counting invoices and naming days is not money, and is all
+ * `overview-view.ts` does.
  *
- * NOT ONE FIGURE ON THIS PAGE IS WORKED OUT HERE (CONVENTIONS §1.7). A dashboard is
- * where that rule is most tempting to break — "total overdue" is one addition away, and
- * so is "net position" — and every one of those additions is money arithmetic in the
- * renderer. What is shown is what main sent: a side's `totals.total`, a column's own
- * figure, an item's own amount. Where a figure would have to be computed to exist, the
- * page does without it. `overview-view.ts` holds the selection and ordering that is left,
- * and nothing else.
- *
- * SEVEN INDEPENDENT READS, AND NO ONE OF THEM CAN TAKE THE SCREEN DOWN. Each panel holds
- * its own `Panel<T>` — loading, ready, or failed with the reason — so an ageing report
- * that cannot resolve its control account leaves the drafts, the activity and the backup
- * button exactly where they were, and says what went wrong in its own box. A dashboard
- * that went blank because one query failed would be worse than no dashboard.
+ * SEVEN INDEPENDENT READS, AND NO ONE OF THEM CAN TAKE THE SCREEN DOWN. Each holds its own
+ * `Panel<T>` — loading, ready, or failed with the reason — so an ageing report that cannot
+ * resolve its control account leaves the cash figure and the attention list where they
+ * were, and says what went wrong in its own box.
  *
  * AN EMPTY COMPANY READS AS A BEGINNING. A file made this morning has no documents and no
- * parties, and six zeroes over an empty table is the least useful thing to show somebody
- * on their first day. `isNewCompany` swaps the figures for the three things that have to
- * happen first, each marked with whether it is already done — and the two reads behind
- * that checklist are only made when the books turn out to be empty.
+ * receipts, and four noughts over two empty lists is the least useful thing to show
+ * somebody on their first day. `isNewCompany` swaps them for the three things that have to
+ * happen first, each marked with whether it is already done.
  *
- * WHAT DID NOT CHANGE IS THE PART THAT CANNOT WAIT FOR ANY OF IT: proof the right company
- * is open, the backup that makes the encryption survivable, a way to change the
- * passphrase, and a way to close. Backup is the one that matters most. A company is a
- * database and a sidecar vault (ARCHITECTURE §6.3), so copying the file alone produces
- * something nobody can ever open again — `companies.backup` writes one archive holding
- * both, and this screen still never suggests any other way of keeping a copy.
+ * WHAT MOVED OFF THIS SCREEN IN 5b is the company's own housekeeping. The file path is in
+ * the status bar on every screen, Back up now is in the rail's footer, and changing the
+ * passphrase and closing the company are in the palette. They were here because this was
+ * the only screen there was; it is the business's screen now.
  */
 
 import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
-import { Badge, Button, Dialog } from '@renderer/components/atoms'
+import { Badge, Button } from '@renderer/components/atoms'
 import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { makeRoute } from '@renderer/lib/routing'
 import { describeLocation, registerScreens, type ScreenContext } from '@renderer/lib/screens'
-import { useBackup } from '@renderer/store/backup'
+import { todayISO } from '@renderer/lib/today'
 import { useRegisterCommands } from '@renderer/store/commands'
-import { useScreens } from '@renderer/store/screens'
 import { useCompany } from '@renderer/store/company'
+import { useCurrentFinancialYear } from '@renderer/store/financial-year'
 import { useNumberFormat } from '@renderer/store/regime'
-import { useToasts } from '@renderer/store/toasts'
-import type { TradeSide } from '@shared/documents'
+import { useScreens } from '@renderer/store/screens'
 import type {
   AgedReport,
   AppError,
   CompanyProfile,
-  DocumentSummary,
+  DocumentListRow,
+  OverviewFigures,
   PartySummary,
-  PassphraseStrength,
-  ReceiptSummary,
 } from '@shared/dto'
 import { EmptyState } from '../components/EmptyState'
 import { FailureNotice } from '../components/FailureNotice'
-import { Notice } from '../components/Notice'
-import { PassphraseField } from '../components/PassphraseField'
 import { ScreenFrame } from '../components/ScreenFrame'
-import { StrengthMeter } from '../components/StrengthMeter'
+import { agedScreenId, agedTitle } from '../lib/ageing-view'
+import { editorScreenId as documentEditorScreenId } from '../lib/document-view'
+import { formatAmount, isNegativeAmount } from '../lib/ledger-format'
 import {
-  agedEmptySentence,
-  agedScreenId,
-  agedTotalLabel,
-  itemNumberLabel,
-  itemSourceLabel,
-  itemTarget,
-  overdueLabel,
-} from '../lib/ageing-view'
-import { describeCreated, describeLastOpened } from '../lib/dates'
-import { validateChangePassphrase } from '../lib/forms'
-import { formatAmount, formatAmountOrBlank } from '../lib/ledger-format'
-import { failureTitle } from '../lib/messages'
-import { NO_RESET_WARNING } from '../lib/passphrase-meter'
-import {
-  activityIsStruck,
-  activityLabel,
-  activityStatusLabel,
-  activityTarget,
-  activityTone,
-  ACTIVITY_LIMIT,
-  ATTENTION_LIMIT,
-  bucketFigures,
-  documentActivity,
+  ageLabel,
+  ageTone,
+  asAtLine,
+  attentionItems,
+  cashNote,
   firstRunSteps,
+  isAttentionComplete,
   isNewCompany,
+  monthNote,
   nextFirstRunStep,
-  LINKED_SCREENS,
-  mostOverdue,
-  outstandingLinkLabel,
-  outstandingTitle,
-  overdueRowsIn,
-  pageOf,
+  oldestOwed,
+  outstandingNote,
   panelFrom,
-  recentActivity,
   stepLabel,
   stepState,
   stepTone,
-  type ActivityRow,
+  type AttentionSources,
   type Panel,
 } from '../lib/overview-view'
-import { todayISO } from '../lib/report-view'
+import { editorScreenId as receiptEditorScreenId } from '../lib/receipt-view'
 
 /** Every panel starts here. Not `null`, which would read as "nothing to show". */
 const LOADING = { state: 'loading' } as const
 
 export function Overview({ navigate }: ScreenContext): JSX.Element {
-  const { company, recoveryCodesRemaining, close } = useCompany()
-  const { show } = useToasts()
-  const { backUp: backup, isBackingUp } = useBackup()
-  const [isPassphraseOpen, setPassphraseOpen] = useState(false)
-  const [isBusy, setBusy] = useState(false)
+  const { company, recoveryCodesRemaining } = useCompany()
+  const year = useCurrentFinancialYear(company?.id ?? null)
+  const [asAtDate, setAsAtDate] = useState(todayISO)
 
   const [receivables, setReceivables] = useState<Panel<AgedReport>>(LOADING)
   const [payables, setPayables] = useState<Panel<AgedReport>>(LOADING)
-  const [drafts, setDrafts] = useState<Panel<readonly DocumentSummary[]>>(LOADING)
-  const [documents, setDocuments] = useState<Panel<readonly DocumentSummary[]>>(LOADING)
-  const [receipts, setReceipts] = useState<Panel<readonly ReceiptSummary[]>>(LOADING)
+  const [figures, setFigures] = useState<Panel<OverviewFigures>>(LOADING)
+  const [documentCount, setDocumentCount] = useState<Panel<number>>(LOADING)
+  const [receiptCount, setReceiptCount] = useState<Panel<number>>(LOADING)
+  const [draftCount, setDraftCount] = useState<Panel<number>>(LOADING)
+  const [newestDraft, setNewestDraft] = useState<Panel<readonly DocumentListRow[]>>(LOADING)
   const [profile, setProfile] = useState<Panel<CompanyProfile | null>>(LOADING)
   const [parties, setParties] = useState<Panel<readonly PartySummary[]>>(LOADING)
 
   /*
-   * FIVE READS AT ONCE, AND EACH LANDS ON ITS OWN PANEL.
-   *
-   * `Promise.all` for the round trips and five separate `setState`s for the answers: one
-   * combined result object would mean a single failure emptying every panel, which is
-   * exactly the collapse this screen is built not to have. The date is taken once so
-   * both ageing reports are drawn as at the same day — asking twice could straddle
-   * midnight and put a receivable and a payable on different dates.
+   * EVERY READ AT ONCE, AND EACH LANDS ON ITS OWN PANEL. One combined result would mean a
+   * single failure emptying every panel. The date is taken once so both ageing reports and
+   * the cash figure are as at the same day — asking three times could straddle midnight.
    */
   const load = useCallback(async () => {
-    setBusy(true)
-    const asAtDate = todayISO()
-    const [sales, purchases, draftList, documentList, receiptList] = await Promise.all([
-      callApi((api) => api.reports.aged({ side: 'sales', asAtDate })),
-      callApi((api) => api.reports.aged({ side: 'purchase', asAtDate })),
-      /* One row more than is drawn. The extra row is the whole of "and there are more". */
-      callApi((api) => api.documents.list({ status: 'draft', limit: ATTENTION_LIMIT + 1 })),
-      callApi((api) => api.documents.list({ limit: ACTIVITY_LIMIT })),
-      callApi((api) => api.receipts.list({ limit: ACTIVITY_LIMIT })),
+    const date = todayISO()
+    setAsAtDate(date)
+    const [sales, purchases, overview, documents, receipts, drafts, newest] = await Promise.all([
+      callApi((api) => api.reports.aged({ side: 'sales', asAtDate: date })),
+      callApi((api) => api.reports.aged({ side: 'purchase', asAtDate: date })),
+      callApi((api) => api.reports.overviewFigures({ asAtDate: date })),
+      callApi((api) => api.documents.count()),
+      callApi((api) => api.receipts.count()),
+      callApi((api) => api.documents.count({ status: 'draft' })),
+      callApi((api) => api.documents.list({ status: 'draft', limit: 1 })),
     ])
     setReceivables(panelFrom(sales))
     setPayables(panelFrom(purchases))
-    setDrafts(panelFrom(draftList))
-    setDocuments(panelFrom(documentList))
-    setReceipts(panelFrom(receiptList))
-    setBusy(false)
+    setFigures(panelFrom(overview))
+    setDocumentCount(panelFrom(documents))
+    setReceiptCount(panelFrom(receipts))
+    setDraftCount(panelFrom(drafts))
+    setNewestDraft(panelFrom(newest))
   }, [])
 
   /*
    * NOTHING IS READ UNTIL A COMPANY IS OPEN. Every channel above needs one and answers
-   * `NO_COMPANY_OPEN` without it, so firing them during the frame between closing a
-   * company and the shell returning to the picker would fill the dashboard with five
-   * failure notices nobody is meant to see.
+   * `NO_COMPANY_OPEN` without it, so firing them in the frame between closing a company
+   * and the shell returning to the picker would fill the page with failures nobody is meant
+   * to see.
    */
   const companyId = company?.id ?? null
 
@@ -172,15 +133,12 @@ export function Overview({ navigate }: ScreenContext): JSX.Element {
     if (companyId !== null) void load()
   }, [companyId, load])
 
-  const isNew = isNewCompany(documents, receipts)
+  const isNew = isNewCompany(documentCount, receiptCount)
 
   /*
-   * THE CHECKLIST'S TWO READS HAPPEN ONLY WHEN THE BOOKS TURN OUT TO BE EMPTY.
-   *
-   * `parties.list` has no limit in its input and answers with every party there is, so a
-   * dashboard that asked for it every time would pull the whole party master on every
-   * visit to say nothing. On an empty company the answer is an empty array, and that is
-   * the only company that needs it.
+   * THE CHECKLIST'S TWO READS HAPPEN ONLY WHEN THE BOOKS TURN OUT TO BE EMPTY. `parties.list`
+   * has no limit and answers with every party there is, so asking on every visit would pull
+   * the whole party master to say nothing.
    */
   const loadFirstRun = useCallback(async () => {
     const [profileResult, partyList] = await Promise.all([
@@ -195,31 +153,13 @@ export function Overview({ navigate }: ScreenContext): JSX.Element {
     if (isNew) void loadFirstRun()
   }, [isNew, loadFirstRun])
 
-  const closeCompany = useCallback(async () => {
-    const result = await close()
-    if (!result.ok) {
-      show({
-        tone: 'danger',
-        title: failureTitle(result.error),
-        body: result.error.message,
-      })
-    }
-  }, [close, show])
-
   useRegisterCommands(
     useMemo<Command[]>(
       () => [
         {
-          id: 'company.change-passphrase',
-          title: 'Change the passphrase',
-          section: 'Company',
-          keywords: ['password', 'key', 'security'],
-          run: () => setPassphraseOpen(true),
-        },
-        {
           id: 'company.refresh-overview',
           title: 'Refresh the overview',
-          section: 'Company',
+          section: 'Accounts',
           keywords: ['dashboard', 'reload', 'outstanding', 'overdue'],
           run: () => void load(),
         },
@@ -238,113 +178,83 @@ export function Overview({ navigate }: ScreenContext): JSX.Element {
     )
   }
 
+  const open = (screenId: string, params: Record<string, string> = {}): void =>
+    navigate(makeRoute('workspace', screenId, params))
+
   return (
     <ScreenFrame
       isInset
       width="list"
-      title={company.displayName}
-      lede="Open, decrypted in memory only, and readable by nothing else while it is."
+      title="Overview"
+      lede={asAtLine(asAtDate, year)}
       actions={
-        <>
-          <Button icon="refresh" onClick={() => void load()} isBusy={isBusy}>
-            Refresh
-          </Button>
-          <Button
-            variant="primary"
-            icon="archive"
-            onClick={() => void backup()}
-            isBusy={isBackingUp}
-          >
-            Back up now
-          </Button>
-          <Button icon="lock" onClick={() => setPassphraseOpen(true)}>
-            Change passphrase
-          </Button>
-          <Button icon="close" onClick={() => void closeCompany()}>
-            Close company
-          </Button>
-        </>
+        isNew ? undefined : (
+          <>
+            <Button onClick={() => open(receiptEditorScreenId('receipt'))}>Record receipt</Button>
+            <Button
+              variant="primary"
+              icon="plus"
+              onClick={() => open(documentEditorScreenId('sales-invoice'))}
+            >
+              New sales invoice
+            </Button>
+          </>
+        )
       }
     >
-      <div className="stack">
-        {recoveryCodesRemaining === 0 && (
-          <Notice tone="warning" title="No recovery codes remain">
-            <p>
-              Every code issued for this company has been spent. The passphrase is now the only way
-              in, and nobody can reset it. Keep a backup, and keep the passphrase somewhere you will
-              still have it in a year.
-            </p>
-          </Notice>
-        )}
+      {isNew ? (
+        <FirstRun
+          profile={profile}
+          parties={parties}
+          documents={documentCount}
+          navigate={navigate}
+        />
+      ) : (
+        <div className="stack">
+          <Failures panels={[receivables, payables, figures, draftCount]} />
 
-        {isNew ? (
-          <FirstRun profile={profile} parties={parties} documents={documents} navigate={navigate} />
-        ) : (
-          <>
-            <div className="report-columns">
-              <Outstanding side="sales" panel={receivables} navigate={navigate} />
-              <Outstanding side="purchase" panel={payables} navigate={navigate} />
-            </div>
-
-            <div className="report-columns">
-              <Overdue receivables={receivables} payables={payables} navigate={navigate} />
-              <Drafts panel={drafts} navigate={navigate} />
-            </div>
-
-            <Activity documents={documents} receipts={receipts} navigate={navigate} />
-          </>
-        )}
-
-        <DashboardPanel title="This company">
-          <section className="facts">
-            <Fact label="Company file" value={company.filePath} isPath />
-            <Fact label="Key vault" value={company.vaultPath} isPath />
-            <Fact label="Last opened" value={describeLastOpened(company.lastOpenedAt)} />
-            <Fact label="Created" value={describeCreated(company.createdAt)} />
-            <Fact
-              label="Recovery codes left"
-              value={
-                recoveryCodesRemaining === 0
-                  ? 'None — the passphrase is the only way in'
-                  : `${recoveryCodesRemaining} unused`
-              }
-              badge={
-                recoveryCodesRemaining === 0 ? (
-                  <Badge tone="negative">None left</Badge>
-                ) : recoveryCodesRemaining <= 2 ? (
-                  <Badge tone="warning">Running low</Badge>
-                ) : null
-              }
+          <dl className="figures">
+            <Figure
+              label="Owed to you"
+              panel={receivables}
+              value={(report) => report.totals.total}
+              note={(report) => outstandingNote('sales', report)}
             />
-          </section>
+            <Figure
+              label="You owe"
+              panel={payables}
+              value={(report) => report.totals.total}
+              note={(report) => outstandingNote('purchase', report)}
+            />
+            <Figure
+              label="Cash and bank"
+              panel={figures}
+              value={(data) => data.cashAndBank.total}
+              note={(data) => cashNote(data.cashAndBank.accounts.length)}
+            />
+            <Figure
+              label="This month, net"
+              panel={figures}
+              value={(data) => data.monthToDate.netProfit}
+              note={(data) => monthNote(data.monthToDate.fromDate, data.monthToDate.toDate)}
+            />
+          </dl>
 
-          {/* The one thing on this screen that is about surviving a disaster rather than
-              running a business, and it keeps its own box for that reason. */}
-          <Notice
-            tone="info"
-            title="A copy of the file alone opens nothing"
-            icon="archive"
-            actions={
-              <Button size="sm" icon="archive" onClick={() => void backup()} isBusy={isBackingUp}>
-                Back up now
-              </Button>
-            }
-          >
-            <p>
-              These books are a database and a separate key vault. Copying one without the other
-              leaves an archive nobody can ever open — not you, and not us. Back up now writes a
-              single file holding both, and it is the only way of keeping a copy this screen will
-              ever suggest.
-            </p>
-          </Notice>
-        </DashboardPanel>
-      </div>
-
-      <ChangePassphraseDialog
-        key={isPassphraseOpen ? 'open' : 'closed'}
-        isOpen={isPassphraseOpen}
-        onClose={() => setPassphraseOpen(false)}
-      />
+          <div className="overview-columns">
+            <Owed panel={receivables} onOpenReport={() => open(agedScreenId('sales'))} />
+            <Attention
+              sources={{
+                receivables,
+                payables,
+                draftCount,
+                newestDraft,
+                recoveryCodesRemaining,
+              }}
+              onOpen={open}
+            />
+          </div>
+        </div>
+      )}
     </ScreenFrame>
   )
 }
@@ -352,392 +262,220 @@ export function Overview({ navigate }: ScreenContext): JSX.Element {
 // ---- The frame each panel sits in -------------------------------------------
 
 /**
- * A titled block of the dashboard.
+ * A titled card of the dashboard.
  *
- * A landmark with its heading as the accessible name, rather than a bare `div`: this page
- * is half a dozen unrelated tables, and without regions a screen reader reads them as one
- * undifferentiated run of figures. It is also what lets a test scope an assertion to the
- * panel it is about instead of to the page.
+ * A landmark with its heading as the accessible name, rather than a bare `div`: without
+ * regions a screen reader reads two unrelated lists as one run of text, and it is what lets
+ * a test scope an assertion to the panel it is about.
  */
-function DashboardPanel({ title, children }: { title: string; children: ReactNode }): JSX.Element {
+function DashboardPanel({
+  title,
+  aside,
+  children,
+}: {
+  title: string
+  aside?: ReactNode
+  children: ReactNode
+}): JSX.Element {
   const headingId = useId()
   return (
-    <section className="stack stack--tight" aria-labelledby={headingId}>
-      <h2 id={headingId} className="caps-label">
-        {title}
-      </h2>
+    <section className="panel" aria-labelledby={headingId}>
+      <header className="panel__head">
+        <h2 id={headingId} className="panel__title">
+          {title}
+        </h2>
+        {aside}
+      </header>
       {children}
     </section>
   )
 }
 
-/** A way out of a panel to the screen that holds all of it. */
-function PanelLink({
+/** Each read that failed, said once, above the figures it would have filled. */
+function Failures({ panels }: { panels: ReadonlyArray<Panel<unknown>> }): JSX.Element {
+  const errors = panels.flatMap((panel) => (panel.state === 'failed' ? [panel.error] : []))
+  /* The same refusal from four channels — a company closed under them — is one message. */
+  const distinct = errors.filter(
+    (error, index) =>
+      errors.findIndex((other) => other.code === error.code && other.message === error.message) ===
+      index,
+  )
+  return (
+    <>
+      {distinct.map((error: AppError) => (
+        <FailureNotice key={`${error.code}:${error.message}`} error={error} context="ledger" />
+      ))}
+    </>
+  )
+}
+
+// ---- The four figures ---------------------------------------------------------
+
+/**
+ * One figure, as main sent it, with the line that says what it is made of.
+ *
+ * A term and its definitions, so the label and the figure are read together. The figure
+ * keeps its sign and takes the negative ink below nought (design.md §6): a month that lost
+ * money says so in the figure, not only in a colour.
+ */
+function Figure<T>({
   label,
-  screenId,
-  navigate,
+  panel,
+  value,
+  note,
 }: {
   label: string
-  screenId: string
-  navigate: ScreenContext['navigate']
+  panel: Panel<T>
+  value: (data: T) => string
+  note: (data: T) => string
 }): JSX.Element {
+  const format = useNumberFormat()
+
   return (
-    <div className="actions">
-      <Button
-        variant="ghost"
-        size="sm"
-        iconEnd="arrow-right"
-        onClick={() => navigate(makeRoute('workspace', screenId))}
-      >
-        {label}
-      </Button>
+    <div className="figure-card">
+      <dt className="figure-card__label">{label}</dt>
+      {panel.state === 'ready' ? (
+        <>
+          <dd
+            className="figure-card__value"
+            data-tone={isNegativeAmount(value(panel.data)) ? 'negative' : undefined}
+          >
+            {formatAmount(value(panel.data), format)}
+          </dd>
+          <dd className="figure-card__note">{note(panel.data)}</dd>
+        </>
+      ) : panel.state === 'loading' ? (
+        <dd className="figure-card__value" aria-busy="true">
+          <span className="skeleton__bar figure-card__skeleton" aria-hidden="true" />
+          <span className="visually-hidden">Reading</span>
+        </dd>
+      ) : (
+        <>
+          <dd className="figure-card__value">—</dd>
+          <dd className="figure-card__note">Could not be read</dd>
+        </>
+      )}
     </div>
   )
 }
 
-// ---- What is owed, each way -------------------------------------------------
+// ---- Owed to you, oldest first ------------------------------------------------
 
 /*
- * One side's ageing report, reduced to its foot.
- *
- * "LESS ON ACCOUNT" IS THE HEADING, NOT "ON ACCOUNT" — the same rule the aged report
- * itself follows (CONVENTIONS §1.7). `totals.total` is the columns LESS what is on
- * account, and main sends the on-account figure as a positive quantity, so a reader
- * adding down a column headed "On account" would be out by twice it. The heading carries
- * the sign because the renderer may not: flipping one is arithmetic on money.
- *
- * THE DATE SHOWN IS THE REPORT'S OWN, not this screen's clock. They agree, and stating
- * main's answer is what makes the agreement checkable rather than assumed.
+ * Who has owed the longest. The amount is each party's own total from the report; the age
+ * is their oldest charge's. A party with nothing owed is not on it.
  */
-function Outstanding({
-  side,
+function Owed({
   panel,
-  navigate,
+  onOpenReport,
 }: {
-  side: TradeSide
   panel: Panel<AgedReport>
-  navigate: ScreenContext['navigate']
+  onOpenReport: () => void
 }): JSX.Element {
   const format = useNumberFormat()
+  const rows = panel.state === 'ready' ? oldestOwed(panel.data) : []
 
   return (
-    <DashboardPanel title={outstandingTitle(side)}>
-      {panel.state === 'loading' && <p className="prose prose--muted">Reading the account…</p>}
-      {panel.state === 'failed' && <FailureNotice error={panel.error} context="ledger" />}
-      {panel.state === 'ready' && (
-        <>
-          <p className="prose prose--muted">
-            As at {panel.data.asAtDate} · {panel.data.accountCode} · {panel.data.accountName}
-          </p>
-
-          {!panel.data.ties && (
-            <Notice tone="danger" title="This does not agree with the account">
-              <p>
-                What is behind this figure does not come to the balance on {panel.data.accountCode}{' '}
-                · {panel.data.accountName}. {outstandingLinkLabel(side)} to see the rows — the
-                difference is somewhere among them.
-              </p>
-            </Notice>
-          )}
-
-          {panel.data.parties.length === 0 ? (
-            <Notice tone="info" title="Nothing outstanding">
-              <p>{agedEmptySentence(side)}</p>
-            </Notice>
-          ) : (
-            <table className="ledger-table ledger-table--figures report-table">
-              <tbody>
-                {bucketFigures(panel.data).map((column, index) => (
-                  <tr key={index}>
-                    <td>{column.label}</td>
-                    <td className="ledger-table__figure">
-                      {column.figure === null ? '' : formatAmountOrBlank(column.figure, format)}
-                    </td>
-                  </tr>
-                ))}
-                <tr>
-                  <td>Less on account</td>
-                  <td className="ledger-table__figure">
-                    {formatAmountOrBlank(panel.data.totals.onAccount, format)}
-                  </td>
-                </tr>
-              </tbody>
-              <tfoot>
-                <tr className="ledger-table__total">
-                  <td>{agedTotalLabel(side)}</td>
-                  <td className="ledger-table__figure">
-                    {formatAmount(panel.data.totals.total, format)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          )}
-
-          <PanelLink
-            label={outstandingLinkLabel(side)}
-            screenId={agedScreenId(side)}
-            navigate={navigate}
-          />
-        </>
+    <DashboardPanel
+      title="Owed to you, oldest first"
+      aside={
+        <Button variant="ghost" size="sm" iconEnd="arrow-right" onClick={onOpenReport}>
+          {agedTitle('sales')}
+        </Button>
+      }
+    >
+      {panel.state === 'loading' && <p className="panel__empty">Reading the aged receivables…</p>}
+      {panel.state === 'failed' && (
+        <p className="panel__empty">The aged receivables could not be read.</p>
       )}
-    </DashboardPanel>
-  )
-}
-
-// ---- What needs attention ---------------------------------------------------
-
-/*
- * What is late, across both sides, worst first.
- *
- * IT READS TWO PANELS AND SAYS SO WHEN IT HAS ONLY ONE. "Nothing is overdue" is a claim
- * about the whole business, and a side whose report failed cannot support half of it —
- * so the reassuring sentence is shown only when both reports answered, and a partial
- * answer is labelled as one. The alternative is a green tick over a query that never ran.
- */
-function Overdue({
-  receivables,
-  payables,
-  navigate,
-}: {
-  receivables: Panel<AgedReport>
-  payables: Panel<AgedReport>
-  navigate: ScreenContext['navigate']
-}): JSX.Element {
-  const format = useNumberFormat()
-  const sides: ReadonlyArray<{ side: TradeSide; panel: Panel<AgedReport> }> = [
-    { side: 'sales', panel: receivables },
-    { side: 'purchase', panel: payables },
-  ]
-  const isComplete = sides.every(({ panel }) => panel.state === 'ready')
-  const isReading = sides.some(({ panel }) => panel.state === 'loading')
-  const rows = mostOverdue(
-    sides.flatMap(({ side, panel }) =>
-      panel.state === 'ready' ? overdueRowsIn(side, panel.data) : [],
-    ),
-    ATTENTION_LIMIT,
-  )
-
-  return (
-    <DashboardPanel title="Overdue">
-      {rows.length > 0 ? (
-        <>
-          <table className="ledger-table ledger-table--figures report-table">
-            <thead>
+      {panel.state === 'ready' &&
+        (rows.length === 0 ? (
+          <p className="panel__empty">Nobody owes you anything today.</p>
+        ) : (
+          <table className="panel-table">
+            <thead className="visually-hidden">
               <tr>
-                <th scope="col">Number</th>
-                <th scope="col">Who</th>
+                <th scope="col">Customer</th>
                 <th scope="col">How late</th>
-                <th scope="col" className="ledger-table__figure">
-                  Amount
-                </th>
+                <th scope="col">Owed</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
-                const target = itemTarget(row.item)
-                const late = overdueLabel(row.item)
-                return (
-                  <tr key={row.key} className="ledger-table__row">
-                    <td className="ledger-table__code">
-                      {target === null ? (
-                        itemNumberLabel(row.item)
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            navigate(makeRoute('workspace', target.screenId, target.params))
-                          }
-                        >
-                          {itemNumberLabel(row.item)}
-                        </Button>
-                      )}
-                    </td>
-                    <td>{row.partyName}</td>
-                    <td>
-                      {/* Never null on a row `isOverdue` let through, and spelled as a
-                          fallback rather than asserted: the badge is what the reader
-                          scans, and an empty pill would be worse than a plain word. */}
-                      {late === null ? (
-                        itemSourceLabel(row.item)
-                      ) : (
-                        <Badge tone="negative">{late}</Badge>
-                      )}
-                    </td>
-                    <td className="ledger-table__figure">
-                      {formatAmount(row.item.amount, format)}
-                    </td>
-                  </tr>
-                )
-              })}
+              {rows.map((row) => (
+                <tr key={row.key}>
+                  <td className="panel-table__name">{row.partyName}</td>
+                  <td>
+                    <Badge tone={ageTone(row.daysOverdue)}>{ageLabel(row.daysOverdue)}</Badge>
+                  </td>
+                  <td className="panel-table__figure">{formatAmount(row.total, format)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
-          {!isComplete && (
-            <p className="prose prose--muted">
-              One of the two ageing reports could not be read, so this is what the other holds.
-            </p>
-          )}
-        </>
-      ) : isReading ? (
-        <p className="prose prose--muted">Reading the ageing reports…</p>
-      ) : isComplete ? (
-        <Notice tone="positive" title="Nothing is overdue">
-          <p>
-            Every charge in these books is either settled or not yet due. What is due later is in
-            the two panels above.
-          </p>
-        </Notice>
-      ) : (
-        <p className="prose prose--muted">
-          An ageing report could not be read, so nothing can be said about what is overdue. The
-          panels above say what went wrong.
-        </p>
-      )}
-    </DashboardPanel>
-  )
-}
-
-/** Documents that have been started and never issued. Each row opens its own editor. */
-function Drafts({
-  panel,
-  navigate,
-}: {
-  panel: Panel<readonly DocumentSummary[]>
-  navigate: ScreenContext['navigate']
-}): JSX.Element {
-  const page = panel.state === 'ready' ? pageOf(panel.data, ATTENTION_LIMIT) : null
-
-  return (
-    <DashboardPanel title="Drafts not yet issued">
-      {panel.state === 'loading' && <p className="prose prose--muted">Reading the registers…</p>}
-      {panel.state === 'failed' && <FailureNotice error={panel.error} context="ledger" />}
-      {page !== null &&
-        (page.rows.length === 0 ? (
-          <Notice tone="info" title="No drafts are waiting">
-            <p>
-              Nothing has been started and left. A draft is in nobody&rsquo;s books until it is
-              issued, so this is the list worth being empty.
-            </p>
-          </Notice>
-        ) : (
-          <>
-            <ActivityTable rows={documentActivity(page.rows)} navigate={navigate} />
-            {page.hasMore && (
-              <p className="prose prose--muted">
-                The {ATTENTION_LIMIT} most recent are shown. Each register in the rail lists the
-                rest of its own kind.
-              </p>
-            )}
-          </>
         ))}
     </DashboardPanel>
   )
 }
 
-// ---- What has happened lately -----------------------------------------------
+// ---- Needs your attention -------------------------------------------------------
 
-/**
- * The last few documents and vouchers, as one sequence.
- *
- * TWO READS AND ONE TABLE. Either can fail on its own, and the panel then shows what
- * failed beside the half that answered rather than dropping both — a register that is
- * unreachable does not make the receipts less recent.
- */
-function Activity({
-  documents,
-  receipts,
-  navigate,
+function Attention({
+  sources,
+  onOpen,
 }: {
-  documents: Panel<readonly DocumentSummary[]>
-  receipts: Panel<readonly ReceiptSummary[]>
-  navigate: ScreenContext['navigate']
+  sources: AttentionSources
+  onOpen: (screenId: string, params?: Record<string, string>) => void
 }): JSX.Element {
-  const rows = recentActivity(
-    documents.state === 'ready' ? documents.data : [],
-    receipts.state === 'ready' ? receipts.data : [],
-    ACTIVITY_LIMIT,
-  )
-  const isReading = documents.state === 'loading' || receipts.state === 'loading'
+  const items = attentionItems(sources)
+  const isComplete = isAttentionComplete(sources)
 
   return (
-    <DashboardPanel title="Lately">
-      {documents.state === 'failed' && <FailureNotice error={documents.error} context="ledger" />}
-      {receipts.state === 'failed' && <FailureNotice error={receipts.error} context="ledger" />}
-
-      {rows.length > 0 ? (
-        <>
-          <ActivityTable rows={rows} navigate={navigate} />
-          <PanelLink
-            label="Open the day book"
-            screenId={LINKED_SCREENS.dayBook}
-            navigate={navigate}
-          />
-        </>
-      ) : isReading ? (
-        <p className="prose prose--muted">Reading the registers…</p>
+    <DashboardPanel
+      title="Needs your attention"
+      aside={
+        items.length > 0 ? (
+          <span className="panel__count">
+            {items.length} {items.length === 1 ? 'item' : 'items'}
+          </span>
+        ) : undefined
+      }
+    >
+      {items.length > 0 ? (
+        <ul className="attention">
+          {items.map((item) => (
+            <li key={item.id} className="attention__item" data-tone={item.tone}>
+              <span className="attention__dot" aria-hidden="true" />
+              <div className="attention__text">
+                <p className="attention__title">{item.title}</p>
+                <p className="attention__note">{item.note}</p>
+              </div>
+              {item.target !== undefined && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    const target = item.target
+                    if (target !== undefined) onOpen(target.screenId, { ...target.params })
+                  }}
+                >
+                  {item.actionLabel}
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : isComplete ? (
+        <p className="panel__empty">
+          Nothing needs your attention. Nothing is past its due date and no draft is waiting.
+        </p>
+      ) : sources.receivables.state === 'loading' || sources.draftCount.state === 'loading' ? (
+        <p className="panel__empty">Reading the books…</p>
       ) : (
-        <p className="prose prose--muted">Nothing could be listed. The failures above say why.</p>
+        <p className="panel__empty">
+          Part of the books could not be read, so nothing can be said about what needs attention.
+        </p>
       )}
     </DashboardPanel>
-  )
-}
-
-/** Documents and vouchers in the columns they share. Every number opens its own editor. */
-function ActivityTable({
-  rows,
-  navigate,
-}: {
-  rows: readonly ActivityRow[]
-  navigate: ScreenContext['navigate']
-}): JSX.Element {
-  const format = useNumberFormat()
-
-  return (
-    <table className="ledger-table ledger-table--figures report-table">
-      <thead>
-        <tr>
-          <th scope="col">Number</th>
-          <th scope="col">What it is</th>
-          <th scope="col">Date</th>
-          <th scope="col">Who</th>
-          <th scope="col">Status</th>
-          <th scope="col" className="ledger-table__figure">
-            Total
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => {
-          const target = activityTarget(row)
-          return (
-            <tr key={row.key} className="ledger-table__row">
-              <td className="ledger-table__code">
-                {target === null ? (
-                  row.numberLabel
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => navigate(makeRoute('workspace', target.screenId, target.params))}
-                  >
-                    {row.numberLabel}
-                  </Button>
-                )}
-              </td>
-              <td>{activityLabel(row)}</td>
-              <td className="ledger-table__code">{row.date}</td>
-              <td>{row.partyName}</td>
-              <td>
-                <Badge tone={activityTone(row)} isStruck={activityIsStruck(row)}>
-                  {activityStatusLabel(row)}
-                </Badge>
-              </td>
-              <td className="ledger-table__figure">{formatAmount(row.amount, format)}</td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
   )
 }
 
@@ -745,11 +483,6 @@ function ActivityTable({
 
 /**
  * What to do first, on books that hold nothing.
- *
- * SHOWN INSTEAD OF THE FIGURES, NOT BESIDE THEM. Six zeroes and four empty tables is an
- * accurate description of a company file made this morning and a useless first
- * impression of one. It says the empty state is the right one, and the main button is the
- * next thing to do.
  *
  * THE ORDER IS THE BOOKS', NOT THE DESIGN'S. The design leads with "Raise the first
  * invoice", and on day one that screen cannot work: a document needs the business details
@@ -765,19 +498,23 @@ function FirstRun({
 }: {
   profile: Panel<CompanyProfile | null>
   parties: Panel<readonly PartySummary[]>
-  documents: Panel<readonly DocumentSummary[]>
+  documents: Panel<number>
   navigate: ScreenContext['navigate']
 }): JSX.Element {
   const screens = useScreens()
+  const headingId = useId()
   const steps = firstRunSteps({
     profile: stepState(profile, (value) => value !== null),
     parties: stepState(parties, (value) => value.length > 0),
-    documents: stepState(documents, (value) => value.length > 0),
+    documents: stepState(documents, (value) => value > 0),
   })
   const next = nextFirstRunStep(steps)
 
   return (
-    <DashboardPanel title="Start here">
+    <section className="stack" aria-labelledby={headingId}>
+      <h2 id={headingId} className="caps-label">
+        Start here
+      </h2>
       <EmptyState
         title="The books are empty, which is the correct state on day one"
         titleAs="p"
@@ -820,153 +557,7 @@ function FirstRun({
           </li>
         ))}
       </ol>
-    </DashboardPanel>
-  )
-}
-
-interface FactProps {
-  label: string
-  value: string
-  isPath?: boolean
-  badge?: JSX.Element | null
-}
-
-function Fact({ label, value, isPath = false, badge }: FactProps): JSX.Element {
-  return (
-    <div className="fact">
-      <span className="fact__label caps-label">{label}</span>
-      <span className={`fact__value ${isPath ? 'fact__value--path selectable truncate' : ''}`}>
-        {value}
-        {badge}
-      </span>
-    </div>
-  )
-}
-
-// ---- Changing the passphrase ----------------------------------------------
-
-interface ChangePassphraseDialogProps {
-  isOpen: boolean
-  onClose: () => void
-}
-
-/**
- * Re-wraps the key under a new passphrase.
- *
- * The database is not re-encrypted and the open session stays valid — main only rewrites
- * one slot in the vault. Every recovery code still works afterwards, which is worth
- * saying on screen: users expect changing a password to invalidate everything.
- */
-function ChangePassphraseDialog({ isOpen, onClose }: ChangePassphraseDialogProps): JSX.Element {
-  const { show } = useToasts()
-  const [currentPassphrase, setCurrent] = useState('')
-  const [newPassphrase, setNew] = useState('')
-  const [confirmation, setConfirmation] = useState('')
-  const [hasTouchedConfirmation, setTouchedConfirmation] = useState(false)
-  const [strength, setStrength] = useState<PassphraseStrength | null>(null)
-  const [isBusy, setBusy] = useState(false)
-  const [error, setError] = useState<AppError | null>(null)
-
-  const form = validateChangePassphrase(
-    { currentPassphrase, newPassphrase, confirmation },
-    hasTouchedConfirmation,
-  )
-
-  const checkStrength = useCallback(async (value: string) => {
-    if (value === '') {
-      setStrength(null)
-      return
-    }
-    const result = await callApi((api) => api.companies.checkPassphrase(value))
-    if (result.ok) setStrength(result.data)
-  }, [])
-
-  const submit = useCallback(async () => {
-    if (!form.canSubmit || isBusy) return
-    setBusy(true)
-    setError(null)
-    const result = await callApi((api) =>
-      api.companies.changePassphrase({ currentPassphrase, newPassphrase }),
-    )
-    setBusy(false)
-
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-
-    setCurrent('')
-    setNew('')
-    setConfirmation('')
-    onClose()
-    show({
-      tone: 'success',
-      title: 'Passphrase changed',
-      body: 'Use the new one from now on. Your recovery codes are unaffected — they open this company regardless of which passphrase is set.',
-    })
-  }, [form.canSubmit, isBusy, currentPassphrase, newPassphrase, onClose, show])
-
-  return (
-    <Dialog
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Change the passphrase"
-      description="This re-wraps the key. The books are not re-encrypted, nothing is re-saved, and every recovery code keeps working."
-      footer={
-        <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button
-            variant="primary"
-            onClick={() => void submit()}
-            disabled={!form.canSubmit}
-            isBusy={isBusy}
-          >
-            Change passphrase
-          </Button>
-        </>
-      }
-    >
-      <div className="stack">
-        {error && <FailureNotice error={error} context="change-passphrase" />}
-
-        <PassphraseField
-          label="Current passphrase"
-          value={currentPassphrase}
-          onChange={setCurrent}
-          error={form.errors.currentPassphrase}
-          isDisabled={isBusy}
-        />
-
-        <PassphraseField
-          label="New passphrase"
-          value={newPassphrase}
-          onChange={(value) => {
-            setNew(value)
-            void checkStrength(value)
-          }}
-          error={form.errors.newPassphrase}
-          isDisabled={isBusy}
-        >
-          <StrengthMeter strength={strength} passphrase={newPassphrase} />
-        </PassphraseField>
-
-        <PassphraseField
-          label="New passphrase again"
-          value={confirmation}
-          onChange={(value) => {
-            setConfirmation(value)
-            setTouchedConfirmation(true)
-          }}
-          error={form.errors.confirmation}
-          isDisabled={isBusy}
-          onSubmit={() => void submit()}
-        />
-
-        <Notice tone="warning" title="Still nobody's to reset">
-          <p>{NO_RESET_WARNING}</p>
-        </Notice>
-      </div>
-    </Dialog>
+    </section>
   )
 }
 

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { dayDistance, describeCreated, describeFileSize, describeLastOpened } from './dates'
+import {
+  dayDistance,
+  describeCreated,
+  describeFileSize,
+  describeLastOpened,
+  formatDate,
+  formatDayRange,
+} from './dates'
 
 /* Local times throughout: these lines are read by the person at the machine, and the
  * boundary that matters to them is their own midnight, not UTC's. */
@@ -63,5 +70,36 @@ describe('describeFileSize', () => {
   it('does not invent a size it does not have', () => {
     expect(describeFileSize(Number.NaN)).toBe('an unknown size')
     expect(describeFileSize(-1)).toBe('an unknown size')
+  })
+})
+
+describe('formatDate', () => {
+  it('writes a calendar date the way the design does', () => {
+    expect(formatDate('2026-09-13')).toBe('13 Sep 2026')
+    expect(formatDate('2027-03-31')).toBe('31 Mar 2027')
+    expect(formatDate('2026-01-01')).toBe('1 Jan 2026')
+  })
+
+  /* Read off the string, never through `Date`: UTC midnight on the first of April is the
+   * thirty-first of March west of Greenwich, and a document date has no zone at all. */
+  it('does not move a date across midnight in any zone', () => {
+    expect(formatDate('2026-04-01')).toBe('1 Apr 2026')
+  })
+
+  it('shows what it was given when that is not an ISO date', () => {
+    expect(formatDate('13/09/2026')).toBe('13/09/2026')
+    expect(formatDate('2026-13-01')).toBe('2026-13-01')
+  })
+})
+
+describe('formatDayRange', () => {
+  it('says the month once inside one month', () => {
+    expect(formatDayRange('2026-09-01', '2026-09-15')).toBe('1–15 Sep')
+    expect(formatDayRange('2026-09-01', '2026-09-01')).toBe('1 Sep')
+  })
+
+  it('names both months across two, and both years across two', () => {
+    expect(formatDayRange('2026-08-28', '2026-09-03')).toBe('28 Aug – 3 Sep')
+    expect(formatDayRange('2026-12-28', '2027-01-03')).toBe('28 Dec 2026 – 3 Jan 2027')
   })
 })

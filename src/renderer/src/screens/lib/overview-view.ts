@@ -1,57 +1,36 @@
 /*
- * What the workspace dashboard has to decide before it can draw anything.
+ * What the Overview has to decide before it can draw anything.
  *
  * NOTHING HERE ADDS UP MONEY (CONVENTIONS §1.7), and a dashboard is where that rule is
- * most tempting to break: the obvious "total overdue" is the sum of every bucket but the
- * first, and the obvious "net position" is receivables less payables. Both are arithmetic
- * on money and neither is here. What the page shows instead is the figure main already
- * computed — `totals.total` for a side, `totals.buckets[i]` for a column, an item's own
- * `amount` — and where no channel returns a figure, the page does without it rather than
- * inventing one.
+ * most tempting to break: the obvious "net position" is receivables less payables, and
+ * the obvious "cash" is a sum of bank balances. Every figure the page shows is one main
+ * computed — an aged report's `totals.total`, a party's own `total`, the cash and bank
+ * total and the month's net profit from `reports.overviewFigures`. Where no channel
+ * returns a figure, the page does without it rather than inventing one.
  *
- * WHAT IS DECIDED HERE IS SELECTION AND ORDER, which are not arithmetic:
+ * WHAT IS DECIDED HERE IS SELECTION, ORDER, COUNTING AND WORDS, none of which is money:
  *
- *   `isNewCompany`     whether these books have been started at all — the difference
- *                      between a first day and six zeroes.
+ *   `isNewCompany`     whether these books have been started at all.
  *   `firstRunSteps`    what to do first, and which of it is already done.
- *   `mostOverdue`      which of two reports' items are late, worst first. Two lists
- *                      arriving separately have to be ordered by something, and main
- *                      cannot order across a call it did not make.
- *   `recentActivity`   documents and receipts as one sequence, newest first, for the
- *                      same reason.
+ *   `oldestOwed`       who has owed the longest, for "Owed to you, oldest first".
+ *   `attentionItems`   the handful of real signals worth interrupting somebody with,
+ *                      worst first.
+ *   `figureNote`s      the line under each figure: how many, how many late, which days.
  *
  * A PANEL IS A STATE, NOT A NULL. `Panel<T>` distinguishes "still reading" from "read and
  * empty" from "the read failed", because a dashboard is many independent reads and the
  * three must not collapse into one blank space. `isNewCompany` is where that pays: a
  * failed read is not an empty company, and a screen that treated it as one would greet a
- * business of ten years with a "welcome, add your first customer".
+ * business of ten years with "add your first customer".
  */
 
 import type { BadgeTone } from '@renderer/components/atoms'
 import { definitionOf, isDocumentKind, type TradeSide } from '@shared/documents'
-import type {
-  AgedItem,
-  AgedReport,
-  AppError,
-  DecimalString,
-  DocumentSummary,
-  ReceiptSummary,
-  Result,
-} from '@shared/dto'
-import { isReceiptKind, receiptDefinitionOf } from '@shared/receipts'
-import { agedTitle, columnFigure, isOverdue, type ItemTarget } from './ageing-view'
-import {
-  editorScreenId as documentEditorScreenId,
-  isStruckStatus as isStruckDocumentStatus,
-  statusLabel as documentStatusLabel,
-  statusTone as documentStatusTone,
-} from './document-view'
-import {
-  editorScreenId as receiptEditorScreenId,
-  isStruckStatus as isStruckReceiptStatus,
-  statusLabel as receiptStatusLabel,
-  statusTone as receiptStatusTone,
-} from './receipt-view'
+import type { AgedItem, AgedReport, AppError, DocumentListRow, Result } from '@shared/dto'
+import { agedScreenId, isOverdue, type ItemTarget } from './ageing-view'
+import { formatDate, formatDayRange } from './dates'
+import { editorScreenId as documentEditorScreenId } from './document-view'
+import { isNegativeAmount, isZeroAmount } from './ledger-format'
 
 // ---- One read, in the three states it can be in -----------------------------
 
@@ -60,9 +39,7 @@ import {
  *
  * THREE STATES RATHER THAN `T | null`. "Reading it now", "read it, there is nothing" and
  * "the read failed" are three different things to a reader, and the null that stands for
- * all three is the reason a broken panel looks like an empty one. Every derivation below
- * that could otherwise make a claim about books it has not seen takes a `Panel` for
- * exactly this reason.
+ * all three is the reason a broken panel looks like an empty one.
  */
 export type Panel<T> =
   | { readonly state: 'loading' }
@@ -82,14 +59,10 @@ export function panelFrom<T>(result: Result<T>): Panel<T> {
  * Every tone the Badge atom actually styles, as values.
  *
  * `BadgeTone` is a type and a type has no members at runtime, so something has to
- * enumerate them for a test to iterate — and a hand-written list would be a second copy
- * agreeing with the atom by inspection. `satisfies Record<BadgeTone, BadgeTone>` makes
+ * enumerate them for a test to iterate. `satisfies Record<BadgeTone, BadgeTone>` makes
  * this one total: a sixth tone added to the atom fails to compile here, and a tone the
- * atom no longer has is an excess key.
- *
- * IT IS WORTH THE CEREMONY BECAUSE THE FAILURE IS SILENT. `periodStatusTone` returned
- * `'info'` until 0016; `.badge--info` has no rule in atoms.css, so it would have rendered
- * an unstyled pill rather than throwing anything (see `ledger-format.ts`).
+ * atom no longer has is an excess key. Worth the ceremony because the failure is silent —
+ * a tone with no rule in atoms.css renders an unstyled pill rather than throwing.
  */
 const STYLED_TONES = {
   neutral: 'neutral',
@@ -106,20 +79,15 @@ export const BADGE_TONES: readonly BadgeTone[] = Object.values(STYLED_TONES)
 /**
  * Whether these books hold nothing yet.
  *
- * FOUR CONDITIONS, AND EACH EXCLUDES SOMETHING THE OTHERS LET THROUGH. Both reads have
- * to have finished, because a failure is not an emptiness — a company with a decade of
- * invoices whose document list failed would otherwise be told to add its first customer.
- * And both have to be empty: a company with no documents may still have taken money on
- * account, and a company with no receipts is the ordinary state of one that invoices on
- * terms.
+ * Both counts have to have answered, because a failure is not an emptiness — a company
+ * with a decade of invoices whose count failed would otherwise be told to add its first
+ * customer. And both have to be nought: a company with no documents may still have taken
+ * money on account.
  */
-export function isNewCompany(
-  documents: Panel<readonly DocumentSummary[]>,
-  receipts: Panel<readonly ReceiptSummary[]>,
-): boolean {
+export function isNewCompany(documents: Panel<number>, receipts: Panel<number>): boolean {
   if (documents.state !== 'ready') return false
   if (receipts.state !== 'ready') return false
-  return documents.data.length === 0 && receipts.data.length === 0
+  return documents.data === 0 && receipts.data === 0
 }
 
 // ---- What to do first -------------------------------------------------------
@@ -129,8 +97,7 @@ export function isNewCompany(
  *
  * `unknown` IS A REAL ANSWER AND NOT A LOADING FLAG. The read behind a step can fail, and
  * a step that then said "to do" would be telling a user to enter business details they
- * have already entered. Written as values with the type read off them, so a test can
- * iterate every state rather than remembering the list.
+ * have already entered.
  */
 export const STEP_STATES = ['done', 'todo', 'unknown'] as const
 export type StepState = (typeof STEP_STATES)[number]
@@ -163,16 +130,13 @@ export function stepLabel(state: StepState): string {
 }
 
 /*
- * Screens the dashboard links to that own their own ids.
- *
- * Collected rather than scattered, so a rename in someone else's file has one place to be
- * found. Ids that are DERIVED — a document editor, a register, an aged report — are taken
- * from the tables that build them instead, and so are absent here on purpose.
+ * Screens the dashboard links to that own their own ids. Collected rather than scattered,
+ * so a rename in someone else's file has one place to be found. Derived ids — an editor,
+ * a register, an aged report — come from the tables that build them.
  */
 export const LINKED_SCREENS = {
   companyProfile: 'company-profile',
   customers: 'customers',
-  dayBook: 'day-book',
 } as const
 
 export interface FirstRunStep {
@@ -190,11 +154,7 @@ export interface FirstRunStep {
  *
  * THE ORDER IS A DEPENDENCY, NOT A PREFERENCE. A document cannot be created until the
  * company profile exists — the service refuses it with `COMPANY_PROFILE_MISSING` — and it
- * needs a party to be addressed to. Listing "raise an invoice" first would send a first
- * user straight into the one screen that cannot work yet.
- *
- * Each state is passed in rather than derived here, because each comes from a different
- * read and one of them can fail while the others answer.
+ * needs a party to be addressed to.
  */
 export function firstRunSteps(states: {
   profile: StepState
@@ -239,52 +199,6 @@ export function nextFirstRunStep(steps: readonly FirstRunStep[]): FirstRunStep |
   return steps.find((step) => step.state !== 'done') ?? null
 }
 
-// ---- What is owed, each way -------------------------------------------------
-
-/*
- * The dashboard's headings for the two sides.
- *
- * NOT `agedTitle`, WHICH IS THE ACCOUNTANT'S NAME. "Aged receivables" is right at the top
- * of the report it names and wrong as the first thing somebody reads after unlocking
- * their books; this is the same money in the words the owner would use. A total record
- * over `TradeSide`, so a third side has to be given a sentence rather than inheriting
- * one.
- */
-const OUTSTANDING_TITLES: Readonly<Record<TradeSide, string>> = {
-  sales: 'What customers owe you',
-  purchase: 'What you owe suppliers',
-}
-
-export function outstandingTitle(side: TradeSide): string {
-  return OUTSTANDING_TITLES[side]
-}
-
-/** The link out to the full report. Built from the report's own name, so it cannot drift. */
-export function outstandingLinkLabel(side: TradeSide): string {
-  return `Open the ${agedTitle(side).toLowerCase()}`
-}
-
-/** One column of the report's foot: what the column is called, and what stands in it. */
-export interface BucketFigure {
-  label: string
-  /** Null where the report sent no figure for the column. Never a substituted nought. */
-  figure: DecimalString | null
-}
-
-/**
- * The report's totals row, read across its own columns.
- *
- * Goes through `columnFigure` rather than indexing, so a report whose labels and figures
- * are of different lengths leaves a hole rather than borrowing the neighbouring column's
- * money — the reasoning is in `ageing-view.ts` and this is the second reader of it.
- */
-export function bucketFigures(report: AgedReport): readonly BucketFigure[] {
-  return report.buckets.map((bucket, index) => ({
-    label: bucket.label,
-    figure: columnFigure(report.totals.buckets, index),
-  }))
-}
-
 // ---- What is late -----------------------------------------------------------
 
 /** One late item, with the party it stands against and the side it came from. */
@@ -300,8 +214,7 @@ export interface OverdueRow {
  *
  * `isOverdue` IS BORROWED RATHER THAN REWRITTEN, and its second condition is the reason:
  * a credit note raised a hundred days ago has a hundred days on it and is not late by any
- * reading, because it stands to the party's credit. A dashboard that tested only the days
- * would put its loudest badge on the customer's own money.
+ * reading, because it stands to the party's credit.
  */
 export function overdueRowsIn(side: TradeSide, report: AgedReport): readonly OverdueRow[] {
   return report.parties.flatMap((party) =>
@@ -315,212 +228,267 @@ export function overdueRowsIn(side: TradeSide, report: AgedReport): readonly Ove
 }
 
 /**
- * The worst of them, longest overdue first.
- *
- * ORDERED HERE BECAUSE NOTHING ELSE CAN. Each report arrives ordered by its own rule —
- * largest debt first, within a party oldest first — and neither knows about the other. A
- * dashboard showing "what needs attention" across both sides has to interleave them, and
- * the only ranking that means anything across a receivable and a payable is how late it
- * is.
- *
- * Copied before sorting: `sort` is in place, and the arrays here are derived from state.
- * Equal ages keep the order they arrived in, which is each report's own.
+ * The late items, longest overdue first. Copied before sorting, because `sort` is in
+ * place and the arrays here are derived from state; equal ages keep the report's order.
  */
-export function mostOverdue(rows: readonly OverdueRow[], limit: number): readonly OverdueRow[] {
-  return [...rows].sort((a, b) => b.item.daysOverdue - a.item.daysOverdue).slice(0, limit)
+export function mostOverdue(rows: readonly OverdueRow[]): readonly OverdueRow[] {
+  return [...rows].sort((a, b) => b.item.daysOverdue - a.item.daysOverdue)
 }
 
-// ---- What has happened lately -----------------------------------------------
+// ---- The four figures ---------------------------------------------------------
+
+/** One word, singular or plural, for a count this file already has. */
+function counted(count: number, singular: string, plural = `${singular}s`): string {
+  return `${String(count)} ${count === 1 ? singular : plural}`
+}
 
 /*
- * The two things that happen in a set of books, as values.
- *
- * The type is read off the list rather than the list off the type, so every record keyed
- * by it below is total and a test can iterate the members without a second copy.
+ * Charges counted, not money: an item on one side's report with something owed on it. The
+ * report lists what stands to a party's credit as well, and "3 unpaid" must not count a
+ * credit note as a thing somebody has not paid.
  */
-export const ACTIVITY_SOURCES = ['document', 'receipt'] as const
-export type ActivitySource = (typeof ACTIVITY_SOURCES)[number]
+function chargesIn(report: AgedReport): number {
+  return report.parties.reduce(
+    (sum, party) =>
+      sum +
+      party.items.filter((item) => !isNegativeAmount(item.amount) && !isZeroAmount(item.amount))
+        .length,
+    0,
+  )
+}
 
-/** A document or a voucher, in the one shape the dashboard lists both in. */
-export interface ActivityRow {
+/** The line under "Owed to you" and "You owe": how many are open, and how many are late. */
+export function outstandingNote(side: TradeSide, report: AgedReport): string {
+  const open = chargesIn(report)
+  if (open === 0) return 'Nothing outstanding'
+  const late = overdueRowsIn(side, report).length
+  return `${String(open)} unpaid · ${String(late)} overdue`
+}
+
+/** The line under "Cash and bank": how many accounts the figure is made of. */
+export function cashNote(accountCount: number): string {
+  if (accountCount === 0) return 'No account fills the cash or bank role'
+  return `across ${counted(accountCount, 'account')}`
+}
+
+/** The line under "This month, net": the days it covers, and what it is. */
+export function monthNote(fromDate: string, toDate: string): string {
+  return `${formatDayRange(fromDate, toDate)} · income less expenses`
+}
+
+/** "As at 13 Sep 2026 · financial year 2026-27", with the year left off until it is known. */
+export function asAtLine(today: string, financialYear: string | null): string {
+  const date = `As at ${formatDate(today)}`
+  return financialYear === null ? date : `${date} · financial year ${financialYear}`
+}
+
+// ---- Owed to you, oldest first ------------------------------------------------
+
+/** One party on the "Owed to you" list. */
+export interface OwedRow {
   key: string
-  source: ActivitySource
-  id: string
-  /** A `DocumentKind` or a `ReceiptKind`. A string, because the DTOs carry it as one. */
-  kind: string
-  /** What it is known by. A draft has no number and is named for what it is. */
-  numberLabel: string
-  date: string
+  partyId: string | null
   partyName: string
-  status: string
-  /** As main sent it. Nothing here totals a column of these. */
-  amount: DecimalString
+  /** The party's own total, as main sent it. */
+  total: string
+  /** How late their oldest charge is. Nought or below is not yet due. */
+  daysOverdue: number
+}
+
+/** Rows on the list. A dashboard list of forty is a report with none of its columns. */
+export const OWED_LIMIT = 5
+
+/**
+ * The parties who owe something, the one whose oldest charge is latest first.
+ *
+ * ORDERED BY AGE, NOT BY AMOUNT, which is the reverse of the report. The report leads with
+ * the largest debt because it is read for the balance; this list is read for who to ring
+ * first, and a small invoice ninety days late is the call to make before a large one due
+ * tomorrow. A party whose total stands to their credit owes nothing and is not listed.
+ */
+export function oldestOwed(report: AgedReport, limit: number = OWED_LIMIT): readonly OwedRow[] {
+  const rows: OwedRow[] = []
+  for (const party of report.parties) {
+    if (isNegativeAmount(party.total) || isZeroAmount(party.total)) continue
+    const charges = party.items.filter((item) => item.bucket !== null)
+    const oldest = charges.reduce(
+      (worst, item) => Math.max(worst, item.daysOverdue),
+      Number.NEGATIVE_INFINITY,
+    )
+    rows.push({
+      key: party.partyId ?? `unnamed:${party.partyName}`,
+      partyId: party.partyId,
+      partyName: party.partyName,
+      total: party.total,
+      daysOverdue: Number.isFinite(oldest) ? oldest : 0,
+    })
+  }
+  return rows.sort((a, b) => b.daysOverdue - a.daysOverdue).slice(0, limit)
+}
+
+/** How late, in words: "61 days overdue", or "Not yet due". */
+export function ageLabel(daysOverdue: number): string {
+  if (daysOverdue <= 0) return 'Not yet due'
+  return `${counted(daysOverdue, 'day')} overdue`
 }
 
 /**
- * What a document with no number is called.
- *
- * A draft has none and must not borrow one. The word is better than a blank cell, which
- * reads as a number that failed to load — the same argument `DocumentRegister` makes.
+ * The badge an age wears. Past thirty days is the bad tone and anything late is a warning:
+ * thirty days is the first bucket every aged report in these books draws, so the colour
+ * changes where the report's own columns do.
  */
-export const DRAFT_NUMBER_LABEL = 'Draft'
-
-export function documentActivity(rows: readonly DocumentSummary[]): readonly ActivityRow[] {
-  return rows.map((row) => ({
-    key: `document:${row.id}`,
-    source: 'document',
-    id: row.id,
-    kind: row.kind,
-    numberLabel: row.number ?? DRAFT_NUMBER_LABEL,
-    date: row.date,
-    partyName: row.partyName,
-    status: row.status,
-    amount: row.grandTotal,
-  }))
+export function ageTone(daysOverdue: number): BadgeTone {
+  if (daysOverdue > 30) return 'negative'
+  if (daysOverdue > 0) return 'warning'
+  return 'neutral'
 }
 
-export function receiptActivity(rows: readonly ReceiptSummary[]): readonly ActivityRow[] {
-  return rows.map((row) => ({
-    key: `receipt:${row.id}`,
-    source: 'receipt',
-    id: row.id,
-    kind: row.kind,
-    /* A voucher always has a number — there is no state in its life before it has one
-     * (`ReceiptSummary`) — so there is nothing to substitute here. */
-    numberLabel: row.number,
-    date: row.date,
-    partyName: row.partyName,
-    status: row.status,
-    amount: row.amount,
-  }))
+// ---- Needs your attention -------------------------------------------------------
+
+export const ATTENTION_TONES = ['negative', 'warning', 'info'] as const
+export type AttentionTone = (typeof ATTENTION_TONES)[number]
+
+/** One thing worth interrupting somebody with. */
+export interface AttentionItem {
+  id: string
+  tone: AttentionTone
+  title: string
+  note: string
+  /** Where acting on it happens. Absent where there is nowhere to go yet. */
+  target?: ItemTarget
+  /** The button's words, where there is a target. */
+  actionLabel?: string
 }
 
-/**
- * Documents and vouchers as one sequence, newest first.
- *
- * ORDERED HERE, AND THAT IS NOT DISTRUST OF MAIN. Each list arrives newest first already;
- * what no channel can do is interleave two of them, because the merge happens after both
- * answers have crossed the bridge. Taking the newest few of each and then the newest few
- * of the union is exact — nothing outside a list's own first `limit` rows can be newer
- * than all of them.
- *
- * COMPARED AS TEXT. A date is `YYYY-MM-DD`, so lexicographic order IS chronological order
- * and nothing has to be parsed into a `Date` to sort it.
- */
-export function recentActivity(
-  documents: readonly DocumentSummary[],
-  receipts: readonly ReceiptSummary[],
-  limit: number,
-): readonly ActivityRow[] {
-  return [...documentActivity(documents), ...receiptActivity(receipts)]
-    .sort((a, b) => (a.date === b.date ? 0 : a.date < b.date ? 1 : -1))
-    .slice(0, limit)
+export interface AttentionSources {
+  receivables: Panel<AgedReport>
+  payables: Panel<AgedReport>
+  draftCount: Panel<number>
+  newestDraft: Panel<readonly DocumentListRow[]>
+  recoveryCodesRemaining: number
 }
 
 /*
- * Three total records over `ActivitySource` rather than three conditionals.
- *
- * A `row.source === 'document' ? … : …` is correct for exactly as long as there are two
- * sources, and gives the third one whatever the last branch said (CONVENTIONS §1.9). A
- * record does not compile until the new member has been answered for.
+ * The words each side uses. A total record over the side, so the purchase side cannot
+ * inherit "customers" from a conditional written for sales.
  */
-const ACTIVITY_LABELS: Readonly<Record<ActivitySource, (kind: string) => string>> = {
-  document: (kind) => (isDocumentKind(kind) ? definitionOf(kind).label : kind),
-  receipt: (kind) => (isReceiptKind(kind) ? receiptDefinitionOf(kind).label : kind),
+const SIDE_ATTENTION: Readonly<
+  Record<TradeSide, { charge: string; who: string; report: string; tone: AttentionTone }>
+> = {
+  sales: { charge: 'invoice', who: 'customers owe', report: 'aged receivables', tone: 'negative' },
+  purchase: { charge: 'bill', who: 'you owe suppliers', report: 'aged payables', tone: 'warning' },
 }
 
 /**
- * What a row is, in the user's words.
+ * The real signals, worst first. Nothing is here that the books cannot prove today.
  *
- * A kind this build does not know keeps its own name. It is more use to whoever is
- * reading than a word invented for it here, and it says plainly that the file has been
- * written by something newer.
+ * FIVE KINDS, AND WHAT IS LEFT OUT IS DELIBERATE. The design also shows a return not yet
+ * looked at, a backup days old and an item below its reorder level. None of those is
+ * recorded anywhere yet — no backup date is stored, no return screen exists, no stock level
+ * is read — so they arrive with the work that records them (design plan R3).
+ *
+ *   an aged report that does not agree with its account    negative
+ *   invoices past their due date                            negative
+ *   bills past their due date                               warning
+ *   recovery codes spent, or nearly                         negative / warning
+ *   drafts not yet issued                                   info
+ *
+ * A read that failed contributes nothing here: its own failure is shown where the figure
+ * would have been, and "nothing needs your attention" is only said when every read answered.
  */
-export function activityLabel(row: ActivityRow): string {
-  return ACTIVITY_LABELS[row.source](row.kind)
-}
+export function attentionItems(sources: AttentionSources): readonly AttentionItem[] {
+  const items: AttentionItem[] = []
 
-const ACTIVITY_STATUS_LABELS: Readonly<Record<ActivitySource, (status: string) => string>> = {
-  document: documentStatusLabel,
-  receipt: receiptStatusLabel,
-}
+  for (const [side, panel] of [
+    ['sales', sources.receivables],
+    ['purchase', sources.payables],
+  ] as const) {
+    if (panel.state !== 'ready') continue
+    const words = SIDE_ATTENTION[side]
+    const report = panel.data
 
-export function activityStatusLabel(row: ActivityRow): string {
-  return ACTIVITY_STATUS_LABELS[row.source](row.status)
-}
+    if (!report.ties) {
+      items.push({
+        id: `${side}:ties`,
+        tone: 'negative',
+        title: `What ${words.who} does not agree with ${report.accountCode} · ${report.accountName}`,
+        note: `The ${words.report} lists every row behind it. The difference is somewhere among them.`,
+        target: { screenId: agedScreenId(side), params: {} },
+        actionLabel: `Open the ${words.report}`,
+      })
+    }
 
-/*
- * The two status vocabularies are NOT interchangeable, which is why this is a record of
- * two functions and not one shared call. A document's `issued` is a receipt's `posted`,
- * and the document table's answer for an unknown status is `neutral` — so lending it to a
- * receipt would draw every posted voucher in the quiet tone reserved for a cancelled one.
- */
-const ACTIVITY_TONES: Readonly<Record<ActivitySource, (status: string) => BadgeTone>> = {
-  document: documentStatusTone,
-  receipt: receiptStatusTone,
-}
-
-export function activityTone(row: ActivityRow): BadgeTone {
-  return ACTIVITY_TONES[row.source](row.status)
-}
-
-/* Struck through for a voided row. A record of two for the same reason as the tones: the
- * vocabularies are the two sources' own, even where today they agree on cancelled. */
-const ACTIVITY_STRUCK: Readonly<Record<ActivitySource, (status: string) => boolean>> = {
-  document: isStruckDocumentStatus,
-  receipt: isStruckReceiptStatus,
-}
-
-export function activityIsStruck(row: ActivityRow): boolean {
-  return ACTIVITY_STRUCK[row.source](row.status)
-}
-
-const ACTIVITY_TARGETS: Readonly<Record<ActivitySource, (row: ActivityRow) => ItemTarget | null>> =
-  {
-    document: (row) =>
-      isDocumentKind(row.kind)
-        ? { screenId: documentEditorScreenId(row.kind), params: { id: row.id } }
-        : null,
-    receipt: (row) =>
-      isReceiptKind(row.kind)
-        ? { screenId: receiptEditorScreenId(row.kind), params: { id: row.id } }
-        : null,
+    const late = mostOverdue(overdueRowsIn(side, report))
+    const worst = late[0]
+    if (worst !== undefined) {
+      const allDocuments = late.every((row) => row.item.source === 'document')
+      const noun = allDocuments ? words.charge : 'amount'
+      items.push({
+        id: `${side}:overdue`,
+        tone: words.tone,
+        title: `${counted(late.length, noun)} ${late.length === 1 ? 'is' : 'are'} past the due date`,
+        note: `Oldest is ${counted(worst.item.daysOverdue, 'day')} · ${worst.partyName}`,
+        target: { screenId: agedScreenId(side), params: {} },
+        actionLabel: `Open the ${words.report}`,
+      })
+    }
   }
 
-/**
- * The editor a row opens, or null where there is nowhere to go.
- *
- * Null is an answer rather than a failure: a kind these books do not recognise has no
- * editor in this build, and the row is drawn as text. A route to a screen that does not
- * resolve is a blank page rather than a message.
- */
-export function activityTarget(row: ActivityRow): ItemTarget | null {
-  return ACTIVITY_TARGETS[row.source](row)
+  if (sources.recoveryCodesRemaining === 0) {
+    items.push({
+      id: 'recovery-codes',
+      tone: 'negative',
+      title: 'No recovery codes remain',
+      note: 'The passphrase is now the only way into these books, and nobody can reset it. Keep a backup.',
+    })
+  } else if (sources.recoveryCodesRemaining <= 2) {
+    items.push({
+      id: 'recovery-codes',
+      tone: 'warning',
+      title: `Only ${counted(sources.recoveryCodesRemaining, 'recovery code')} left`,
+      note: 'Each one opens this company once. When they are gone, the passphrase is the only way in.',
+    })
+  }
+
+  if (sources.draftCount.state === 'ready' && sources.draftCount.data > 0) {
+    items.push(draftsItem(sources.draftCount.data, sources.newestDraft))
+  }
+
+  const rank = (tone: AttentionTone): number => ATTENTION_TONES.indexOf(tone)
+  return items.sort((a, b) => rank(a.tone) - rank(b.tone))
 }
 
-// ---- How much of each list is shown -----------------------------------------
-
-/**
- * Rows drawn in a "needs attention" panel.
- *
- * Small on purpose. A dashboard panel listing forty drafts is a register with none of a
- * register's filters, and the registers are one click away in the rail.
+/*
+ * The drafts line. It names the newest one and opens it where the list answered and the
+ * kind is one this build draws; otherwise it says what a draft is and goes nowhere, rather
+ * than guessing which register the rest are in — drafts can be any of five kinds.
  */
-export const ATTENTION_LIMIT = 5
+function draftsItem(count: number, newestDraft: Panel<readonly DocumentListRow[]>): AttentionItem {
+  const title = `${counted(count, 'draft')} not yet issued`
+  const newest = newestDraft.state === 'ready' ? newestDraft.data[0] : undefined
+  if (newest === undefined || !isDocumentKind(newest.kind)) {
+    return {
+      id: 'drafts',
+      tone: 'info',
+      title,
+      note: 'A draft is in nobody’s books until it is issued.',
+    }
+  }
+  return {
+    id: 'drafts',
+    tone: 'info',
+    title,
+    note: `The newest is a ${definitionOf(newest.kind).label.toLowerCase()} for ${newest.partyName}, dated ${formatDate(newest.date)}`,
+    target: { screenId: documentEditorScreenId(newest.kind), params: { id: newest.id } },
+    actionLabel: 'Open the newest',
+  }
+}
 
-/** Rows drawn in the activity panel, and asked of each of the two channels behind it. */
-export const ACTIVITY_LIMIT = 6
-
-/**
- * One page of a list that was asked for one row more than it shows.
- *
- * The extra row IS the answer to "is there more of this", with no count query and no way
- * to be off by one — the mechanism `DocumentRegister` pages with, borrowed for a panel
- * that says "and there are others" rather than offering a Next.
- */
-export function pageOf<T>(
-  rows: readonly T[],
-  limit: number,
-): { rows: readonly T[]; hasMore: boolean } {
-  return { rows: rows.slice(0, limit), hasMore: rows.length > limit }
+/** Whether every read behind the attention list answered, so "nothing" can be said. */
+export function isAttentionComplete(sources: AttentionSources): boolean {
+  return (
+    sources.receivables.state === 'ready' &&
+    sources.payables.state === 'ready' &&
+    sources.draftCount.state === 'ready'
+  )
 }

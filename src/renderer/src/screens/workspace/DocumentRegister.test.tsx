@@ -24,7 +24,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { DocumentListRow, Result } from '@shared/dto'
-import { chargesOnTerms, DOCUMENT_KINDS, type DocumentKind } from '@shared/documents'
+import { DOCUMENT_KINDS, type DocumentKind } from '@shared/documents'
 import { renderScreen, screenContext, type BridgeStub } from '../../test/harness'
 import { documentRegisterScreens, DocumentRegister } from './DocumentRegister'
 
@@ -40,7 +40,9 @@ function invoice(over: Partial<DocumentListRow> = {}): DocumentListRow {
     status: 'issued',
     number: 'INV/2026-27/0001',
     date: '2026-04-15',
-    dueDate: '2026-05-15',
+    /* Never past, whatever day the suite runs, so an open invoice says Issued. A late one
+     * is built with a date that is always past. */
+    dueDate: '2099-05-15',
     partyId: 'party-1',
     partyName: 'Sunrise Components',
     grandTotal: '125000.00',
@@ -69,8 +71,12 @@ const ROWS: DocumentListRow[] = [
   }),
 ]
 
-const listing = (rows: DocumentListRow[]): BridgeStub => ({
-  documents: { list: () => Promise.resolve<Result<DocumentListRow[]>>({ ok: true, data: rows }) },
+/* The count answers with the rows it was given unless told there are more. */
+const listing = (rows: DocumentListRow[], total: number = rows.length): BridgeStub => ({
+  documents: {
+    list: () => Promise.resolve<Result<DocumentListRow[]>>({ ok: true, data: rows }),
+    count: () => Promise.resolve<Result<number>>({ ok: true, data: total }),
+  },
 })
 
 /** The filters the last query carried, for asserting that a click reached main. */
@@ -90,7 +96,7 @@ describe('what it asks main for', () => {
   })
 
   /* THE PAGING MECHANISM. One more row than the screen draws — the extra is how Next
-   * knows there is somewhere to go, with no count query to disagree with the list. */
+   * knows there is somewhere to go. The count only says how many there are in all. */
   it('asks for one row more than it will draw', async () => {
     const { bridge } = renderScreen(register(), { bridge: listing(ROWS) })
 
@@ -127,6 +133,21 @@ describe('what it asks main for', () => {
     await waitFor(() => expect(bridge.callsTo('documents:list')).toHaveLength(3))
     /* Absent, not `status: ''` — main would reject that, and it means something else. */
     expect(lastQuery(bridge)).not.toHaveProperty('status')
+  })
+
+  it('counts with the same filters the page was asked with, and no page', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(register(), { bridge: listing(ROWS) })
+
+    await screen.findByText('Sunrise Components')
+    await user.click(screen.getByRole('button', { name: 'Drafts' }))
+
+    await waitFor(() =>
+      expect(bridge.lastCallTo('documents:count')?.args[0]).toEqual({
+        kind: 'sales-invoice',
+        status: 'draft',
+      }),
+    )
   })
 
   /* Typing is not searching. A query per keystroke would put one read of the books on
@@ -228,6 +249,7 @@ describe('what it draws', () => {
               data: call === 1 ? ROWS : [],
             })
           },
+          count: () => Promise.resolve<Result<number>>({ ok: true, data: 0 }),
         },
       },
     })
@@ -239,12 +261,45 @@ describe('what it draws', () => {
     expect(screen.queryByText('No sales invoices yet')).toBeNull()
   })
 
+  it('clears the search and the filter from the empty state it left', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(register(), { bridge: listing([]) })
+
+    await screen.findByText('No sales invoices yet')
+    await user.click(screen.getByRole('button', { name: 'Drafts' }))
+    await user.click(await screen.findByRole('button', { name: 'Clear the search and filter' }))
+
+    await waitFor(() => expect(lastQuery(bridge)).not.toHaveProperty('status'))
+  })
+
+  it('says where on the list the page is', async () => {
+    renderScreen(register(), { bridge: listing(ROWS, 184) })
+
+    expect(await screen.findByText('Showing 1–3 of 184')).toBeInTheDocument()
+  })
+
+  /* A skeleton at the real columns' widths, and no spinner (design.md §6). */
+  it('holds the grid with a skeleton while it reads', async () => {
+    renderScreen(register(), {
+      bridge: {
+        documents: { list: () => new Promise(() => {}), count: () => new Promise(() => {}) },
+      },
+    })
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Loading sales invoices')
+  })
+
   it('shows what main said when the register cannot be read', async () => {
     renderScreen(register(), {
       bridge: {
         documents: {
           list: () =>
             Promise.resolve<Result<DocumentListRow[]>>({
+              ok: false,
+              error: { code: 'NO_COMPANY_OPEN', message: 'Open a company first.' },
+            }),
+          count: () =>
+            Promise.resolve<Result<number>>({
               ok: false,
               error: { code: 'NO_COMPANY_OPEN', message: 'Open a company first.' },
             }),
@@ -267,7 +322,7 @@ describe('paging', () => {
       }),
     )
 
-  it('offers no paging at all when everything fits on one page', async () => {
+  it('offers no Previous or Next when everything fits on one page', async () => {
     renderScreen(register(), { bridge: listing(ROWS) })
 
     await screen.findByText('Sunrise Components')
@@ -288,14 +343,14 @@ describe('paging', () => {
   it('asks for the next page by offset, and can come back', async () => {
     const user = userEvent.setup()
     const { bridge } = renderScreen(register(), {
-      bridge: listing(page(51, 'A')),
+      bridge: listing(page(51, 'A'), 120),
     })
 
     await screen.findByText('Party 0')
     await user.click(screen.getByRole('button', { name: 'Next' }))
 
     await waitFor(() => expect(lastQuery(bridge)?.['offset']).toBe(50))
-    expect(screen.getByText('Page 2')).toBeInTheDocument()
+    expect(await screen.findByText('Showing 51–100 of 120')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Previous' }))
     await waitFor(() => expect(lastQuery(bridge)?.['offset']).toBe(0))
@@ -371,47 +426,24 @@ describe('the other four kinds', () => {
     expect(await screen.findByRole('columnheader', { name: 'Customer' })).toBeInTheDocument()
   })
 
-  /*
-   * COUNTED FROM THE KIND TABLE, so a sixth kind cannot arrive with a column of dashes.
-   * The register asks `chargesOnTerms` rather than testing the kind, which is the same
-   * question migration 0014's trigger asks and the same one issuing asks.
-   */
-  it('shows the due column for exactly the kinds that fall due', async () => {
+  /* The due column went with the redesign (Screens §04): the badge says when a date
+   * matters, and the editor shows the date itself. */
+  it('draws no due column for any kind', async () => {
     for (const definition of DOCUMENT_KINDS) {
       const { unmount } = renderScreen(register(definition.kind), { bridge: listing(ROWS) })
       await screen.findByRole('columnheader', { name: 'Number' })
 
-      const due = screen.queryByRole('columnheader', { name: 'Due' })
-      expect(due === null, `${definition.kind} draws the due column`).toBe(
-        !chargesOnTerms(definition.kind),
-      )
+      expect(screen.queryByRole('columnheader', { name: 'Due' })).toBeNull()
       unmount()
     }
   })
 
-  /*
-   * ASSERTED ON THE CELL, NOT ON THE ROW, for the reason the Draft test above gives: the
-   * document date sits in the cell beside this one, and a version that drew the wrong one
-   * of the two would satisfy any assertion made about the row as a whole. Cell two is Due.
-   */
-  it('shows the date an invoice falls due, in its own column', async () => {
+  it('writes the date the way the app writes dates, in its own column', async () => {
     renderScreen(register('sales-invoice'), { bridge: listing(ROWS) })
 
     const cells = within(await rowFor('INV/2026-27/0001')).getAllByRole('cell')
-
-    expect(cells[1]).toHaveTextContent('2026-04-15')
-    expect(cells[2]).toHaveTextContent('2026-05-15')
-  })
-
-  /* A draft has none, and a blank cell reads as a date that failed to load. */
-  it('draws a dash where a draft has no due date', async () => {
-    renderScreen(register('sales-invoice'), {
-      bridge: listing([invoice({ status: 'draft', number: null, dueDate: null })]),
-    })
-
-    const cells = within(await rowFor('Sunrise Components')).getAllByRole('cell')
-
-    expect(cells[2]).toHaveTextContent('—')
+    expect(cells[1]).toHaveTextContent('Sunrise Components')
+    expect(cells[2]).toHaveTextContent('15 Apr 2026')
   })
 
   it('names the kind on the button that starts one', async () => {
@@ -445,6 +477,61 @@ describe('the other four kinds', () => {
     expect(navigate).toHaveBeenCalledWith(
       expect.objectContaining({ screenId: 'purchase-bill', params: { id: 'doc-1' } }),
     )
+  })
+})
+
+/*
+ * ONE BADGE PER ROW (5b). Settlement is main's; Overdue is a date comparison the view makes
+ * against today. Asserted on the STATUS CELL, because the number cell of a draft also says
+ * a word.
+ */
+describe('the status badge', () => {
+  const statusCell = async (number: string): Promise<HTMLElement> =>
+    within(await rowFor(number)).getAllByRole('cell')[3] as HTMLElement
+
+  it('says Paid for an issued invoice with nothing left on it', async () => {
+    renderScreen(register(), { bridge: listing([invoice({ settlement: 'settled' })]) })
+
+    expect(await statusCell('INV/2026-27/0001')).toHaveTextContent('Paid')
+  })
+
+  it('says Part paid for one partly settled and not yet due', async () => {
+    renderScreen(register(), { bridge: listing([invoice({ settlement: 'part' })]) })
+
+    expect(await statusCell('INV/2026-27/0001')).toHaveTextContent('Part paid')
+  })
+
+  it('says how many days overdue an invoice with money on it is', async () => {
+    renderScreen(register(), {
+      bridge: listing([invoice({ settlement: 'part', dueDate: '2019-05-15' })]),
+    })
+
+    expect(await statusCell('INV/2026-27/0001')).toHaveTextContent(/^Overdue \d+d$/)
+  })
+
+  it('never calls a paid invoice overdue, however old its due date', async () => {
+    renderScreen(register(), {
+      bridge: listing([invoice({ settlement: 'settled', dueDate: '2019-05-15' })]),
+    })
+
+    expect(await statusCell('INV/2026-27/0001')).toHaveTextContent('Paid')
+  })
+
+  it('says Issued for an open invoice not yet due, and strikes a cancelled one', async () => {
+    renderScreen(register(), { bridge: listing(ROWS) })
+
+    expect(await statusCell('INV/2026-27/0001')).toHaveTextContent('Issued')
+    const cancelled = await statusCell('INV/2026-27/0002')
+    expect(cancelled).toHaveTextContent('Cancelled')
+    expect(cancelled.querySelector('.badge')).toHaveClass('badge--struck')
+  })
+
+  it('says Refunded for a credit note settled in full', async () => {
+    renderScreen(register('credit-note'), {
+      bridge: listing([invoice({ kind: 'credit-note', settlement: 'settled' })]),
+    })
+
+    expect(await statusCell('INV/2026-27/0001')).toHaveTextContent('Refunded')
   })
 })
 

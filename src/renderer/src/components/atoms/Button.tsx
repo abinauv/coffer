@@ -16,6 +16,11 @@ interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'cla
    * leads the label when there is no icon. It never becomes the word "Loading".
    */
   isBusy?: boolean
+  /**
+   * The label is an identifier — a document or voucher number that opens its record. Set in
+   * the mono face with a slashed zero, as an identifier field is.
+   */
+  isIdentifier?: boolean
   className?: string
   ref?: Ref<HTMLButtonElement>
 }
@@ -27,6 +32,7 @@ export function Button({
   iconEnd,
   isFullWidth = false,
   isBusy = false,
+  isIdentifier = false,
   className,
   children,
   disabled,
@@ -38,6 +44,7 @@ export function Button({
     `button--${variant}`,
     `button--${size}`,
     isFullWidth ? 'button--full' : '',
+    isIdentifier ? 'button--identifier' : '',
     children === undefined ? 'button--icon-only' : '',
     className ?? '',
   ]
