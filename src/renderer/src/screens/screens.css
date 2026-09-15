@@ -1449,7 +1449,11 @@
   font-variant-numeric: tabular-nums;
 }
 
-.ledger-table__figure {
+/* Scoped to the table (B22). `.ledger-table th, .ledger-table td` above sets `start` with a
+ * higher specificity than a bare class, so every figure column in every ledger table — the
+ * registers, the trial balance, the statements — was drawn left-aligned under a header that
+ * meant to sit right. */
+.ledger-table .ledger-table__figure {
   text-align: end;
   white-space: nowrap;
 }
@@ -1565,9 +1569,37 @@
   border-radius: var(--radius-md);
 }
 
+/* Positioned, so the visually hidden labels inside the grid are clipped with it: without
+ * it they are placed against the page and give the whole window a sideways scrollbar. */
 .editor__lines {
+  position: relative;
   max-height: min(60vh, 36rem);
   overflow: auto;
+}
+
+/* Ten columns of controls. Below this width they squeeze until a price reads "2250." — so
+ * the grid holds its width and scrolls sideways inside its own box instead. */
+.editor__table {
+  min-width: 84rem;
+}
+
+/* The item, the description and the code are read as words, so they keep a width a word
+ * fits in; the figures share what is left. */
+.editor__table td:nth-child(2) .field {
+  min-width: 11rem;
+}
+
+.editor__table td:nth-child(3) .field {
+  min-width: 16rem;
+}
+
+.editor__table td:nth-child(4) .field {
+  min-width: 8rem;
+}
+
+.editor__grid > .prose {
+  margin: 0;
+  padding: var(--space-2) var(--space-4) 0;
 }
 
 .editor__table thead th {

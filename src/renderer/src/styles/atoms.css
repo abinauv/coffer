@@ -332,6 +332,14 @@ select.field__control[aria-invalid='true'] {
   color: var(--ink-faint);
 }
 
+/* A value shown in a field's shape that nobody types into — a due date stamped at issue, a
+ * unit's code. Sunken like a disabled field, so it does not read as a box waiting for
+ * input, but in full ink, because what it says is the answer and not an unavailable one. */
+.field__input:read-only:not(:disabled) {
+  border-color: var(--rule);
+  background: var(--surface-sunken);
+}
+
 .field__input[aria-invalid='true'] {
   border-color: var(--negative);
 }

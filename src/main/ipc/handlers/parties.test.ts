@@ -114,6 +114,42 @@ describe('create', () => {
     expect(first('create', minimal)['creditLimit']).toBeUndefined()
   })
 
+  /*
+   * B21. The party dialog sends every field as typed, so a limit left empty arrives as ''.
+   * It was refused here, and no party could be added without a credit limit — every
+   * screen test passed, because they stub the bridge. Blank is no limit, as the repository
+   * has always read it.
+   */
+  it('reads a blank credit limit as no limit, on a create and an update', () => {
+    expect(first('create', { ...minimal, creditLimit: '' })['creditLimit']).toBeNull()
+    expect(first('create', { ...minimal, creditLimit: '   ' })['creditLimit']).toBeNull()
+    expect(first('update', { id: 'p1', creditLimit: '' })['creditLimit']).toBeNull()
+  })
+
+  /* The shape `partyFieldsFrom` builds for a firm with nothing optional filled in: every
+   * field present, the empty ones as empty strings. Through the parse, as the app sends it. */
+  it('accepts what the party dialog sends for a firm with nothing optional filled in', () => {
+    const fromDialog = {
+      name: 'Kaveri Polymers',
+      countryCode: 'in',
+      isCustomer: true,
+      isVendor: false,
+      legalName: '',
+      registrationNumber: '',
+      jurisdictionCode: '29',
+      addressLine1: '',
+      addressLine2: '',
+      city: '',
+      postalCode: '',
+      email: '',
+      phone: '',
+      paymentTermsDays: 30,
+      creditLimit: '',
+      notes: '',
+    }
+    expect(() => parse('create', fromDialog)).not.toThrow()
+  })
+
   it('bounds the payment terms', () => {
     expect(first('create', { ...minimal, paymentTermsDays: 30 })['paymentTermsDays']).toBe(30)
     rejects('create', { ...minimal, paymentTermsDays: -1 })
