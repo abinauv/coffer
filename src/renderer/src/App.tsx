@@ -13,8 +13,11 @@
  *               may not render before the rules that say how it is written.
  *   Navigation  derives its area from Company, so it sits under it.
  *   Commands    contributed by everything, consumed by the palette.
- *   Backup      the open company's one backup flow, shared by the rail, the Overview
- *               and the palette. Under Commands because it registers one.
+ *   Backup      the open company's one backup flow, shared by the rail and the
+ *               palette. Under Commands because it registers one.
+ *
+ * `ChangePassphrase` sits beside the shell rather than in a screen: it is the palette's
+ * "Change the passphrase" and its dialog, for as long as a company is open.
  *
  * No business logic lives here, and no screen is named here. Screens register
  * themselves — see store/screens.ts.
@@ -22,6 +25,7 @@
 
 import type { JSX } from 'react'
 import { AppShell } from './components/shell/AppShell'
+import { ChangePassphrase } from './screens/components/ChangePassphrase'
 import { BackupProvider } from './store/backup'
 import { CommandProvider } from './store/commands'
 import { CompanyProvider } from './store/company'
@@ -44,6 +48,7 @@ export function App(): JSX.Element {
                   <CommandProvider>
                     <BackupProvider>
                       <AppShell />
+                      <ChangePassphrase />
                     </BackupProvider>
                   </CommandProvider>
                 </NavigationProvider>

@@ -1008,6 +1008,200 @@
   margin-inline-start: calc(var(--space-2) * -1);
 }
 
+/* ---- The Overview (Screens §02) ------------------------------------------------ */
+
+/* Four figures across, wrapping to two and then one as the window narrows. */
+.figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.figure-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+}
+
+.figure-card__label {
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+}
+
+.figure-card__value {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: var(--numeric-figures);
+  letter-spacing: var(--tracking-tight);
+  overflow-wrap: anywhere;
+}
+
+/* The sign is in the figure; the ink is the second signal (design.md §6). */
+.figure-card__value[data-tone='negative'] {
+  color: var(--figure-negative);
+}
+
+.figure-card__skeleton {
+  width: 60%;
+  height: var(--space-6);
+}
+
+.figure-card__note {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  line-height: var(--leading-relaxed);
+}
+
+.overview-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+
+@media (max-width: 60rem) {
+  .overview-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A titled card: a heading row with its link or count, then rows ruled by hairlines. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+}
+
+.panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: calc(var(--row-height) + var(--space-2));
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--rule);
+}
+
+.panel__title {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.panel__count {
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+}
+
+.panel__empty {
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+.panel-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.panel-table td {
+  height: var(--row-height);
+  padding: var(--row-pad-y) var(--space-4);
+  border-bottom: 1px solid var(--rule);
+}
+
+.panel-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Names wrap rather than truncate: a firm's name cut off is a different firm. */
+.panel-table__name {
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.panel-table__figure {
+  text-align: end;
+  white-space: nowrap;
+  font-variant-numeric: var(--numeric-figures);
+}
+
+.attention {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attention__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--rule);
+}
+
+.attention__item:last-child {
+  border-bottom: none;
+}
+
+/* The dot is the second signal: every item's title already says what is wrong. */
+.attention__dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-top: 0.45em;
+  border-radius: var(--radius-pill);
+  background: var(--info);
+}
+
+.attention__item[data-tone='negative'] .attention__dot {
+  background: var(--negative);
+}
+
+.attention__item[data-tone='warning'] .attention__dot {
+  background: var(--warning);
+}
+
+.attention__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.attention__title {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}
+
+.attention__note {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  line-height: var(--leading-relaxed);
+}
+
 /* ---- Facts --------------------------------------------------------------- */
 
 .facts {
@@ -1317,6 +1511,75 @@
   gap: var(--space-2);
   color: var(--ink-muted);
   font-size: var(--text-sm);
+}
+
+/* ---- The registers (Screens §04) ------------------------------------------------
+ * A search box sized to its sentence (B12), the status filters beside it, a table in a
+ * card, and a foot that says where on the list the page is. */
+
+.register__toolbar {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.register__search {
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+
+.register__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.register {
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+}
+
+.register__table th:first-child,
+.register__table td:first-child {
+  padding-inline-start: var(--space-4);
+}
+
+.register__table th:last-child,
+.register__table td:last-child {
+  padding-inline-end: var(--space-4);
+}
+
+/* The number opens the record: pulled back by the button's own padding so it lines up with
+ * the heading above it. */
+.register__number .button {
+  margin-inline-start: calc(var(--space-2) * -1);
+}
+
+/* Names wrap rather than truncate: a firm's name cut off is a different firm. */
+.register__party {
+  overflow-wrap: anywhere;
+}
+
+.register__date {
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.register__pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+}
+
+.register__pages {
+  display: flex;
+  gap: var(--space-2);
 }
 
 /* ---- The statements ------------------------------------------------------ */

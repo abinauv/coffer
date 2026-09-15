@@ -53,6 +53,16 @@
   width: 100%;
 }
 
+/* A document or voucher number that opens its record: the identifier face, as in a field. */
+.button--identifier {
+  font-family: var(--font-mono);
+  font-variant-numeric: var(--numeric-identifier);
+}
+
+.button--identifier.button--sm {
+  font-size: var(--text-xs);
+}
+
 /*
  * THE STATES, from the design system's button table (§03): rest, hover, active, focus,
  * disabled — and busy, which is not disabled.

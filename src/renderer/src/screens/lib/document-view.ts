@@ -229,6 +229,14 @@ export function registerLede(kind: DocumentKind): string {
 }
 
 /**
+ * What a register's search box says it searches: the three things `listDocuments` matches.
+ * The party is named in the side's own word, so a purchase register says "vendor".
+ */
+export function registerSearchPlaceholder(side: TradeSide): string {
+  return `Search by number, ${SIDE_WORDS[side].label.toLowerCase()} or narration`
+}
+
+/**
  * What an empty register says, when nothing has been filtered out.
  *
  * Names what is missing rather than saying there is nothing: a register is empty on a
@@ -333,6 +341,7 @@ function daysAfter(from: string, to: string): number {
   }
   return Math.round((utc(to) - utc(from)) / 86_400_000)
 }
+
 /** The status buttons, in the order a register is scanned. `''` is no filter. */
 export function statusFilters(): ReadonlyArray<{ value: DocumentStatusDto | ''; label: string }> {
   return [

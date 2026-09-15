@@ -67,6 +67,67 @@ export function describeCreated(timestamp: string): string {
   return day === UNREADABLE ? 'Created at an unknown time' : `Created ${day}`
 }
 
+// ---- Calendar dates, as the app writes them ---------------------------------
+
+/*
+ * `31 Mar 2026`, the voice rule in docs/design.md, for a date the app WRITES. A date typed
+ * into a field keeps the platform's own picker.
+ *
+ * NOT `toLocaleDateString`, unlike the timestamps above. A document date is a calendar
+ * date with no time and no zone — `2026-04-01` is the first of April wherever the reader
+ * sits — and handing it to `Date` reads it as UTC midnight, which is the thirty-first of
+ * March in every zone west of Greenwich. So the three parts are read off the string, and
+ * the month is named from a table: the day and the year are digits in every locale this
+ * product ships, and the abbreviation is the one the design writes.
+ */
+const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const
+
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
+
+function dateParts(iso: string): { day: number; month: string; year: string } | null {
+  const match = ISO_DATE.exec(iso)
+  if (match === null) return null
+  const month = MONTHS[Number(match[2]) - 1]
+  if (month === undefined) return null
+  return { day: Number(match[3]), month, year: match[1] ?? '' }
+}
+
+/** `2026-09-13` as `13 Sep 2026`. Anything that is not an ISO date is shown as it came. */
+export function formatDate(iso: string): string {
+  const parts = dateParts(iso)
+  return parts === null ? iso : `${String(parts.day)} ${parts.month} ${parts.year}`
+}
+
+/**
+ * A span of days, as short as it can honestly be: `1–15 Sep` inside one month,
+ * `28 Aug – 3 Sep` across two, with the year only where the two ends are in different ones.
+ */
+export function formatDayRange(from: string, to: string): string {
+  const start = dateParts(from)
+  const end = dateParts(to)
+  if (start === null || end === null) return `${from} – ${to}`
+  if (start.year !== end.year) return `${formatDate(from)} – ${formatDate(to)}`
+  if (start.month !== end.month) {
+    return `${String(start.day)} ${start.month} – ${String(end.day)} ${end.month}`
+  }
+  return start.day === end.day
+    ? `${String(start.day)} ${start.month}`
+    : `${String(start.day)}–${String(end.day)} ${end.month}`
+}
+
 /** A file size a person can read. Used for the archive a backup just wrote. */
 export function describeFileSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return 'an unknown size'

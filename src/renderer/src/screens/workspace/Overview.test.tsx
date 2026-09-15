@@ -1,40 +1,38 @@
 /*
- * The workspace dashboard, rendered. The screen has never had a test until now.
+ * The Overview, rendered.
  *
- * What the wording, the ordering and the routing decide is covered as pure functions next
+ * What the wording, the ordering and the counting decide is covered as pure functions next
  * door in `overview-view.test.ts`. What is covered only here is what the screen ASKS main
- * for, what it does with each answer, and what it keeps doing when one of them fails —
- * plus the four things this screen has always done and nothing has ever checked: proving
- * which company is open, backing it up, changing the passphrase, and closing it.
+ * for, where each answer lands, and what it keeps doing when one of them fails.
  *
- * FIXTURE DATES ARE ALL IN 2019, which the real clock cannot be in. The ageing reports
- * come back stamped `2019-07-31` while the REQUEST has to carry today — so a screen that
- * printed its own clock under the "As at" heading, or sent the report's date back to
- * main, fails here. A fixture set near today would have proved neither.
+ * FIXTURE DATES ARE ALL IN 2019, which the real clock cannot be in. The reports come back
+ * stamped 2019 while the REQUEST has to carry today, so a screen that sent the report's
+ * date back to main, or printed the report's date as today's, fails here.
  *
- * FIXTURES ARE ORDERED TO DISAGREE WITH THE ANSWER. The newest thing in these books is a
- * receipt, and it is the LAST row of the receipts list; the newest document is the SECOND
- * row of the documents list; and the worst overdue item is not the first item of the
- * first report. A screen that took row one of anything gets a different answer.
+ * FIXTURES ARE ORDERED TO DISAGREE WITH THE ANSWER. The party owed longest is the second in
+ * the report, and the worst overdue item is not the first item of the first report.
  */
 
-import { act, screen, waitFor, within } from '@testing-library/react'
+import type { JSX } from 'react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type {
+  AccountingPeriod,
   AgedItem,
   AgedPartyRow,
   AgedReport,
   CompanyProfile,
   CompanySummary,
   DocumentListRow,
+  OverviewFigures,
   PartySummary,
-  ReceiptSummary,
   RegimeDescription,
   Result,
 } from '@shared/dto'
+import { useCommands } from '@renderer/store/commands'
+import { formatDate } from '../lib/dates'
 import {
-  DEFAULT_REGIME,
   renderScreen,
   screenContext,
   type BridgeStub,
@@ -91,11 +89,6 @@ function party(over: Partial<AgedPartyRow> = {}): AgedPartyRow {
   }
 }
 
-/*
- * The receivables report. Every column carries a DIFFERENT figure, so a panel that read
- * the columns in the wrong order, or printed one column's money under another's heading,
- * cannot pass by coincidence.
- */
 const RECEIVABLES: AgedReport = {
   side: 'sales',
   asAtDate: '2019-07-31',
@@ -112,8 +105,7 @@ const RECEIVABLES: AgedReport = {
       onAccount: '5000.00',
       total: '4000.00',
       items: [
-        /* A credit note, three hundred days old and owed by nobody. `bucket` being null
-         * is what says so, and it must never wear the overdue badge. */
+        /* A credit note three hundred days old: owed by nobody, and never the oldest charge. */
         item({
           sourceId: 'document-3',
           kind: 'credit-note',
@@ -143,25 +135,20 @@ const RECEIVABLES: AgedReport = {
 }
 
 const PAYABLES: AgedReport = {
+  ...RECEIVABLES,
   side: 'purchase',
-  asAtDate: '2019-07-31',
   accountId: 'account-payable',
   accountCode: '2100',
   accountName: 'Accounts Payable',
-  buckets: BUCKETS,
   parties: [
     party({
       partyId: 'party-3',
       partyName: 'Tamil Coir',
-      buckets: ['0.00', '0.00', '4500.00'],
-      onAccount: '0.00',
       total: '4500.00',
       items: [
         item({
-          source: 'document',
           sourceId: 'document-4',
           kind: 'purchase-bill',
-          number: 'BILL/2019-20/0007',
           daysOverdue: 45,
           bucket: 2,
           amount: '4500.00',
@@ -176,96 +163,33 @@ const PAYABLES: AgedReport = {
     total: '6000.00',
   },
   controlBalance: '6000.00',
-  ties: true,
 }
 
-function document(over: Partial<DocumentListRow> = {}): DocumentListRow {
-  return {
-    id: 'document-1',
-    kind: 'sales-invoice',
-    status: 'issued',
-    number: 'INV/2019-20/0001',
-    date: '2019-04-02',
-    dueDate: '2019-05-02',
-    partyId: 'party-1',
-    partyName: 'Sunrise Components',
-    grandTotal: '1180.00',
-    settlement: 'open',
-    ...over,
-  }
+const FIGURES: OverviewFigures = {
+  asAtDate: '2019-07-31',
+  cashAndBank: {
+    total: '276905.00',
+    accounts: [
+      { accountId: 'a', code: '1100', name: 'Cash in Hand', balance: '4905.00' },
+      { accountId: 'b', code: '1210', name: 'HDFC Current', balance: '200000.00' },
+      { accountId: 'c', code: '1220', name: 'SBI', balance: '72000.00' },
+    ],
+  },
+  monthToDate: { fromDate: '2019-07-01', toDate: '2019-07-31', netProfit: '-48220.00' },
 }
 
-function receipt(over: Partial<ReceiptSummary> = {}): ReceiptSummary {
-  return {
-    id: 'receipt-1',
-    kind: 'receipt',
-    status: 'posted',
-    number: 'RC/2019-20/0001',
-    date: '2019-04-05',
-    partyId: 'party-1',
-    partyName: 'Sunrise Components',
-    amount: '500.00',
-    allocated: '0.00',
-    unallocated: '500.00',
-    ...over,
-  }
+const NEWEST_DRAFT: DocumentListRow = {
+  id: 'draft-1',
+  kind: 'sales-invoice',
+  status: 'draft',
+  number: null,
+  date: '2019-06-02',
+  dueDate: null,
+  partyId: 'party-1',
+  partyName: 'Sunrise Components',
+  grandTotal: '2360.00',
+  settlement: null,
 }
-
-/* Oldest FIRST, which is not the order the panel draws them in. */
-const DOCUMENTS: DocumentListRow[] = [
-  document(),
-  document({
-    id: 'document-2',
-    number: 'INV/2019-20/0002',
-    date: '2019-06-30',
-    grandTotal: '9000.00',
-  }),
-  document({
-    id: 'document-3',
-    kind: 'credit-note',
-    status: 'cancelled',
-    number: 'CN/2019-20/0001',
-    date: '2019-05-11',
-    partyId: 'party-2',
-    partyName: 'Halide Metals',
-    grandTotal: '5000.00',
-  }),
-]
-
-/* The newest thing in these books is the LAST row of this list. */
-const RECEIPTS: ReceiptSummary[] = [
-  receipt({
-    id: 'receipt-2',
-    kind: 'payment',
-    status: 'cancelled',
-    number: 'PY/2019-20/0001',
-    date: '2019-03-15',
-    partyId: 'party-3',
-    partyName: 'Tamil Coir',
-    amount: '7080.00',
-  }),
-  receipt({ id: 'receipt-3', number: 'RC/2019-20/0002', date: '2019-07-20', amount: '3000.00' }),
-]
-
-const DRAFTS: DocumentListRow[] = [
-  document({
-    id: 'draft-1',
-    status: 'draft',
-    number: null,
-    date: '2019-06-02',
-    grandTotal: '2360.00',
-  }),
-  document({
-    id: 'draft-2',
-    kind: 'purchase-bill',
-    status: 'draft',
-    number: null,
-    date: '2019-05-20',
-    partyId: 'party-3',
-    partyName: 'Tamil Coir',
-    grandTotal: '7080.00',
-  }),
-]
 
 const PROFILE: CompanyProfile = {
   legalName: 'Acme Private Limited',
@@ -283,23 +207,37 @@ const PROFILE: CompanyProfile = {
   updatedAt: '2019-08-01T09:30:00.000Z',
 }
 
+const PERIODS: AccountingPeriod[] = [
+  {
+    id: 'p1',
+    fiscalYearLabel: '2019-20',
+    index: 1,
+    label: 'Apr 2019',
+    startDate: '2019-04-01',
+    endDate: '2020-03-31',
+    status: 'open',
+    closedAt: null,
+  },
+]
+
 // ---- The bridge -------------------------------------------------------------
 
 interface Books {
   sales?: () => Promise<Result<AgedReport>>
   purchase?: () => Promise<Result<AgedReport>>
-  drafts?: () => Promise<Result<DocumentListRow[]>>
-  documents?: () => Promise<Result<DocumentListRow[]>>
-  receipts?: () => Promise<Result<ReceiptSummary[]>>
+  figures?: () => Promise<Result<OverviewFigures>>
+  documentCount?: () => Promise<Result<number>>
+  receiptCount?: () => Promise<Result<number>>
+  draftCount?: () => Promise<Result<number>>
+  newestDraft?: () => Promise<Result<DocumentListRow[]>>
   profile?: () => Promise<Result<CompanyProfile | null>>
   parties?: () => Promise<Result<PartySummary[]>>
 }
 
 /*
- * ONE `documents:list` CHANNEL, TWO QUESTIONS. The screen asks it twice — once for the
- * drafts and once for what happened lately — and the stub answers on the INPUT rather
- * than on call order, so a screen that dropped the status filter would be handed the
- * wrong list and fail here rather than quietly listing every document as a draft.
+ * ONE `documents:count` CHANNEL, TWO QUESTIONS. The stub answers on the INPUT rather than
+ * on call order, so a screen that dropped the draft filter would be handed every document
+ * as a draft and fail here rather than quietly miscounting.
  */
 function bridgeFor(books: Books = {}): BridgeStub {
   return {
@@ -308,25 +246,35 @@ function bridgeFor(books: Books = {}): BridgeStub {
         input.side === 'sales'
           ? (books.sales ?? (() => ok(RECEIVABLES)))()
           : (books.purchase ?? (() => ok(PAYABLES)))(),
+      overviewFigures: () => (books.figures ?? (() => ok(FIGURES)))(),
     },
     documents: {
-      list: (input) =>
+      count: (input) =>
         input?.status === 'draft'
-          ? (books.drafts ?? (() => ok(DRAFTS)))()
-          : (books.documents ?? (() => ok(DOCUMENTS)))(),
+          ? (books.draftCount ?? (() => ok(2)))()
+          : (books.documentCount ?? (() => ok(40)))(),
+      list: () => (books.newestDraft ?? (() => ok([NEWEST_DRAFT])))(),
     },
-    receipts: { list: () => (books.receipts ?? (() => ok(RECEIPTS)))() },
+    receipts: { count: () => (books.receiptCount ?? (() => ok(12)))() },
     companyProfile: { get: () => (books.profile ?? (() => ok(null)))() },
     parties: { list: () => (books.parties ?? (() => ok([])))() },
-    companies: { close: () => ok(undefined) },
+    ledger: { listPeriods: () => ok(PERIODS) },
   }
+}
+
+/** Runs a command by id, as the palette would, so a test can reach one with no button. */
+function RunCommand({ id }: { id: string }): JSX.Element {
+  const { run } = useCommands()
+  return (
+    <button type="button" onClick={() => run(id)}>
+      run {id}
+    </button>
+  )
 }
 
 interface MountOptions {
   books?: Books
-  bridge?: BridgeStub
   codes?: number
-  /** False renders the screen with no company open, which is a real frame of the shell. */
   isOpen?: boolean
   regime?: RegimeDescription
 }
@@ -335,18 +283,21 @@ function mount(
   options: MountOptions = {},
 ): RenderedScreen & { navigate: ReturnType<typeof vi.fn> } {
   const navigate = vi.fn()
-  const rendered = renderScreen(<Overview {...screenContext({ navigate })} />, {
-    bridge: options.bridge ?? bridgeFor(options.books),
-    company: options.isOpen === false ? null : ACME,
-    recoveryCodesRemaining: options.codes ?? 5,
-    ...(options.regime === undefined ? {} : { regime: options.regime }),
-  })
+  const rendered = renderScreen(
+    <>
+      <Overview {...screenContext({ navigate })} />
+      <RunCommand id="company.refresh-overview" />
+    </>,
+    {
+      bridge: bridgeFor(options.books),
+      company: options.isOpen === false ? null : ACME,
+      recoveryCodesRemaining: options.codes ?? 5,
+      ...(options.regime === undefined ? {} : { regime: options.regime }),
+    },
+  )
   return Object.assign(rendered, { navigate })
 }
 
-// ---- Reading the page -------------------------------------------------------
-
-/** A dashboard panel, by the heading that names it. Every assertion is scoped to one. */
 const findPanel = (name: string): Promise<HTMLElement> => screen.findByRole('region', { name })
 
 /** Today, built here rather than imported: a hardcoded date proves nothing about a clock. */
@@ -356,509 +307,298 @@ function today(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 }
 
-/*
- * The figure beside a label, FROM THE CELL BESIDE IT — never `toHaveTextContent` on the
- * row, which matches a substring anywhere in it. '1,180.00' appears inside '11,180.00',
- * and a row assertion cannot tell the two columns apart at all.
- */
-function figureFor(region: HTMLElement, label: string): string {
-  const rows = [...region.querySelectorAll('tr')]
-  const row = rows.find((candidate) => candidate.querySelector('td')?.textContent === label)
-  if (!row) {
-    const labels = rows.map((candidate) => candidate.querySelector('td')?.textContent).join(' | ')
-    throw new Error(`No row labelled '${label}' in this panel. Rows: ${labels}`)
-  }
-  return [...row.querySelectorAll('td')][1]?.textContent ?? '<no figure cell>'
-}
-
-/** Every body row of a panel's table, as its cells. */
-function bodyRows(region: HTMLElement): HTMLElement[] {
-  return [...region.querySelectorAll('tbody tr')].filter(
-    (row): row is HTMLElement => row instanceof HTMLElement,
-  )
-}
-
-function cells(row: HTMLElement): string[] {
-  return [...row.querySelectorAll('td')].map((cell) => cell.textContent ?? '')
-}
-
-function cellAt(row: HTMLElement | undefined, index: number): string {
-  if (row === undefined) return '<no row>'
-  return cells(row)[index] ?? '<no cell>'
-}
-
-/**
- * The badge on one step of the first-run checklist, once its read has finished.
- *
- * WAITED FOR, AND NOT ON THE BADGE ITSELF. `Not checked` is both "the read failed" and
- * "the read has not happened yet", so an assertion that stopped at the first matching
- * frame would pass against a panel that had asked main nothing. The wait is on the
- * PARTIES step reaching a settled word — both reads land in one tick — and the assertion
- * on the step in question is made after it.
- */
-async function stepBadges(panel: HTMLElement): Promise<string[]> {
-  await waitFor(() => {
-    const settled = [...panel.querySelectorAll('li')][1]?.textContent ?? ''
-    expect(settled.includes('To do') || settled.includes('Done')).toBe(true)
-  })
-  return [...panel.querySelectorAll('li')].map((step) => {
-    const badge = step.querySelector('.badge')
-    return badge?.textContent ?? '<no badge>'
-  })
-}
-
-/** The first column of every row: a number, or the word standing in for one. */
-function numbersIn(region: HTMLElement): string[] {
-  return bodyRows(region).map((row) => cellAt(row, 0))
+/** The figure card under a label: its value and its note, once the value has arrived. */
+async function figure(label: string): Promise<{ value: HTMLElement; note: string }> {
+  const term = await screen.findByText(label, { selector: 'dt' })
+  const card = term.parentElement as HTMLElement
+  await waitFor(() => expect(card.querySelector('[aria-busy]')).toBeNull())
+  const [value, note] = [...card.querySelectorAll('dd')]
+  return { value: value as HTMLElement, note: note?.textContent ?? '<no note>' }
 }
 
 // ---- What it asks main for --------------------------------------------------
 
 describe('the reads', () => {
-  it('asks for both ageing reports as at today, and for the same day', async () => {
+  it('asks for both ageing reports and the figures as at today, and for the same day', async () => {
     const { bridge } = mount()
-    await findPanel('What customers owe you')
+    await findPanel('Needs your attention')
 
     await waitFor(() => expect(bridge.callsTo('reports:aged')).toHaveLength(2))
     expect(bridge.callsTo('reports:aged').map((call) => call.args[0])).toEqual([
       { side: 'sales', asAtDate: today() },
       { side: 'purchase', asAtDate: today() },
     ])
+    expect(bridge.lastCallTo('reports:overviewFigures')?.args[0]).toEqual({ asAtDate: today() })
   })
 
-  it('asks the document register twice — once for drafts, once for what is recent', async () => {
+  it('counts the books rather than listing them, and asks for one draft', async () => {
     const { bridge } = mount()
-    await findPanel('Drafts not yet issued')
+    await findPanel('Needs your attention')
 
-    await waitFor(() => expect(bridge.callsTo('documents:list')).toHaveLength(2))
-    expect(bridge.callsTo('documents:list').map((call) => call.args[0])).toEqual([
-      { status: 'draft', limit: 6 },
-      { limit: 6 },
+    await waitFor(() => expect(bridge.callsTo('documents:count')).toHaveLength(2))
+    expect(bridge.callsTo('documents:count').map((call) => call.args[0])).toEqual([
+      undefined,
+      { status: 'draft' },
     ])
-  })
-
-  it('asks for a page of receipts rather than all of them', async () => {
-    const { bridge } = mount()
-    await findPanel('Lately')
-
-    expect(bridge.lastCallTo('receipts:list')?.args[0]).toEqual({ limit: 6 })
+    expect(bridge.callsTo('receipts:count')).toHaveLength(1)
+    expect(bridge.lastCallTo('documents:list')?.args[0]).toEqual({ status: 'draft', limit: 1 })
   })
 
   it('does not pull the party master on a company that already has books', async () => {
-    /* `parties.list` has no limit and answers with every party there is. The checklist is
-     * the only thing that needs it, and a stocked company never shows the checklist. */
     const { bridge } = mount()
-    await findPanel('Lately')
+    await findPanel('Needs your attention')
 
     expect(bridge.callsTo('parties:list')).toHaveLength(0)
     expect(bridge.callsTo('companyProfile:get')).toHaveLength(0)
   })
 
   it('reads nothing at all until a company is open', async () => {
-    /* Every channel here needs one and answers NO_COMPANY_OPEN without it. */
     const { bridge } = mount({ isOpen: false })
     expect(await screen.findByRole('heading', { name: 'No company is open' })).toBeVisible()
 
     expect(bridge.callsTo('reports:aged')).toHaveLength(0)
-    expect(bridge.callsTo('documents:list')).toHaveLength(0)
-    expect(bridge.callsTo('receipts:list')).toHaveLength(0)
+    expect(bridge.callsTo('documents:count')).toHaveLength(0)
   })
 
-  it('asks again when Refresh is pressed', async () => {
+  it('asks again when the palette refreshes it', async () => {
     const user = userEvent.setup()
     const { bridge } = mount()
-    await findPanel('Lately')
+    await findPanel('Needs your attention')
+    await waitFor(() => expect(bridge.callsTo('reports:aged')).toHaveLength(2))
 
-    await user.click(screen.getByRole('button', { name: 'Refresh' }))
+    await user.click(screen.getByRole('button', { name: 'run company.refresh-overview' }))
     await waitFor(() => expect(bridge.callsTo('reports:aged')).toHaveLength(4))
   })
 })
 
-// ---- What is owed, each way -------------------------------------------------
+// ---- The head of the page -------------------------------------------------------
 
-describe('what is owed', () => {
-  it("shows the report's own date and control account, not this machine's clock", async () => {
+describe('the heading', () => {
+  it('says what day it is as at, and the financial year the books name', async () => {
     mount()
-    const panel = await findPanel('What customers owe you')
-    expect(within(panel).getByText(/As at 2019-07-31/)).toHaveTextContent(
-      'As at 2019-07-31 · 1300 · Accounts Receivable',
-    )
+
+    expect(await screen.findByRole('heading', { name: 'Overview' })).toBeVisible()
+    expect(
+      await screen.findByText(`As at ${formatDate(today())} · financial year 2019-20`),
+    ).toBeVisible()
   })
 
-  it('puts each column of figures under its own heading', async () => {
-    mount()
-    const panel = await findPanel('What customers owe you')
+  it('records a receipt and raises a sales invoice from the two buttons at the top', async () => {
+    const user = userEvent.setup()
+    const { navigate } = mount()
+    await findPanel('Needs your attention')
 
-    expect(figureFor(panel, 'Not yet due')).toBe('2,00,000.00')
-    expect(figureFor(panel, '1-30 days')).toBe('1,180.00')
-    expect(figureFor(panel, 'Over 30 days')).toBe('12,34,567.00')
+    await user.click(screen.getByRole('button', { name: 'Record receipt' }))
+    expect(navigate).toHaveBeenLastCalledWith({
+      area: 'workspace',
+      screenId: 'receipt',
+      params: {},
+    })
+
+    await user.click(screen.getByRole('button', { name: 'New sales invoice' }))
+    expect(navigate).toHaveBeenLastCalledWith({
+      area: 'workspace',
+      screenId: 'sales-invoice',
+      params: {},
+    })
+  })
+})
+
+// ---- The four figures ---------------------------------------------------------
+
+describe('the figures', () => {
+  it('prints what customers owe and what is owed to suppliers as the reports total them', async () => {
+    mount()
+
+    const owed = await figure('Owed to you')
+    expect(owed.value).toHaveTextContent('14,30,747.00')
+    expect(owed.note).toBe('2 unpaid · 2 overdue')
+
+    const owe = await figure('You owe')
+    expect(owe.value).toHaveTextContent('6,000.00')
+    expect(owe.note).toBe('1 unpaid · 1 overdue')
   })
 
-  it('heads the credit column "Less on account" and prints the figure as main sent it', async () => {
-    /* The renderer may not flip a sign (CONVENTIONS §1.7). Main sends what stands to the
-     * party's credit as a POSITIVE quantity, and `total` is already net of it — so the
-     * heading carries the subtraction and the figure keeps the sign it arrived with. */
+  it('prints cash and bank, and how many accounts it counted', async () => {
     mount()
-    const panel = await findPanel('What customers owe you')
-    expect(figureFor(panel, 'Less on account')).toBe('5,000.00')
+
+    const cash = await figure('Cash and bank')
+    expect(cash.value).toHaveTextContent('2,76,905.00')
+    expect(cash.note).toBe('across 3 accounts')
   })
 
-  it("foots with the report's own total under the side's name for it", async () => {
+  /* The sign is in the figure and the ink is the second signal (design.md §6). */
+  it('keeps the sign on a month that lost money, and marks it negative', async () => {
     mount()
-    const panel = await findPanel('What customers owe you')
-    expect(figureFor(panel, 'Owed to the business')).toBe('14,30,747.00')
-  })
 
-  it('does not draw the payables report in the receivables panel', async () => {
-    mount()
-    const owed = await findPanel('What you owe suppliers')
-
-    expect(within(owed).getByText(/2100 · Accounts Payable/)).toBeVisible()
-    expect(figureFor(owed, 'Owed by the business')).toBe('6,000.00')
-    expect(figureFor(owed, 'Not yet due')).toBe('1,000.00')
+    const month = await figure('This month, net')
+    expect(month.value).toHaveTextContent('-48,220.00')
+    expect(month.value).toHaveAttribute('data-tone', 'negative')
+    expect(month.note).toBe('1–31 Jul · income less expenses')
   })
 
   it('takes the grouping from the regime rather than assuming India', async () => {
-    /* Hard-coding the lakh/crore grouping was a bug removed in 2.2e-2. The same figure,
-     * under a regime that groups in threes, must read differently. */
     mount({
       regime: {
-        ...DEFAULT_REGIME,
-        numberFormat: { ...DEFAULT_REGIME.numberFormat, groupSizes: [3] },
+        id: 'pt',
+        label: 'Portugal — IVA',
+        registrationLabel: 'NIF',
+        numberFormat: {
+          groupSizes: [3],
+          decimalSeparator: ',',
+          groupSeparator: '.',
+          currencyCode: 'EUR',
+          currencySymbol: '€',
+        },
+        jurisdictions: [],
+        taxRates: [],
+        taxComponents: [],
+        classification: { code: null, label: 'CPA', validLengths: [] },
       },
     })
-    const panel = await findPanel('What customers owe you')
 
-    expect(figureFor(panel, 'Owed to the business')).toBe('1,430,747.00')
+    expect((await figure('Owed to you')).value).toHaveTextContent('1.430.747,00')
   })
 
-  it('says so when the report does not agree with its account, and still draws the figures', async () => {
-    mount({ books: { sales: () => ok({ ...RECEIVABLES, ties: false }) } })
-    const panel = await findPanel('What customers owe you')
+  it('says a figure could not be read, and leaves the others standing', async () => {
+    mount({ books: { figures: () => fails('ROLE_UNMAPPED', 'No account fills the bank role.') } })
 
-    expect(within(panel).getByRole('alert')).toHaveTextContent('does not agree with the account')
-    expect(figureFor(panel, 'Owed to the business')).toBe('14,30,747.00')
+    const cash = await figure('Cash and bank')
+    expect(cash.note).toBe('Could not be read')
+    expect(await screen.findByText(/No account fills the bank role/)).toBeVisible()
+    expect((await figure('Owed to you')).value).toHaveTextContent('14,30,747.00')
   })
 
-  it('offers a way through to the full report', async () => {
-    const user = userEvent.setup()
-    const { navigate } = mount()
-    const panel = await findPanel('What customers owe you')
-
-    await user.click(within(panel).getByRole('button', { name: 'Open the aged receivables' }))
-    expect(navigate).toHaveBeenCalledWith({
-      area: 'workspace',
-      screenId: 'aged-sales',
-      params: {},
-    })
-  })
-
-  it('says nothing is outstanding rather than drawing an empty table', async () => {
-    mount({
-      books: {
-        sales: () =>
-          ok({
-            ...RECEIVABLES,
-            parties: [],
-            totals: {
-              buckets: ['0.00', '0.00', '0.00'],
-              onAccount: '0.00',
-              overdue: '0.00',
-              total: '0.00',
-            },
-            controlBalance: '0.00',
-          }),
-      },
-    })
-    const panel = await findPanel('What customers owe you')
-
-    expect(within(panel).getByText('Nothing outstanding')).toBeVisible()
+  it('does not add anything up itself', async () => {
+    mount()
+    await figure('You owe')
+    /* Receivables less payables would be 14,24,747.00. Nothing on the page may say it. */
+    expect(screen.queryByText(/14,24,747/)).toBeNull()
   })
 })
 
-// ---- What needs attention ---------------------------------------------------
+// ---- Owed to you, oldest first ------------------------------------------------
 
-describe('what is overdue', () => {
-  it('lists the latest first, across both sides of the trade', async () => {
+describe('owed to you, oldest first', () => {
+  it('lists the party owed longest first, with their own total', async () => {
     mount()
-    const panel = await findPanel('Overdue')
+    const panel = await findPanel('Owed to you, oldest first')
 
-    /* The fixture order is INV/0001 (12 days), INV/0002 (90) from the sales report and
-     * then BILL/0007 (45) from the purchase one. A screen that concatenated the two would
-     * show them in that order. */
-    expect(numbersIn(panel)).toEqual(['INV/2019-20/0002', 'BILL/2019-20/0007', 'INV/2019-20/0001'])
-  })
-
-  it("never marks money standing to a party's credit as overdue", async () => {
-    /* CN/2019-20/0001 is three hundred days old and owed by nobody. */
-    mount()
-    const panel = await findPanel('Overdue')
-    expect(numbersIn(panel)).not.toContain('CN/2019-20/0001')
-  })
-
-  it('says how late each one is, in its own cell', async () => {
-    mount()
-    const panel = await findPanel('Overdue')
-    const rows = bodyRows(panel)
-
-    expect(cellAt(rows[0], 1)).toBe('Halide Metals')
-    expect(cellAt(rows[0], 2)).toBe('90 days overdue')
-    expect(cellAt(rows[0], 3)).toBe('9,000.00')
-  })
-
-  it('opens the document behind a row in its own editor', async () => {
-    const user = userEvent.setup()
-    const { navigate } = mount()
-    const panel = await findPanel('Overdue')
-
-    await user.click(within(panel).getByRole('button', { name: 'BILL/2019-20/0007' }))
-    expect(navigate).toHaveBeenCalledWith({
-      area: 'workspace',
-      screenId: 'purchase-bill',
-      params: { id: 'document-4' },
-    })
-  })
-
-  it('says nothing is overdue only when both reports answered', async () => {
-    mount({
-      books: {
-        sales: () => ok({ ...RECEIVABLES, parties: [] }),
-        purchase: () => ok({ ...PAYABLES, parties: [] }),
-      },
-    })
-    const panel = await findPanel('Overdue')
-
-    expect(within(panel).getByText('Nothing is overdue')).toBeVisible()
-  })
-
-  it('refuses to say it when one of the two reports failed', async () => {
-    /* A green tick over a query that never ran is the worst answer available here. */
-    mount({
-      books: {
-        sales: () => fails('ROLE_UNMAPPED', 'No account is mapped to receivable.'),
-        purchase: () => ok({ ...PAYABLES, parties: [] }),
-      },
-    })
-    const panel = await findPanel('Overdue')
-
-    expect(within(panel).queryByText('Nothing is overdue')).toBeNull()
-    expect(within(panel).getByText(/nothing can be said about what is overdue/)).toBeVisible()
-  })
-
-  it('shows the half it has, and says it is a half, when one report failed', async () => {
-    mount({
-      books: { sales: () => fails('ROLE_UNMAPPED', 'No account is mapped to receivable.') },
-    })
-    const panel = await findPanel('Overdue')
-
-    expect(numbersIn(panel)).toEqual(['BILL/2019-20/0007'])
-    expect(
-      within(panel).getByText(/could not be read, so this is what the other holds/),
-    ).toBeVisible()
-  })
-})
-
-describe('the drafts', () => {
-  it('names a draft where the number goes rather than leaving the cell blank', async () => {
-    mount()
-    const panel = await findPanel('Drafts not yet issued')
-    const rows = bodyRows(panel)
-
-    expect(rows).toHaveLength(2)
-    expect(cellAt(rows[0], 0)).toBe('Draft')
-    expect(cellAt(rows[0], 1)).toBe('Sales invoice')
-    expect(cellAt(rows[0], 2)).toBe('2019-06-02')
-    expect(cellAt(rows[0], 5)).toBe('2,360.00')
-  })
-
-  it('opens a draft in the editor for its own kind', async () => {
-    const user = userEvent.setup()
-    const { navigate } = mount()
-    const panel = await findPanel('Drafts not yet issued')
-
-    await user.click(within(panel).getAllByRole('button', { name: 'Draft' })[1] as HTMLElement)
-    expect(navigate).toHaveBeenCalledWith({
-      area: 'workspace',
-      screenId: 'purchase-bill',
-      params: { id: 'draft-2' },
-    })
-  })
-
-  it('says there are more when the extra row came back', async () => {
-    /* The screen asks for one row more than it draws. The extra row IS the answer. */
-    const six = [1, 2, 3, 4, 5, 6].map((n) =>
-      document({ id: `draft-${String(n)}`, status: 'draft', number: null }),
-    )
-    mount({ books: { drafts: () => ok(six) } })
-    const panel = await findPanel('Drafts not yet issued')
-
-    expect(bodyRows(panel)).toHaveLength(5)
-    expect(within(panel).getByText(/The 5 most recent are shown/)).toBeVisible()
-  })
-
-  it('does not claim there are more when exactly a full page came back', async () => {
-    const five = [1, 2, 3, 4, 5].map((n) =>
-      document({ id: `draft-${String(n)}`, status: 'draft', number: null }),
-    )
-    mount({ books: { drafts: () => ok(five) } })
-    const panel = await findPanel('Drafts not yet issued')
-
-    expect(bodyRows(panel)).toHaveLength(5)
-    expect(within(panel).queryByText(/The 5 most recent are shown/)).toBeNull()
-  })
-
-  it('says the list worth being empty is empty', async () => {
-    mount({ books: { drafts: () => ok([]) } })
-    const panel = await findPanel('Drafts not yet issued')
-
-    expect(within(panel).getByText('No drafts are waiting')).toBeVisible()
-  })
-})
-
-// ---- What has happened lately -----------------------------------------------
-
-describe('what happened lately', () => {
-  it('interleaves documents and vouchers, newest first', async () => {
-    mount()
-    const panel = await findPanel('Lately')
-
-    /* The newest is a RECEIPT, and it is the last row of the receipts fixture. Neither
-     * list's own first row is the answer. */
-    expect(numbersIn(panel)).toEqual([
-      'RC/2019-20/0002',
-      'INV/2019-20/0002',
-      'CN/2019-20/0001',
-      'INV/2019-20/0001',
-      'PY/2019-20/0001',
+    const rows = await within(panel).findAllByRole('row')
+    const body = rows.filter((row) => within(row).queryAllByRole('cell').length > 0)
+    expect(body.map((row) => within(row).getAllByRole('cell')[0]?.textContent)).toEqual([
+      'Halide Metals',
+      'Sunrise Components',
     ])
+    expect(body[0]).toHaveTextContent('90 days overdue')
+    expect(body[0]).toHaveTextContent('4,000.00')
   })
 
-  it('names each row for what it is and marks its status', async () => {
-    mount()
-    const panel = await findPanel('Lately')
-    const rows = bodyRows(panel)
-
-    expect(cellAt(rows[2], 1)).toBe('Credit note')
-    expect(cellAt(rows[2], 3)).toBe('Halide Metals')
-    expect(cellAt(rows[2], 4)).toBe('Cancelled')
-    expect(cellAt(rows[2], 5)).toBe('5,000.00')
-  })
-
-  it("takes a voucher's status from the receipt vocabulary, not the document one", async () => {
-    mount()
-    const panel = await findPanel('Lately')
-    expect(cellAt(bodyRows(panel)[0], 4)).toBe('Posted')
-  })
-
-  it('opens a voucher in the editor for its own kind', async () => {
+  it('opens the aged receivables', async () => {
     const user = userEvent.setup()
     const { navigate } = mount()
-    const panel = await findPanel('Lately')
+    const panel = await findPanel('Owed to you, oldest first')
 
-    await user.click(within(panel).getByRole('button', { name: 'PY/2019-20/0001' }))
-    expect(navigate).toHaveBeenCalledWith({
-      area: 'workspace',
-      screenId: 'payment',
-      params: { id: 'receipt-2' },
-    })
+    await user.click(within(panel).getByRole('button', { name: 'Aged receivables' }))
+    expect(navigate).toHaveBeenCalledWith({ area: 'workspace', screenId: 'aged-sales', params: {} })
   })
 
-  it('offers the day book as the way to see the rest', async () => {
-    const user = userEvent.setup()
-    const { navigate } = mount()
-    const panel = await findPanel('Lately')
+  it('says nobody owes anything rather than drawing an empty table', async () => {
+    mount({ books: { sales: () => ok({ ...RECEIVABLES, parties: [] }) } })
+    const panel = await findPanel('Owed to you, oldest first')
 
-    await user.click(within(panel).getByRole('button', { name: 'Open the day book' }))
-    expect(navigate).toHaveBeenCalledWith({
-      area: 'workspace',
-      screenId: 'day-book',
-      params: {},
-    })
+    expect(await within(panel).findByText('Nobody owes you anything today.')).toBeVisible()
   })
 })
 
-// ---- One panel failing ------------------------------------------------------
+// ---- Needs your attention -------------------------------------------------------
 
-describe('a panel that fails', () => {
-  it('says what went wrong in its own box and leaves the rest of the screen standing', async () => {
-    mount({
-      books: {
-        sales: () => fails('ROLE_UNMAPPED', 'No account is mapped to receivable.'),
-        purchase: () => fails('ROLE_UNMAPPED', 'No account is mapped to payable.'),
-      },
-    })
+describe('needs your attention', () => {
+  it('lists what is late on both sides and the drafts, worst first', async () => {
+    mount()
+    const panel = await findPanel('Needs your attention')
 
-    const owed = await findPanel('What customers owe you')
-    expect(within(owed).getByRole('alert')).toHaveTextContent('No account is mapped to receivable')
-
-    /* Everything that did not depend on that read is exactly where it was. */
-    const drafts = await findPanel('Drafts not yet issued')
-    expect(bodyRows(drafts)).toHaveLength(2)
-
-    const lately = await findPanel('Lately')
-    expect(numbersIn(lately)[0]).toBe('RC/2019-20/0002')
-
-    const company = await findPanel('This company')
-    expect(within(company).getByText('/books/acme.coffer')).toBeVisible()
-    expect(within(company).getAllByRole('button', { name: 'Back up now' })).toHaveLength(1)
+    const items = await within(panel).findAllByRole('listitem')
+    expect(items.map((entry) => entry.querySelector('.attention__title')?.textContent)).toEqual([
+      '2 invoices are past the due date',
+      '1 bill is past the due date',
+      '2 drafts not yet issued',
+    ])
+    expect(within(panel).getByText('3 items')).toBeVisible()
+    expect(within(panel).getByText('Oldest is 90 days · Halide Metals')).toBeVisible()
   })
 
-  it('lists the documents it has when the receipts could not be read', async () => {
-    mount({ books: { receipts: () => fails('IPC_FAILED', 'That action could not be completed.') } })
-    const panel = await findPanel('Lately')
+  it('opens the newest draft in the editor for its own kind', async () => {
+    const user = userEvent.setup()
+    const { navigate } = mount()
+    const panel = await findPanel('Needs your attention')
 
-    expect(within(panel).getByRole('alert')).toBeVisible()
-    expect(numbersIn(panel)).toEqual(['INV/2019-20/0002', 'CN/2019-20/0001', 'INV/2019-20/0001'])
+    await user.click(await within(panel).findByRole('button', { name: 'Open the newest' }))
+    expect(navigate).toHaveBeenCalledWith({
+      area: 'workspace',
+      screenId: 'sales-invoice',
+      params: { id: 'draft-1' },
+    })
   })
 
-  it('shows the failure from the drafts read instead of an empty list', async () => {
-    mount({ books: { drafts: () => fails('IPC_FAILED', 'That action could not be completed.') } })
-    const panel = await findPanel('Drafts not yet issued')
+  it('says when the recovery codes are gone', async () => {
+    mount({ codes: 0 })
+    const panel = await findPanel('Needs your attention')
 
-    expect(within(panel).getByRole('alert')).toBeVisible()
-    expect(within(panel).queryByText('No drafts are waiting')).toBeNull()
+    expect(await within(panel).findByText('No recovery codes remain')).toBeVisible()
   })
-})
 
-// ---- Before anything has answered -------------------------------------------
+  it('says nothing needs attention only when every read answered', async () => {
+    const quiet: Books = {
+      sales: () => ok({ ...RECEIVABLES, parties: [] }),
+      purchase: () => ok({ ...PAYABLES, parties: [] }),
+      draftCount: () => ok(0),
+      newestDraft: () => ok([]),
+    }
+    const { unmount } = mount({ books: quiet })
+    expect(
+      await within(await findPanel('Needs your attention')).findByText(
+        /Nothing needs your attention/,
+      ),
+    ).toBeVisible()
+    unmount()
 
-describe('while the reads are in flight', () => {
-  it('says it is reading, and fills in when the answer lands', async () => {
-    /* Awaiting the promise is not the same as waiting for the screen to change, so the
-     * release is wrapped in `act` and React is given the chance to re-render. */
-    let release: (value: Result<AgedReport>) => void = () => {}
-    const pending = new Promise<Result<AgedReport>>((resolve) => {
-      release = resolve
-    })
-
-    mount({ books: { sales: () => pending, purchase: () => pending } })
-
-    const panel = await findPanel('What customers owe you')
-    expect(within(panel).getByText('Reading the account…')).toBeVisible()
-
-    await act(async () => {
-      release({ ok: true, data: RECEIVABLES })
-      await pending
-    })
-
-    expect(figureFor(panel, 'Owed to the business')).toBe('14,30,747.00')
+    mount({ books: { ...quiet, purchase: () => fails('IPC_FAILED', 'That did not work.') } })
+    const panel = await findPanel('Needs your attention')
+    expect(await within(panel).findByText(/Part of the books could not be read/)).toBeVisible()
+    expect(within(panel).queryByText(/Nothing needs your attention/)).toBeNull()
   })
 })
 
 // ---- A company with nothing in it -------------------------------------------
 
 describe('a company with nothing in it yet', () => {
-  const empty: Books = { documents: () => ok([]), receipts: () => ok([]), drafts: () => ok([]) }
+  const empty: Books = { documentCount: () => ok(0), receiptCount: () => ok(0) }
 
-  it('points at what to do first instead of showing a screen of noughts', async () => {
+  /**
+   * The badge on each step, once both of the checklist's reads have landed. `Not checked`
+   * is also the answer before anything came back, so the wait is on the parties step.
+   */
+  async function stepBadges(panel: HTMLElement): Promise<string[]> {
+    await waitFor(() => {
+      const settled = [...panel.querySelectorAll('li')][1]?.textContent ?? ''
+      expect(settled.includes('To do') || settled.includes('Done')).toBe(true)
+    })
+    return [...panel.querySelectorAll('li')].map(
+      (step) => step.querySelector('.badge')?.textContent ?? '<no badge>',
+    )
+  }
+
+  it('points at what to do first instead of showing four noughts', async () => {
     mount({ books: empty })
     const panel = await findPanel('Start here')
 
     expect(
       within(panel).getByText('The books are empty, which is the correct state on day one'),
     ).toBeVisible()
-    expect(screen.queryByRole('region', { name: 'What customers owe you' })).toBeNull()
-    expect(screen.queryByRole('region', { name: 'Lately' })).toBeNull()
+    expect(screen.queryByText('Owed to you', { selector: 'dt' })).toBeNull()
+    /* On day one the invoice editor cannot issue anything, so the top buttons are not offered. */
+    expect(screen.queryByRole('button', { name: 'New sales invoice' })).toBeNull()
   })
 
   it('reads the profile and the parties only once the books turn out to be empty', async () => {
@@ -869,29 +609,18 @@ describe('a company with nothing in it yet', () => {
     expect(bridge.callsTo('companyProfile:get')).toHaveLength(1)
   })
 
+  it('does not take a count that failed for an empty company', async () => {
+    mount({ books: { ...empty, receiptCount: () => fails('IPC_FAILED', 'That did not work.') } })
+    await findPanel('Needs your attention')
+
+    expect(screen.queryByRole('region', { name: 'Start here' })).toBeNull()
+  })
+
   it('marks a step already done rather than asking for it twice', async () => {
     mount({ books: { ...empty, profile: () => ok(PROFILE) } })
     const panel = await findPanel('Start here')
 
     expect(await stepBadges(panel)).toEqual(['Done', 'To do', 'To do'])
-  })
-
-  it('counts a party that exists, whichever side of the trade it is on', async () => {
-    const vendor: PartySummary = {
-      id: 'party-3',
-      name: 'Tamil Coir',
-      registrationNumber: null,
-      jurisdictionCode: '33',
-      countryCode: 'in',
-      isCustomer: false,
-      isVendor: true,
-      city: 'Pollachi',
-      isArchived: false,
-    }
-    mount({ books: { ...empty, parties: () => ok([vendor]) } })
-    const panel = await findPanel('Start here')
-
-    expect(await stepBadges(panel)).toEqual(['To do', 'Done', 'To do'])
   })
 
   it('says it does not know rather than guessing when a step’s read failed', async () => {
@@ -903,8 +632,6 @@ describe('a company with nothing in it yet', () => {
     })
     const panel = await findPanel('Start here')
 
-    /* The parties read answered, so the profile's `Not checked` is the failure and not a
-     * frame taken before anything came back. */
     expect(await stepBadges(panel)).toEqual(['Not checked', 'To do', 'To do'])
   })
 
@@ -921,7 +648,6 @@ describe('a company with nothing in it yet', () => {
     })
   })
 
-  /* Not "Raise the first invoice": on day one that screen refuses to issue anything. */
   it('offers the next step not yet done as the main action', async () => {
     const user = userEvent.setup()
     const { navigate } = mount({ books: { ...empty, profile: () => ok(PROFILE) } })
@@ -929,267 +655,5 @@ describe('a company with nothing in it yet', () => {
 
     await user.click(await within(panel).findByRole('button', { name: 'Add your first customer' }))
     expect(navigate).toHaveBeenCalledWith({ area: 'workspace', screenId: 'customers', params: {} })
-  })
-
-  it('places the invoice editor under the register it opens from', async () => {
-    mount({ books: empty })
-    const panel = await findPanel('Start here')
-
-    expect(within(panel).getByRole('button', { name: 'Sales → Sales invoices' })).toBeVisible()
-  })
-
-  it('still offers the backup, because an empty company is still encrypted', async () => {
-    mount({ books: empty })
-    const company = await findPanel('This company')
-
-    expect(within(company).getAllByRole('button', { name: 'Back up now' })).toHaveLength(1)
-  })
-})
-
-// ---- The company's own state ------------------------------------------------
-
-describe('which company is open', () => {
-  it('names the file and the vault beside it', async () => {
-    mount()
-    const panel = await findPanel('This company')
-
-    expect(within(panel).getByText('/books/acme.coffer')).toBeVisible()
-    expect(within(panel).getByText('/books/acme.coffer.vault')).toBeVisible()
-  })
-
-  it('shows the company name as the heading of the screen', async () => {
-    mount()
-    expect(await screen.findByRole('heading', { name: 'Acme Pvt Ltd' })).toBeVisible()
-  })
-
-  it('warns when the last recovery code has been spent', async () => {
-    mount({ codes: 0 })
-    expect(await screen.findByText('No recovery codes remain')).toBeVisible()
-
-    const panel = await findPanel('This company')
-    expect(within(panel).getByText('None left')).toBeVisible()
-  })
-
-  it('marks two remaining as running low without the full warning', async () => {
-    mount({ codes: 2 })
-    const panel = await findPanel('This company')
-
-    expect(within(panel).getByText('Running low')).toBeVisible()
-    expect(screen.queryByText('No recovery codes remain')).toBeNull()
-  })
-
-  it('marks a healthy count neither way', async () => {
-    mount()
-    const panel = await findPanel('This company')
-
-    expect(within(panel).getByText('5 unused')).toBeVisible()
-    expect(within(panel).queryByText('Running low')).toBeNull()
-  })
-})
-
-// ---- Backing up -------------------------------------------------------------
-
-describe('backing up', () => {
-  const backupBridge = (over: BridgeStub = {}): BridgeStub => ({
-    ...bridgeFor(),
-    system: {
-      chooseDirectory: () => ok('/backups'),
-      revealInFileManager: () => ok(undefined),
-    },
-    companies: {
-      close: () => ok(undefined),
-      backup: () =>
-        ok({
-          archivePath: '/backups/acme-2019.coffer-backup',
-          sizeBytes: 2_500_000,
-          createdAt: '2019-08-20T11:00:00.000Z',
-        }),
-    },
-    ...over,
-  })
-
-  it('is offered twice — in the header and beside the sentence that says why', async () => {
-    mount({ bridge: backupBridge() })
-    await findPanel('This company')
-
-    expect(screen.getAllByRole('button', { name: 'Back up now' })).toHaveLength(2)
-  })
-
-  it('asks where to put it and writes one archive holding both halves', async () => {
-    const user = userEvent.setup()
-    const { bridge } = mount({ bridge: backupBridge() })
-    await findPanel('This company')
-
-    await user.click(screen.getAllByRole('button', { name: 'Back up now' })[0] as HTMLElement)
-
-    await waitFor(() => expect(bridge.callsTo('companies:backup')).toHaveLength(1))
-    expect(bridge.lastCallTo('companies:backup')?.args[0]).toEqual({ directoryPath: '/backups' })
-  })
-
-  it('says where the archive went and how big it is', async () => {
-    const user = userEvent.setup()
-    mount({ bridge: backupBridge() })
-    await findPanel('This company')
-
-    await user.click(screen.getAllByRole('button', { name: 'Back up now' })[1] as HTMLElement)
-
-    expect(await screen.findByText('Backup written')).toBeVisible()
-    expect(screen.getByText(/\/backups\/acme-2019\.coffer-backup · 2\.4 MB/)).toBeVisible()
-  })
-
-  it('writes nothing when the folder picker is cancelled', async () => {
-    const user = userEvent.setup()
-    const { bridge } = mount({
-      bridge: backupBridge({
-        system: { chooseDirectory: () => ok(null), revealInFileManager: () => ok(undefined) },
-      }),
-    })
-    await findPanel('This company')
-
-    await user.click(screen.getAllByRole('button', { name: 'Back up now' })[0] as HTMLElement)
-
-    await waitFor(() => expect(bridge.callsTo('system:chooseDirectory')).toHaveLength(1))
-    expect(bridge.callsTo('companies:backup')).toHaveLength(0)
-    expect(screen.queryByText('Backup written')).toBeNull()
-  })
-
-  it('says what went wrong when the archive could not be written', async () => {
-    const user = userEvent.setup()
-    mount({
-      bridge: backupBridge({
-        companies: {
-          close: () => ok(undefined),
-          backup: () => fails('BACKUP_FAILED', 'The folder is not writable.'),
-        },
-      }),
-    })
-    await findPanel('This company')
-
-    await user.click(screen.getAllByRole('button', { name: 'Back up now' })[0] as HTMLElement)
-
-    expect(await screen.findByText('The folder is not writable.')).toBeVisible()
-    expect(screen.queryByText('Backup written')).toBeNull()
-  })
-})
-
-// ---- Changing the passphrase ------------------------------------------------
-
-describe('changing the passphrase', () => {
-  const passphraseBridge: BridgeStub = {
-    ...bridgeFor(),
-    companies: {
-      close: () => ok(undefined),
-      checkPassphrase: () => ok({ score: 3, label: 'Strong', suggestion: null, isWeak: false }),
-      changePassphrase: () => ok(undefined),
-    },
-  }
-
-  async function openDialog(): Promise<HTMLElement> {
-    const user = userEvent.setup()
-    await findPanel('This company')
-    /* The dialog's own submit button carries the same words, and a closed <dialog> is
-     * not reliably hidden from the accessibility tree here. The header's is first in the
-     * document, so it is taken by position rather than by a name that is not unique. */
-    await user.click(screen.getAllByRole('button', { name: 'Change passphrase' })[0] as HTMLElement)
-    return await screen.findByRole('dialog', { name: 'Change the passphrase' })
-  }
-
-  it('sends both passphrases and nothing else', async () => {
-    const user = userEvent.setup()
-    const { bridge } = mount({ bridge: passphraseBridge })
-    const dialog = await openDialog()
-
-    await user.type(screen.getByLabelText('Current passphrase'), 'the old one')
-    await user.type(screen.getByLabelText('New passphrase'), 'a longer newer one')
-    await user.type(screen.getByLabelText('New passphrase again'), 'a longer newer one')
-    await user.click(within(dialog).getByRole('button', { name: 'Change passphrase' }))
-
-    await waitFor(() => expect(bridge.callsTo('companies:changePassphrase')).toHaveLength(1))
-    expect(bridge.lastCallTo('companies:changePassphrase')?.args[0]).toEqual({
-      currentPassphrase: 'the old one',
-      newPassphrase: 'a longer newer one',
-    })
-  })
-
-  it('says afterwards that the recovery codes still work', async () => {
-    const user = userEvent.setup()
-    mount({ bridge: passphraseBridge })
-    const dialog = await openDialog()
-
-    await user.type(screen.getByLabelText('Current passphrase'), 'the old one')
-    await user.type(screen.getByLabelText('New passphrase'), 'a longer newer one')
-    await user.type(screen.getByLabelText('New passphrase again'), 'a longer newer one')
-    await user.click(within(dialog).getByRole('button', { name: 'Change passphrase' }))
-
-    expect(await screen.findByText('Passphrase changed')).toBeVisible()
-    expect(screen.getByText(/recovery codes are unaffected/)).toBeVisible()
-  })
-
-  it('refuses to submit until the confirmation matches', async () => {
-    const user = userEvent.setup()
-    const { bridge } = mount({ bridge: passphraseBridge })
-    const dialog = await openDialog()
-
-    await user.type(screen.getByLabelText('Current passphrase'), 'the old one')
-    await user.type(screen.getByLabelText('New passphrase'), 'a longer newer one')
-    await user.type(screen.getByLabelText('New passphrase again'), 'a different thing')
-    await user.click(within(dialog).getByRole('button', { name: 'Change passphrase' }))
-
-    expect(within(dialog).getByText('These two do not match.')).toBeVisible()
-    expect(bridge.callsTo('companies:changePassphrase')).toHaveLength(0)
-  })
-
-  it('keeps the dialog open and says why when main refuses', async () => {
-    const user = userEvent.setup()
-    mount({
-      bridge: {
-        ...passphraseBridge,
-        companies: {
-          close: () => ok(undefined),
-          checkPassphrase: () => ok({ score: 3, label: 'Strong', suggestion: null, isWeak: false }),
-          changePassphrase: () => fails('PASSPHRASE_INVALID', 'That passphrase did not work.'),
-        },
-      },
-    })
-    const dialog = await openDialog()
-
-    await user.type(screen.getByLabelText('Current passphrase'), 'the wrong one')
-    await user.type(screen.getByLabelText('New passphrase'), 'a longer newer one')
-    await user.type(screen.getByLabelText('New passphrase again'), 'a longer newer one')
-    await user.click(within(dialog).getByRole('button', { name: 'Change passphrase' }))
-
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      'That is not the current passphrase for this company.',
-    )
-    expect(screen.queryByText('Passphrase changed')).toBeNull()
-  })
-})
-
-// ---- Closing ----------------------------------------------------------------
-
-describe('closing the company', () => {
-  it('asks main to close and leaves the dashboard behind', async () => {
-    const user = userEvent.setup()
-    const { bridge } = mount()
-    await findPanel('This company')
-
-    await user.click(screen.getByRole('button', { name: 'Close company' }))
-
-    await waitFor(() => expect(bridge.callsTo('companies:close')).toHaveLength(1))
-    expect(await screen.findByRole('heading', { name: 'No company is open' })).toBeVisible()
-  })
-
-  it('says what went wrong when main could not close it', async () => {
-    const user = userEvent.setup()
-    mount({
-      bridge: {
-        ...bridgeFor(),
-        companies: { close: () => fails('IPC_FAILED', 'That action could not be completed.') },
-      },
-    })
-    await findPanel('This company')
-
-    await user.click(screen.getByRole('button', { name: 'Close company' }))
-    expect(await screen.findByText('That action could not be completed.')).toBeVisible()
   })
 })

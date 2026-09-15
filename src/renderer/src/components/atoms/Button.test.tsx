@@ -86,6 +86,16 @@ describe('variant and size', () => {
     expect(screen.getByRole('button', { name: 'Post' })).toHaveClass('button--full')
   })
 
+  it('sets an identifier in its own face only when asked', () => {
+    const { rerender } = render(<Button>INV/2026-27/0001</Button>)
+    expect(screen.getByRole('button')).not.toHaveClass('button--identifier')
+
+    rerender(<Button isIdentifier>INV/2026-27/0001</Button>)
+    expect(screen.getByRole('button', { name: 'INV/2026-27/0001' })).toHaveClass(
+      'button--identifier',
+    )
+  })
+
   it('appends an extra class without dropping its own', () => {
     render(<Button className="editor__save">Post</Button>)
 

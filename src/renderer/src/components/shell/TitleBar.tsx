@@ -24,15 +24,12 @@
  * main changes its BrowserWindow options.
  */
 
-import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { BRAND } from '../../../../branding'
-import { callApi } from '../../lib/api'
-import { currentFiscalYear, fiscalYearsFrom } from '../../lib/fiscal-year'
 import { type Shortcut } from '../../lib/keys'
-import { todayISO } from '../../lib/today'
 import { useCommands } from '../../store/commands'
 import { useCompany } from '../../store/company'
+import { useCurrentFinancialYear } from '../../store/financial-year'
 import { useAppInfo, useWindowChrome } from '../../store/platform'
 import { Badge, Icon, Kbd } from '../atoms'
 import { BrandMark } from './BrandMark'
@@ -98,36 +95,4 @@ export function TitleBar(): JSX.Element {
       </div>
     </header>
   )
-}
-
-/**
- * The financial year today falls in, as the open company's regime names it.
- *
- * READ FROM THE PERIODS, NEVER WORKED OUT HERE. '2026-27' is India's spelling of a year
- * that starts in April; another regime's starts in January and is called '2026'. The
- * periods carry the regime's own label, so the title bar says what the books say.
- *
- * Nothing is shown until it is known, or when it cannot be read: the year is a courtesy
- * in the corner, and a failure to fetch it is not worth a message in the way.
- */
-function useCurrentFinancialYear(companyId: string | null): string | null {
-  const [found, setFound] = useState<{ companyId: string; label: string | null } | null>(null)
-
-  useEffect(() => {
-    if (companyId === null) return
-    let isCurrent = true
-    void callApi((api) => api.ledger.listPeriods()).then((result) => {
-      if (!isCurrent) return
-      setFound({
-        companyId,
-        label: result.ok ? currentFiscalYear(fiscalYearsFrom(result.data), todayISO()) : null,
-      })
-    })
-    return () => {
-      isCurrent = false
-    }
-  }, [companyId])
-
-  /* An answer about the company before this one is no answer about this one. */
-  return found !== null && found.companyId === companyId ? found.label : null
 }

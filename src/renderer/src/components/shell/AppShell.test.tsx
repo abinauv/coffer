@@ -26,8 +26,8 @@
  *
  * AND THE SHELL'S TESTS INHERIT THE LANDING SCREEN'S READS, which is why `BRIDGE` below
  * answers channels no assertion here mentions. `AppShell` renders the active screen, the
- * workspace lands on the dashboard, and the dashboard reads the aged reports, the
- * document register and the receipts. That is not a fault in either batch — it is what
+ * workspace lands on the Overview, and the Overview reads the aged reports, its own two
+ * figures and the counts of documents and receipts. That is not a fault in either batch — it is what
  * mounting the whole frame means — and the honest fix is for the frame's own harness to
  * answer them rather than for the dashboard to read less. The title bar's read of the
  * periods, for the financial year, is answered the same way.
@@ -37,13 +37,7 @@ import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { JSX } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import type {
-  AgedReport,
-  CompanySummary,
-  DocumentListRow,
-  ReceiptSummary,
-  Result,
-} from '@shared/dto'
+import type { AgedReport, CompanySummary, DocumentListRow, Result } from '@shared/dto'
 import { DEFAULT_COMPANY, renderScreen, type BridgeStub } from '@renderer/test/harness'
 import type { Command } from '../../lib/command-registry'
 import { DENSITY_STORAGE_KEY } from '../../lib/density'
@@ -107,9 +101,17 @@ const BRIDGE: BridgeStub = {
   },
   /* The dashboard's reads. See the header: the frame renders the active screen, so the
    * frame's tests answer whatever that screen asks for. */
-  reports: { aged: (input) => ok<AgedReport>({ ...NOTHING_OUTSTANDING, side: input.side }) },
-  documents: { list: () => ok<DocumentListRow[]>([]) },
-  receipts: { list: () => ok<ReceiptSummary[]>([]) },
+  reports: {
+    aged: (input) => ok<AgedReport>({ ...NOTHING_OUTSTANDING, side: input.side }),
+    overviewFigures: (input) =>
+      ok({
+        asAtDate: input.asAtDate,
+        cashAndBank: { total: '0.00', accounts: [] },
+        monthToDate: { fromDate: input.asAtDate, toDate: input.asAtDate, netProfit: '0.00' },
+      }),
+  },
+  documents: { list: () => ok<DocumentListRow[]>([]), count: () => ok(0) },
+  receipts: { count: () => ok(0) },
   companyProfile: { get: () => ok(null) },
   parties: { list: () => ok([]) },
   ledger: { listPeriods: () => ok([]) },

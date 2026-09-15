@@ -67,8 +67,12 @@ const ROWS: ReceiptSummary[] = [
   }),
 ]
 
-const listing = (rows: ReceiptSummary[]): BridgeStub => ({
-  receipts: { list: () => Promise.resolve<Result<ReceiptSummary[]>>({ ok: true, data: rows }) },
+/* The count answers with the rows it was given, as if the register held nothing else. */
+const listing = (rows: ReceiptSummary[], total: number = rows.length): BridgeStub => ({
+  receipts: {
+    list: () => Promise.resolve<Result<ReceiptSummary[]>>({ ok: true, data: rows }),
+    count: () => Promise.resolve<Result<number>>({ ok: true, data: total }),
+  },
 })
 
 const lastQuery = (bridge: {
@@ -89,7 +93,7 @@ describe('what it asks main for', () => {
   })
 
   /* THE PAGING MECHANISM. One more row than the screen draws — the extra is how Next
-   * knows there is somewhere to go, with no count query to disagree with the list. */
+   * knows there is somewhere to go. The count only says how many there are in all. */
   it('asks for one row more than it will draw', async () => {
     const { bridge } = renderScreen(register(), { bridge: listing(ROWS) })
 
@@ -118,6 +122,22 @@ describe('what it asks main for', () => {
 
     await user.keyboard('{Enter}')
     await waitFor(() => expect(lastQuery(bridge)?.['search']).toBe('UTR88'))
+  })
+
+  /* The count is the list's question without the page, so "of 184" is about these rows. */
+  it('counts with the same filters, and no page', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(register(), { bridge: listing(ROWS) })
+
+    await waitFor(() => expect(bridge.callsTo('receipts:count')).toHaveLength(1))
+    await user.click(screen.getByRole('button', { name: 'Cancelled' }))
+
+    await waitFor(() =>
+      expect(bridge.lastCallTo('receipts:count')?.args[0]).toEqual({
+        kind: 'receipt',
+        status: 'cancelled',
+      }),
+    )
   })
 
   /* Staying on page 4 of a filter that now matches six rows shows an empty register,
@@ -171,6 +191,48 @@ describe('what it draws', () => {
     const cells = within(row).getAllByRole('cell')
     expect(cells[4]).toHaveTextContent('1,25,000.00')
     expect(cells[5]).toHaveTextContent('')
+  })
+
+  it('says where on the list the page is', async () => {
+    renderScreen(register(), { bridge: listing(ROWS, 184) })
+
+    expect(await screen.findByText('Showing 1–3 of 184')).toBeInTheDocument()
+  })
+
+  /* A count that failed is not a register that failed: the page is still the answer. */
+  it('leaves the count off when it could not be read', async () => {
+    renderScreen(register(), {
+      bridge: {
+        receipts: {
+          list: () => Promise.resolve<Result<ReceiptSummary[]>>({ ok: true, data: ROWS }),
+          count: () =>
+            Promise.resolve<Result<number>>({
+              ok: false,
+              error: { code: 'IPC_FAILED', message: 'That did not work.' },
+            }),
+        },
+      },
+    })
+
+    expect(await screen.findByText('Showing 1–3')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('writes the date the way the app writes dates', async () => {
+    renderScreen(register(), { bridge: listing(ROWS) })
+
+    const cells = within(await rowFor('RCT/2026-27/0001')).getAllByRole('cell')
+    expect(cells[2]).toHaveTextContent('20 Apr 2026')
+  })
+
+  /* B12. The box was narrower than its own sentence, and the sentence was cut off. */
+  it('sizes the search box to its placeholder', async () => {
+    renderScreen(register(), { bridge: listing(ROWS) })
+
+    const box = await screen.findByLabelText('Search')
+    const placeholder = box.getAttribute('placeholder') ?? ''
+    expect(placeholder).toBe('Search by number, customer or reference')
+    expect(box.style.minWidth).toContain(`${String(placeholder.length)}ch`)
   })
 
   it('names the customer and the status', async () => {
