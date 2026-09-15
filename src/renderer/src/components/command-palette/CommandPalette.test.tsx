@@ -60,6 +60,7 @@ const COMMANDS: readonly Command[] = [
     title: 'Open the general ledger',
     section: 'Ledger',
     keywords: ['journal'],
+    location: 'Accounts → Account ledger',
     run: runLedger,
   },
   { id: 'company.backup', title: 'Back up the company', section: 'Company', run: runBackup },
@@ -559,5 +560,25 @@ describe('outside a CommandProvider', () => {
     expect(() => render(<CommandPalette />)).toThrow(/CommandProvider/)
 
     quiet.mockRestore()
+  })
+})
+
+describe('where a command lives', () => {
+  /* Screens §04: each result says which screen it acts on, under its title. */
+  it('draws the location under the title, and nothing for a command with none', async () => {
+    const user = userEvent.setup()
+    mount()
+    await open(user)
+
+    expect(optionFor('Open the general ledger')).toHaveTextContent('Accounts → Account ledger')
+    expect(optionFor('Invoices').querySelector('.palette__item-location')).toBeNull()
+  })
+
+  it('draws the keycap of a command that has one', async () => {
+    const user = userEvent.setup()
+    mount()
+    await open(user)
+
+    expect(optionFor('New invoice').querySelector('.kbd')).not.toBeNull()
   })
 })

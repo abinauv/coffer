@@ -517,7 +517,7 @@ describe('the figures', () => {
       bridge: bridgeFor(receipt({ allocated: '400.00', unallocated: '780.00' })),
     })
 
-    const row = (await screen.findByText('On account')).closest('tr') as HTMLElement
+    const row = (await screen.findByText('On account')).closest('.totals__row') as HTMLElement
     expect(within(row).getByText('780.00')).toBeInTheDocument()
   })
 
@@ -534,7 +534,7 @@ describe('the figures', () => {
 
     expect(screen.getByText('These figures are from the last saved version')).toBeInTheDocument()
     /* And the on-account figure is still main's, not one the screen worked out. */
-    const row = (screen.getByText('On account').closest('tr') as HTMLElement) ?? null
+    const row = screen.getByText('On account').closest('.totals__row') as HTMLElement
     expect(within(row).getByText('1,180.00')).toBeInTheDocument()
   })
 
@@ -696,22 +696,16 @@ describe('the payment editor', () => {
     )
   })
 
-  /* Back and the after-record route are both built from the kind. A fixed one would put
-   * somebody who just recorded a payment in front of the receipts register. */
-  it('returns to the payments register, not the receipts one', async () => {
-    const user = userEvent.setup()
-    const navigate = vi.fn()
+  /* The after-record route is built from the kind. A fixed one would put somebody who just
+   * recorded a payment in front of the receipts register. The way back is the rail, which
+   * marks the payments register while this is open (`navParent`, asserted below). */
+  it('draws no way back of its own, because the rail marks the register', async () => {
+    renderScreen(<ReceiptEditor {...paying()} kind="payment" />, {
+      bridge: bridgeFor(payment(), [bill()], payment()),
+    })
 
-    renderScreen(
-      <ReceiptEditor
-        {...screenContext({ route: testRoute('payment', { id: 'rct-1' }), navigate })}
-        kind="payment"
-      />,
-      { bridge: bridgeFor(payment(), [bill()], payment()) },
-    )
-
-    await user.click(await screen.findByRole('button', { name: 'Back to the register' }))
-    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ screenId: 'payment-register' }))
+    await screen.findByRole('button', { name: 'Cancel this payment' })
+    expect(screen.queryByRole('button', { name: 'Back to the register' })).toBeNull()
   })
 
   it('cancels a payment by its own name', async () => {

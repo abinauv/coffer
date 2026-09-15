@@ -42,7 +42,7 @@
  * scrolling past rather than tabbing through.
  */
 
-import { useCallback, useEffect, useId, useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
 import { Badge, Button, Dialog, Input, Select } from '@renderer/components/atoms'
 import { callApi } from '@renderer/lib/api'
@@ -73,9 +73,14 @@ import {
 interface PartiesProps {
   /** Which side this screen was entered from. Null lists everybody. */
   role?: PartyRole | null
+  /**
+   * A party to open as the screen arrives — what the palette sends when a party is chosen
+   * from its results. Opened once, when the screen mounts with it.
+   */
+  openId?: string
 }
 
-export function Parties({ role = null }: PartiesProps): JSX.Element {
+export function Parties({ role = null, openId }: PartiesProps): JSX.Element {
   const { show } = useToasts()
   const regime = useRegime()
   const copy = useMemo(() => copyFor(role), [role])
@@ -157,6 +162,18 @@ export function Parties({ role = null }: PartiesProps): JSX.Element {
     },
     [load],
   )
+
+  /*
+   * The route names a party to open: the palette's result, landing on its record. ONCE —
+   * `openEditor` is rebuilt when the archived filter changes, and a dialog that reopened
+   * every time somebody ticked Show archived would be a dialog nobody could close for good.
+   */
+  const openedFromRoute = useRef(false)
+  useEffect(() => {
+    if (openedFromRoute.current || openId === undefined || openId === '') return
+    openedFromRoute.current = true
+    void openEditor(openId)
+  }, [openEditor, openId])
 
   const setArchived = useCallback(
     async (party: PartySummary, archived: boolean) => {
@@ -620,14 +637,14 @@ registerScreens([
     title: 'Customers',
     area: 'workspace',
     nav: { label: 'Customers', icon: 'people', group: 'sales', order: PARTIES_NAV_ORDER },
-    render: () => <Parties role="customer" />,
+    render: ({ route }) => <Parties role="customer" openId={route.params['id']} />,
   },
   {
     id: 'vendors',
     title: 'Vendors',
     area: 'workspace',
     nav: { label: 'Vendors', icon: 'truck', group: 'purchases', order: PARTIES_NAV_ORDER },
-    render: () => <Parties role="vendor" />,
+    render: ({ route }) => <Parties role="vendor" openId={route.params['id']} />,
   },
   /*
    * Not in the rail, and reachable from the palette. Two entries for two words the

@@ -34,6 +34,11 @@
  * The amount is deliberately NOT pre-filled from the document: what moved is a fact about
  * a bank statement, and a screen that guessed it would have somebody confirming a figure
  * they had not read.
+ *
+ * THE LAYOUT IS THE DOCUMENT EDITOR'S SINCE 5b: the status and the verbs in the header,
+ * the fields in one grid, what it settles in a card, and main's figures pinned in a panel
+ * headed "last saved". The rail marks the register while this is open, so there is no
+ * separate way back drawn on the page.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -56,6 +61,7 @@ import { FailureNotice } from '../components/FailureNotice'
 import { MoneyField } from '../components/MoneyField'
 import { Notice } from '../components/Notice'
 import { ScreenFrame } from '../components/ScreenFrame'
+import { formatDate } from '../lib/dates'
 import { formatAmount } from '../lib/ledger-format'
 import {
   accountHint,
@@ -324,52 +330,49 @@ export function ReceiptEditor({
     <ScreenFrame
       isInset
       width="list"
-      title={receipt?.number ?? `New ${label}`}
-      lede={receipt === null ? newSentence(kind) : stateSentence(status, receipt.number)}
+      title={receipt?.number ?? definition.label}
+      lede={
+        <span className="editor__state">
+          {receipt !== null && (
+            <Badge tone={statusTone(status)} isStruck={isStruckStatus(status)}>
+              {statusLabel(status)}
+            </Badge>
+          )}
+          <span>
+            {receipt === null ? newSentence(kind) : stateSentence(status, receipt.number)}
+          </span>
+        </span>
+      }
       actions={
         <>
-          <Button
-            variant="ghost"
-            onClick={() => navigate(makeRoute('workspace', registerScreenId(kind)))}
-          >
-            Back to the register
-          </Button>
           {isNew && (
             <Button variant="primary" disabled={!canRecord || isBusy} onClick={() => void record()}>
               Record {label}
             </Button>
           )}
+          {receipt !== null && canAllocate(status) && (
+            <Button
+              variant="primary"
+              disabled={isBusy || !isDirty}
+              onClick={() => void saveAllocations()}
+            >
+              Save what it settles
+            </Button>
+          )}
+          {receipt !== null && canCancel(status) && (
+            <Button variant="ghost" disabled={isBusy} onClick={() => void cancel()}>
+              Cancel this {label}
+            </Button>
+          )}
         </>
       }
     >
-      <div className="stack">
+      <div className="stack editor">
         {error && <FailureNotice error={error} context="ledger" />}
-
-        {receipt !== null && (
-          <div className="toolbar">
-            <Badge tone={statusTone(status)} isStruck={isStruckStatus(status)}>
-              {statusLabel(status)}
-            </Badge>
-            {canAllocate(status) && (
-              <Button
-                variant="primary"
-                disabled={isBusy || !isDirty}
-                onClick={() => void saveAllocations()}
-              >
-                Save what it settles
-              </Button>
-            )}
-            {canCancel(status) && (
-              <Button variant="ghost" disabled={isBusy} onClick={() => void cancel()}>
-                Cancel this {label}
-              </Button>
-            )}
-          </div>
-        )}
 
         {/*
          * Said once, where it is relevant. A user who has just recorded money and sees
-         * the header go grey needs to know that is the design and not a failure.
+         * the fields go grey needs to know that is the design and not a failure.
          */}
         {receipt !== null && (
           <Notice tone="info" title="The money is recorded and cannot be edited">
@@ -382,11 +385,12 @@ export function ReceiptEditor({
           </Notice>
         )}
 
-        <div className="stack">
+        <div className="editor__fields">
           <Select
             label={party}
             value={partyId}
             disabled={!isNew}
+            className="editor__party"
             hint={
               isNew ? `Whose money this is. It decides which ${settled} it can settle.` : undefined
             }
@@ -444,6 +448,7 @@ export function ReceiptEditor({
             label="Reference"
             value={reference}
             disabled={!isNew}
+            isIdentifier
             hint={
               isNew
                 ? 'The cheque number or the UTR — whatever identifies it on a statement.'
@@ -461,19 +466,21 @@ export function ReceiptEditor({
           />
         </div>
 
-        <Allocations
-          open={open}
-          kind={kind}
-          values={allocations}
-          format={format}
-          isEditable={isNew || canAllocate(status)}
-          hasParty={partyId !== ''}
-          onChange={setAllocation}
-        />
+        <div className="editor__foot">
+          <Allocations
+            open={open}
+            kind={kind}
+            values={allocations}
+            format={format}
+            isEditable={isNew || canAllocate(status)}
+            hasParty={partyId !== ''}
+            onChange={setAllocation}
+          />
 
-        {receipt !== null && (
-          <Settled receipt={receipt} settles={settled} isStale={isDirty} format={format} />
-        )}
+          {receipt !== null && (
+            <Settled receipt={receipt} settles={settled} isStale={isDirty} format={format} />
+          )}
+        </div>
       </div>
     </ScreenFrame>
   )
@@ -540,58 +547,60 @@ function Allocations({
   }
 
   return (
-    <table className="ledger-table ledger-table--figures">
-      <thead>
-        <tr>
-          <th scope="col">{settles}</th>
-          <th scope="col">Date</th>
-          <th scope="col" className="ledger-table__figure">
-            Total
-          </th>
-          <th scope="col" className="ledger-table__figure">
-            Outstanding
-          </th>
-          <th scope="col" className="ledger-table__figure">
-            Settle
-          </th>
-          <th scope="col">
-            <span className="visually-hidden">Actions</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {open.map((document) => (
-          <tr key={document.id} className="ledger-table__row">
-            <td className="ledger-table__code">{document.number}</td>
-            <td className="ledger-table__code">{document.date}</td>
-            <td className="ledger-table__figure">{formatAmount(document.grandTotal, format)}</td>
-            <td className="ledger-table__figure">{formatAmount(document.outstanding, format)}</td>
-            <td className="ledger-table__figure">
-              <Input
-                label={`Settle against ${document.number}`}
-                isLabelHidden
-                value={values[document.id] ?? ''}
-                disabled={!isEditable}
-                placeholder="0.00"
-                onChange={(event) => onChange(document.id, event.target.value)}
-              />
-            </td>
-            <td>
-              {/* A COPY of what main sent, never a sum — see `settleInFull`. */}
-              {isEditable && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onChange(document.id, settleInFull(document))}
-                >
-                  Settle in full
-                </Button>
-              )}
-            </td>
+    <div className="register">
+      <table className="ledger-table ledger-table--figures register__table">
+        <thead>
+          <tr>
+            <th scope="col">{settles}</th>
+            <th scope="col">Date</th>
+            <th scope="col" className="ledger-table__figure">
+              Total
+            </th>
+            <th scope="col" className="ledger-table__figure">
+              Outstanding
+            </th>
+            <th scope="col" className="ledger-table__figure">
+              Settle
+            </th>
+            <th scope="col">
+              <span className="visually-hidden">Actions</span>
+            </th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {open.map((document) => (
+            <tr key={document.id} className="ledger-table__row">
+              <td className="ledger-table__code">{document.number}</td>
+              <td className="ledger-table__code register__date">{formatDate(document.date)}</td>
+              <td className="ledger-table__figure">{formatAmount(document.grandTotal, format)}</td>
+              <td className="ledger-table__figure">{formatAmount(document.outstanding, format)}</td>
+              <td className="ledger-table__figure">
+                <Input
+                  label={`Settle against ${document.number}`}
+                  isLabelHidden
+                  value={values[document.id] ?? ''}
+                  disabled={!isEditable}
+                  placeholder="0.00"
+                  onChange={(event) => onChange(document.id, event.target.value)}
+                />
+              </td>
+              <td>
+                {/* A COPY of what main sent, never a sum — see `settleInFull`. */}
+                {isEditable && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onChange(document.id, settleInFull(document))}
+                  >
+                    Settle in full
+                  </Button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
@@ -609,35 +618,34 @@ function Settled({
   format: Parameters<typeof formatAmount>[1]
 }): JSX.Element {
   return (
-    <div className="stack stack--tight">
+    <section className="totals" aria-label="Totals">
+      <p className="totals__title caps-label">What it settles — last saved</p>
+      <dl className="totals__rows">
+        <div className="totals__row">
+          <dt>Received</dt>
+          <dd>{formatAmount(receipt.amount, format)}</dd>
+        </div>
+        <div className="totals__row">
+          <dt>Settled against {settles}</dt>
+          <dd>{formatAmount(receipt.allocated, format)}</dd>
+        </div>
+        <div className="totals__row totals__row--total">
+          <dt>On account</dt>
+          <dd>{formatAmount(receipt.unallocated, format)}</dd>
+        </div>
+      </dl>
+
       {/*
        * SAID, NOT HIDDEN. These are main's figures for the version that is stored. The
        * renderer cannot add up the allocations on screen and will not pretend to, so when
        * there are unsaved edits it says which version they belong to.
        */}
       {isStale && (
-        <Notice tone="info" title="These figures are from the last saved version">
+        <Notice tone="warning" title="These figures are from the last saved version">
           <p>Save to see what it now has left on account.</p>
         </Notice>
       )}
-
-      <table className="ledger-table ledger-table--figures">
-        <tbody>
-          <tr>
-            <td>Received</td>
-            <td className="ledger-table__figure">{formatAmount(receipt.amount, format)}</td>
-          </tr>
-          <tr>
-            <td>Settled against {settles}</td>
-            <td className="ledger-table__figure">{formatAmount(receipt.allocated, format)}</td>
-          </tr>
-          <tr>
-            <td>On account</td>
-            <td className="ledger-table__figure">{formatAmount(receipt.unallocated, format)}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    </section>
   )
 }
 

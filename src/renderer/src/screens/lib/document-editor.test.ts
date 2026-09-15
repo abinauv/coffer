@@ -19,6 +19,10 @@ import {
   stateSentence,
   toLineInput,
   type LineDraft,
+  duplicateLine,
+  dueHint,
+  issueConsequence,
+  partyDetails,
 } from './document-editor'
 
 const KINDS: readonly DocumentKind[] = DOCUMENT_KINDS.map((definition) => definition.kind)
@@ -696,5 +700,57 @@ describe('linesFrom', () => {
     const keys = [...linesFrom(original), ...linesFrom(original)].map((line) => line.key)
 
     expect(new Set(keys).size).toBe(keys.length)
+  })
+})
+
+describe('duplicateLine', () => {
+  it('copies every field under a key of its own', () => {
+    const source = { ...blankLine(), description: 'Freight', unitPrice: '800.00', isCharge: true }
+    const copy = duplicateLine(source)
+
+    expect(copy).toEqual({ ...source, key: copy.key })
+    expect(copy.key).not.toBe(source.key)
+  })
+})
+
+describe('issueConsequence', () => {
+  it('names the kind that corrects this one, read off the kind table', () => {
+    expect(issueConsequence('sales-invoice').afterwards).toMatch(/credit note/)
+    expect(issueConsequence('purchase-bill').afterwards).toMatch(/debit note/)
+  })
+
+  it('offers cancelling where no kind corrects it', () => {
+    expect(issueConsequence('credit-note').afterwards).toMatch(/cancel it/)
+  })
+
+  it('does not say a quotation reaches the books', () => {
+    expect(issueConsequence('quotation').does).toMatch(/puts nothing in the books/)
+    expect(issueConsequence('sales-invoice').does).toMatch(/posts it to the books/)
+  })
+})
+
+describe('dueHint', () => {
+  it('says the terms it will be stamped with, and never a date', () => {
+    expect(dueHint(true, 30)).toBe('Net 30, from the party. Set when it is issued.')
+    expect(dueHint(true, null)).toMatch(/falls due the day it is issued/)
+    expect(dueHint(true, 0)).toMatch(/falls due the day it is issued/)
+    expect(dueHint(false, undefined)).toMatch(/from the party’s terms/)
+  })
+})
+
+describe('partyDetails', () => {
+  const places = [{ code: '29', name: 'Karnataka' }]
+
+  it('names the registration and the state it places them in', () => {
+    expect(
+      partyDetails({ registrationNumber: '29AAAAA0000A1ZY', jurisdictionCode: '29' }, places),
+    ).toBe('29AAAAA0000A1ZY · Karnataka (29)')
+  })
+
+  it('says a party is not registered rather than leaving a gap', () => {
+    expect(partyDetails({ registrationNumber: null, jurisdictionCode: null }, places)).toBe(
+      'Not registered',
+    )
+    expect(partyDetails(undefined, places)).toBeNull()
   })
 })
