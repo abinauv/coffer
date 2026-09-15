@@ -22,6 +22,7 @@ import type {
   AllocateReceiptInput,
   AllocationInput,
   CancelReceiptInput,
+  CountReceiptsInput,
   CreateReceiptInput,
   ListReceiptsInput,
   OpenDocument,
@@ -51,6 +52,7 @@ import {
  */
 export interface ReceiptsService {
   list(input: ListReceiptsInput): Promise<ReceiptSummary[]>
+  count(input: CountReceiptsInput): Promise<number>
   get(id: string): Promise<Receipt | null>
   create(input: CreateReceiptInput): Promise<Receipt>
   allocate(input: AllocateReceiptInput): Promise<Receipt>
@@ -101,7 +103,8 @@ function parseAllocations(value: unknown): readonly AllocationInput[] | undefine
   return expectArray(value, 'allocations', MAX_ALLOCATIONS).map(parseAllocation)
 }
 
-function parseList(value: unknown): ListReceiptsInput {
+/** What a register filters by. The list and the count read the same fields the same way. */
+function parseFilter(value: unknown): CountReceiptsInput {
   if (value === undefined || value === null) return {}
   const input = expectRecord(value, 'input')
   return {
@@ -111,6 +114,14 @@ function parseList(value: unknown): ListReceiptsInput {
     fromDate: optional(input['fromDate'], (v) => expectDateString(v, 'fromDate')),
     toDate: optional(input['toDate'], (v) => expectDateString(v, 'toDate')),
     search: optional(input['search'], (v) => expectBoundedString(v, 'search', MAX_SEARCH)),
+  }
+}
+
+function parseList(value: unknown): ListReceiptsInput {
+  if (value === undefined || value === null) return {}
+  const input = expectRecord(value, 'input')
+  return {
+    ...parseFilter(input),
     limit: optional(input['limit'], (v) => expectInteger(v, 'limit', 1, MAX_PAGE)),
     offset: optional(input['offset'], (v) =>
       expectInteger(v, 'offset', 0, Number.MAX_SAFE_INTEGER),
@@ -180,6 +191,11 @@ export function createReceiptsHandlers(service: ReceiptsService): GroupHandlers<
     list: {
       parseArgs: (raw): [ListReceiptsInput] => [parseList(raw[0])],
       handle: async (input = {}) => ok(await service.list(input)),
+    },
+
+    count: {
+      parseArgs: (raw): [CountReceiptsInput] => [parseFilter(raw[0])],
+      handle: async (input = {}) => ok(await service.count(input)),
     },
 
     get: {

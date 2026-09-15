@@ -18,7 +18,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TRADE_SIDES } from '../../../shared/documents'
-import type { AgedReport } from '../../../shared/dto'
+import type { AgedReport, OverviewFigures } from '../../../shared/dto'
 import { createReportHandlers, type ReportService } from './reports'
 
 const AGED: AgedReport = {
@@ -44,8 +44,36 @@ beforeEach(() => {
     accountLedger: vi.fn(),
     dayBook: vi.fn(),
     aged: vi.fn(async () => AGED),
+    overviewFigures: vi.fn(async () => FIGURES),
   } as unknown as ReportService
   handlers = createReportHandlers(service)
+})
+
+const FIGURES: OverviewFigures = {
+  asAtDate: '2026-09-15',
+  cashAndBank: { total: '0.00', accounts: [] },
+  monthToDate: { fromDate: '2026-09-01', toDate: '2026-09-15', netProfit: '0.00' },
+}
+
+describe('overviewFigures', () => {
+  it('takes a date and wraps what the service answers', async () => {
+    expect(handlers.overviewFigures.parseArgs([{ asAtDate: '2026-09-15' }])).toEqual([
+      { asAtDate: '2026-09-15' },
+    ])
+    await expect(handlers.overviewFigures.handle({ asAtDate: '2026-09-15' })).resolves.toEqual({
+      ok: true,
+      data: FIGURES,
+    })
+  })
+
+  /* A month so far with no date is no month at all, and the first of which month would be
+   * the renderer's clock deciding what main reports. */
+  it('refuses a request with no date, or a date that is not one', () => {
+    expect(() => handlers.overviewFigures.parseArgs([{}])).toThrow(/asAtDate/)
+    expect(() => handlers.overviewFigures.parseArgs([{ asAtDate: '2026-9-15' }])).toThrow(
+      /asAtDate/,
+    )
+  })
 })
 
 describe('aged', () => {

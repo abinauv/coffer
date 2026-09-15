@@ -81,6 +81,7 @@ import { D, roundAt, toMoneyString } from '@main/domain/money'
 import type {
   CancelDocumentInput,
   CreateDocumentInput,
+  CountDocumentsInput,
   DateString,
   Document,
   DocumentLineInput,
@@ -99,6 +100,7 @@ import type {
 import { OpenBooks, type OpenCompanyHandle } from '../books/open-books'
 import { getCompanyProfile } from '../db/repos/company-profile'
 import {
+  countDocuments,
   createDocument,
   deleteDocument,
   getDocument,
@@ -139,6 +141,10 @@ export class DocumentsService {
 
   async list(input: ListDocumentsInput = {}): Promise<DocumentListRow[]> {
     return listDocuments(this.books.db(), input)
+  }
+
+  async count(input: CountDocumentsInput = {}): Promise<number> {
+    return countDocuments(this.books.db(), input)
   }
 
   async get(id: string): Promise<Document | null> {

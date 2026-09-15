@@ -96,6 +96,7 @@ export const API_SURFACE: ApiSurface = {
   },
   documents: {
     list: true,
+    count: true,
     get: true,
     create: true,
     update: true,
@@ -108,6 +109,7 @@ export const API_SURFACE: ApiSurface = {
   },
   receipts: {
     list: true,
+    count: true,
     get: true,
     create: true,
     allocate: true,
@@ -130,6 +132,7 @@ export const API_SURFACE: ApiSurface = {
   },
   regime: {
     describe: true,
+    amountInWords: true,
   },
   reports: {
     balanceSheet: true,
@@ -137,6 +140,7 @@ export const API_SURFACE: ApiSurface = {
     accountLedger: true,
     dayBook: true,
     aged: true,
+    overviewFigures: true,
   },
 }
 

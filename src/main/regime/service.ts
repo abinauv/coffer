@@ -22,7 +22,8 @@
  * than as a rule people remember.
  */
 
-import type { RegimeDescription } from '@shared/dto'
+import { D } from '@main/domain/money'
+import type { DecimalString, RegimeDescription } from '@shared/dto'
 
 import { OpenBooks, type OpenCompanyHandle } from '../books/open-books'
 import type { TaxRegime } from '../regimes'
@@ -99,6 +100,18 @@ export class RegimeService {
    */
   async describe(): Promise<RegimeDescription> {
     return describeRegime(this.books.regime())
+  }
+
+  /**
+   * An amount in the regime's own words, for the line under a document's total.
+   *
+   * THE ONE REGIME METHOD THAT CROSSES, AND IT DECIDES NOTHING. Words for a figure main
+   * already computed are not a tax, a place of supply or a validity: they are how the
+   * regime's invoices spell a number, and a renderer that spelled it would be a second
+   * implementation of lakh and crore to keep in step with the print model's.
+   */
+  async amountInWords(amount: DecimalString): Promise<string> {
+    return this.books.regime().amountInWords(D(amount))
   }
 }
 

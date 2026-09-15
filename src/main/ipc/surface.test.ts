@@ -29,7 +29,7 @@ describe('API_SURFACE', () => {
   })
 
   it('lists the regime methods', () => {
-    expect(apiMethods('regime')).toEqual(['describe'])
+    expect(apiMethods('regime')).toEqual(['describe', 'amountInWords'])
   })
 
   it('lists the system methods', () => {

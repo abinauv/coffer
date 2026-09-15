@@ -72,6 +72,7 @@ import type {
   AllocateReceiptInput,
   AllocationInput,
   CancelReceiptInput,
+  CountReceiptsInput,
   CreateReceiptInput,
   DateString,
   ListReceiptsInput,
@@ -106,9 +107,7 @@ export async function listReceipts(
   db: CofferDb,
   input: ListReceiptsInput = {},
 ): Promise<ReceiptSummary[]> {
-  let query = db
-    .selectFrom('receipts')
-    .innerJoin('parties', 'parties.id', 'receipts.party_id')
+  const rows = await filteredReceipts(db, input)
     .select([
       'receipts.id as id',
       'receipts.kind as kind',
@@ -119,30 +118,6 @@ export async function listReceipts(
       'receipts.amount as amount',
       'parties.name as party_name',
     ])
-
-  if (input.kind !== undefined) query = query.where('receipts.kind', '=', input.kind)
-  if (input.status !== undefined) query = query.where('receipts.status', '=', input.status)
-  if (input.partyId !== undefined) query = query.where('receipts.party_id', '=', input.partyId)
-  if (input.fromDate !== undefined) {
-    query = query.where('receipts.receipt_date', '>=', input.fromDate)
-  }
-  if (input.toDate !== undefined) query = query.where('receipts.receipt_date', '<=', input.toDate)
-
-  /* The blank guard saves four LIKEs and is not a rule — `.trim()` would reduce an
-   * all-space term to '%%', which matches everything. Same note as `listDocuments`. */
-  if (input.search !== undefined && input.search.trim() !== '') {
-    const term = `%${input.search.trim()}%`
-    query = query.where((eb) =>
-      eb.or([
-        eb(sql<string>`receipts.number COLLATE NOCASE`, 'like', term),
-        eb(sql<string>`parties.name COLLATE NOCASE`, 'like', term),
-        eb(sql<string>`receipts.reference COLLATE NOCASE`, 'like', term),
-        eb(sql<string>`receipts.narration COLLATE NOCASE`, 'like', term),
-      ]),
-    )
-  }
-
-  const rows = await query
     .orderBy('receipts.receipt_date', 'desc')
     .orderBy('receipts.number', 'desc')
     .orderBy('receipts.created_at', 'desc')
@@ -172,6 +147,43 @@ export async function listReceipts(
       unallocated: toMoneyString(D(row.amount).minus(sum)),
     }
   })
+}
+
+/** How many receipts the same filters match. Built from the list's query, as `countDocuments` is. */
+export async function countReceipts(db: CofferDb, input: CountReceiptsInput = {}): Promise<number> {
+  const row = await filteredReceipts(db, input)
+    .select((eb) => eb.fn.countAll<number>().as('count'))
+    .executeTakeFirstOrThrow()
+  return Number(row.count)
+}
+
+/** The receipts a register's filters match, joined to their party, before any select. */
+function filteredReceipts(db: CofferDb, input: CountReceiptsInput) {
+  let query = db.selectFrom('receipts').innerJoin('parties', 'parties.id', 'receipts.party_id')
+
+  if (input.kind !== undefined) query = query.where('receipts.kind', '=', input.kind)
+  if (input.status !== undefined) query = query.where('receipts.status', '=', input.status)
+  if (input.partyId !== undefined) query = query.where('receipts.party_id', '=', input.partyId)
+  if (input.fromDate !== undefined) {
+    query = query.where('receipts.receipt_date', '>=', input.fromDate)
+  }
+  if (input.toDate !== undefined) query = query.where('receipts.receipt_date', '<=', input.toDate)
+
+  /* The blank guard saves four LIKEs and is not a rule — `.trim()` would reduce an
+   * all-space term to '%%', which matches everything. Same note as `listDocuments`. */
+  if (input.search !== undefined && input.search.trim() !== '') {
+    const term = `%${input.search.trim()}%`
+    query = query.where((eb) =>
+      eb.or([
+        eb(sql<string>`receipts.number COLLATE NOCASE`, 'like', term),
+        eb(sql<string>`parties.name COLLATE NOCASE`, 'like', term),
+        eb(sql<string>`receipts.reference COLLATE NOCASE`, 'like', term),
+        eb(sql<string>`receipts.narration COLLATE NOCASE`, 'like', term),
+      ]),
+    )
+  }
+
+  return query
 }
 
 /** One receipt, with what it settles. */

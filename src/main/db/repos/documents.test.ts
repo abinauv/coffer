@@ -24,6 +24,7 @@ import { createSeries } from './numbering'
 import { isRepoError, type RepoError, type RepoErrorCode } from './errors'
 import {
   MAX_DOCUMENT_PAGE,
+  countDocuments,
   createDocument,
   deleteDocument,
   getDocument,
@@ -1229,12 +1230,28 @@ describe('the register', () => {
     expect(await listDocuments(db, { toDate: '2026-04-15' })).toHaveLength(1)
   })
 
+  /* The register's "of 184". The same filters, so the count and a page agree on what
+   * they are about — asked here of every filter the list test above uses. */
+  it('counts what the same filters match', async () => {
+    await createDocument(db, draft({ date: '2026-04-01' }), NOW)
+    await createDocument(db, draft({ date: '2026-05-01', kind: 'quotation' }), NOW)
+
+    expect(await countDocuments(db)).toBe(2)
+    expect(await countDocuments(db, { kind: 'quotation' })).toBe(1)
+    expect(await countDocuments(db, { status: 'issued' })).toBe(0)
+    expect(await countDocuments(db, { partyId: customer })).toBe(2)
+    expect(await countDocuments(db, { fromDate: '2026-04-15' })).toBe(1)
+    expect(await countDocuments(db, { toDate: '2026-04-15' })).toBe(1)
+  })
+
   it('searches the number, the party and the narration', async () => {
     await createDocument(db, draft({ narration: 'Against PO 4471' }), NOW)
 
     expect(await listDocuments(db, { search: 'bharat' })).toHaveLength(1)
     expect(await listDocuments(db, { search: '4471' })).toHaveLength(1)
     expect(await listDocuments(db, { search: 'nothing' })).toHaveLength(0)
+    expect(await countDocuments(db, { search: '4471' })).toBe(1)
+    expect(await countDocuments(db, { search: 'nothing' })).toBe(0)
   })
 
   /* A register is read as a sequence of documents, and the sequence is the one printed on
@@ -1274,6 +1291,8 @@ describe('the register', () => {
     expect(await listDocuments(db, { limit: 4 })).toHaveLength(4)
     expect(await listDocuments(db, { limit: 10_000 })).toHaveLength(MAX_DOCUMENT_PAGE)
     expect(await listDocuments(db)).toHaveLength(MAX_DOCUMENT_PAGE)
+    /* The count has no ceiling: it is the number the page is a part of. */
+    expect(await countDocuments(db)).toBe(MAX_DOCUMENT_PAGE + 1)
   } /*
    * Its own timeout, because 501 inserts is real work and the default is 5s. It failed
    * once in a full-suite run under load and passed alone immediately after, which is

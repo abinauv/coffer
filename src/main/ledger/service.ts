@@ -26,6 +26,7 @@ import type {
   JournalEntry,
   ListAccountsInput,
   ListJournalEntriesInput,
+  OverviewFigures,
   PostOpeningBalancesInput,
   PostingResult,
   ProfitAndLoss,
@@ -48,7 +49,13 @@ import {
 } from '../db/repos/accounts'
 import { trialBalance } from '../db/repos/balances'
 import { agedReport } from '../db/repos/ageing'
-import { accountLedger, balanceSheet, dayBook, profitAndLoss } from '../db/repos/reports'
+import {
+  accountLedger,
+  balanceSheet,
+  dayBook,
+  overviewFigures,
+  profitAndLoss,
+} from '../db/repos/reports'
 import { getEntry, listEntries, postManualEntry, reverseEntry } from '../db/repos/journal'
 import { postOpeningBalances } from '../db/repos/opening-balances'
 import { closePeriod, listPeriods, lockPeriod, reopenPeriod } from '../db/repos/periods'
@@ -163,6 +170,10 @@ export class LedgerService {
      * table — so this cast narrows a boundary string to the union the repository takes,
      * and adds no trust that the validator has not already earned. */
     return agedReport(this.db(), { side: input.side as TradeSide, asAtDate: input.asAtDate })
+  }
+
+  async overviewFigures(input: AsAtDateInput): Promise<OverviewFigures> {
+    return overviewFigures(this.db(), input.asAtDate)
   }
 
   async closeFiscalYear(input: CloseFiscalYearInput): Promise<YearEndCloseResult> {

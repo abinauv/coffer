@@ -22,6 +22,7 @@ import type {
   BalanceSheet,
   DateRangeInput,
   DayBook,
+  OverviewFigures,
   ProfitAndLoss,
 } from '../../../shared/dto'
 import type { GroupHandlers } from '../registry'
@@ -45,6 +46,7 @@ export interface ReportService {
   accountLedger(input: AccountLedgerInput): Promise<AccountLedger>
   dayBook(input: DateRangeInput): Promise<DayBook>
   aged(input: AgedReportInput): Promise<AgedReport>
+  overviewFigures(input: AsAtDateInput): Promise<OverviewFigures>
 }
 
 function parseDateRange(value: unknown): DateRangeInput {
@@ -114,6 +116,11 @@ export function createReportHandlers(service: ReportService): GroupHandlers<'rep
     aged: {
       parseArgs: (raw): [AgedReportInput] => [parseAged(raw[0])],
       handle: async (input) => ok(await service.aged(input)),
+    },
+
+    overviewFigures: {
+      parseArgs: (raw): [AsAtDateInput] => [parseAsAt(raw[0])],
+      handle: async (input) => ok(await service.overviewFigures(input)),
     },
   }
 }
