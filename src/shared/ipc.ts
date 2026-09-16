@@ -78,6 +78,7 @@ import type {
   ProfitAndLoss,
   RecoverCompanyInput,
   RestoreInput,
+  SetBackupReminderInput,
   Result,
   SaveCompanyProfileInput,
   RegimeDescription,
@@ -181,8 +182,14 @@ export interface CofferApi {
     close(): Promise<Result<void>>
     changePassphrase(input: ChangePassphraseInput): Promise<Result<void>>
 
-    /** Writes one archive holding the database and its vault. */
+    /**
+     * Writes one archive holding the database and its vault, and remembers it: the
+     * answer carries the company as it now stands, so the screens that say when it was
+     * last backed up need not work that out for themselves.
+     */
     backup(input: BackupInput): Promise<Result<BackupResult>>
+    /** Whether the Overview says when this company has not been backed up for a week. */
+    setBackupReminder(input: SetBackupReminderInput): Promise<Result<CompanySummary>>
     restore(input: RestoreInput): Promise<Result<CompanySummary>>
 
     /** Adds an existing company file to the registry. */

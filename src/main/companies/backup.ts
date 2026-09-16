@@ -22,7 +22,7 @@
  * calling here — `checkpoint()` in src/main/db/connection.ts exists for this.
  */
 
-import type { BackupResult, Timestamp } from '@shared/dto'
+import type { Timestamp } from '@shared/dto'
 import { createHash } from 'node:crypto'
 import type { FileHandle } from 'node:fs/promises'
 import { mkdir, open, readFile, rm } from 'node:fs/promises'
@@ -95,7 +95,20 @@ export interface OpenedBackup {
  *
  * @throws CompanyError `COMPANY_DATABASE_MISSING` | `COMPANY_VAULT_MISSING` | `COMPANY_IO_FAILED`
  */
-export async function writeBackup(options: WriteBackupOptions): Promise<BackupResult> {
+/**
+ * What writing an archive produced.
+ *
+ * The transport's `BackupResult` is this plus the company as it now stands, which this
+ * module cannot know: it writes files and has never heard of the registry. The service
+ * puts the two together.
+ */
+export interface WrittenArchive {
+  archivePath: string
+  sizeBytes: number
+  createdAt: Timestamp
+}
+
+export async function writeBackup(options: WriteBackupOptions): Promise<WrittenArchive> {
   const when = options.now ?? new Date()
   const database = await readCompanyFile(
     options.databaseFilePath,

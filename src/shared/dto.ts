@@ -77,6 +77,20 @@ export type CompanyAvailability =
   /** The database is there but its vault is not. Restore from a backup holding both. */
   | 'vault-missing'
 
+/**
+ * The last archive written for a company, as the registry remembers it.
+ *
+ * A pointer, not a copy: the size and the path are what a person needs to recognise the
+ * file, and the time is what says whether it is old. Kept in the app registry rather than
+ * in the company database, which a backup is taken FROM — see `CompanyRecord`.
+ */
+export interface CompanyBackup {
+  at: Timestamp
+  /** Absolute path to the archive that was written. */
+  path: string
+  sizeBytes: number
+}
+
 export interface CompanySummary {
   /** Registry-local identifier. Not a tenant key; nothing else is scoped by it. */
   id: string
@@ -88,6 +102,10 @@ export interface CompanySummary {
   lastOpenedAt: Timestamp | null
   createdAt: Timestamp
   availability: CompanyAvailability
+  /** The last archive written, or null when none has been. */
+  lastBackup: CompanyBackup | null
+  /** Whether the Overview says when no backup has been written for a week. */
+  remindsAboutBackups: boolean
 }
 
 // ---- Passphrase strength --------------------------------------------------
@@ -199,6 +217,17 @@ export interface BackupResult {
   archivePath: string
   sizeBytes: number
   createdAt: Timestamp
+  /**
+   * The company as it now stands, so the screens that say when it was last backed up do
+   * not have to work that out for themselves. Writing the archive is what changed it.
+   */
+  company: CompanySummary
+}
+
+export interface SetBackupReminderInput {
+  id: string
+  /** On: the Overview says when no backup has been written for a week. */
+  isOn: boolean
 }
 
 export interface RestoreInput {

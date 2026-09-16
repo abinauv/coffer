@@ -28,6 +28,8 @@ function record(overrides: Partial<CompanyRecord> = {}): CompanyRecord {
     vaultPath: join(tmpdir(), 'coffer-books', 'Acme-Traders.coffer.vault'),
     createdAt: '2026-08-14T09:30:00.000Z',
     lastOpenedAt: null,
+    lastBackup: null,
+    remindsAboutBackups: true,
     ...overrides,
   }
 }
@@ -125,6 +127,65 @@ describe('CompanyRegistry', () => {
     expect(registry.status().isHealthy).toBe(true)
   })
 
+  /*
+   * EVERY REGISTRY WRITTEN BEFORE THIS VERSION LACKS THE BACKUP FIELDS, and a file that
+   * predates a field is not a damaged file. An entry keeps its company; the reminder
+   * starts on, which is the answer somebody who has never been asked would want.
+   */
+  it('reads an entry written before backups were remembered', async () => {
+    const { registry } = await tempRegistry()
+    const old = record()
+    const { lastBackup, remindsAboutBackups, ...withoutBackupFields } = old
+    void lastBackup
+    void remindsAboutBackups
+    await writeFile(
+      registry.filePath,
+      JSON.stringify({ format: REGISTRY_FORMAT, version: 1, companies: [withoutBackupFields] }),
+      'utf8',
+    )
+
+    const [entry] = await registry.read()
+    expect(entry?.lastBackup).toBeNull()
+    expect(entry?.remindsAboutBackups).toBe(true)
+    expect(registry.status().isHealthy).toBe(true)
+  })
+
+  it('keeps a company whose backup record is unusable, and forgets only the record', async () => {
+    const { registry } = await tempRegistry()
+    await writeFile(
+      registry.filePath,
+      JSON.stringify({
+        format: REGISTRY_FORMAT,
+        version: 1,
+        companies: [
+          record({ id: 'half-written', lastBackup: { at: 'not a time', path: '', sizeBytes: -1 } }),
+        ],
+      }),
+      'utf8',
+    )
+
+    const [entry] = await registry.read()
+    /* The row's job is to say where the books are. A reminder is not worth losing it. */
+    expect(entry?.id).toBe('half-written')
+    expect(entry?.lastBackup).toBeNull()
+  })
+
+  it('round-trips a backup record through a write and a read', async () => {
+    const { registry } = await tempRegistry()
+    await registry.add(record())
+    const backup = {
+      at: '2026-09-16T10:00:00.000Z',
+      path: join(tmpdir(), 'Acme-Traders.coffer-backup.zip'),
+      sizeBytes: 2048,
+    }
+
+    await registry.patch('company-one', { lastBackup: backup, remindsAboutBackups: false })
+
+    const [entry] = await new CompanyRegistry(registry.filePath).read()
+    expect(entry?.lastBackup).toEqual(backup)
+    expect(entry?.remindsAboutBackups).toBe(false)
+  })
+
   it('keeps the entries it can read and drops the ones it cannot', async () => {
     const { registry } = await tempRegistry()
     await writeFile(
@@ -209,6 +270,8 @@ describe('availability', () => {
       createdAt: '2026-08-14T09:30:00.000Z',
       lastOpenedAt: null,
       availability: 'vault-missing',
+      lastBackup: null,
+      remindsAboutBackups: true,
     })
   })
 })

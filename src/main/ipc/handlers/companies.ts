@@ -28,12 +28,14 @@ import type {
   RecoverCompanyInput,
   RegistrationCheck,
   RestoreInput,
+  SetBackupReminderInput,
 } from '../../../shared/dto'
 import type { PathAllowlist } from '../path-access'
 import type { GroupHandlers } from '../registry'
 import { ok } from '../surface'
 import {
   expectAbsolutePath,
+  expectBoolean,
   expectBoundedString,
   expectNonEmptyString,
   expectRecord,
@@ -57,6 +59,7 @@ export interface CompanyService {
   close(): Promise<void>
   changePassphrase(input: ChangePassphraseInput): Promise<void>
   backup(input: BackupInput): Promise<BackupResult>
+  setBackupReminder(input: SetBackupReminderInput): Promise<CompanySummary>
   restore(input: RestoreInput): Promise<CompanySummary>
   addExisting(filePath: string): Promise<CompanySummary>
   /** Registry only. Never touches the user's files. */
@@ -128,6 +131,14 @@ function parseChangePassphraseInput(value: unknown): ChangePassphraseInput {
 function parseBackupInput(value: unknown): BackupInput {
   const input = expectRecord(value, 'input')
   return { directoryPath: expectAbsolutePath(input['directoryPath'], 'directoryPath') }
+}
+
+function parseBackupReminderInput(value: unknown): SetBackupReminderInput {
+  const input = expectRecord(value, 'input')
+  return {
+    id: expectNonEmptyString(input['id'], 'id'),
+    isOn: expectBoolean(input['isOn'], 'isOn'),
+  }
 }
 
 function parseRestoreInput(value: unknown): RestoreInput {
@@ -213,8 +224,16 @@ export function createCompaniesHandlers(
         /* The archive is the one artefact the user is told to copy somewhere safe, so
          * "show me where it went" is the next thing they will ask for. */
         allowlist.allow(result.archivePath)
+        /* The company travels back with the archive, and a screen may offer to reveal
+         * its files as any other answer carrying one does. */
+        grantReveal(allowlist, result.company)
         return ok(result)
       },
+    },
+
+    setBackupReminder: {
+      parseArgs: (raw): [SetBackupReminderInput] => [parseBackupReminderInput(raw[0])],
+      handle: async (input) => ok(grantReveal(allowlist, await service.setBackupReminder(input))),
     },
 
     restore: {
