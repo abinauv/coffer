@@ -249,6 +249,7 @@ export function Overview({ navigate }: ScreenContext): JSX.Element {
                 draftCount,
                 newestDraft,
                 recoveryCodesRemaining,
+                company,
               }}
               onOpen={open}
             />

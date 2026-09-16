@@ -26,8 +26,16 @@
 
 import type { BadgeTone } from '@renderer/components/atoms'
 import { definitionOf, isDocumentKind, type TradeSide } from '@shared/documents'
-import type { AgedItem, AgedReport, AppError, DocumentListRow, Result } from '@shared/dto'
+import type {
+  AgedItem,
+  AgedReport,
+  AppError,
+  CompanySummary,
+  DocumentListRow,
+  Result,
+} from '@shared/dto'
 import { agedScreenId, isOverdue, type ItemTarget } from './ageing-view'
+import { backupAttention } from './backup-view'
 import { formatDate, formatDayRange } from './dates'
 import { editorScreenId as documentEditorScreenId } from './document-view'
 import { isNegativeAmount, isZeroAmount } from './ledger-format'
@@ -366,6 +374,8 @@ export interface AttentionSources {
   draftCount: Panel<number>
   newestDraft: Panel<readonly DocumentListRow[]>
   recoveryCodesRemaining: number
+  /** The open company, for how long it has been since a backup. Null before it opens. */
+  company: CompanySummary | null
 }
 
 /*
@@ -432,6 +442,23 @@ export function attentionItems(sources: AttentionSources): readonly AttentionIte
         actionLabel: `Open the ${words.report}`,
       })
     }
+  }
+
+  /*
+   * THE BACKUP LINE IS A FACT ABOUT THIS MACHINE, not about the user's diligence. It says
+   * how long it has been and what that means — everything since then exists in one place —
+   * and only when this company asked to be reminded. See `backupAttention`.
+   */
+  const backup = backupAttention(sources.company)
+  if (backup !== null) {
+    items.push({
+      id: 'backup',
+      tone: 'warning',
+      title: backup.title,
+      note: backup.note,
+      target: { screenId: 'backups', params: {} },
+      actionLabel: 'Open Backups',
+    })
   }
 
   if (sources.recoveryCodesRemaining === 0) {

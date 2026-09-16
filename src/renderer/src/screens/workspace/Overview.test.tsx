@@ -48,6 +48,8 @@ const ACME: CompanySummary = {
   filePath: '/books/acme.coffer',
   vaultPath: '/books/acme.coffer.vault',
   lastOpenedAt: '2019-08-14T09:30:00.000Z',
+  lastBackup: null,
+  remindsAboutBackups: false,
   createdAt: '2019-08-01T09:30:00.000Z',
   availability: 'ok',
 }

@@ -95,8 +95,12 @@ function Frame({ isCollapsed = false }: { isCollapsed?: boolean }): JSX.Element 
   )
 }
 
-function mount({ isCollapsed = false, bridge = {} as BridgeStub } = {}): void {
-  renderScreen(<Frame isCollapsed={isCollapsed} />, { company: DEFAULT_COMPANY, bridge })
+function mount({
+  isCollapsed = false,
+  bridge = {} as BridgeStub,
+  company = DEFAULT_COMPANY,
+} = {}): void {
+  renderScreen(<Frame isCollapsed={isCollapsed} />, { company, bridge })
 }
 
 function goTo(screenId: string): void {
@@ -301,6 +305,37 @@ describe('the foot', () => {
     await user.click(screen.getByRole('button', { name: 'Back up now' }))
 
     expect(calls).toEqual(['chooseDirectory'])
+  })
+
+  /*
+   * WHEN, NOT WHETHER. The rail says when an archive was last written from this machine.
+   * Whether that file is still in the folder is something only the folder can answer, and
+   * Company → Backups is where the path is.
+   */
+  it('says when this company was last backed up', () => {
+    mount({
+      company: {
+        ...DEFAULT_COMPANY,
+        lastBackup: {
+          at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+          path: '/backups/acme.zip',
+          sizeBytes: 2048,
+        },
+      },
+    })
+
+    expect(screen.getByText('Backed up 2 days ago')).toBeVisible()
+  })
+
+  it('says so plainly when there has never been one', () => {
+    mount()
+    expect(screen.getByText('No backup yet')).toBeVisible()
+  })
+
+  /* Collapsed, the rail is icons: one line of prose in a 48px column is not a line. */
+  it('leaves it out when the rail is collapsed to icons', () => {
+    mount({ isCollapsed: true })
+    expect(screen.queryByText('No backup yet')).toBeNull()
   })
 
   it('says what the collapse toggle will do next', () => {
