@@ -34,9 +34,10 @@ copyright: © 2026 The Coffer contributors
 npmRebuild: false
 buildDependenciesFromSource: false
 
-# Fails the build if the packaged native binaries are for the wrong platform — the one
-# packaging mistake that produces a clean build and a broken installer. See the script.
-afterPack: ./scripts/verify-packaged-natives.mjs
+# Fails the build if the packaged native binaries are for the wrong platform, or if
+# anything but out/, package.json and node_modules reached the asar (B1). Both are
+# packaging mistakes that produce a clean build and a broken or bloated installer.
+afterPack: ./scripts/verify-packaged-app.mjs
 
 directories:
   buildResources: build
@@ -44,6 +45,17 @@ directories:
 
 # electron-vite emits to out/. Production dependencies under node_modules are added by
 # electron-builder automatically; devDependencies are never packaged.
+#
+# THE THREE LINES BELOW ARE REPEATED IN EVERY PLATFORM BLOCK, AND THEY HAVE TO BE (B1).
+# A platform's `files` REPLACES this list rather than adding to it, and a list whose first
+# pattern is a negation makes electron-builder prepend `**/*` — so `win.files` holding
+# nothing but exclusions meant "everything in the repository, except those prebuilds". It
+# shipped: the asar was 29.6 MB and contained src/ with every test and fixture, docs/,
+# scripts/, coverage/ and dist/. Source is not a secret, but it is not the product either,
+# and an installer carrying the coverage report is one nobody has looked inside.
+#
+# scripts/packaging.test.mjs fails if a platform list drifts from these three, and the
+# afterPack hook fails the build if anything else reaches the archive.
 files:
   - out/**/*
   - package.json
@@ -93,7 +105,11 @@ win:
       arch: [x64]
   icon: build/icon.png
   artifactName: ${productName}-${version}-windows-${arch}-setup.${ext}
+  # The shared three first — see the note above `files` at the top of this file.
   files:
+    - out/**/*
+    - package.json
+    - '!**/*.map'
     - '!**/node_modules/better-sqlite3-multiple-ciphers/prebuilds/{darwin,linux,linuxmusl}-*.node'
     - '!**/node_modules/better-sqlite3-multiple-ciphers/prebuilds/win32-arm64.node'
 
@@ -121,8 +137,12 @@ mac:
   darkModeSupport: true
   artifactName: ${productName}-${version}-macos-${arch}.${ext}
   # Both slices keep both darwin binaries: electron-builder does not vary `files` by
-  # architecture, and 2 MB is not worth a fragile pattern.
+  # architecture, and 2 MB is not worth a fragile pattern. The shared three first — see
+  # the note above `files` at the top of this file.
   files:
+    - out/**/*
+    - package.json
+    - '!**/*.map'
     - '!**/node_modules/better-sqlite3-multiple-ciphers/prebuilds/{linux,linuxmusl,win32}-*.node'
   # Unsigned: no identity, no hardened runtime (it requires signing), no notarization.
   identity: null
@@ -154,8 +174,12 @@ linux:
       arch: [x64]
   icon: build/icon.png
   # Keeps linux-x64 and linuxmusl-x64 — the AppImage can land on a musl-based
-  # distribution, and the module picks the right one at load time.
+  # distribution, and the module picks the right one at load time. The shared three
+  # first — see the note above `files` at the top of this file.
   files:
+    - out/**/*
+    - package.json
+    - '!**/*.map'
     - '!**/node_modules/better-sqlite3-multiple-ciphers/prebuilds/{darwin,win32}-*.node'
     - '!**/node_modules/better-sqlite3-multiple-ciphers/prebuilds/*-arm64.node'
   category: Office;Finance
