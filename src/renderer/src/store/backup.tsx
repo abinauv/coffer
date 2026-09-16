@@ -33,7 +33,7 @@ interface BackupContextValue {
 const BackupContext = createContext<BackupContextValue | null>(null)
 
 export function BackupProvider({ children }: { children: ReactNode }): JSX.Element {
-  const { company } = useCompany()
+  const { company, update } = useCompany()
   const { show } = useToasts()
   const [isBackingUp, setBackingUp] = useState(false)
   /* The state is for drawing; the ref is the guard. Two clicks inside one frame both see
@@ -63,6 +63,11 @@ export function BackupProvider({ children }: { children: ReactNode }): JSX.Eleme
         return
       }
 
+      /* Main remembered the archive in the registry and handed the company back with it.
+       * Adopting it is what makes Company → Backups and the rail say "backed up today"
+       * without asking again. */
+      update(result.data.company)
+
       const archivePath = result.data.archivePath
       show({
         tone: 'success',
@@ -80,7 +85,7 @@ export function BackupProvider({ children }: { children: ReactNode }): JSX.Eleme
       running.current = false
       setBackingUp(false)
     }
-  }, [show])
+  }, [show, update])
 
   useRegisterCommands(
     useMemo<Command[]>(

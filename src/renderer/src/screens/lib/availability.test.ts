@@ -14,6 +14,8 @@ function company(
     lastOpenedAt: '2026-08-13T09:30:00.000Z',
     createdAt: '2026-01-04T09:30:00.000Z',
     availability,
+    lastBackup: null,
+    remindsAboutBackups: true,
     ...overrides,
   }
 }

@@ -19,7 +19,9 @@ import { useId } from 'react'
 import type { JSX } from 'react'
 import type { NavSection, NavigableScreen } from '../../lib/screens'
 import { makeRoute } from '../../lib/routing'
+import { railBackupLine } from '../../screens/lib/backup-view'
 import { useBackup } from '../../store/backup'
+import { useCompany } from '../../store/company'
 import { useCommands } from '../../store/commands'
 import { useNavigation } from '../../store/navigation'
 import { Button, Icon, IconButton, Kbd, Tooltip } from '../atoms'
@@ -40,6 +42,7 @@ export function ContextRail({
 }: ContextRailProps): JSX.Element {
   const { navigate } = useNavigation()
   const { backUp, isBackingUp } = useBackup()
+  const { company } = useCompany()
   const headingId = useId()
 
   return (
@@ -79,6 +82,12 @@ export function ContextRail({
       </div>
 
       <div className="rail__foot">
+        {/* WHEN, NOT WHETHER. The rail says when an archive was last written from this
+            machine; whether that file is still in the folder is something only the folder
+            can answer, and Company → Backups is where the path is. */}
+        {!isCollapsed && company !== null && (
+          <p className="rail__backup-when">{railBackupLine(company.lastBackup)}</p>
+        )}
         {isCollapsed ? (
           <Tooltip label="Back up now" placement="right" delayMs={250}>
             <IconButton

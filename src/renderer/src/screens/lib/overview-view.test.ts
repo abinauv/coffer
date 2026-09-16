@@ -10,7 +10,14 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import type { AgedItem, AgedPartyRow, AgedReport, DocumentListRow, Result } from '@shared/dto'
+import type {
+  AgedItem,
+  AgedPartyRow,
+  AgedReport,
+  CompanySummary,
+  DocumentListRow,
+  Result,
+} from '@shared/dto'
 import {
   ageLabel,
   ageTone,
@@ -110,6 +117,26 @@ function draft(over: Partial<DocumentListRow> = {}): DocumentListRow {
 }
 
 const ready = <T>(data: T): Panel<T> => ({ state: 'ready', data })
+
+/** A day count back from now, as a timestamp. */
+function daysAgo(days: number): string {
+  return new Date(Date.now() - days * 86_400_000).toISOString()
+}
+
+/** The open company, with its last backup at a time the test chooses. */
+function companyBackedUp(at: string | null): CompanySummary {
+  return {
+    id: 'acme',
+    displayName: 'Acme Traders',
+    filePath: '/books/acme.coffer',
+    vaultPath: '/books/acme.coffer.vault',
+    lastOpenedAt: null,
+    createdAt: new Date().toISOString(),
+    availability: 'ok',
+    lastBackup: at === null ? null : { at, path: '/backups/acme.zip', sizeBytes: 2048 },
+    remindsAboutBackups: true,
+  }
+}
 const failure: Panel<never> = {
   state: 'failed',
   error: { code: 'NO_COMPANY_OPEN', message: 'No company is open.' },
@@ -125,6 +152,8 @@ function quiet(over: Partial<AttentionSources> = {}): AttentionSources {
     draftCount: ready(0),
     newestDraft: ready([]),
     recoveryCodesRemaining: 5,
+    /* Backed up this morning, so the backup line has nothing to say either. */
+    company: companyBackedUp(new Date().toISOString()),
     ...over,
   }
 }
@@ -527,6 +556,33 @@ describe('attentionItems', () => {
 })
 
 // ---- The tones that exist ---------------------------------------------------
+
+describe('the backup line', () => {
+  /* A fact about this machine, not about the user's diligence. */
+  it('says how long it has been, and where to go about it', () => {
+    const items = attentionItems(quiet({ company: companyBackedUp(daysAgo(9)) }))
+    const backup = items.find((item) => item.id === 'backup')
+
+    expect(backup?.title).toBe('No backup for 9 days')
+    expect(backup?.tone).toBe('warning')
+    expect(backup?.target).toEqual({ screenId: 'backups', params: {} })
+  })
+
+  it('says nothing about a company backed up this week', () => {
+    const items = attentionItems(quiet({ company: companyBackedUp(daysAgo(3)) }))
+    expect(items.map((item) => item.id)).not.toContain('backup')
+  })
+
+  it('says nothing at all when the company asked not to be reminded', () => {
+    const company = { ...companyBackedUp(daysAgo(40)), remindsAboutBackups: false }
+    expect(attentionItems(quiet({ company })).map((item) => item.id)).not.toContain('backup')
+  })
+
+  /* Before the company is open there is nothing to be late about. */
+  it('says nothing with no company', () => {
+    expect(attentionItems(quiet({ company: null })).map((item) => item.id)).not.toContain('backup')
+  })
+})
 
 describe('BADGE_TONES', () => {
   it('names every tone the atom styles and nothing else', () => {

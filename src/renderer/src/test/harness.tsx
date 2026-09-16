@@ -142,6 +142,8 @@ export const DEFAULT_COMPANY: CompanySummary = {
   lastOpenedAt: null,
   createdAt: '2026-08-14T09:30:00.000Z',
   availability: 'ok',
+  lastBackup: null,
+  remindsAboutBackups: true,
 }
 
 /** Unspent recovery codes a test gets unless it says otherwise. Three: some, not none. */

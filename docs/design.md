@@ -150,7 +150,12 @@ is a bug, however it looks.
   typed (`Command.isSearchOnly`); choosing one opens its record.
 - **The company's housekeeping is not on a business screen.** The file path is in the status
   bar, Back up now in the rail, and changing the passphrase and closing the company are
-  palette commands on every workspace screen.
+  palette commands on every workspace screen. Company → Backups is where the rest of it
+  lives: when the last archive was written, where it went, and the reminder.
+- **Coffer never says a backup still exists.** It says when one was written, how big it was
+  and where it went, and puts the path on screen so the reader can check the only thing
+  that settles it. The file may be on a USB stick in a drawer; this process has not looked
+  at that folder since it wrote there. "Your books are safe" is not a claim it can make.
 
 **The keyboard (§4a)**
 

@@ -346,10 +346,21 @@
 
 .rail__foot {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1);
   padding: var(--space-2);
   border-top: 1px solid var(--rule);
+}
+
+/* When the last archive was written. Above the button that writes the next one, quiet
+ * enough that it reads as a note rather than as a warning. */
+.rail__backup-when {
+  flex: 1 0 100%;
+  margin: 0;
+  padding: 0 var(--space-1) var(--space-1);
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
 }
 
 .rail[data-collapsed='true'] .rail__foot {
