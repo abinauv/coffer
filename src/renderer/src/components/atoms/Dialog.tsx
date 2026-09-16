@@ -9,11 +9,17 @@
  * The one thing to know: `open` is a React prop, not the element's own state.
  * Escape is intercepted and turned into `onClose` so React stays the single
  * source of truth for whether the dialog is showing.
+ *
+ * ESCAPE NEVER THROWS TYPING AWAY WITHOUT ASKING (design system §04, rule 2). A dialog
+ * told `hasUnsavedInput` answers a dismissal with the question instead, in place of its
+ * own footer — where the buttons already were, so the answer is where the hand is. The
+ * dialog itself stays up: a confirmation stacked on a modal is two trapped focus rings
+ * arguing, and the platform gives us exactly one.
  */
 
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
-import { IconButton } from './Button'
+import { Button, IconButton } from './Button'
 
 export type DialogSize = 'sm' | 'md' | 'lg' | 'palette'
 
@@ -26,6 +32,12 @@ interface DialogProps {
   size?: DialogSize
   /** When false, Escape and backdrop clicks do not close it. */
   isDismissible?: boolean
+  /**
+   * Something has been typed that closing would lose. Escape, the backdrop and the close
+   * button then ask first. A dialog that only reads — a confirmation, a delete — leaves
+   * this alone: there is nothing to lose, and a question about nothing is noise.
+   */
+  hasUnsavedInput?: boolean
   /** Hides the header entirely. The palette is its own header. */
   isChrome?: boolean
   footer?: ReactNode
@@ -40,6 +52,7 @@ export function Dialog({
   description,
   size = 'md',
   isDismissible = true,
+  hasUnsavedInput = false,
   isChrome = true,
   footer,
   children,
@@ -48,13 +61,24 @@ export function Dialog({
   const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
   const descriptionId = useId()
+  const [isAsking, setAsking] = useState(false)
 
   useEffect(() => {
     const dialog = ref.current
     if (!dialog) return
     if (isOpen && !dialog.open) dialog.showModal()
     else if (!isOpen && dialog.open) dialog.close()
+    if (!isOpen) setAsking(false)
   }, [isOpen])
+
+  /** What Escape, the backdrop and the close button do: leave, or ask whether to. */
+  function dismiss(): void {
+    if (hasUnsavedInput) {
+      setAsking(true)
+      return
+    }
+    onClose()
+  }
 
   return (
     <dialog
@@ -67,12 +91,12 @@ export function Dialog({
          * back, or `isOpen` and `dialog.open` drift apart and the next open()
          * is a no-op. */
         event.preventDefault()
-        if (isDismissible) onClose()
+        if (isDismissible) dismiss()
       }}
       onClick={(event) => {
         /* A modal <dialog> fills the viewport; anything outside the inner panel
          * is a click on the backdrop. */
-        if (isDismissible && event.target === ref.current) onClose()
+        if (isDismissible && event.target === ref.current) dismiss()
       }}
     >
       <div className="dialog__panel">
@@ -118,12 +142,30 @@ export function Dialog({
               )}
             </div>
             {isDismissible && (
-              <IconButton icon="close" label="Close" variant="ghost" size="sm" onClick={onClose} />
+              <IconButton icon="close" label="Close" variant="ghost" size="sm" onClick={dismiss} />
             )}
           </header>
         )}
         <div className="dialog__body">{children}</div>
-        {footer !== undefined && <footer className="dialog__footer">{footer}</footer>}
+        {isAsking ? (
+          <footer className="dialog__footer dialog__footer--asking">
+            <p className="dialog__question" role="status">
+              Discard what you have typed?
+            </p>
+            <Button onClick={() => setAsking(false)}>Keep editing</Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                setAsking(false)
+                onClose()
+              }}
+            >
+              Discard
+            </Button>
+          </footer>
+        ) : (
+          footer !== undefined && <footer className="dialog__footer">{footer}</footer>
+        )}
       </div>
     </dialog>
   )

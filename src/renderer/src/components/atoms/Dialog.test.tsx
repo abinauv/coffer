@@ -399,3 +399,91 @@ describe('the frame', () => {
     expect(screen.getByRole('dialog')).toHaveClass('dialog--md')
   })
 })
+
+/*
+ * ESCAPE NEVER THROWS TYPING AWAY WITHOUT ASKING (design system §04, rule 2).
+ *
+ * The question replaces the footer rather than opening a second dialog: two modals means
+ * two focus traps, and the platform gives us exactly one.
+ */
+describe('a dialog with typing in it', () => {
+  function open(onClose = vi.fn()): { onClose: ReturnType<typeof vi.fn> } {
+    render(
+      <Dialog
+        isOpen
+        hasUnsavedInput
+        onClose={onClose}
+        title="New customer"
+        footer={<button>Add</button>}
+      >
+        <p>the form</p>
+      </Dialog>,
+    )
+    return { onClose }
+  }
+
+  it('asks instead of closing, and keeps the dialog up', async () => {
+    const user = userEvent.setup()
+    const { onClose } = open()
+
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+
+    expect(screen.getByText('Discard what you have typed?')).toBeVisible()
+    expect(onClose).not.toHaveBeenCalled()
+    /* The footer's own button is out of the way while the question stands. */
+    expect(screen.queryByRole('button', { name: 'Add' })).toBeNull()
+  })
+
+  it('puts the form back when the answer is to keep editing', async () => {
+    const user = userEvent.setup()
+    const { onClose } = open()
+
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    await user.click(screen.getByRole('button', { name: 'Keep editing' }))
+
+    expect(screen.getByRole('button', { name: 'Add' })).toBeVisible()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('closes once discarding is chosen', async () => {
+    const user = userEvent.setup()
+    const { onClose } = open()
+
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    await user.click(screen.getByRole('button', { name: 'Discard' }))
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks on Escape as well', () => {
+    const onClose = vi.fn()
+    open(onClose)
+
+    /* The `cancel` a browser dispatches for Escape. See the header: happy-dom does not. */
+    pressEscape(dialogElement())
+
+    expect(screen.getByText('Discard what you have typed?')).toBeVisible()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  /* A dialog that only reads — a confirmation, a delete — has nothing to lose. */
+  it('closes straight away when nothing has been typed', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    render(
+      <Dialog
+        isOpen
+        onClose={onClose}
+        title="Delete Bharat Steel?"
+        footer={<button>Delete</button>}
+      >
+        <p>gone for good</p>
+      </Dialog>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('Discard what you have typed?')).toBeNull()
+  })
+})

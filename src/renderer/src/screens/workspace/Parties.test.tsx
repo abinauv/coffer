@@ -956,3 +956,34 @@ describe('the list’s states', () => {
     expect(screen.getByPlaceholderText(/Search by name/)).toHaveValue('')
   })
 })
+
+/*
+ * Closing a dialog with typing in it asks first (design system §04, rule 2). The question
+ * itself is the Dialog atom's, and Dialog.test.tsx holds it; what is asserted here is that
+ * this dialog tells the atom there is something to lose — and only once there is.
+ */
+describe('leaving a half-filled dialog', () => {
+  it('asks before throwing away what was typed', async () => {
+    const user = userEvent.setup()
+    renderScreen(<Parties role="customer" />, { bridge: listing() })
+
+    await user.click(await screen.findByRole('button', { name: 'New customer' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText('Name'), 'Bharat Steel')
+    await user.click(within(dialog).getByRole('button', { name: 'Close' }))
+
+    expect(within(dialog).getByText('Discard what you have typed?')).toBeVisible()
+    expect(screen.getByRole('dialog')).toBeVisible()
+  })
+
+  it('closes without a question when nothing has been typed', async () => {
+    const user = userEvent.setup()
+    renderScreen(<Parties role="customer" />, { bridge: listing() })
+
+    await user.click(await screen.findByRole('button', { name: 'New customer' }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Close' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+})
