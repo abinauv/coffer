@@ -139,8 +139,11 @@ is a bug, however it looks.
   previous section, <kbd>Alt</kbd><kbd>←</kbd> goes back, and <kbd>Ctrl</kbd><kbd>B</kbd>
   collapses the rail to icons, which narrow windows also do on their own. A shortcut on
   an arrow, Home or End never fires inside a field, whatever modifier is held: those keys
-  move the caret there.
+  move the caret there. The rest of the map is in §4a below.
 - **Appearance and density are chosen from the command palette** until Settings exists.
+- **Leaving the books is two commands, not one.** <kbd>Ctrl</kbd><kbd>L</kbd> locks and stops
+  at the unlock screen for the company that was open; <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>O</kbd>
+  switches and goes to the picker. Both close the company in main.
 - **Every palette result says where it lives,** under its title. A screen's commands are given
   the screen's place by the screen host (`CommandLocation`), so no call site spells its own.
   Parties are results too, read when the palette opens and offered only once something is
@@ -148,6 +151,29 @@ is a bug, however it looks.
 - **The company's housekeeping is not on a business screen.** The file path is in the status
   bar, Back up now in the rail, and changing the passphrase and closing the company are
   palette commands on every workspace screen.
+
+**The keyboard (§4a)**
+
+- **Every binding is in `lib/shortcuts.ts`**, declared on the command that owns it, so the
+  palette, the keycap on a button and the key that fires are one fact.
+  <kbd>Ctrl</kbd><kbd>K</kbd> palette · <kbd>Ctrl</kbd><kbd>N</kbd> new, of the kind on
+  screen · <kbd>Ctrl</kbd><kbd>S</kbd> save · <kbd>Ctrl</kbd><kbd>⏎</kbd> issue or record ·
+  <kbd>Ctrl</kbd><kbd>F</kbd> search this register or list ·
+  <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>O</kbd> switch company · <kbd>Ctrl</kbd><kbd>L</kbd>
+  lock · <kbd>Ctrl</kbd><kbd>]</kbd> / <kbd>Ctrl</kbd><kbd>[</kbd> sections ·
+  <kbd>Ctrl</kbd><kbd>D</kbd> duplicate a line · <kbd>Esc</kbd> one level back.
+  `shortcuts.test.ts` fails if two of them are the same chord, and `AppShell.test.tsx`
+  fails if two commands registered at once claim one.
+- **Enter advances, it never submits.** In an editor it moves to the next field, and at the
+  end of the last line it opens another — which is what the person typing meant. Accepting
+  a document is always <kbd>Ctrl</kbd><kbd>⏎</kbd>. A textarea keeps its own Enter.
+- **Escape steps back exactly one level:** out of the field, then out of the document to its
+  register. It never throws typing away without asking — an editor asks before it leaves, and
+  a dialog with something typed in it asks in place of its own footer (`hasUnsavedInput`).
+  A dialog that is already open owns Escape, and the recovery-codes screen has none at all.
+- **Nothing is reachable only by keyboard.** Every binding has a visible control: a button
+  that carries the keycap and `aria-keyshortcuts`, the box the key puts the cursor in, or the
+  palette row that runs it.
 
 **Density**
 

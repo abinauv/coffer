@@ -462,6 +462,21 @@ select.field__control[aria-invalid='true'] {
   overflow-y: auto;
 }
 
+/* The question Escape asks when there is typing to lose: where the buttons already were,
+ * so the answer is where the hand is. */
+.dialog__footer--asking {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.dialog__question {
+  flex: 1 1 auto;
+  margin: 0;
+  min-width: 12rem;
+  color: var(--ink);
+  font-size: var(--text-sm);
+}
+
 .dialog__footer {
   display: flex;
   justify-content: flex-end;

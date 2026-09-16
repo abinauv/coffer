@@ -120,6 +120,9 @@ function ChangePassphraseDialog({ isOpen, onClose }: ChangePassphraseDialogProps
     <Dialog
       isOpen={isOpen}
       onClose={onClose}
+      /* A plain boolean, never the text: nothing may hold a second copy of a passphrase.
+       * See `useHasTyped`, which the other dialogs use and this one must not. */
+      hasUnsavedInput={currentPassphrase !== '' || newPassphrase !== '' || confirmation !== ''}
       title="Change the passphrase"
       description="This re-wraps the key. The books are not re-encrypted, nothing is re-saved, and every recovery code keeps working."
       footer={
