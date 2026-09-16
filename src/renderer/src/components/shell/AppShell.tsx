@@ -25,10 +25,11 @@ import {
   type RailPreference,
 } from '../../lib/layout'
 import { useMediaQuery } from '../../lib/hooks'
-import { makeRoute } from '../../lib/routing'
+import { makeRoute, type Route } from '../../lib/routing'
 import { describeLocation, navSections } from '../../lib/screens'
 import { browserStore, readPreference, writePreference } from '../../lib/storage'
 import type { Command } from '../../lib/command-registry'
+import { SHORTCUTS } from '../../lib/shortcuts'
 import { useCommands, useRegisterCommands } from '../../store/commands'
 import { useCompany } from '../../store/company'
 import { useDensity } from '../../store/density'
@@ -128,7 +129,7 @@ function WorkspaceCommands({
           title: isCollapsed ? 'Expand the rail' : 'Collapse the rail to icons',
           section: 'View',
           keywords: ['nav', 'navigation', 'panel', 'sidebar', 'icons'],
-          shortcut: { key: 'b', ctrlOrCmd: true },
+          shortcut: SHORTCUTS.toggleRail,
           run: onToggleRail,
         },
         /* Ctrl ] and Ctrl [ from the design system's Modern key map. Ctrl [ was Back, which
@@ -138,7 +139,7 @@ function WorkspaceCommands({
           title: 'Go to the next section',
           section: 'Go to',
           keywords: ['section', 'tab', 'right'],
-          shortcut: { key: ']', ctrlOrCmd: true },
+          shortcut: SHORTCUTS.nextSection,
           run: () => onStep(1),
         },
         {
@@ -146,7 +147,7 @@ function WorkspaceCommands({
           title: 'Go to the previous section',
           section: 'Go to',
           keywords: ['section', 'tab', 'left'],
-          shortcut: { key: '[', ctrlOrCmd: true },
+          shortcut: SHORTCUTS.previousSection,
           run: () => onStep(-1),
         },
       ],
@@ -210,38 +211,60 @@ function ShellCommands(): JSX.Element {
         title: 'Show all commands',
         section: 'General',
         keywords: ['palette', 'search', 'help'],
-        shortcut: { key: 'k', ctrlOrCmd: true },
+        shortcut: SHORTCUTS.palette,
         run: () => setPaletteOpen(true),
       },
       {
         id: 'nav.back',
         title: 'Go back',
         section: 'General',
-        shortcut: { key: 'ArrowLeft', alt: true },
+        shortcut: SHORTCUTS.back,
         isDisabled: !canGoBack,
         run: back,
       },
     ]
 
+    /*
+     * LEAVING THE BOOKS, TWO WAYS, AND THE DIFFERENCE IS WHERE IT LANDS.
+     *
+     * Both close the company — main drops the connection and the shell leaves the
+     * workspace either way. Lock stops at the unlock screen for the company that was
+     * open, which is the door somebody who is stepping away from the machine wants to
+     * come back through; Switch goes to the picker, which is the one somebody opening
+     * another set of books wants. Closing behind them is the same act, so it is one
+     * function with a different destination.
+     */
+    const leave = (to: Route): void => {
+      void close().then((result) => {
+        if (!result.ok) {
+          show({
+            tone: 'danger',
+            title: 'Closing the company reported a problem',
+            body: result.error.message,
+          })
+        }
+        navigate(to)
+      })
+    }
+
     const companyCommands: Command[] = company
       ? [
           {
-            id: 'company.close',
-            title: 'Close this company',
+            id: 'company.lock',
+            title: 'Lock the books now',
             section: 'Company',
-            keywords: ['lock', 'switch', 'sign out'],
+            keywords: ['close', 'lock', 'leave', 'away from the desk'],
             hint: company.displayName,
-            run: () => {
-              void close().then((result) => {
-                if (!result.ok) {
-                  show({
-                    tone: 'danger',
-                    title: 'Closing the company reported a problem',
-                    body: result.error.message,
-                  })
-                }
-              })
-            },
+            shortcut: SHORTCUTS.lock,
+            run: () => leave(makeRoute('welcome', 'unlock', { id: company.id })),
+          },
+          {
+            id: 'company.switch',
+            title: 'Switch company',
+            section: 'Company',
+            keywords: ['close', 'another', 'change', 'open'],
+            shortcut: SHORTCUTS.switchCompany,
+            run: () => leave(makeRoute('welcome', 'companies')),
           },
         ]
       : []

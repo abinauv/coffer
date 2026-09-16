@@ -24,6 +24,7 @@ import { Badge, Button, Dialog, Input, Select } from '@renderer/components/atoms
 import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { registerScreens } from '@renderer/lib/screens'
+import { SHORTCUTS } from '@renderer/lib/shortcuts'
 import { useRegisterCommands } from '@renderer/store/commands'
 import { useToasts } from '@renderer/store/toasts'
 import type { Account, AccountType, AppError } from '@shared/dto'
@@ -33,9 +34,11 @@ import { ListToolbar } from '../components/ListToolbar'
 import { RegisterEmpty } from '../components/RegisterToolbar'
 import { RegisterSkeleton, type SkeletonColumn } from '../components/RegisterSkeleton'
 import { ScreenFrame } from '../components/ScreenFrame'
+import { useSearchShortcut } from '../lib/use-search-shortcut'
 import { accountLabel, filterChart, parentsForAccount, parentsForType } from '../lib/chart-tree'
 import { accountTypeLabel, ACCOUNT_TYPE_ORDER } from '../lib/ledger-format'
 import { archivedNote } from '../lib/register-view'
+import { useHasTyped } from '../lib/typed'
 
 /* Code, name, type, roles, actions. */
 const COLUMNS: readonly SkeletonColumn[] = [
@@ -77,6 +80,7 @@ export function ChartOfAccounts(): JSX.Element {
           title: 'New account',
           section: 'Accounts',
           keywords: ['chart', 'ledger', 'create'],
+          shortcut: SHORTCUTS.create,
           run: () => setCreateOpen(true),
         },
       ],
@@ -105,6 +109,8 @@ export function ChartOfAccounts(): JSX.Element {
     [load, show],
   )
 
+  const searchBox = useSearchShortcut('ledger.search-accounts', 'Accounts', 'Search this chart')
+
   const rows = useMemo(() => filterChart(accounts ?? [], query), [accounts, query])
   const searched = query.trim()
 
@@ -129,6 +135,7 @@ export function ChartOfAccounts(): JSX.Element {
           onQueryChange={setQuery}
           includeArchived={includeArchived}
           onIncludeArchivedChange={setIncludeArchived}
+          inputRef={searchBox}
         />
 
         {accounts === null ? (
@@ -297,6 +304,7 @@ function NewAccountDialog({
   const [error, setError] = useState<AppError | null>(null)
 
   const parents = useMemo(() => parentsForType(accounts, type), [accounts, type])
+  const hasTyped = useHasTyped({ code, name, type, parentId, isGroup })
   const canSubmit = code.trim() !== '' && name.trim() !== '' && !isBusy
 
   const submit = useCallback(async () => {
@@ -326,6 +334,7 @@ function NewAccountDialog({
     <Dialog
       isOpen={isOpen}
       onClose={onClose}
+      hasUnsavedInput={hasTyped}
       title="New account"
       description="The type is fixed once the account exists — every figure posted to it is classified by that type."
       footer={
@@ -429,6 +438,7 @@ function EditAccountDialog({
     () => (account === null ? [] : parentsForAccount(accounts, account)),
     [accounts, account],
   )
+  const hasTyped = useHasTyped({ code, name, parentId, description })
   const canSubmit = account !== null && code.trim() !== '' && name.trim() !== '' && !isBusy
 
   const submit = useCallback(async () => {
@@ -459,6 +469,7 @@ function EditAccountDialog({
     <Dialog
       isOpen={account !== null}
       onClose={onClose}
+      hasUnsavedInput={hasTyped}
       title={account === null ? 'Edit account' : `Edit ${accountLabel(account)}`}
       description="Rename, renumber or move it. Everything already posted to it follows, because postings refer to the account and not to its code."
       footer={

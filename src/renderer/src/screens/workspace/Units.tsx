@@ -28,6 +28,7 @@ import { Badge, Button, Dialog, Input, Select } from '@renderer/components/atoms
 import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { registerScreens } from '@renderer/lib/screens'
+import { SHORTCUTS } from '@renderer/lib/shortcuts'
 import { useRegisterCommands } from '@renderer/store/commands'
 import { useToasts } from '@renderer/store/toasts'
 import type { AppError, UnitOfMeasure } from '@shared/dto'
@@ -37,7 +38,9 @@ import { ListToolbar } from '../components/ListToolbar'
 import { RegisterEmpty } from '../components/RegisterToolbar'
 import { RegisterSkeleton, type SkeletonColumn } from '../components/RegisterSkeleton'
 import { ScreenFrame } from '../components/ScreenFrame'
+import { useSearchShortcut } from '../lib/use-search-shortcut'
 import { archivedNote } from '../lib/register-view'
+import { useHasTyped } from '../lib/typed'
 import {
   DECIMAL_PLACES_CHOICES,
   DEFAULT_DECIMAL_PLACES,
@@ -97,6 +100,7 @@ export function Units(): JSX.Element {
           title: 'New unit of measure',
           section: 'Items',
           keywords: ['unit', 'uom', 'measure', 'kilogram', 'quantity', 'create'],
+          shortcut: SHORTCUTS.create,
           run: () => setEditing('new'),
         },
       ],
@@ -147,6 +151,8 @@ export function Units(): JSX.Element {
     [load, show],
   )
 
+  const searchBox = useSearchShortcut('units.search', 'Items', 'Search these units')
+
   const rows = useMemo(() => filterUnits(units ?? [], query), [units, query])
 
   return (
@@ -170,6 +176,7 @@ export function Units(): JSX.Element {
           onQueryChange={setQuery}
           includeArchived={includeArchived}
           onIncludeArchivedChange={setIncludeArchived}
+          inputRef={searchBox}
         />
 
         {units === null ? (
@@ -330,6 +337,7 @@ function UnitDialog({ isOpen, unit, onClose, onSaved }: UnitDialogProps): JSX.El
   const [isBusy, setBusy] = useState(false)
   const [error, setError] = useState<AppError | null>(null)
 
+  const hasTyped = useHasTyped({ code, name, decimalPlaces, regimeCode })
   const canSubmit = code.trim() !== '' && name.trim() !== '' && !isBusy
   const field = error === null ? null : unitErrorField(error)
 
@@ -364,6 +372,7 @@ function UnitDialog({ isOpen, unit, onClose, onSaved }: UnitDialogProps): JSX.El
     <Dialog
       isOpen={isOpen}
       onClose={onClose}
+      hasUnsavedInput={hasTyped}
       title={isNew ? 'New unit' : `Edit ${unit.code}`}
       description="A unit is a code, a name, and how many decimal places a quantity in it may carry. Nothing restricts you to a known list."
       footer={

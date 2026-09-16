@@ -53,6 +53,7 @@ import { Badge, Button, Dialog, Input, Select } from '@renderer/components/atoms
 import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { registerScreens } from '@renderer/lib/screens'
+import { SHORTCUTS } from '@renderer/lib/shortcuts'
 import { useRegisterCommands } from '@renderer/store/commands'
 import { useToasts } from '@renderer/store/toasts'
 import type {
@@ -83,6 +84,7 @@ import {
   type FiscalYear,
 } from '../lib/numbering-view'
 import { todayISO } from '../lib/report-view'
+import { useHasTyped } from '../lib/typed'
 
 /** What the two reset choices are called. A total record over the union (§1.9). */
 const RESET_LABELS: Record<NumberingReset, string> = {
@@ -205,6 +207,7 @@ export function Numbering(): JSX.Element {
           title: 'New numbering series',
           section: 'Numbering',
           keywords: ['prefix', 'invoice number', 'series', 'numbering'],
+          shortcut: SHORTCUTS.create,
           run: () => setEditing('new'),
         },
       ],
@@ -594,6 +597,17 @@ function SeriesDialog({
    * refused in main's words; 'abc' is not sent because there is nothing to send. */
   const isWidthReadable = parsedWidth === undefined || Number.isInteger(parsedWidth)
 
+  const hasTyped = useHasTyped({
+    label,
+    kind,
+    prefix,
+    separator,
+    suffix,
+    width,
+    includeFiscalYear,
+    resetOn,
+    isDefault,
+  })
   const canSubmit = label.trim() !== '' && kind !== '' && isWidthReadable && !isBusy
 
   const submit = useCallback(async () => {
@@ -652,6 +666,7 @@ function SeriesDialog({
     <Dialog
       isOpen={isOpen}
       onClose={onClose}
+      hasUnsavedInput={hasTyped}
       title={isNew ? 'New series' : `Edit ${record.label}`}
       description="Every part of a number is yours to set, so a series can keep looking the way it already looks."
       footer={

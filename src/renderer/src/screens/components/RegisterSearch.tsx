@@ -9,7 +9,7 @@
  * Its width comes from its placeholder (B12), so the sentence it shows is never cut off.
  */
 
-import type { JSX } from 'react'
+import type { JSX, Ref } from 'react'
 import { Input } from '@renderer/components/atoms'
 import { searchWidth } from '../lib/register-view'
 
@@ -18,6 +18,8 @@ interface RegisterSearchProps {
   value: string
   onChange: (value: string) => void
   onSubmit?: () => void
+  /** So Ctrl F can put the cursor here. See `useSearchShortcut`. */
+  inputRef?: Ref<HTMLInputElement>
 }
 
 export function RegisterSearch({
@@ -25,6 +27,7 @@ export function RegisterSearch({
   value,
   onChange,
   onSubmit,
+  inputRef,
 }: RegisterSearchProps): JSX.Element {
   return (
     <form
@@ -41,6 +44,9 @@ export function RegisterSearch({
         icon="search"
         placeholder={placeholder}
         value={value}
+        ref={inputRef}
+        aria-keyshortcuts="Control+F"
+
         style={{ minWidth: searchWidth(placeholder) }}
         onChange={(event) => onChange(event.target.value)}
       />

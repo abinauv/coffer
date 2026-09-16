@@ -11,7 +11,7 @@
  * it lined up on its bottom edge reads as a line below the text.
  */
 
-import type { JSX, ReactNode } from 'react'
+import type { JSX, ReactNode, Ref } from 'react'
 import { CheckboxField } from './CheckboxField'
 import { RegisterSearch } from './RegisterSearch'
 
@@ -22,6 +22,8 @@ interface ListToolbarProps {
   onQueryChange?: (value: string) => void
   includeArchived: boolean
   onIncludeArchivedChange: (value: boolean) => void
+  /** So Ctrl F can put the cursor in the search box. See `useSearchShortcut`. */
+  inputRef?: Ref<HTMLInputElement>
   /** Anything else the list is filtered by, drawn after the checkbox. */
   children?: ReactNode
 }
@@ -32,12 +34,18 @@ export function ListToolbar({
   onQueryChange,
   includeArchived,
   onIncludeArchivedChange,
+  inputRef,
   children,
 }: ListToolbarProps): JSX.Element {
   return (
     <div className="toolbar list__toolbar">
       {placeholder !== undefined && onQueryChange !== undefined && (
-        <RegisterSearch placeholder={placeholder} value={query} onChange={onQueryChange} />
+        <RegisterSearch
+          placeholder={placeholder}
+          value={query}
+          onChange={onQueryChange}
+          inputRef={inputRef}
+        />
       )}
       <CheckboxField isChecked={includeArchived} onChange={onIncludeArchivedChange}>
         Show archived

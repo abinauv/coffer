@@ -7,13 +7,15 @@
  * reader hears which one is on rather than inferring it from which button is drawn filled.
  */
 
-import type { JSX } from 'react'
+import type { JSX, Ref } from 'react'
 import { Button } from '@renderer/components/atoms'
 import { EmptyState } from './EmptyState'
 import { RegisterSearch } from './RegisterSearch'
 
 interface RegisterToolbarProps<S extends string> {
   placeholder: string
+  /** So Ctrl F can put the cursor in the search box. See `useSearchShortcut`. */
+  inputRef?: Ref<HTMLInputElement>
   search: string
   onSearchChange: (value: string) => void
   onSearchSubmit: () => void
@@ -24,6 +26,7 @@ interface RegisterToolbarProps<S extends string> {
 
 export function RegisterToolbar<S extends string>({
   placeholder,
+  inputRef,
   search,
   onSearchChange,
   onSearchSubmit,
@@ -38,6 +41,7 @@ export function RegisterToolbar<S extends string>({
         value={search}
         onChange={onSearchChange}
         onSubmit={onSearchSubmit}
+        inputRef={inputRef}
       />
       <div className="register__filters" role="group" aria-label="Status">
         {filters.map((filter) => (

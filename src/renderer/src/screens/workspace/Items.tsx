@@ -32,6 +32,7 @@ import type { Command } from '@renderer/lib/command-registry'
 import { makeRoute } from '@renderer/lib/routing'
 import type { ScreenContext } from '@renderer/lib/screens'
 import { registerScreens } from '@renderer/lib/screens'
+import { SHORTCUTS } from '@renderer/lib/shortcuts'
 import { useRegisterCommands } from '@renderer/store/commands'
 import { useNumberFormat, useRegime } from '@renderer/store/regime'
 import { useToasts } from '@renderer/store/toasts'
@@ -52,8 +53,10 @@ import { Notice } from '../components/Notice'
 import { RegisterEmpty } from '../components/RegisterToolbar'
 import { RegisterSkeleton, type SkeletonColumn } from '../components/RegisterSkeleton'
 import { ScreenFrame } from '../components/ScreenFrame'
+import { useSearchShortcut } from '../lib/use-search-shortcut'
 import { formatAmount } from '../lib/ledger-format'
 import { archivedNote } from '../lib/register-view'
+import { useHasTyped } from '../lib/typed'
 import {
   accountOptions,
   classificationHint,
@@ -140,6 +143,7 @@ export function Items({ navigate }: ScreenContext): JSX.Element {
           title: 'New item',
           section: 'Items',
           keywords: ['item', 'product', 'service', 'sku', 'charge', 'create'],
+          shortcut: SHORTCUTS.create,
           run: () => setEditing('new'),
         },
       ],
@@ -186,6 +190,8 @@ export function Items({ navigate }: ScreenContext): JSX.Element {
     [load, show],
   )
 
+  const searchBox = useSearchShortcut('items.search', 'Items', 'Search these items')
+
   const rows = useMemo(() => filterItems(items ?? [], query), [items, query])
 
   return (
@@ -209,6 +215,7 @@ export function Items({ navigate }: ScreenContext): JSX.Element {
           onQueryChange={setQuery}
           includeArchived={includeArchived}
           onIncludeArchivedChange={setIncludeArchived}
+          inputRef={searchBox}
         />
 
         {items === null ? (
@@ -419,6 +426,22 @@ function ItemDialog({
   const [isBusy, setBusy] = useState(false)
   const [error, setError] = useState<AppError | null>(null)
 
+  const hasTyped = useHasTyped({
+    name,
+    code,
+    kind,
+    description,
+    unitCode,
+    classificationCode,
+    taxRatePct,
+    salePrice,
+    purchasePrice,
+    isSold,
+    isPurchased,
+    isCharge,
+    salesAccountId,
+    purchaseAccountId,
+  })
   const hasASide = isSold || isPurchased
   const canSubmit = name.trim() !== '' && hasASide && !isBusy
   const field = error === null ? null : itemErrorField(error)
@@ -487,6 +510,7 @@ function ItemDialog({
       isOpen={isOpen}
       onClose={onClose}
       size="lg"
+      hasUnsavedInput={hasTyped}
       title={isNew ? 'New item' : `Edit ${item.name}`}
       description="Everything here is a default for a document line. A line keeps its own copy, so changing an item never rewrites paperwork already issued."
       footer={

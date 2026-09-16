@@ -48,6 +48,7 @@ import { Badge, Button, Dialog, Input, Select } from '@renderer/components/atoms
 import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { registerScreens } from '@renderer/lib/screens'
+import { SHORTCUTS } from '@renderer/lib/shortcuts'
 import { useRegisterCommands } from '@renderer/store/commands'
 import { useRegime } from '@renderer/store/regime'
 import { useToasts } from '@renderer/store/toasts'
@@ -61,7 +62,9 @@ import { Notice } from '../components/Notice'
 import { RegisterEmpty } from '../components/RegisterToolbar'
 import { RegisterSkeleton, type SkeletonColumn } from '../components/RegisterSkeleton'
 import { ScreenFrame } from '../components/ScreenFrame'
+import { useSearchShortcut } from '../lib/use-search-shortcut'
 import { archivedNote } from '../lib/register-view'
+import { useHasTyped } from '../lib/typed'
 import {
   blankDraft,
   copyFor,
@@ -153,6 +156,7 @@ export function Parties({ role = null, openId }: PartiesProps): JSX.Element {
           title: copy.newLabel,
           section: 'Parties',
           keywords: ['customer', 'vendor', 'party', 'create'],
+          shortcut: SHORTCUTS.create,
           run: () => setEditing('new'),
         },
       ],
@@ -210,6 +214,12 @@ export function Parties({ role = null, openId }: PartiesProps): JSX.Element {
     [load, show],
   )
 
+  const searchBox = useSearchShortcut(
+    `parties.search-${role ?? 'party'}`,
+    'Parties',
+    `Search these ${copy.title.toLowerCase()}`,
+  )
+
   const rows = useMemo(() => filterParties(parties ?? [], query), [parties, query])
   const searched = query.trim()
 
@@ -234,6 +244,7 @@ export function Parties({ role = null, openId }: PartiesProps): JSX.Element {
           onQueryChange={setQuery}
           includeArchived={includeArchived}
           onIncludeArchivedChange={setIncludeArchived}
+          inputRef={searchBox}
         />
 
         {parties === null ? (
@@ -442,6 +453,7 @@ function PartyDialog({
     [],
   )
 
+  const hasTyped = useHasTyped(draft)
   const terms = parsePaymentTerms(draft.paymentTermsDays)
   const hasARole = draft.isCustomer || draft.isVendor
   const canSubmit =
@@ -475,6 +487,7 @@ function PartyDialog({
     <Dialog
       isOpen
       onClose={onClose}
+      hasUnsavedInput={hasTyped}
       title={isNew ? copyFor(role).newLabel : 'Edit'}
       description="One record per firm. Tick both boxes when you buy from someone you also sell to — that is what keeps their balance in one place."
       footer={

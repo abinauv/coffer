@@ -553,3 +553,55 @@ describe('the registrations', () => {
     }
   })
 })
+
+/*
+ * THE KEYBOARD (design system §04). The bindings are declared on commands, so the palette
+ * says the key and the key does what the palette says. What is asserted here is the part a
+ * person feels: Ctrl F puts the cursor in the box, Ctrl N starts one.
+ */
+describe('the keyboard', () => {
+  it('puts the cursor in the search box on Ctrl F, and selects what is in it', async () => {
+    const user = userEvent.setup()
+    renderScreen(register(), { bridge: listing(ROWS) })
+
+    const box = await screen.findByPlaceholderText(/Search by number/)
+    await user.type(box, 'sunrise')
+    await user.click(screen.getByRole('heading', { name: 'Sales invoices' }))
+    expect(box).not.toHaveFocus()
+
+    await user.keyboard('{Control>}f{/Control}')
+
+    expect(box).toHaveFocus()
+    /* Ctrl F on a search that already says something means "search for something else". */
+    expect((box as HTMLInputElement).selectionStart).toBe(0)
+    expect((box as HTMLInputElement).selectionEnd).toBe('sunrise'.length)
+    expect(box).toHaveAttribute('aria-keyshortcuts', 'Control+F')
+  })
+
+  it('starts a new one on Ctrl N', async () => {
+    const user = userEvent.setup()
+    const navigate = vi.fn()
+    renderScreen(<DocumentRegister {...screenContext({ navigate })} kind="sales-invoice" />, {
+      bridge: listing(ROWS),
+    })
+
+    await screen.findByText('Sunrise Components')
+    await user.keyboard('{Control>}n{/Control}')
+
+    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ screenId: 'sales-invoice' }))
+  })
+
+  /* Ctrl N from inside the search box too: a modified key is never the field's. */
+  it('starts a new one while the cursor is in the search box', async () => {
+    const user = userEvent.setup()
+    const navigate = vi.fn()
+    renderScreen(<DocumentRegister {...screenContext({ navigate })} kind="sales-invoice" />, {
+      bridge: listing(ROWS),
+    })
+
+    await user.click(await screen.findByPlaceholderText(/Search by number/))
+    await user.keyboard('{Control>}n{/Control}')
+
+    expect(navigate).toHaveBeenCalledTimes(1)
+  })
+})

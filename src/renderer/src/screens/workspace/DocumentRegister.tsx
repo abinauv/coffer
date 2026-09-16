@@ -35,6 +35,7 @@ import type { Command } from '@renderer/lib/command-registry'
 import { makeRoute } from '@renderer/lib/routing'
 import { registerScreens, type ScreenContext, type ScreenDefinition } from '@renderer/lib/screens'
 import { todayISO } from '@renderer/lib/today'
+import { SHORTCUTS } from '@renderer/lib/shortcuts'
 import { useRegisterCommands } from '@renderer/store/commands'
 import { useNumberFormat } from '@renderer/store/regime'
 import { definitionOf, DOCUMENT_KINDS, type DocumentKind } from '@shared/documents'
@@ -44,6 +45,7 @@ import { RegisterPager } from '../components/RegisterPager'
 import { RegisterSkeleton } from '../components/RegisterSkeleton'
 import { RegisterEmpty, RegisterToolbar } from '../components/RegisterToolbar'
 import { ScreenFrame } from '../components/ScreenFrame'
+import { useSearchShortcut } from '../lib/use-search-shortcut'
 import { formatDate } from '../lib/dates'
 import { formatAmount } from '../lib/ledger-format'
 import {
@@ -151,6 +153,7 @@ export function DocumentRegister({
           title: `New ${label}`,
           section: definition.side === 'sales' ? 'Sales' : 'Purchases',
           keywords: [...label.split(' '), 'draft', 'create'],
+          shortcut: SHORTCUTS.create,
           run: () => openDocument(),
         },
         {
@@ -163,6 +166,12 @@ export function DocumentRegister({
       ],
       [definition, kind, label, load, openDocument],
     ),
+  )
+
+  const searchBox = useSearchShortcut(
+    `documents.${kind}.search`,
+    definition.side === 'sales' ? 'Sales' : 'Purchases',
+    `Search these ${definition.pluralLabel.toLowerCase()}`,
   )
 
   const isFiltered = status !== '' || applied.trim() !== ''
@@ -185,6 +194,7 @@ export function DocumentRegister({
 
         <RegisterToolbar
           placeholder={registerSearchPlaceholder(definition.side)}
+          inputRef={searchBox}
           search={search}
           onSearchChange={setSearch}
           onSearchSubmit={() => refine(() => setApplied(search))}

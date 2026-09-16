@@ -30,11 +30,14 @@
  * happens when it disagrees with the number is main's to say.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { JSX } from 'react'
-import { Button, Input, Select } from '@renderer/components/atoms'
+import { Button, Input, Kbd, Select } from '@renderer/components/atoms'
 import { callApi } from '@renderer/lib/api'
+import type { Command } from '@renderer/lib/command-registry'
 import { registerScreens } from '@renderer/lib/screens'
+import { SHORTCUTS } from '@renderer/lib/shortcuts'
+import { useRegisterCommands } from '@renderer/store/commands'
 import { useRegime } from '@renderer/store/regime'
 import { useToasts } from '@renderer/store/toasts'
 import type { AppError, CompanyProfile as Profile, RegimeDescription } from '@shared/dto'
@@ -177,9 +180,30 @@ export function CompanyProfile(): JSX.Element {
     })
   }, [canSave, draft, show])
 
-  /* No commands registered. A navigable screen already gets a "Go to Business details"
-   * command from the registry (lib/screens.ts), and this screen has no second verb — the
-   * only action on it is the Save button in front of the user. */
+  /*
+   * ONE COMMAND: Save, so that Ctrl S means the same thing here as in an editor. The
+   * screen is otherwise reachable by the registry's own "Go to Business details", and it
+   * has no second verb. Through a ref, because `save` is rebuilt on every keystroke.
+   */
+  const latestSave = useRef(save)
+  latestSave.current = save
+
+  useRegisterCommands(
+    useMemo<Command[]>(
+      () => [
+        {
+          id: 'company.profile.save',
+          title: 'Save the business details',
+          section: 'Company',
+          keywords: ['save', 'business', 'details', 'profile'],
+          shortcut: SHORTCUTS.save,
+          isDisabled: !canSave,
+          run: () => void latestSave.current(),
+        },
+      ],
+      [canSave],
+    ),
+  )
 
   const jurisdictions = regime?.jurisdictions ?? []
 
@@ -310,8 +334,16 @@ export function CompanyProfile(): JSX.Element {
             />
 
             <div className="toolbar">
-              <Button type="submit" variant="primary" disabled={!canSave}>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={!canSave}
+                aria-keyshortcuts="Control+S"
+              >
                 {isBusy ? 'Saving…' : 'Save'}
+                <span className="button__keys" aria-hidden="true">
+                  <Kbd shortcut={SHORTCUTS.save} />
+                </span>
               </Button>
             </div>
           </form>
