@@ -26,6 +26,7 @@ import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import { makeRoute } from '@renderer/lib/routing'
 import { registerScreens, type ScreenContext, type ScreenDefinition } from '@renderer/lib/screens'
+import { SHORTCUTS } from '@renderer/lib/shortcuts'
 import { useRegisterCommands } from '@renderer/store/commands'
 import { useNumberFormat } from '@renderer/store/regime'
 import type { AppError, ReceiptStatusDto, ReceiptSummary } from '@shared/dto'
@@ -35,6 +36,7 @@ import { RegisterPager } from '../components/RegisterPager'
 import { RegisterSkeleton } from '../components/RegisterSkeleton'
 import { RegisterEmpty, RegisterToolbar } from '../components/RegisterToolbar'
 import { ScreenFrame } from '../components/ScreenFrame'
+import { useSearchShortcut } from '../lib/use-search-shortcut'
 import { formatDate } from '../lib/dates'
 import { formatAmount, formatAmountOrBlank } from '../lib/ledger-format'
 import {
@@ -133,6 +135,7 @@ export function ReceiptRegister({
           title: `Record a ${label}`,
           section: definition.side === 'sales' ? 'Sales' : 'Purchases',
           keywords: [label, 'money', 'paid', 'cheque', 'bank'],
+          shortcut: SHORTCUTS.create,
           run: () => openReceipt(),
         },
         {
@@ -145,6 +148,12 @@ export function ReceiptRegister({
       ],
       [definition, kind, label, load, openReceipt],
     ),
+  )
+
+  const searchBox = useSearchShortcut(
+    `receipts.${kind}.search`,
+    definition.side === 'sales' ? 'Sales' : 'Purchases',
+    `Search these ${definition.pluralLabel.toLowerCase()}`,
   )
 
   const isFiltered = status !== '' || applied.trim() !== ''
@@ -166,6 +175,7 @@ export function ReceiptRegister({
 
         <RegisterToolbar
           placeholder={registerSearchPlaceholder(definition.side)}
+          inputRef={searchBox}
           search={search}
           onSearchChange={setSearch}
           onSearchSubmit={() => refine(() => setApplied(search))}

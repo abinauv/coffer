@@ -33,7 +33,7 @@
  * periods, for the financial year, is answered the same way.
  */
 
-import { act, screen, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { JSX } from 'react'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -46,6 +46,8 @@ import { registerScreens } from '../../lib/screens'
 import { THEME_STORAGE_KEY } from '../../lib/theme'
 import { useCommands } from '../../store/commands'
 import { useNavigation } from '../../store/navigation'
+import { formatShortcut } from '../../lib/keys'
+import { SHORTCUTS } from '../../lib/shortcuts'
 import { AppShell } from './AppShell'
 
 const ACME: CompanySummary = DEFAULT_COMPANY
@@ -326,16 +328,24 @@ describe('the commands the frame owns', () => {
     expect(localStorage.getItem(DENSITY_STORAGE_KEY)).toBe('comfortable')
   })
 
-  it('offers closing the company only when there is one, and names it', () => {
+  /*
+   * TWO WAYS OUT OF THE BOOKS, AND THE DIFFERENCE IS WHERE EACH ONE LANDS. Both close the
+   * company; Lock stops at the unlock screen for the company that was open and Switch goes
+   * to the picker. Only Lock names the company, because only Lock is about that one.
+   */
+  it('offers locking the books only when a company is open, and names it', () => {
     mount({ isCompanyOpen: true })
 
-    expect(commandFor('company.close').hint).toBe('Acme Pvt Ltd')
+    expect(commandFor('company.lock').hint).toBe('Acme Pvt Ltd')
+    expect(commandFor('company.lock').shortcut).toEqual(SHORTCUTS.lock)
+    expect(commandFor('company.switch').shortcut).toEqual(SHORTCUTS.switchCompany)
   })
 
-  it('offers no company command when none is open', () => {
+  it('offers neither way out when no company is open', () => {
     mount({ isCompanyOpen: false })
 
-    expect(ids()).not.toContain('company.close')
+    expect(ids()).not.toContain('company.lock')
+    expect(ids()).not.toContain('company.switch')
   })
 })
 
@@ -447,5 +457,49 @@ describe('the palette', () => {
 
     expect(route).toBe('shell-probe')
     expect(screen.getByText('the shell probe screen')).toBeVisible()
+  })
+})
+
+/*
+ * LEAVING THE BOOKS FROM THE KEYBOARD, and where each key lands.
+ *
+ * Both close the company, so both leave the workspace; the difference is the door they
+ * stop at. Asserted through the route, because that is the whole of the difference.
+ */
+describe('locking and switching', () => {
+  it('locks to the unlock screen of the company that was open', async () => {
+    const user = userEvent.setup()
+    mount({ isCompanyOpen: true })
+
+    await user.keyboard('{Control>}l{/Control}')
+
+    await waitFor(() => expect(route).toBe('unlock'))
+  })
+
+  it('switches to the picker', async () => {
+    const user = userEvent.setup()
+    mount({ isCompanyOpen: true })
+
+    await user.keyboard('{Control>}{Shift>}o{/Shift}{/Control}')
+
+    await waitFor(() => expect(route).toBe('companies'))
+  })
+
+  /*
+   * ONE CHORD, ONE COMMAND, at any moment. Two commands on one chord is a binding that
+   * works until both screens are on at once and then fires whichever registered last —
+   * a defect nobody can reproduce on purpose. `shortcuts.test.ts` holds the map itself;
+   * this holds what is actually registered with a company open and a screen drawn.
+   */
+  it('claims no chord twice', async () => {
+    mount({ isCompanyOpen: true })
+    await screen.findByRole('navigation', { name: 'Accounts' })
+
+    const chords = commands
+      .filter((command) => command.shortcut !== undefined)
+      .map((command) => `${command.id}:${formatShortcut(command.shortcut!, 'win32')}`)
+    const keys = chords.map((entry) => entry.split(':')[1])
+
+    expect(new Set(keys).size, chords.join(', ')).toBe(keys.length)
   })
 })
