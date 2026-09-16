@@ -53,6 +53,7 @@ import type {
   RecoverCompanyInput,
   RegistrationCheck,
   RestoreInput,
+  SetBackupReminderInput,
 } from '@shared/dto'
 import { randomUUID } from 'node:crypto'
 import type { FileHandle } from 'node:fs/promises'
@@ -253,6 +254,8 @@ export class CompanyService {
           vaultPath,
           createdAt,
           lastOpenedAt: createdAt,
+          lastBackup: null,
+          remindsAboutBackups: true,
         })
 
         this.session = { record, database }
@@ -379,12 +382,49 @@ export class CompanyService {
        * part of the backup. Fold them into the file first. */
       checkpoint(session.database)
 
-      return writeBackup({
+      const written = await writeBackup({
         databaseFilePath: session.record.filePath,
         vaultFilePath: session.record.vaultPath,
         displayName: session.record.displayName,
         directoryPath,
       })
+
+      /*
+       * REMEMBERED IN THE REGISTRY, AFTER THE ARCHIVE IS ON DISK. The screens that say
+       * when this company was last backed up read it from there, so a failure to write
+       * the archive leaves the record saying what is still true. The archive is what
+       * matters; if remembering it fails, the backup has still been taken.
+       */
+      const registry = await this.registry()
+      const updated = await registry.patch(session.record.id, {
+        lastBackup: {
+          at: written.createdAt,
+          path: written.archivePath,
+          sizeBytes: written.sizeBytes,
+        },
+      })
+      this.session = { record: updated, database: session.database }
+
+      return { ...written, company: await describeCompany(updated) }
+    })
+  }
+
+  /**
+   * Turn the backup reminder on or off for one company.
+   *
+   * Kept per company rather than as one setting for the application: somebody keeping a
+   * client's books on this machine has a different answer for each of them, and the
+   * reminder is about a file, not about a person.
+   */
+  async setBackupReminder(input: SetBackupReminderInput): Promise<CompanySummary> {
+    return this.exclusive(async () => {
+      const registry = await this.registry()
+      const updated = await registry.patch(input.id, { remindsAboutBackups: input.isOn })
+      const session = this.session
+      if (session !== null && session.record.id === input.id) {
+        this.session = { record: updated, database: session.database }
+      }
+      return describeCompany(updated)
     })
   }
 
@@ -444,6 +484,8 @@ export class CompanyService {
            * inside the database, which cannot be read without the passphrase. */
           createdAt: backup.manifest.createdAt,
           lastOpenedAt: null,
+          lastBackup: null,
+          remindsAboutBackups: true,
         }))
       return describeCompany(record)
     })
@@ -479,6 +521,8 @@ export class CompanyService {
         vaultPath: vaultPathFor(resolved),
         createdAt: await fileCreatedAt(resolved),
         lastOpenedAt: null,
+        lastBackup: null,
+        remindsAboutBackups: true,
       })
       return describeCompany(record)
     })

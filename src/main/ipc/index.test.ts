@@ -41,6 +41,8 @@ const SUMMARY: CompanySummary = {
   lastOpenedAt: null,
   createdAt: '2026-08-14T09:30:00.000Z',
   availability: 'ok',
+  lastBackup: null,
+  remindsAboutBackups: true,
 }
 
 let channels: Map<string, ChannelListener>

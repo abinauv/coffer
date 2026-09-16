@@ -24,7 +24,7 @@
  * Writes are atomic: a temporary file, flushed, then renamed over the target.
  */
 
-import type { CompanyAvailability, CompanySummary, Timestamp } from '@shared/dto'
+import type { CompanyAvailability, CompanyBackup, CompanySummary, Timestamp } from '@shared/dto'
 import { mkdir, open, rename, rm, stat } from 'node:fs/promises'
 import { dirname, isAbsolute } from 'node:path'
 
@@ -41,6 +41,21 @@ export interface CompanyRecord {
   readonly vaultPath: string
   readonly createdAt: Timestamp
   readonly lastOpenedAt: Timestamp | null
+  /**
+   * The last archive written for this company, or null when none has been.
+   *
+   * WHERE ELSE WOULD IT GO. Not in `localStorage` — `storage.ts` forbids company data
+   * there, and this is a path into the user's filesystem. Not in the company database
+   * either: a backup is written FROM that file, so a record kept inside it would say
+   * "backed up" in the copy and in the original alike, and would be unreadable while the
+   * company is locked, which is exactly when a reminder is worth showing.
+   *
+   * It is an INDEX ENTRY, like the rest of this file: where something is, not what is in
+   * it. Losing it loses a reminder, never a backup.
+   */
+  readonly lastBackup: CompanyBackup | null
+  /** Whether the Overview should say when no backup has been written for a week. */
+  readonly remindsAboutBackups: boolean
 }
 
 /** What the last read of the registry found. Reported, never thrown. */
@@ -317,6 +332,8 @@ export function toSummary(
     createdAt: record.createdAt,
     lastOpenedAt: record.lastOpenedAt,
     availability,
+    lastBackup: record.lastBackup,
+    remindsAboutBackups: record.remindsAboutBackups,
   }
 }
 
@@ -364,6 +381,10 @@ function toRecord(value: unknown): CompanyRecord | null {
   const displayName = record['displayName']
   const createdAt = record['createdAt']
   const lastOpenedAt = record['lastOpenedAt']
+  /* Both are new in this version of the file, so EVERY registry written before it lacks
+   * them. Absent is not damaged: no backup recorded, and reminders on — which is the
+   * answer a user who has never been asked would want. */
+  const remindsAboutBackups = record['remindsAboutBackups']
 
   return {
     id,
@@ -376,7 +397,30 @@ function toRecord(value: unknown): CompanyRecord | null {
         : displayNameFromFilePath(filePath),
     createdAt: isTimestamp(createdAt) ? createdAt : new Date().toISOString(),
     lastOpenedAt: isTimestamp(lastOpenedAt) ? lastOpenedAt : null,
+    lastBackup: toBackup(record['lastBackup']),
+    remindsAboutBackups: typeof remindsAboutBackups === 'boolean' ? remindsAboutBackups : true,
   }
+}
+
+/**
+ * The last backup, if the entry holds a usable one.
+ *
+ * A half-written or hand-edited entry reads as "no backup recorded" rather than dropping
+ * the whole company: the row's job is to say where the books are, and a reminder is not
+ * worth losing that over.
+ */
+function toBackup(value: unknown): CompanyBackup | null {
+  const record = asRecord(value)
+  if (record === null) return null
+
+  const at = record['at']
+  const path = record['path']
+  const sizeBytes = record['sizeBytes']
+  if (!isTimestamp(at)) return null
+  if (typeof path !== 'string' || path.trim() === '') return null
+  if (typeof sizeBytes !== 'number' || !Number.isFinite(sizeBytes) || sizeBytes < 0) return null
+
+  return { at, path, sizeBytes }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

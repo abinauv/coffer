@@ -24,6 +24,8 @@ const SUMMARY: CompanySummary = {
   lastOpenedAt: null,
   createdAt: '2026-08-14T09:30:00.000Z',
   availability: 'ok',
+  lastBackup: null,
+  remindsAboutBackups: true,
 }
 
 const OPENED: OpenCompanyResult = { company: SUMMARY, recoveryCodesRemaining: 5 }
@@ -32,6 +34,10 @@ const BACKUP: BackupResult = {
   archivePath: ARCHIVE,
   sizeBytes: 1024,
   createdAt: '2026-08-14T09:30:00.000Z',
+  company: {
+    ...SUMMARY,
+    lastBackup: { at: '2026-08-14T09:30:00.000Z', path: ARCHIVE, sizeBytes: 1024 },
+  },
 }
 
 const STRENGTH: PassphraseStrength = { score: 4, label: 'Strong', suggestion: null, isWeak: false }
@@ -76,6 +82,7 @@ beforeEach(() => {
     close: vi.fn(async () => undefined),
     changePassphrase: vi.fn(async () => undefined),
     backup: vi.fn(async () => BACKUP),
+    setBackupReminder: vi.fn(async () => ({ ...SUMMARY, remindsAboutBackups: false })),
     restore: vi.fn(async () => SUMMARY),
     addExisting: vi.fn(async () => SUMMARY),
     forget: vi.fn(async () => undefined),
@@ -234,6 +241,32 @@ describe('companies:backup', () => {
 
     expect(error.code).toBe('INVALID_ARGUMENT')
     expect(service.backup).not.toHaveBeenCalled()
+  })
+})
+
+describe('companies:setBackupReminder', () => {
+  it('passes the answer through and hands back the company', async () => {
+    await expect(call(handlers.setBackupReminder, { id: 'acme', isOn: false })).resolves.toEqual({
+      ok: true,
+      data: { ...SUMMARY, remindsAboutBackups: false },
+    })
+    expect(service.setBackupReminder).toHaveBeenCalledWith({ id: 'acme', isOn: false })
+  })
+
+  /* A toggle sends a boolean. Anything else is a screen sending the wrong thing, and
+   * `'false'` read as true is exactly the way a reminder turns itself back on. */
+  it('refuses anything but a boolean', async () => {
+    const error = await rejection(() =>
+      call(handlers.setBackupReminder, { id: 'acme', isOn: 'no' }),
+    )
+
+    expect(error.code).toBe('INVALID_ARGUMENT')
+    expect(service.setBackupReminder).not.toHaveBeenCalled()
+  })
+
+  it('refuses an empty id', async () => {
+    const error = await rejection(() => call(handlers.setBackupReminder, { id: '', isOn: true }))
+    expect(error.code).toBe('INVALID_ARGUMENT')
   })
 })
 

@@ -700,6 +700,74 @@ describe('changePassphrase', () => {
   })
 })
 
+describe('what the registry remembers about backups', () => {
+  /*
+   * WHY THE REGISTRY AND NOT THE COMPANY FILE. A backup is written FROM the database, so
+   * a record kept inside it would say "backed up" in the copy as well as the original,
+   * and could not be read at all while the company is locked — which is exactly when a
+   * reminder is worth showing.
+   */
+  it('remembers the archive it just wrote, and hands the company back with it', async () => {
+    const now = await fixture()
+    await createCompany(now)
+
+    const backupDirectory = await tempDirectory('backups')
+    const result = await now.service.backup({ directoryPath: backupDirectory })
+
+    expect(result.company.lastBackup).toEqual({
+      at: result.createdAt,
+      path: result.archivePath,
+      sizeBytes: result.sizeBytes,
+    })
+
+    /* And it is in the list, so a screen drawn after a restart says the same thing. */
+    const listed = await now.service.list()
+    expect(listed[0]?.lastBackup?.path).toBe(result.archivePath)
+  })
+
+  it('replaces the record rather than keeping the oldest', async () => {
+    const now = await fixture()
+    await createCompany(now)
+    const backupDirectory = await tempDirectory('backups')
+
+    const first = await now.service.backup({ directoryPath: backupDirectory })
+    const second = await now.service.backup({ directoryPath: backupDirectory })
+
+    expect(first.archivePath).not.toBe(second.archivePath)
+    expect((await now.service.list())[0]?.lastBackup?.path).toBe(second.archivePath)
+  })
+
+  it('says a new company has never been backed up, and reminds by default', async () => {
+    const now = await fixture()
+    const created = await createCompany(now)
+
+    expect(created.company.lastBackup).toBeNull()
+    /* On for a company nobody has been asked about: the answer somebody who has not
+     * thought about backups yet needs. */
+    expect(created.company.remindsAboutBackups).toBe(true)
+  })
+
+  it('turns the reminder off and on, and remembers which', async () => {
+    const now = await fixture()
+    const created = await createCompany(now)
+    const id = created.company.id
+
+    expect((await now.service.setBackupReminder({ id, isOn: false })).remindsAboutBackups).toBe(
+      false,
+    )
+    expect((await now.service.list())[0]?.remindsAboutBackups).toBe(false)
+
+    expect((await now.service.setBackupReminder({ id, isOn: true })).remindsAboutBackups).toBe(true)
+  })
+
+  it('refuses a company it has never heard of', async () => {
+    const now = await fixture()
+    expect(await codeOf(() => now.service.setBackupReminder({ id: 'nobody', isOn: false }))).toBe(
+      'COMPANY_NOT_FOUND',
+    )
+  })
+})
+
 describe('backup and restore', () => {
   it('writes one archive holding both files, and restores it to a working company', async () => {
     const now = await fixture()

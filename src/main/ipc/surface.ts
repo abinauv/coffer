@@ -46,6 +46,7 @@ export const API_SURFACE: ApiSurface = {
     close: true,
     changePassphrase: true,
     backup: true,
+    setBackupReminder: true,
     restore: true,
     addExisting: true,
     forget: true,
