@@ -2739,3 +2739,173 @@ describe('the registrations', () => {
     }
   })
 })
+
+/*
+ * THE KEYBOARD (design system §04, Phase 6).
+ *
+ * The bindings are declared on commands, so what is asserted here is what a person
+ * pressing the key gets: the cursor in the next box, another line at the end of the last
+ * one, a draft saved, and a way out that asks before it throws typing away.
+ */
+describe('the keyboard', () => {
+  const lineField = (label: string): HTMLElement => screen.getByLabelText(label)
+
+  it('advances to the next field on Enter, and never submits', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    await screen.findByRole('button', { name: 'Issue sales invoice' })
+    await user.click(lineField('Description, line 1'))
+    await user.keyboard('{Enter}')
+
+    expect(lineField('HSN or SAC, line 1')).toHaveFocus()
+    /* The one thing Enter must never do on a voucher screen. */
+    expect(bridge.callsTo('documents:update')).toHaveLength(0)
+    expect(bridge.callsTo('documents:issue')).toHaveLength(0)
+  })
+
+  it('opens another line at the end of the last one', async () => {
+    const user = userEvent.setup()
+    renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    await screen.findByRole('button', { name: 'Issue sales invoice' })
+    expect(screen.queryByLabelText('Description, line 2')).toBeNull()
+
+    await user.click(lineField('Account, line 1'))
+    await user.keyboard('{Enter}')
+
+    expect(await screen.findByLabelText('Description, line 2')).toBeInTheDocument()
+    /* The cursor follows the line it just opened, or the next keystroke is lost. */
+    expect(screen.getByLabelText('Item, line 2')).toHaveFocus()
+  })
+
+  it('saves the draft on Ctrl S, and says so on the button', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<DocumentEditor {...editing()} kind="sales-invoice" />, {
+      bridge: bridgeFor(document()),
+    })
+
+    const save = await screen.findByRole('button', { name: 'Save draft' })
+    expect(save).toHaveAttribute('aria-keyshortcuts', 'Control+S')
+    expect(save.querySelector('.kbd')).not.toBeNull()
+
+    await user.click(screen.getByLabelText('Narration'))
+    await user.keyboard('{Control>}s{/Control}')
+
+    await waitFor(() => expect(bridge.callsTo('documents:update')).toHaveLength(1))
+  })
+
+  /* Escape steps back exactly one level: out of the box first, then out of the document. */
+  it('takes the first Escape to mean out of this field', async () => {
+    const user = userEvent.setup()
+    const navigate = vi.fn()
+    renderScreen(
+      <DocumentEditor
+        {...screenContext({ route: testRoute('sales-invoice', { id: 'doc-1' }), navigate })}
+        kind="sales-invoice"
+      />,
+      { bridge: bridgeFor(document()) },
+    )
+
+    await screen.findByRole('button', { name: 'Issue sales invoice' })
+    const narration = screen.getByLabelText('Narration')
+    await user.click(narration)
+    await user.keyboard('{Escape}')
+
+    expect(narration).not.toHaveFocus()
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('goes back to the register on the second Escape', async () => {
+    const user = userEvent.setup()
+    const navigate = vi.fn()
+    renderScreen(
+      <DocumentEditor
+        {...screenContext({ route: testRoute('sales-invoice', { id: 'doc-1' }), navigate })}
+        kind="sales-invoice"
+      />,
+      { bridge: bridgeFor(document()) },
+    )
+
+    await screen.findByRole('button', { name: 'Issue sales invoice' })
+    await user.keyboard('{Escape}')
+
+    expect(navigate).toHaveBeenCalledWith(
+      expect.objectContaining({ area: 'workspace', screenId: 'sales-invoice-register' }),
+    )
+  })
+
+  it('asks before leaving with typing that has not been saved', async () => {
+    const user = userEvent.setup()
+    const navigate = vi.fn()
+    renderScreen(
+      <DocumentEditor
+        {...screenContext({ route: testRoute('sales-invoice', { id: 'doc-1' }), navigate })}
+        kind="sales-invoice"
+      />,
+      { bridge: bridgeFor(document()) },
+    )
+
+    await screen.findByRole('button', { name: 'Issue sales invoice' })
+    await user.type(screen.getByLabelText('Narration'), 'Against PO 4471')
+    /* Out of the field, then out of the document. */
+    await user.keyboard('{Escape}')
+    await user.keyboard('{Escape}')
+
+    const dialog = await screen.findByRole('dialog', { name: 'Leave this sales invoice?' })
+    expect(navigate).not.toHaveBeenCalled()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Keep editing' }))
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('leaves once the question is answered', async () => {
+    const user = userEvent.setup()
+    const navigate = vi.fn()
+    renderScreen(
+      <DocumentEditor
+        {...screenContext({ route: testRoute('sales-invoice', { id: 'doc-1' }), navigate })}
+        kind="sales-invoice"
+      />,
+      { bridge: bridgeFor(document()) },
+    )
+
+    await screen.findByRole('button', { name: 'Issue sales invoice' })
+    await user.type(screen.getByLabelText('Narration'), 'Against PO 4471')
+    await user.keyboard('{Escape}')
+    await user.keyboard('{Escape}')
+
+    const dialog = await screen.findByRole('dialog', { name: 'Leave this sales invoice?' })
+    await user.click(within(dialog).getByRole('button', { name: 'Leave it' }))
+
+    expect(navigate).toHaveBeenCalledWith(
+      expect.objectContaining({ screenId: 'sales-invoice-register' }),
+    )
+  })
+
+  /* A dialog owns Escape while it is up: it asked a question, and Escape answers it. */
+  it('leaves Escape to the confirmation while it is open', async () => {
+    const user = userEvent.setup()
+    const navigate = vi.fn()
+    renderScreen(
+      <DocumentEditor
+        {...screenContext({ route: testRoute('sales-invoice', { id: 'doc-1' }), navigate })}
+        kind="sales-invoice"
+      />,
+      { bridge: bridgeFor(document()) },
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Issue sales invoice' }))
+    await screen.findByRole('dialog', { name: 'Issue this sales invoice?' })
+    await user.keyboard('{Escape}')
+
+    /* The dialog's own Escape closes it — that is the platform's, and Dialog.test.tsx
+     * holds it. What matters here is that the editor did not step back as well: one
+     * keystroke, one level. */
+    expect(navigate).not.toHaveBeenCalled()
+  })
+})

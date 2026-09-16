@@ -86,13 +86,14 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { JSX } from 'react'
+import type { JSX, KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Badge, Button, Dialog, Input, Kbd, Select } from '@renderer/components/atoms'
 import { callApi } from '@renderer/lib/api'
 import type { Command } from '@renderer/lib/command-registry'
 import type { Shortcut } from '@renderer/lib/keys'
 import { makeRoute } from '@renderer/lib/routing'
 import { registerScreens, type ScreenContext, type ScreenDefinition } from '@renderer/lib/screens'
+import { SHORTCUTS } from '@renderer/lib/shortcuts'
 import { useRegisterCommands } from '@renderer/store/commands'
 import { useNumberFormat, useRegime } from '@renderer/store/regime'
 import { useToasts } from '@renderer/store/toasts'
@@ -124,6 +125,7 @@ import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
 import { ScreenFrame } from '../components/ScreenFrame'
 import { formatDate } from '../lib/dates'
+import { advanceFrom, fieldsIn, isAdvanceField, isAdvanceKey } from '../lib/enter-advances'
 import { formatAmount, isZeroAmount } from '../lib/ledger-format'
 import {
   editorScreenId,
@@ -278,6 +280,8 @@ export function DocumentEditor({
   const [confirming, setConfirming] = useState<Document | null>(null)
 
   /* The total in the regime's words, for the line under it. */
+  /* Escape asks before it throws typing away, and this is the question. */
+  const [isLeaving, setLeaving] = useState(false)
   const [words, setWords] = useState<{ amount: string; words: string } | null>(null)
 
   /* What has been receipted against it. Null until asked, and only asked for a document
@@ -832,6 +836,50 @@ export function DocumentEditor({
     }
   }, [savedTotal])
 
+  /*
+   * ENTER ADVANCES, IT NEVER SUBMITS (design system §04, rule 1). The grid is where the
+   * keystroke matters: at the end of the last line it opens another, which is what the
+   * person typing meant. `advanceFrom` decides; this focuses.
+   */
+  const sheet = useRef<HTMLDivElement>(null)
+  const focusNewLine = useRef(false)
+
+  const onKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (!isAdvanceKey(event.nativeEvent)) return
+      const container = sheet.current
+      if (container === null || !(event.target instanceof Element)) return
+
+      const advance = advanceFrom(container, event.target)
+      if (advance.kind === 'none') {
+        /* Still swallowed: a stray Enter must not reach a form or a default button. */
+        event.preventDefault()
+        return
+      }
+      event.preventDefault()
+      if (advance.kind === 'focus') {
+        advance.element.focus()
+        if (advance.element instanceof HTMLInputElement) advance.element.select()
+        return
+      }
+      if (!isEditable) return
+      focusNewLine.current = true
+      touch(() => setLines((current) => [...current, blankLine()]))
+    },
+    [isEditable, touch],
+  )
+
+  /* The new line exists only after React has drawn it, so the cursor follows here. */
+  useEffect(() => {
+    if (!focusNewLine.current) return
+    focusNewLine.current = false
+    const container = sheet.current
+    if (container === null) return
+    const rows = [...container.querySelectorAll('[data-line-key]')]
+    const first = fieldsIn(rows[rows.length - 1] ?? container)[0]
+    first?.focus()
+  }, [lines])
+
   const canBeginIssue =
     document !== null && canIssue(status) && canSave && !isBusy && confirming === null
   const section = definition.side === 'sales' ? 'Sales' : 'Purchases'
@@ -842,10 +890,31 @@ export function DocumentEditor({
    * every render, which updates the registry, which renders this screen again. The list
    * changes only when what it SAYS changes: whether each command can run.
    */
-  const actions = useRef({ beginIssue, duplicate })
+  /*
+   * ESCAPE STEPS BACK EXACTLY ONE LEVEL (design system §04, rule 2), and a field is a
+   * level: the first Escape leaves the box, the second leaves the document. It never
+   * throws typing away without asking. A dialog that is up keeps its own Escape, and the
+   * one keyboard listener is what holds that (`ownsEscape` in store/commands.tsx).
+   */
+  const stepBack = useCallback(() => {
+    const focused = window.document.activeElement
+    if (focused instanceof HTMLElement && sheet.current?.contains(focused) === true) {
+      if (isAdvanceField(focused) || focused instanceof HTMLTextAreaElement) {
+        focused.blur()
+        return
+      }
+    }
+    if (isDirty) {
+      setLeaving(true)
+      return
+    }
+    navigate(makeRoute('workspace', registerScreenId(kind)))
+  }, [isDirty, kind, navigate])
+
+  const actions = useRef({ beginIssue, duplicate, save, stepBack })
   useEffect(() => {
-    actions.current = { beginIssue, duplicate }
-  }, [beginIssue, duplicate])
+    actions.current = { beginIssue, duplicate, save, stepBack }
+  }, [beginIssue, duplicate, save, stepBack])
 
   useRegisterCommands(
     useMemo<Command[]>(
@@ -860,6 +929,23 @@ export function DocumentEditor({
           run: () => void actions.current.beginIssue(),
         },
         {
+          id: `documents.${kind}.save`,
+          title: 'Save this draft',
+          section,
+          keywords: ['save', 'draft', 'keep'],
+          shortcut: SHORTCUTS.save,
+          isDisabled: !isEditable || !canSave,
+          run: () => void actions.current.save(),
+        },
+        {
+          id: `documents.${kind}.close`,
+          title: `Back to the ${definition.pluralLabel.toLowerCase()}`,
+          section,
+          keywords: ['back', 'leave', 'register', 'escape'],
+          shortcut: SHORTCUTS.stepBack,
+          run: () => actions.current.stepBack(),
+        },
+        {
           id: `documents.${kind}.duplicate-line`,
           title: 'Duplicate this line',
           section,
@@ -869,7 +955,7 @@ export function DocumentEditor({
           run: () => actions.current.duplicate(),
         },
       ],
-      [canBeginIssue, isEditable, kind, label, section],
+      [canBeginIssue, canSave, definition.pluralLabel, isEditable, kind, label, section],
     ),
   )
 
@@ -917,8 +1003,16 @@ export function DocumentEditor({
             </Button>
           )}
           {isEditable && (
-            <Button disabled={!canSave} isBusy={isBusy} onClick={() => void save()}>
+            <Button
+              disabled={!canSave}
+              isBusy={isBusy}
+              aria-keyshortcuts="Control+S"
+              onClick={() => void save()}
+            >
               Save draft
+              <span className="button__keys" aria-hidden="true">
+                <Kbd shortcut={SHORTCUTS.save} />
+              </span>
             </Button>
           )}
           {document !== null && canIssue(status) && (
@@ -942,7 +1036,7 @@ export function DocumentEditor({
         </>
       }
     >
-      <div className="stack editor">
+      <div className="stack editor" ref={sheet} onKeyDown={onKeyDown}>
         {error && <FailureNotice error={error} context="ledger" />}
 
         <div className="editor__fields">
@@ -1143,6 +1237,33 @@ export function DocumentEditor({
        * saved document's — `beginIssue` saved first where there were edits — so the figure
        * here is main's for exactly what will be numbered.
        */}
+      {/* Escape, on a draft with typing in it that has not been saved. */}
+      <Dialog
+        isOpen={isLeaving}
+        onClose={() => setLeaving(false)}
+        size="sm"
+        title={`Leave this ${label}?`}
+        footer={
+          <>
+            <Button onClick={() => setLeaving(false)}>Keep editing</Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                setLeaving(false)
+                navigate(makeRoute('workspace', registerScreenId(kind)))
+              }}
+            >
+              Leave it
+            </Button>
+          </>
+        }
+      >
+        <p className="prose">
+          Everything typed since the last save is lost. Saving keeps it as a draft, which numbers
+          nothing and puts nothing in the books.
+        </p>
+      </Dialog>
+
       <Dialog
         isOpen={confirming !== null}
         onClose={() => setConfirming(null)}

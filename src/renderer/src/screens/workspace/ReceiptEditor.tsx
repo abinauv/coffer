@@ -41,12 +41,15 @@
  * separate way back drawn on the page.
  */
 
-import { useCallback, useEffect, useState } from 'react'
-import type { JSX } from 'react'
-import { Badge, Button, Input, Select } from '@renderer/components/atoms'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { JSX, KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { Badge, Button, Dialog, Input, Kbd, Select } from '@renderer/components/atoms'
 import { callApi } from '@renderer/lib/api'
+import type { Command } from '@renderer/lib/command-registry'
 import { makeRoute } from '@renderer/lib/routing'
 import { registerScreens, type ScreenContext, type ScreenDefinition } from '@renderer/lib/screens'
+import { SHORTCUTS } from '@renderer/lib/shortcuts'
+import { useRegisterCommands } from '@renderer/store/commands'
 import { useNumberFormat } from '@renderer/store/regime'
 import { useToasts } from '@renderer/store/toasts'
 import type {
@@ -62,6 +65,7 @@ import { MoneyField } from '../components/MoneyField'
 import { Notice } from '../components/Notice'
 import { ScreenFrame } from '../components/ScreenFrame'
 import { formatDate } from '../lib/dates'
+import { advanceFrom, isAdvanceField, isAdvanceKey } from '../lib/enter-advances'
 import { formatAmount } from '../lib/ledger-format'
 import {
   accountHint,
@@ -118,6 +122,8 @@ export function ReceiptEditor({
    * UNIQUE): the picker's rows ARE the documents, and there is nothing to add or remove. */
   const [allocations, setAllocations] = useState<Record<string, string>>({})
   const [isDirty, setDirty] = useState(false)
+  /* Escape asks before it throws typing away, and this is the question. */
+  const [isLeaving, setLeaving] = useState(false)
 
   /** Take main's answer as the truth, and clear the unsaved-edits mark. */
   const adopt = useCallback((next: ReceiptDto): void => {
@@ -300,6 +306,42 @@ export function ReceiptEditor({
     })
   }, [adopt, allocations, receipt, settled, show])
 
+  /*
+   * ENTER ADVANCES (design system §04, rule 1). There are no lines to open here — a
+   * receipt allocates against the documents that are already open — so Enter walks the
+   * fields and stops at the last one. Recording is Ctrl Enter, deliberately.
+   */
+  const sheet = useRef<HTMLDivElement>(null)
+  const onKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!isAdvanceKey(event.nativeEvent)) return
+    const container = sheet.current
+    if (container === null || !(event.target instanceof Element)) return
+    event.preventDefault()
+    const advance = advanceFrom(container, event.target)
+    if (advance.kind !== 'focus') return
+    advance.element.focus()
+    if (advance.element instanceof HTMLInputElement) advance.element.select()
+  }, [])
+
+  /* Escape: out of the field, then out of the voucher — asking first when there is typing
+   * that has not been saved. A dialog that is up keeps its own Escape (`ownsEscape`). */
+  const stepBack = useCallback(() => {
+    const focused = window.document.activeElement
+    if (
+      focused instanceof HTMLElement &&
+      sheet.current?.contains(focused) === true &&
+      (isAdvanceField(focused) || focused instanceof HTMLTextAreaElement)
+    ) {
+      focused.blur()
+      return
+    }
+    if (isDirty) {
+      setLeaving(true)
+      return
+    }
+    navigate(makeRoute('workspace', registerScreenId(kind)))
+  }, [isDirty, kind, navigate])
+
   const cancel = useCallback(async () => {
     if (receipt === null) return
     setBusy(true)
@@ -317,6 +359,50 @@ export function ReceiptEditor({
       body: `The entry is reversed and the ${settled} it settled are owed again. The number is kept.`,
     })
   }, [adopt, receipt, settled, show])
+
+  /* Rebuilt on every keystroke, so the commands call through a ref and the list itself
+   * changes only when what it says changes. See DocumentEditor for the loop this avoids. */
+  const actions = useRef({ record, saveAllocations, stepBack })
+  useEffect(() => {
+    actions.current = { record, saveAllocations, stepBack }
+  }, [record, saveAllocations, stepBack])
+
+  const canSaveAllocations = receipt !== null && canAllocate(status) && isDirty
+  const section = definition.side === 'sales' ? 'Sales' : 'Purchases'
+
+  useRegisterCommands(
+    useMemo<Command[]>(
+      () => [
+        {
+          id: `receipts.${kind}.record`,
+          title: `Record this ${label}`,
+          section,
+          keywords: ['record', 'post', 'money', label],
+          shortcut: SHORTCUTS.accept,
+          isDisabled: !canRecord || isBusy,
+          run: () => void actions.current.record(),
+        },
+        {
+          id: `receipts.${kind}.save`,
+          title: 'Save what it settles',
+          section,
+          keywords: ['save', 'allocate', 'settle'],
+          shortcut: SHORTCUTS.save,
+          isDisabled: !canSaveAllocations || isBusy,
+          run: () => void actions.current.saveAllocations(),
+        },
+        {
+          id: `receipts.${kind}.close`,
+          title: `Back to the ${definition.pluralLabel.toLowerCase()}`,
+          section,
+          keywords: ['back', 'leave', 'register', 'escape'],
+          shortcut: SHORTCUTS.stepBack,
+          run: () => actions.current.stepBack(),
+        },
+      ],
+      [canRecord, canSaveAllocations, definition.pluralLabel, isBusy, kind, label, section],
+    ),
+  )
 
   if (isReading) {
     return (
@@ -346,17 +432,29 @@ export function ReceiptEditor({
       actions={
         <>
           {isNew && (
-            <Button variant="primary" disabled={!canRecord || isBusy} onClick={() => void record()}>
+            <Button
+              variant="primary"
+              disabled={!canRecord || isBusy}
+              aria-keyshortcuts="Control+Enter"
+              onClick={() => void record()}
+            >
               Record {label}
+              <span className="button__keys" aria-hidden="true">
+                <Kbd shortcut={SHORTCUTS.accept} />
+              </span>
             </Button>
           )}
           {receipt !== null && canAllocate(status) && (
             <Button
               variant="primary"
               disabled={isBusy || !isDirty}
+              aria-keyshortcuts="Control+S"
               onClick={() => void saveAllocations()}
             >
               Save what it settles
+              <span className="button__keys" aria-hidden="true">
+                <Kbd shortcut={SHORTCUTS.save} />
+              </span>
             </Button>
           )}
           {receipt !== null && canCancel(status) && (
@@ -367,7 +465,7 @@ export function ReceiptEditor({
         </>
       }
     >
-      <div className="stack editor">
+      <div className="stack editor" ref={sheet} onKeyDown={onKeyDown}>
         {error && <FailureNotice error={error} context="ledger" />}
 
         {/*
@@ -482,6 +580,30 @@ export function ReceiptEditor({
           )}
         </div>
       </div>
+
+      {/* Escape, with typing on screen that has not been saved. */}
+      <Dialog
+        isOpen={isLeaving}
+        onClose={() => setLeaving(false)}
+        size="sm"
+        title={`Leave this ${label}?`}
+        footer={
+          <>
+            <Button onClick={() => setLeaving(false)}>Keep editing</Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                setLeaving(false)
+                navigate(makeRoute('workspace', registerScreenId(kind)))
+              }}
+            >
+              Leave it
+            </Button>
+          </>
+        }
+      >
+        <p className="prose">Everything typed since the last save is lost.</p>
+      </Dialog>
     </ScreenFrame>
   )
 }

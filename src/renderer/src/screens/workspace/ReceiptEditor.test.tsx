@@ -783,3 +783,99 @@ describe('the registrations', () => {
     }
   })
 })
+
+/*
+ * THE KEYBOARD (design system §04). A receipt has no lines to open, so Enter walks the
+ * fields; Ctrl Enter records it, as Ctrl Enter issues a document; Ctrl S saves what it
+ * settles, which posts nothing.
+ */
+describe('the keyboard', () => {
+  async function filled(): Promise<{
+    user: ReturnType<typeof userEvent.setup>
+    bridge: { callsTo(channel: string): readonly unknown[] }
+  }> {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<ReceiptEditor {...creating()} kind="receipt" />, {
+      bridge: bridgeFor(null),
+    })
+
+    await screen.findByRole('button', { name: /Record receipt/ })
+    await fillHeader(user)
+    return { user, bridge }
+  }
+
+  it('records it on Ctrl Enter, and says the key on the button', async () => {
+    const { user, bridge } = await filled()
+
+    const button = screen.getByRole('button', { name: /Record receipt/ })
+    expect(button).toHaveAttribute('aria-keyshortcuts', 'Control+Enter')
+    expect(button.querySelector('.kbd')).not.toBeNull()
+
+    await user.keyboard('{Control>}{Enter}{/Control}')
+
+    await waitFor(() => expect(bridge.callsTo('receipts:create')).toHaveLength(1))
+  })
+
+  it('advances through the fields on Enter, and records nothing', async () => {
+    const { user, bridge } = await filled()
+
+    await user.click(screen.getByLabelText('Reference'))
+    await user.keyboard('{Enter}')
+
+    expect(screen.getByLabelText('Narration')).toHaveFocus()
+    expect(bridge.callsTo('receipts:create')).toHaveLength(0)
+  })
+
+  it('saves what it settles on Ctrl S', async () => {
+    const user = userEvent.setup()
+    const { bridge } = renderScreen(<ReceiptEditor {...editing()} kind="receipt" />, {
+      bridge: bridgeFor(receipt()),
+    })
+
+    const box = await screen.findByLabelText(/Settle against/)
+    await user.type(box, '100.00')
+    await user.keyboard('{Control>}s{/Control}')
+
+    await waitFor(() => expect(bridge.callsTo('receipts:allocate')).toHaveLength(1))
+  })
+
+  it('steps back out of the field, then out of the voucher', async () => {
+    const user = userEvent.setup()
+    const navigate = vi.fn()
+    renderScreen(
+      <ReceiptEditor
+        {...screenContext({ route: testRoute('receipt', { id: 'rct-1' }), navigate })}
+        kind="receipt"
+      />,
+      { bridge: bridgeFor(receipt()) },
+    )
+
+    const box = await screen.findByLabelText(/Settle against/)
+    await user.click(box)
+    await user.keyboard('{Escape}')
+    expect(box).not.toHaveFocus()
+    expect(navigate).not.toHaveBeenCalled()
+
+    await user.keyboard('{Escape}')
+    expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ screenId: 'receipt-register' }))
+  })
+
+  it('asks before leaving with an allocation that has not been saved', async () => {
+    const user = userEvent.setup()
+    const navigate = vi.fn()
+    renderScreen(
+      <ReceiptEditor
+        {...screenContext({ route: testRoute('receipt', { id: 'rct-1' }), navigate })}
+        kind="receipt"
+      />,
+      { bridge: bridgeFor(receipt()) },
+    )
+
+    await user.type(await screen.findByLabelText(/Settle against/), '100.00')
+    await user.keyboard('{Escape}')
+    await user.keyboard('{Escape}')
+
+    expect(await screen.findByRole('dialog', { name: 'Leave this receipt?' })).toBeVisible()
+    expect(navigate).not.toHaveBeenCalled()
+  })
+})
