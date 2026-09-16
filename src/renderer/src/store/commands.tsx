@@ -64,6 +64,16 @@ export function CommandProvider({ children }: { children: ReactNode }): JSX.Elem
         if (!command.shortcut) continue
         if (!matchesShortcut(command.shortcut, event, current)) continue
         if (shouldIgnoreWhileTyping(command.shortcut, asTarget(event.target))) continue
+        /*
+         * A MODAL DIALOG OWNS ESCAPE WHILE IT IS UP, and this is the one place that can
+         * say so. The dialog asked a question and Escape answers it; a screen's own
+         * "step back" is behind it and must not act as well — and, worse, must not call
+         * `preventDefault`, because the platform closes a `<dialog>` as the DEFAULT
+         * ACTION of that keystroke. Swallowing it left the confirmation stuck open with
+         * nothing but the mouse to answer it. Seen in the running app, not in a test:
+         * happy-dom does not close a dialog on Escape either way.
+         */
+        if (ownsEscape(command.shortcut)) return
         if (command.isDisabled === true) return
         event.preventDefault()
         void command.run()
@@ -81,6 +91,12 @@ export function CommandProvider({ children }: { children: ReactNode }): JSX.Elem
   )
 
   return <CommandContext.Provider value={value}>{children}</CommandContext.Provider>
+}
+
+/** Whether this is a bare Escape while a modal dialog is open. See the listener. */
+function ownsEscape(shortcut: { key: string }): boolean {
+  if (shortcut.key.toLowerCase() !== 'escape') return false
+  return document.querySelector('dialog[open]') !== null
 }
 
 function asTarget(target: EventTarget | null): { tagName?: string; isContentEditable?: boolean } {
