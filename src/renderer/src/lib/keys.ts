@@ -64,6 +64,10 @@ export function shouldIgnoreWhileTyping(
   target: { tagName?: string; isContentEditable?: boolean } | null,
 ): boolean {
   if (!target) return false
+  /* ESCAPE IS NEVER TYPED, so it is never the field's. It is the step-back key in both
+   * maps (design system §04, rule 2), and from inside a field stepping back is exactly
+   * what it has to do — the editors take the first Escape to mean "out of this box". */
+  if (shortcut.key.toLowerCase() === 'escape') return false
   const isCaretKey = CARET_KEYS.has(shortcut.key.toLowerCase())
   if (!isCaretKey && (shortcut.ctrlOrCmd === true || shortcut.alt === true)) return false
   if (target.isContentEditable === true) return true

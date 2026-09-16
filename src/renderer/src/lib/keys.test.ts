@@ -64,6 +64,13 @@ describe('shouldIgnoreWhileTyping', () => {
   const bare: Shortcut = { key: '/' }
   const modified: Shortcut = { key: 'k', ctrlOrCmd: true }
 
+  /* Escape types nothing, so a field has no claim on it: it is the step-back key. */
+  it('never ignores Escape, whatever has focus', () => {
+    expect(shouldIgnoreWhileTyping({ key: 'Escape' }, { tagName: 'INPUT' })).toBe(false)
+    expect(shouldIgnoreWhileTyping({ key: 'Escape' }, { tagName: 'TEXTAREA' })).toBe(false)
+    expect(shouldIgnoreWhileTyping({ key: 'Escape' }, { isContentEditable: true })).toBe(false)
+  })
+
   it('suppresses an unmodified shortcut inside a text field', () => {
     expect(shouldIgnoreWhileTyping(bare, { tagName: 'INPUT' })).toBe(true)
     expect(shouldIgnoreWhileTyping(bare, { tagName: 'TEXTAREA' })).toBe(true)
