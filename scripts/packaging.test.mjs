@@ -150,3 +150,21 @@ test('the disk-image background and its Retina pair are 540 × 380 and twice tha
   assert.deepEqual(pngSize('background.png'), { width: 540, height: 380 })
   assert.deepEqual(pngSize('background@2x.png'), { width: 1080, height: 760 })
 })
+
+/*
+ * THE MAC TARGET NAMES NO ARCHITECTURE (B36).
+ *
+ * An `arch` list on a target overrides the command line, so `arch: [x64, arm64]` had each
+ * release runner package both slices with only its own native binaries installed. Both
+ * macOS jobs failed the afterPack check on the first rehearsal. The release matrix passes
+ * `--arm64` or `--x64`, and that has to be what decides.
+ */
+test('the macOS target leaves the architecture to the command line', () => {
+  const block = /\nmac:\n([\s\S]*?)\n(?=[a-z])/.exec(config)?.[1]
+  assert.ok(block !== undefined, 'electron-builder.yml has no mac: block')
+  const lines = block.split('\n').filter((line) => !line.trimStart().startsWith('#'))
+  assert.ok(
+    !lines.some((line) => /^\s+arch:/.test(line)),
+    'a mac target names its architectures, which overrides --arm64 and --x64 on the runners',
+  )
+})

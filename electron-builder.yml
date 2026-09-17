@@ -131,12 +131,19 @@ nsis:
 # ---------------------------------------------------------------------------------------
 # macOS — both architectures. Apple silicon and Intel each get their own dmg; a universal
 # binary would roughly double the download for no benefit to either user.
+#
+# NO ARCH LIST ON THE TARGET (B36). An `arch` here overrides the `--arm64` or `--x64` the
+# command line passes, so `arch: [x64, arm64]` made each release runner package BOTH — and
+# each runner has only its own architecture's native binaries, because npm installs the
+# optional package matching the host. The afterPack check refused the other slice on both
+# runners, and the first release rehearsal packaged no macOS build at all. Without the
+# list, the release matrix picks the architecture per runner, and `npm run build:mac`
+# packages the Mac it runs on.
 # ---------------------------------------------------------------------------------------
 mac:
   category: public.app-category.finance
   target:
     - target: dmg
-      arch: [x64, arm64]
   icon: build/icon.png
   darkModeSupport: true
   artifactName: ${productName}-${version}-macos-${arch}.${ext}
