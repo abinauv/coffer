@@ -97,3 +97,56 @@ test('the packaged-app hook is the one wired into afterPack', () => {
   assert.match(config, /^afterPack: \.\/scripts\/verify-packaged-app\.mjs$/m)
   assert.ok(fs.existsSync(path.join(root, 'scripts', 'verify-packaged-app.mjs')))
 })
+
+/*
+ * THE INSTALLER ARTWORK, READ AS BYTES.
+ *
+ * electron-builder picks these four up by name from build/, and a wrong one fails late: a
+ * BMP NSIS cannot load stops the Windows installer compiling on the release runner, and a
+ * disk-image background of the wrong size gives a Mac window of the wrong size. Neither is
+ * built by `npm run verify`, so the headers are checked here. They are rendered by
+ * `npm run brand:assets`, which writes them in exactly this form.
+ */
+
+function bmpHeader(file) {
+  const bytes = fs.readFileSync(path.join(root, 'build', file))
+  return {
+    magic: bytes.toString('ascii', 0, 2),
+    size: bytes.readUInt32LE(2),
+    length: bytes.length,
+    width: bytes.readInt32LE(18),
+    height: bytes.readInt32LE(22),
+    bitsPerPixel: bytes.readUInt16LE(28),
+    compression: bytes.readUInt32LE(30),
+  }
+}
+
+function pngSize(file) {
+  const bytes = fs.readFileSync(path.join(root, 'build', file))
+  assert.equal(bytes.toString('ascii', 1, 4), 'PNG', `${file} is not a PNG`)
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) }
+}
+
+test('the Windows installer images are uncompressed 24-bit BMPs of the sizes NSIS draws', () => {
+  for (const [file, width, height] of [
+    ['installerSidebar.bmp', 164, 314],
+    ['installerHeader.bmp', 150, 57],
+  ]) {
+    const header = bmpHeader(file)
+    assert.equal(header.magic, 'BM', `${file} is not a BMP`)
+    assert.equal(header.size, header.length, `${file} says it is a different size than it is`)
+    /* Positive height: bottom-up rows, which is what every BMP reader accepts. */
+    assert.deepEqual(
+      { width: header.width, height: header.height },
+      { width, height },
+      `${file} is not ${String(width)} × ${String(height)}`,
+    )
+    assert.equal(header.bitsPerPixel, 24, `${file} is not 24-bit`)
+    assert.equal(header.compression, 0, `${file} is compressed`)
+  }
+})
+
+test('the disk-image background and its Retina pair are 540 × 380 and twice that', () => {
+  assert.deepEqual(pngSize('background.png'), { width: 540, height: 380 })
+  assert.deepEqual(pngSize('background@2x.png'), { width: 1080, height: 760 })
+})
