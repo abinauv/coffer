@@ -110,6 +110,7 @@ beforeEach(() => {
     recover: vi.fn(),
     close: vi.fn(async () => undefined),
     changePassphrase: vi.fn(),
+    replaceRecoveryCodes: vi.fn(),
     backup: vi.fn(),
     restore: vi.fn(),
     addExisting: vi.fn(),

@@ -77,6 +77,8 @@ import type {
   PostingResult,
   ProfitAndLoss,
   RecoverCompanyInput,
+  RecoveryCodesIssued,
+  ReplaceRecoveryCodesInput,
   RestoreInput,
   SetBackupReminderInput,
   Result,
@@ -181,6 +183,16 @@ export interface CofferApi {
     recover(input: RecoverCompanyInput): Promise<Result<OpenCompanyResult>>
     close(): Promise<Result<void>>
     changePassphrase(input: ChangePassphraseInput): Promise<Result<void>>
+
+    /**
+     * Issue a fresh set of recovery codes for the open company, killing every code
+     * issued before — including the ones that have never been used.
+     *
+     * Needs the current passphrase, checked the same way opening the company checks it:
+     * the codes wrap the same key, and an unlocked machine on a desk is not proof of
+     * anything. The answer carries the codes once. Nothing can show them again.
+     */
+    replaceRecoveryCodes(input: ReplaceRecoveryCodesInput): Promise<Result<RecoveryCodesIssued>>
 
     /**
      * Writes one archive holding the database and its vault, and remembers it: the

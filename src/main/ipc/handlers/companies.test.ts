@@ -5,6 +5,7 @@ import type {
   CompanySummary,
   OpenCompanyResult,
   PassphraseStrength,
+  RecoveryCodesIssued,
   RegistrationCheck,
 } from '../../../shared/dto'
 import { IpcError } from '../errors'
@@ -29,6 +30,11 @@ const SUMMARY: CompanySummary = {
 }
 
 const OPENED: OpenCompanyResult = { company: SUMMARY, recoveryCodesRemaining: 5 }
+
+const ISSUED: RecoveryCodesIssued = {
+  recoveryCodes: ['AAAAA-BBBBB-CCCCC-DDDDD'],
+  recoveryCodesRemaining: 1,
+}
 
 const BACKUP: BackupResult = {
   archivePath: ARCHIVE,
@@ -81,6 +87,7 @@ beforeEach(() => {
     recover: vi.fn(async () => OPENED),
     close: vi.fn(async () => undefined),
     changePassphrase: vi.fn(async () => undefined),
+    replaceRecoveryCodes: vi.fn(async () => ISSUED),
     backup: vi.fn(async () => BACKUP),
     setBackupReminder: vi.fn(async () => ({ ...SUMMARY, remindsAboutBackups: false })),
     restore: vi.fn(async () => SUMMARY),
@@ -224,6 +231,38 @@ describe('companies:changePassphrase', () => {
     )
 
     expect(error.code).toBe('INVALID_ARGUMENT')
+  })
+})
+
+describe('companies:replaceRecoveryCodes', () => {
+  it('passes the passphrase to the service and answers with the codes', async () => {
+    await expect(call(handlers.replaceRecoveryCodes, { passphrase: PASSPHRASE })).resolves.toEqual({
+      ok: true,
+      data: ISSUED,
+    })
+    expect(service.replaceRecoveryCodes).toHaveBeenCalledWith({ passphrase: PASSPHRASE })
+  })
+
+  /* An empty passphrase reaches the service, which answers PASSPHRASE_EMPTY — a state the
+   * UI has something to say about. INVALID_ARGUMENT here would throw that away. */
+  it('lets an empty passphrase through to the service', async () => {
+    await call(handlers.replaceRecoveryCodes, { passphrase: '' })
+
+    expect(service.replaceRecoveryCodes).toHaveBeenCalledWith({ passphrase: '' })
+  })
+
+  it('rejects a missing passphrase', async () => {
+    const error = await rejection(() => call(handlers.replaceRecoveryCodes, {}))
+
+    expect(error.code).toBe('INVALID_ARGUMENT')
+  })
+
+  /* The codes are the one thing on this boundary that must not be recorded: no path is
+   * granted, and nothing about them is kept where a later call could read them back. */
+  it('records nothing about the codes it just handed over', async () => {
+    await call(handlers.replaceRecoveryCodes, { passphrase: PASSPHRASE })
+
+    expect(allowlist.isAllowed(ISSUED.recoveryCodes[0] ?? '')).toBe(false)
   })
 })
 
