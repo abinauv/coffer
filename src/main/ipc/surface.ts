@@ -146,6 +146,10 @@ export const API_SURFACE: ApiSurface = {
     dayBook: true,
     aged: true,
     overviewFigures: true,
+    taxReturn: true,
+    exportTaxReturn: true,
+    markTaxReturnSeen: true,
+    taxReturnsDue: true,
   },
 }
 

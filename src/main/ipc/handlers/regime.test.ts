@@ -29,6 +29,7 @@ const DESCRIPTION: RegimeDescription = {
   taxRates: [{ ratePct: '18', label: '18%', note: 'The main slab.' }],
   taxComponents: [{ code: 'CGST', label: 'Central GST', levy: 'both' }],
   classification: { code: 'HSN', label: 'HSN / SAC', validLengths: [4, 6, 8] },
+  returnForms: [],
 }
 
 let service: RegimeService

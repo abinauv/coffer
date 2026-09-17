@@ -18,8 +18,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TRADE_SIDES } from '../../../shared/documents'
-import type { AgedReport, OverviewFigures } from '../../../shared/dto'
-import { createReportHandlers, type ReportService } from './reports'
+import type { AgedReport, OverviewFigures, TaxReturn } from '../../../shared/dto'
+import { IpcError } from '../errors'
+import { createReportHandlers, type ReportService, type TaxReturnsService } from './reports'
 
 const AGED: AgedReport = {
   side: 'sales',
@@ -34,7 +35,26 @@ const AGED: AgedReport = {
   ties: true,
 }
 
+const RETURN: TaxReturn = {
+  form: { id: 'gstr-1', label: 'GSTR-1', description: 'Outward supplies.' },
+  period: { from: '2026-08-01', to: '2026-08-31', label: 'August 2026' },
+  packVersion: '2026.1',
+  isProvisional: true,
+  notice: 'Check it before you upload it.',
+  rows: [],
+  total: {
+    id: 'reported',
+    label: 'Total',
+    what: 'Everything reported',
+    documentCount: 0,
+    taxableValue: '0.00',
+    tax: '0.00',
+  },
+  issues: [],
+}
+
 let service: ReportService
+let taxReturns: TaxReturnsService
 let handlers: ReturnType<typeof createReportHandlers>
 
 beforeEach(() => {
@@ -46,7 +66,13 @@ beforeEach(() => {
     aged: vi.fn(async () => AGED),
     overviewFigures: vi.fn(async () => FIGURES),
   } as unknown as ReportService
-  handlers = createReportHandlers(service)
+  taxReturns = {
+    taxReturn: vi.fn(async () => RETURN),
+    exportTaxReturn: vi.fn(async () => ({ path: '/home/a/gstr-1-2026-08.json' })),
+    markTaxReturnSeen: vi.fn(async () => undefined),
+    taxReturnsDue: vi.fn(async () => []),
+  }
+  handlers = createReportHandlers(service, taxReturns)
 })
 
 const FIGURES: OverviewFigures = {
@@ -116,5 +142,63 @@ describe('aged', () => {
 
   it('refuses a request that is not an object at all', () => {
     expect(() => handlers.aged.parseArgs(['sales'])).toThrow(/input/)
+  })
+})
+
+describe('tax returns', () => {
+  const input = { formId: 'gstr-1', from: '2026-08-01', to: '2026-08-31' }
+
+  it('passes a form and a period through, and wraps the answer', async () => {
+    const [parsed] = handlers.taxReturn.parseArgs([input])
+    expect(parsed).toEqual(input)
+    await expect(handlers.taxReturn.handle(input)).resolves.toEqual({ ok: true, data: RETURN })
+    expect(taxReturns.taxReturn).toHaveBeenCalledWith(input)
+  })
+
+  /* The form is checked against the regime in main. A handler keeping its own list would
+   * be a second answer to "which forms exist", and the first to fall out of step. */
+  it('does not decide which forms exist', () => {
+    expect(handlers.taxReturn.parseArgs([{ ...input, formId: 'anything-at-all' }])).toEqual([
+      { ...input, formId: 'anything-at-all' },
+    ])
+  })
+
+  /* A date compared as text: '2026-8-1' sorts before '2026-08-01' and would quietly
+   * choose a different month rather than failing. */
+  it('refuses a date that is not a date', () => {
+    for (const bad of [
+      { ...input, from: '2026-8-1' },
+      { ...input, to: 'August' },
+      { formId: 'gstr-1' },
+      { ...input, formId: '' },
+      { ...input, formId: 'x'.repeat(65) },
+    ]) {
+      expect(() => handlers.taxReturn.parseArgs([bad])).toThrow(IpcError)
+    }
+  })
+
+  it('answers an export with the path, or null when cancelled', async () => {
+    await expect(handlers.exportTaxReturn.handle(input)).resolves.toEqual({
+      ok: true,
+      data: { path: '/home/a/gstr-1-2026-08.json' },
+    })
+  })
+
+  it('marks a return seen and answers nothing', async () => {
+    await expect(handlers.markTaxReturnSeen.handle(input)).resolves.toEqual({
+      ok: true,
+      data: undefined,
+    })
+    expect(taxReturns.markTaxReturnSeen).toHaveBeenCalledWith(input)
+  })
+
+  it('asks what is due as at a date', async () => {
+    expect(handlers.taxReturnsDue.parseArgs([{ asAtDate: '2026-09-17' }])).toEqual([
+      { asAtDate: '2026-09-17' },
+    ])
+    await expect(handlers.taxReturnsDue.handle({ asAtDate: '2026-09-17' })).resolves.toEqual({
+      ok: true,
+      data: [],
+    })
   })
 })

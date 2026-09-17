@@ -30,7 +30,11 @@ import { type NumberingService, createNumberingHandlers } from './handlers/numbe
 import { type PartiesService, createPartiesHandlers } from './handlers/parties'
 import { type ReceiptsService, createReceiptsHandlers } from './handlers/receipts'
 import { type RegimeService, createRegimeHandlers } from './handlers/regime'
-import { type ReportService, createReportHandlers } from './handlers/reports'
+import {
+  type ReportService,
+  type TaxReturnsService,
+  createReportHandlers,
+} from './handlers/reports'
 import { type SystemEnvironment, createSystemHandlers } from './handlers/system'
 import { type UnitsService, createUnitsHandlers } from './handlers/units'
 import { type PathAllowlist, createPathAllowlist } from './path-access'
@@ -48,7 +52,7 @@ export type { NumberingService } from './handlers/numbering'
 export type { PartiesService } from './handlers/parties'
 export type { ReceiptsService } from './handlers/receipts'
 export type { RegimeService } from './handlers/regime'
-export type { ReportService } from './handlers/reports'
+export type { ReportService, TaxReturnsService } from './handlers/reports'
 export type { SystemEnvironment } from './handlers/system'
 export type { UnitsService } from './handlers/units'
 export type { IpcLogger, IpcTransport } from './registry'
@@ -155,6 +159,14 @@ export interface IpcDependencies {
    */
   reports: ReportService
   /**
+   * THE INJECTION POINT for src/main/tax-returns.
+   *
+   * Behind the same contract group as `reports`, and a separate object for the reason
+   * `printing` is one: it needs a save dialog, and a regime rather than the journal
+   * answers it.
+   */
+  taxReturns: TaxReturnsService
+  /**
    * Directories `system.revealInFileManager` may open before the user has picked
    * anything. In production this is the application data directory and nothing else.
    */
@@ -208,7 +220,10 @@ export function registerIpcHandlers(dependencies: IpcDependencies): HandlerRegis
     createCompanyProfileHandlers(dependencies.companyProfile),
   )
   registry.registerGroup('regime', createRegimeHandlers(dependencies.regime))
-  registry.registerGroup('reports', createReportHandlers(dependencies.reports))
+  registry.registerGroup(
+    'reports',
+    createReportHandlers(dependencies.reports, dependencies.taxReturns),
+  )
 
   assertApiSurfaceComplete(registry)
 

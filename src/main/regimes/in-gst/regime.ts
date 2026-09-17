@@ -21,6 +21,7 @@ import { validateGstin } from './gstin'
 import { jurisdictionName, jurisdictions } from './jurisdictions'
 import { INDIA_NUMBER_FORMAT } from './number-format'
 import { placeOfSupply } from './place-of-supply'
+import { indiaReturns } from './returns/prepare'
 import { computeTax } from './tax'
 
 export const inGstRegime: TaxRegime = {
@@ -49,4 +50,5 @@ export const inGstRegime: TaxRegime = {
   amountInWords,
 
   filings: INDIA_FILINGS,
+  returns: indiaReturns,
 }

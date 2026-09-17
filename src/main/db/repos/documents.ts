@@ -60,6 +60,7 @@ import { definitionOf, documentTotals, type DocumentLine } from '@main/domain/do
 import type {
   CountDocumentsInput,
   CreateTaxedDocumentInput,
+  DateString,
   Document,
   DocumentLineDto,
   ExportTaxPayment,
@@ -218,6 +219,33 @@ function filteredDocuments(db: CofferDb, input: CountDocumentsInput) {
  * column that can disagree with the row it copied, and the original is editable while it
  * is a draft — the number and the date are the ORIGINAL's facts and stay its own.
  */
+/**
+ * Every issued or cancelled document dated inside a period, oldest first. Ids and kinds.
+ *
+ * NO PAGE CAP, AND THAT IS THE POINT OF A SEPARATE QUERY. `listDocuments` stops at
+ * `MAX_DOCUMENT_PAGE`, which is right for a register and wrong for a return: a return
+ * built from the first five hundred documents of a busy month would tie out, file, and be
+ * short by everything after them. Drafts are left out because they have no number and
+ * are not in any return; the kinds that post nothing are the caller's to leave out, by
+ * `postsToLedger`, since that is a fact about the kind rather than about a query.
+ *
+ * Both ends are inclusive, as a return period is.
+ */
+export async function documentIdsInPeriod(
+  db: CofferDb,
+  period: { from: DateString; to: DateString },
+): Promise<{ id: string; kind: string }[]> {
+  return db
+    .selectFrom('documents')
+    .select(['documents.id as id', 'documents.kind as kind'])
+    .where('documents.status', '!=', 'draft')
+    .where('documents.document_date', '>=', period.from)
+    .where('documents.document_date', '<=', period.to)
+    .orderBy('documents.document_date', 'asc')
+    .orderBy('documents.number', 'asc')
+    .execute()
+}
+
 export async function getDocument(db: CofferDb, id: string): Promise<Document | null> {
   const row = await db
     .selectFrom('documents')

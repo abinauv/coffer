@@ -30,6 +30,8 @@
  * which is the decision severity exists to support.
  */
 
+import { RegimeRefusal } from '../../errors'
+
 /** A refusal. Carries a stable, machine-readable code. */
 export type ReturnErrorCode =
   /** `from` is after `to`, or either is not a date. There is no period to file. */
@@ -50,15 +52,21 @@ export type ReturnErrorCode =
   | 'RETURN_PACK_VALUE_INVALID'
   /** Two documents in one period sharing a kind and a number. */
   | 'RETURN_DOCUMENT_NUMBER_REPEATED'
+  /** A form this regime does not prepare. Asked for by id, from outside the regime. */
+  | 'RETURN_FORM_UNKNOWN'
 
-/** A refusal from the return builders. */
-export class ReturnError extends Error {
-  readonly code: ReturnErrorCode
+/**
+ * A refusal from the return builders.
+ *
+ * A `RegimeRefusal`, so the IPC boundary maps its code without importing this module:
+ * nothing above `regimes/` may name the country a refusal came from (CONVENTIONS §1.6).
+ */
+export class ReturnError extends RegimeRefusal {
+  declare readonly code: ReturnErrorCode
 
   constructor(code: ReturnErrorCode, message: string, options?: ErrorOptions) {
-    super(message, options)
+    super(code, message, options)
     this.name = 'ReturnError'
-    this.code = code
   }
 }
 
