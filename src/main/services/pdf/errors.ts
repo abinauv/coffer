@@ -17,6 +17,17 @@ export type PrintErrorCode =
   | 'COMPANY_PROFILE_MISSING'
   /** The document's party was not supplied. A caller bug — it is a foreign key. */
   | 'PARTY_MISSING'
+  /*
+   * The three the printing service raises. They are here rather than in a second error
+   * type because a caller catching "the print refused" wants one `catch`, and the UI
+   * branches on the code either way.
+   */
+  /** A draft. It has no number, and an unnumbered invoice must not reach paper. */
+  | 'DOCUMENT_NOT_ISSUED'
+  /** No copies were asked for. Printing the original instead would be a guess. */
+  | 'NO_COPIES_REQUESTED'
+  /** The page was rendered and the printer, the window or the file refused it. */
+  | 'PRINT_FAILED'
 
 /** A refusal from the print service. Carries a stable, machine-readable code. */
 export class PrintError extends Error {

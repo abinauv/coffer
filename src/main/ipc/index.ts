@@ -19,7 +19,11 @@ import {
   type CompanyProfileService,
   createCompanyProfileHandlers,
 } from './handlers/company-profile'
-import { type DocumentsService, createDocumentsHandlers } from './handlers/documents'
+import {
+  type DocumentsService,
+  type PrintingService,
+  createDocumentsHandlers,
+} from './handlers/documents'
 import { type ItemsService, createItemsHandlers } from './handlers/items'
 import { type LedgerService, createLedgerHandlers } from './handlers/ledger'
 import { type NumberingService, createNumberingHandlers } from './handlers/numbering'
@@ -37,7 +41,7 @@ import { apiChannels } from './surface'
 export type { ErrorMapper } from './errors'
 export type { CompanyService } from './handlers/companies'
 export type { CompanyProfileService } from './handlers/company-profile'
-export type { DocumentsService } from './handlers/documents'
+export type { DocumentsService, PrintingService } from './handlers/documents'
 export type { ItemsService } from './handlers/items'
 export type { LedgerService } from './handlers/ledger'
 export type { NumberingService } from './handlers/numbering'
@@ -109,6 +113,14 @@ export interface IpcDependencies {
    * party to do it, which is why it is a service and not a face of `ledger`.
    */
   documents: DocumentsService
+  /**
+   * THE INJECTION POINT for src/main/printing.
+   *
+   * Behind the same contract group as `documents`, and a separate object on purpose: it
+   * is the one service in this list that needs a Chromium to do its work, and the one
+   * that writes nothing to the books. See the note above `PrintingService`.
+   */
+  printing: PrintingService
   /**
    * THE INJECTION POINT for src/main/receipts.
    *
@@ -185,7 +197,10 @@ export function registerIpcHandlers(dependencies: IpcDependencies): HandlerRegis
   registry.registerGroup('parties', createPartiesHandlers(dependencies.parties))
   registry.registerGroup('items', createItemsHandlers(dependencies.items))
   registry.registerGroup('units', createUnitsHandlers(dependencies.units))
-  registry.registerGroup('documents', createDocumentsHandlers(dependencies.documents))
+  registry.registerGroup(
+    'documents',
+    createDocumentsHandlers(dependencies.documents, dependencies.printing),
+  )
   registry.registerGroup('receipts', createReceiptsHandlers(dependencies.receipts))
   registry.registerGroup('numbering', createNumberingHandlers(dependencies.numbering))
   registry.registerGroup(

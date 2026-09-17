@@ -13,11 +13,19 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { DocumentStatusDto } from '../../../shared/dto'
+import type { DocumentStatusDto, PrintPreview } from '../../../shared/dto'
 import { IpcError } from '../errors'
-import { createDocumentsHandlers, type DocumentsService } from './documents'
+import { createDocumentsHandlers, type DocumentsService, type PrintingService } from './documents'
+
+const PREVIEW: PrintPreview = {
+  imageDataUri: 'data:image/png;base64,iVBORw0KGgo=',
+  widthPx: 794,
+  heightPx: 1123,
+  copyCount: 1,
+}
 
 let service: DocumentsService
+let printing: PrintingService
 let handlers: ReturnType<typeof createDocumentsHandlers>
 
 beforeEach(() => {
@@ -34,7 +42,12 @@ beforeEach(() => {
     offset: vi.fn(async () => ({}) as never),
     openForOffset: vi.fn(async () => []),
   }
-  handlers = createDocumentsHandlers(service)
+  printing = {
+    renderPrint: vi.fn(async () => PREVIEW),
+    savePdf: vi.fn(async () => ({ path: '/tmp/INV-0001.pdf' })),
+    print: vi.fn(async () => undefined),
+  }
+  handlers = createDocumentsHandlers(service, printing)
 })
 
 const parse = (method: keyof typeof handlers, ...raw: unknown[]): unknown[] =>
@@ -121,7 +134,7 @@ describe('count', () => {
 
   it('wraps the number the service answers', async () => {
     service.count = vi.fn(async () => 184)
-    handlers = createDocumentsHandlers(service)
+    handlers = createDocumentsHandlers(service, printing)
 
     await expect(handlers.count.handle({ kind: 'sales-invoice' })).resolves.toEqual({
       ok: true,
@@ -281,7 +294,7 @@ describe('issue and cancel', () => {
   it('wraps what the service answers', async () => {
     const document = { id: 'd1', number: 'INV/2026-27/0001' } as never
     service.issue = vi.fn(async () => document)
-    handlers = createDocumentsHandlers(service)
+    handlers = createDocumentsHandlers(service, printing)
 
     await expect(handlers.issue.handle({ id: 'd1' })).resolves.toEqual({
       ok: true,

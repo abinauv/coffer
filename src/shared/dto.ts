@@ -2110,6 +2110,71 @@ export interface OpenDocumentsInput {
   exceptReceiptId?: string
 }
 
+// ---- Printing a document --------------------------------------------------
+
+/*
+ * The transport side of src/main/services/pdf.
+ *
+ * NOTHING HERE CARRIES THE PAGE ITSELF except the preview image. The HTML that becomes a
+ * PDF is built in main, rendered in main, and never reaches the renderer — a document
+ * whose markup crossed the boundary could be altered before it was printed, and an
+ * invoice is the one artefact in this product that somebody outside the business reads.
+ * So the renderer says which document and what to put on it, and gets back a picture.
+ */
+
+/** Which of the three copies a rendering is. `InvoiceCopy` in services/pdf/model.ts. */
+export type PrintCopy = 'original' | 'duplicate' | 'triplicate'
+
+/**
+ * The blocks the user may leave off.
+ *
+ * Both default to on and both are genuinely optional on a real invoice: the words are
+ * required on some documents and noise on others, and the classification summary is a
+ * return-filing aid rather than something the recipient needs. Everything else on the
+ * page is either required or follows from the document, so there is nothing else to
+ * offer — a longer list would be a list of ways to print a wrong invoice.
+ */
+export interface PrintInclude {
+  /** The grand total written out in the regime's words. */
+  amountInWords: boolean
+  /** The per-classification fold at the foot. `classification.label` names it. */
+  hsnSummary: boolean
+}
+
+export interface PrintDocumentInput {
+  id: string
+  /**
+   * Which copies to produce, in the order they are wanted.
+   *
+   * Empty is refused rather than defaulted: a print of no copies is a mistake, and
+   * quietly printing the original would be this layer guessing at intent.
+   */
+  copies: readonly PrintCopy[]
+  include: PrintInclude
+}
+
+/** A picture of page one, for the dialog to show. */
+export interface PrintPreview {
+  /**
+   * PNG, as a `data:` URI.
+   *
+   * PAGE ONE OF THE FIRST COPY, AND ONLY THAT. It is a screenshot of the rendered page,
+   * not a rendering of the PDF, so a document that runs to three pages previews its
+   * first. The dialog says so rather than implying the preview is the whole document.
+   */
+  imageDataUri: string
+  /** The pixel size of the image, so the dialog reserves the right box before it loads. */
+  widthPx: number
+  heightPx: number
+  /** How many copies this run would produce. The preview shows one of them. */
+  copyCount: number
+}
+
+/** Where a PDF went, or null when the user cancelled the save dialog. */
+export interface SavePdfResult {
+  path: string | null
+}
+
 // ---- Warehouses and the stock ledger (0017-0019) ---------------------------
 
 /*

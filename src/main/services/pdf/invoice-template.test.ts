@@ -31,7 +31,12 @@ import { escapeHtml } from './escape'
 import { isFormattableDecimal } from './format'
 import { buildInvoicePrintModel } from './invoice-model'
 import { PAGE } from './invoice-styles'
-import { renderInvoiceCopies, renderInvoiceHtml, headingFor } from './invoice-template'
+import {
+  renderInvoiceCopies,
+  renderInvoiceHtml,
+  renderInvoiceRun,
+  headingFor,
+} from './invoice-template'
 import { COPY_MARKINGS, INVOICE_COPIES, type InvoiceCopy, type InvoicePrintModel } from './model'
 import fixtures from './__fixtures__/invoices.json'
 
@@ -907,5 +912,124 @@ describe('the blocks the company profile cannot hold yet', () => {
 
   it('prints no terms block for an empty list, which is the same as none', () => {
     expect(renderInvoiceHtml({ ...fullModel(), terms: [] })).not.toContain('Terms')
+  })
+})
+
+describe('the blocks a print run may leave off', () => {
+  it('prints both unless told otherwise', () => {
+    const page = renderInvoiceHtml(intraState)
+
+    expect(page).toContain('Amount in words')
+    expect(page).toContain(headingOfHsn())
+  })
+
+  it('leaves the words off, and nothing else with them', () => {
+    const page = renderInvoiceHtml(intraState, { amountInWords: false })
+
+    expect(page).not.toContain('Amount in words')
+    /* The grand total is still on the page — it is the words that were declined. */
+    expect(rowStartingWith(page, 'Grand total (INR)')).toHaveLength(2)
+    expect(page).toContain(headingOfHsn())
+  })
+
+  it('leaves the classification summary off, and nothing else with it', () => {
+    const page = renderInvoiceHtml(intraState, { hsnSummary: false })
+
+    expect(page).not.toContain(headingOfHsn())
+    expect(page).toContain('Amount in words')
+  })
+
+  it('leaves both off when both are declined', () => {
+    const page = renderInvoiceHtml(intraState, { amountInWords: false, hsnSummary: false })
+
+    expect(page).not.toContain('Amount in words')
+    expect(page).not.toContain(headingOfHsn())
+    /* Still an invoice: the lines and the total are not optional. */
+    expect(rowStartingWith(page, 'Grand total (INR)')).toHaveLength(2)
+  })
+})
+
+/** What the classification summary is headed, off the regime rather than typed here. */
+function headingOfHsn(): string {
+  return `${INDIA_DESCRIPTION.classification.label} summary`
+}
+
+describe('a run of copies, as one document', () => {
+  it('puts every copy in one page, each marked', () => {
+    const run = renderInvoiceRun(intraState, ['original', 'duplicate', 'triplicate'])
+
+    expect(run.match(/<!doctype html>/gi)).toHaveLength(1)
+    expect(run.match(/class="doc"/g)).toHaveLength(3)
+    for (const copy of INVOICE_COPIES) expect(run).toContain(COPY_MARKINGS[copy])
+  })
+
+  it('renders one copy as one body, the same as rendering it alone', () => {
+    const run = renderInvoiceRun(intraState, ['original'])
+
+    expect(run.match(/class="doc"/g)).toHaveLength(1)
+    expect(textOf(run)).toBe(textOf(renderInvoiceHtml(intraState, { copy: 'original' })))
+  })
+
+  /* Three copies of one invoice cannot disagree about a figure: the model is built once
+   * and the copy decides only the marking. */
+  it('prints the same grand total on every copy', () => {
+    const run = renderInvoiceRun(intraState, ['original', 'duplicate', 'triplicate'])
+    const totals = rowsOf(run).filter((cells) => cells[0] === 'Grand total (INR)')
+
+    expect(totals).toHaveLength(3)
+    expect(new Set(totals.map((cells) => cells[1])).size).toBe(1)
+  })
+
+  it('refuses a run of no copies rather than producing an empty page', () => {
+    expect(() => renderInvoiceRun(intraState, [])).toThrow(/at least one copy/)
+  })
+
+  it('carries the include flags into every copy', () => {
+    const run = renderInvoiceRun(intraState, ['original', 'duplicate'], { amountInWords: false })
+
+    expect(run).not.toContain('Amount in words')
+    expect(run.match(/class="doc"/g)).toHaveLength(2)
+  })
+})
+
+describe('the heading font the page carries', () => {
+  const FONT = { family: 'Coffer Print Serif', source: 'data:font/woff2;base64,d09GMgABAAA=' }
+
+  it('embeds the face and points the headings at it', () => {
+    const page = renderInvoiceHtml(intraState, { headingFont: FONT })
+
+    expect(page).toContain("@font-face{font-family:'Coffer Print Serif'")
+    expect(page).toContain(FONT.source)
+  })
+
+  it('prints in the machine own serif when no font was supplied', () => {
+    expect(renderInvoiceHtml(intraState)).not.toContain('@font-face')
+  })
+
+  /*
+   * THE ONE VALUE IN THIS MODULE THAT REACHES THE PAGE WITHOUT GOING THROUGH `html`, so
+   * it is checked rather than trusted. A source that is not a woff2 data URI, or a family
+   * that is not plain letters, is dropped — it cannot close the declaration and open a
+   * rule of its own.
+   */
+  it('drops a family that could close the declaration', () => {
+    const page = renderInvoiceHtml(intraState, {
+      headingFont: { ...FONT, family: "x';} body{display:none} @font-face{font-family:'y" },
+    })
+
+    expect(page).not.toContain('display:none')
+    expect(page).not.toContain('@font-face')
+  })
+
+  it('drops a source that is not a font', () => {
+    for (const source of [
+      'https://example.com/font.woff2',
+      'data:text/html;base64,PHNjcmlwdD4=',
+      "data:font/woff2;base64,AAA') format('woff2');} body{display:none",
+    ]) {
+      expect(renderInvoiceHtml(intraState, { headingFont: { ...FONT, source } })).not.toContain(
+        '@font-face',
+      )
+    }
   })
 })

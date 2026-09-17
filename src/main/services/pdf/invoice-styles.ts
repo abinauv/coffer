@@ -53,6 +53,25 @@
  * browsers drop backgrounds when printing unless told not to.
  */
 
+/**
+ * The two greys on the page, named.
+ *
+ * They were `#eee` and `#f4f4f4` written where they were used, which is two magic numbers
+ * that have to stay in a relationship nobody stated: the heading band must read as darker
+ * than the total row beneath it, and both must survive a laser printer's rendering of a
+ * light tint. Named here so that changing one is a decision rather than a search.
+ *
+ * Deliberately not tokens from the app's palette. This page is ink on paper and has no
+ * theme; a printed invoice that changed colour with the user's dark-mode setting would be
+ * a bug, and `screens.css`'s print block makes the same choice.
+ */
+export const SHADE = {
+  /** Column headings. The darker of the two. */
+  head: '#eeeeee',
+  /** Total rows under a summary table. */
+  row: '#f4f4f4',
+} as const
+
 /** A4, and the margins the page is laid out inside. Millimetres, per the header. */
 export const PAGE = {
   marginTopMm: 10,
@@ -85,6 +104,14 @@ body {
 
 .doc {
   width: 100%;
+}
+
+/* Each copy after the first starts a new sheet. A run of three is one document — one
+ * print job and one file — rather than three, which is what "print all three" means to
+ * the person holding the paper. See renderInvoiceRun in invoice-template.ts. */
+.doc + .doc {
+  break-before: page;
+  page-break-before: always;
 }
 
 /* Figures are read down a column, so every digit is the same width and the column ends
@@ -343,7 +370,7 @@ body {
 }
 
 .grid thead th {
-  background: #eee;
+  background: ${SHADE.head};
   text-align: center;
   font-size: 7pt;
 }
@@ -351,7 +378,7 @@ body {
 .grid tfoot td,
 .grid tfoot th {
   font-weight: 700;
-  background: #f4f4f4;
+  background: ${SHADE.row};
 }
 
 .totals {

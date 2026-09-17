@@ -4,7 +4,7 @@ import type { AppInfo, CompanySummary, Result } from '../../shared/dto'
 import type { CompanyService } from './handlers/companies'
 import type { LedgerService } from './handlers/ledger'
 import type { CompanyProfileService } from './handlers/company-profile'
-import type { DocumentsService } from './handlers/documents'
+import type { DocumentsService, PrintingService } from './handlers/documents'
 import type { ItemsService } from './handlers/items'
 import type { NumberingService } from './handlers/numbering'
 import type { PartiesService } from './handlers/parties'
@@ -56,6 +56,7 @@ let units: UnitsService
 let numbering: NumberingService
 let companyProfile: CompanyProfileService
 let documents: DocumentsService
+let printing: PrintingService
 let receipts: ReceiptsService
 let regime: RegimeService
 let reports: ReportService
@@ -77,6 +78,7 @@ function dependencies(overrides: Partial<IpcDependencies> = {}): IpcDependencies
     units,
     numbering,
     documents,
+    printing,
     companyProfile,
     receipts,
     regime,
@@ -190,6 +192,12 @@ beforeEach(() => {
     issue: vi.fn(),
     cancel: vi.fn(),
   } as unknown as DocumentsService
+
+  printing = {
+    renderPrint: vi.fn(),
+    savePdf: vi.fn(),
+    print: vi.fn(),
+  } as unknown as PrintingService
 
   receipts = {
     list: vi.fn(async () => []),

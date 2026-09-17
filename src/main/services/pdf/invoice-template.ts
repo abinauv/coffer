@@ -54,6 +54,7 @@ import {
   type InvoiceCopy,
   type InvoicePrintModel,
   type InvoiceRenderOptions,
+  type PrintFontFace,
   type PrintBankDetails,
   type PrintImage,
   type PrintParty,
@@ -500,11 +501,17 @@ export function renderInvoiceHtml(
   model: InvoicePrintModel,
   options: InvoiceRenderOptions = {},
 ): string {
-  const copy = options.copy ?? 'original'
-  const definition = definitionOf(model.kind)
-  const title = `${definition.label} ${model.number ?? ''}`.trim()
+  return wrapInDocument(model, [invoiceBody(model, options)], options)
+}
 
-  const body = html`<div class="doc">
+/** One copy's markup, without the document around it. */
+function invoiceBody(model: InvoicePrintModel, options: InvoiceRenderOptions): Html {
+  const copy = options.copy ?? 'original'
+  /* Both blocks are on unless the caller said otherwise — see `InvoiceRenderOptions`. */
+  const withWords = options.amountInWords ?? true
+  const withHsn = options.hsnSummary ?? true
+
+  return html`<div class="doc">
     ${masthead(model, copy)}
     <div class="parties">
       ${partyBox('Supplier', model.supplier, model.registrationLabel)}
@@ -520,11 +527,15 @@ export function renderInvoiceHtml(
       <div class="summaries__left">${rateSummary(model)}</div>
       <div class="summaries__right block">${totalsTable(model)}</div>
     </div>
-    ${hsnSummary(model)}
-    <section class="words block">
-      <span class="words__label">Amount in words</span>
-      <div class="words__value">${model.totals.grandTotalInWords}</div>
-    </section>
+    ${withHsn ? hsnSummary(model) : null}
+    ${
+      withWords
+        ? html`<section class="words block">
+            <span class="words__label">Amount in words</span>
+            <div class="words__value">${model.totals.grandTotalInWords}</div>
+          </section>`
+        : null
+    }
     <div class="foot">
       <div class="foot__left">
         ${bankPanel(model.bank)} ${termsPanel(model.terms)} ${declarationPanel(model.declaration)}
@@ -539,12 +550,23 @@ export function renderInvoiceHtml(
           </div>`
     }
   </div>`
+}
 
-  /*
-   * The two `raw` calls in this module, both on constants declared here. The doctype is
-   * markup by definition and the stylesheet is CSS; neither has ever been near a user's
-   * keyboard. Everything else on the page went through `html`.
-   */
+/**
+ * The document around one or more copies.
+ *
+ * The two `raw` calls in this module, both on constants declared here. The doctype is
+ * markup by definition and the stylesheet is CSS; neither has ever been near a user's
+ * keyboard. Everything else on the page went through `html`.
+ */
+function wrapInDocument(
+  model: InvoicePrintModel,
+  bodies: readonly Html[],
+  options: InvoiceRenderOptions,
+): string {
+  const definition = definitionOf(model.kind)
+  const title = `${definition.label} ${model.number ?? ''}`.trim()
+
   return toHtmlString(
     html`${raw('<!doctype html>')}
       <html lang="en">
@@ -552,13 +574,34 @@ export function renderInvoiceHtml(
           <meta charset="utf-8" />
           <title>${title}</title>
           <style>
-            ${raw(INVOICE_STYLES)}
+            ${fontFace(options.headingFont)}${raw(INVOICE_STYLES)}
           </style>
         </head>
         <body>
-          ${body}
+          ${lines(bodies)}
         </body>
       </html> `,
+  )
+}
+
+/**
+ * The `@font-face` for the heading font, when the caller supplied one.
+ *
+ * The one place in this module where a value that did not come from `html` reaches the
+ * page, and it is guarded rather than trusted: the source must be a `data:` URI for a
+ * font and the family must be plain letters, so nothing here can close the declaration
+ * and start a new one. A value that fails either check is dropped, and the page falls
+ * back to the machine's serif — see `InvoiceRenderOptions.headingFont`.
+ */
+function fontFace(font: PrintFontFace | undefined): Html | null {
+  if (font === undefined) return null
+  if (!/^[A-Za-z0-9 ]{1,64}$/.test(font.family)) return null
+  if (!/^data:font\/woff2;base64,[A-Za-z0-9+/=]+$/.test(font.source)) return null
+  return raw(
+    `@font-face{font-family:'${font.family}';src:url(${font.source}) format('woff2');` +
+      `font-weight:600;font-style:normal;font-display:block;}` +
+      `h1,h2,h3,.masthead__title,.copy-mark{font-family:'${font.family}',Georgia,` +
+      `'Times New Roman',serif;}`,
   )
 }
 
@@ -573,6 +616,33 @@ export function renderInvoiceCopies(
   copies: readonly InvoiceCopy[],
 ): readonly { copy: InvoiceCopy; html: string }[] {
   return copies.map((copy) => ({ copy, html: renderInvoiceHtml(model, { copy }) }))
+}
+
+/**
+ * Every copy in ONE document, each starting a new page.
+ *
+ * THIS IS WHAT PRINTING ACTUALLY WANTS, and `renderInvoiceCopies` above is not: three
+ * separate documents are three print jobs and three PDFs, so a user who asked for all
+ * three copies would get three files to save and three trips to the printer dialog. One
+ * document is one job, one file, three sheets — which is what "print all three" means to
+ * the person holding the paper.
+ *
+ * The model is built once and rendered N times, so the copies cannot disagree about a
+ * figure; `.doc + .doc` in the stylesheet is what puts each after the last.
+ *
+ * @throws Error when `copies` is empty. A document of no pages is a caller's mistake, and
+ *         the printing service refuses an empty list long before this.
+ */
+export function renderInvoiceRun(
+  model: InvoicePrintModel,
+  copies: readonly InvoiceCopy[],
+  options: Omit<InvoiceRenderOptions, 'copy'> = {},
+): string {
+  if (copies.length === 0) {
+    throw new Error('renderInvoiceRun needs at least one copy to render.')
+  }
+  const bodies = copies.map((copy) => invoiceBody(model, { ...options, copy }))
+  return wrapInDocument(model, bodies, options)
 }
 
 /** Re-exported so a caller can offer a heading without importing the kind table twice. */

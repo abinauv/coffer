@@ -367,4 +367,31 @@ export interface InvoiceRenderOptions {
    * chances for the second one to disagree with the first about a figure.
    */
   copy?: InvoiceCopy
+  /**
+   * Print the grand total in words. On unless said otherwise.
+   *
+   * AN OPTION RATHER THAN A FIELD ON THE MODEL for the reason `copy` is: the model is
+   * what is true of the document, and whether a block is wanted on a particular run is
+   * true of the run. The words themselves are on the model either way — the mapper asked
+   * the regime for them, and asking twice could produce two different sentences.
+   */
+  amountInWords?: boolean
+  /** Print the per-classification fold at the foot. On unless said otherwise. */
+  hsnSummary?: boolean
+  /**
+   * A font for the headings, carried by the page itself.
+   *
+   * ABSENT IS NOT A FAILURE. Nothing in this module may read a file, so the bytes arrive
+   * from the caller or not at all, and a page with no `@font-face` falls back to the
+   * machine's own serif. That is a worse-looking invoice and a perfectly valid one.
+   */
+  headingFont?: PrintFontFace
+}
+
+/** A font the page carries, so that it needs nothing from the network or the disk. */
+export interface PrintFontFace {
+  /** The family name the stylesheet asks for. */
+  family: string
+  /** `data:font/woff2;base64,…`. Never a path and never an http URL. */
+  source: string
 }

@@ -28,8 +28,13 @@
  * alone — see the header of `model.ts`.
  */
 
-export { renderInvoiceCopies, renderInvoiceHtml, headingFor } from './invoice-template'
-export { INVOICE_STYLES, PAGE } from './invoice-styles'
+export {
+  renderInvoiceCopies,
+  renderInvoiceHtml,
+  renderInvoiceRun,
+  headingFor,
+} from './invoice-template'
+export { INVOICE_STYLES, PAGE, SHADE } from './invoice-styles'
 
 export { buildInvoicePrintModel, hsnSummaryOf, rateSummaryOf, taxColumnsFor } from './invoice-model'
 export type { InvoiceBranding, InvoicePrintSources } from './invoice-model'
@@ -41,6 +46,7 @@ export type {
   InvoiceRenderOptions,
   PrintBankDetails,
   PrintCorrectedDocument,
+  PrintFontFace,
   PrintHsnRow,
   PrintImage,
   PrintLine,
