@@ -285,8 +285,6 @@ front of it:
 - **Importing.** Readers for Tally XML, Zoho Books CSV and bank-statement CSV exist in
   `src/main/services/importers/`, with no screen in front of them.
 - **GST returns.** GSTR-1 and GSTR-3B are generated but provisional, and have no screen.
-- **New recovery codes.** After a code is used there is no way to issue a fresh set
-  ([`security-for-users.md`](./security-for-users.md) §3).
 
 ## 6. Checking a change
 

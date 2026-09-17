@@ -206,9 +206,9 @@ export function RecoverCompany(): JSX.Element {
         <aside className="split__aside">
           <StepCard title="The code you use is gone afterwards" tone="warning">
             <p>
-              Each code works exactly once. The others on your sheet keep working, and Coffer cannot
-              issue replacements for a company that already exists — so cross this one off the sheet
-              once it has worked.
+              Each code works exactly once, so cross this one off the sheet as soon as it has
+              worked. The others keep working — and once you are in, Company → Recovery codes will
+              issue a fresh set of five if you would rather start again.
             </p>
           </StepCard>
           <StepCard title="There is no back door">

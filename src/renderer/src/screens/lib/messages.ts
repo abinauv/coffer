@@ -49,6 +49,7 @@ export type FailureContext =
   | 'restore'
   | 'backup'
   | 'change-passphrase'
+  | 'new-recovery-codes'
   /* The ledger screens. No overrides yet — `RepoError` messages are already written as
    * sentences for a user, so the generic path shows them unchanged. The context exists
    * so that adding guidance for, say, PERIOD_CLOSED is a table entry rather than a
@@ -99,9 +100,10 @@ const ENTRIES: Record<string, Entry> = {
   RECOVERY_CODE_INVALID: {
     title: 'That code does not belong to this company.',
     body:
-      'Check the sheet is the one for these books — a code from another company will ' +
-      'never open this one. If it is the right sheet, read it again: 0 and O, 1 and I are ' +
-      'easy to swap when copying by hand.',
+      'Three things do this. The sheet belongs to another company; the sheet was replaced ' +
+      'by a newer set, which killed every code on it; or a character was misread — 0 and ' +
+      'O, 1 and I are easy to swap when copying by hand. Read it again before looking ' +
+      'further.',
   },
   RECOVERY_CODE_ALREADY_USED: {
     title: 'That recovery code has already been used.',
@@ -385,6 +387,22 @@ const OVERRIDES: Partial<Record<FailureContext, Record<string, Entry>>> = {
       body:
         'Nothing was changed; the passphrase you already have still works. Check it and ' +
         'try again.',
+    },
+  },
+  /* Issuing needs the passphrase for a reason the generic wording cannot carry: the
+   * refusal is the feature working, not an obstacle. */
+  'new-recovery-codes': {
+    PASSPHRASE_INVALID: {
+      title: 'That is not the passphrase for this company.',
+      body:
+        'No codes were issued, and the ones you have now still work exactly as they did. ' +
+        'This check is why an unlocked machine on a desk cannot mint new ways into your books.',
+    },
+    PASSPHRASE_REQUIRED: {
+      title: 'Enter your passphrase to issue new codes.',
+      body:
+        'It is stored nowhere, so Coffer cannot fill it in. Nothing has changed yet — your ' +
+        'current codes still work.',
     },
   },
   create: {
