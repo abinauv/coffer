@@ -214,6 +214,7 @@ describe('what it draws', () => {
         taxRates: [],
         taxComponents: [],
         classification: { code: null, label: 'CPA', validLengths: [] },
+        returnForms: [],
       },
     })
 

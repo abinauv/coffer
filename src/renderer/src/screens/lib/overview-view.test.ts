@@ -154,6 +154,7 @@ function quiet(over: Partial<AttentionSources> = {}): AttentionSources {
     recoveryCodesRemaining: 5,
     /* Backed up this morning, so the backup line has nothing to say either. */
     company: companyBackedUp(new Date().toISOString()),
+    taxReturnsDue: ready([]),
     ...over,
   }
 }
@@ -605,5 +606,37 @@ describe('BADGE_TONES', () => {
       'positive',
       'warning',
     ])
+  })
+})
+
+describe('a return nobody has opened', () => {
+  const due = {
+    form: { id: 'gstr-1', label: 'GSTR-1', description: 'Outward supplies.' },
+    period: { from: '2026-08-01', to: '2026-08-31', label: 'August 2026' },
+    documentCount: 12,
+  }
+
+  it('names the form and the month in main words, and opens that return', () => {
+    const [item] = attentionItems(quiet({ taxReturnsDue: ready([due]) }))
+
+    expect(item).toMatchObject({
+      id: 'tax-return-gstr-1',
+      tone: 'info',
+      title: 'GSTR-1 for August 2026 has not been looked at',
+      target: {
+        screenId: 'tax-returns',
+        params: { form: 'gstr-1', from: '2026-08-01', to: '2026-08-31' },
+      },
+      actionLabel: 'Open GSTR-1',
+    })
+    expect(item?.note).toContain('12 documents are dated then')
+  })
+
+  /* It is a nudge, not a failure: a read that did not land says nothing rather than
+   * something alarming, and nothing due says nothing at all. */
+  it('says nothing when nothing is due, or when the read failed', () => {
+    expect(attentionItems(quiet({ taxReturnsDue: ready([]) }))).toEqual([])
+    expect(attentionItems(quiet({ taxReturnsDue: failure }))).toEqual([])
+    expect(attentionItems(quiet({ taxReturnsDue: loadingPanel }))).toEqual([])
   })
 })

@@ -33,6 +33,7 @@ import type {
   CompanySummary,
   DocumentListRow,
   Result,
+  TaxReturnDue,
 } from '@shared/dto'
 import { agedScreenId, isOverdue, type ItemTarget } from './ageing-view'
 import { backupAttention } from './backup-view'
@@ -40,6 +41,7 @@ import { formatDate, formatDayRange } from './dates'
 import { editorScreenId as documentEditorScreenId } from './document-view'
 import { isNegativeAmount, isZeroAmount } from './ledger-format'
 import { isRecoveryLow } from './recovery-view'
+import { dueNote, dueTitle } from './tax-return-view'
 
 // ---- One read, in the three states it can be in -----------------------------
 
@@ -377,6 +379,8 @@ export interface AttentionSources {
   recoveryCodesRemaining: number
   /** The open company, for how long it has been since a backup. Null before it opens. */
   company: CompanySummary | null
+  /** Returns for last month with documents in them that nobody has opened. */
+  taxReturnsDue: Panel<readonly TaxReturnDue[]>
 }
 
 /*
@@ -485,6 +489,27 @@ export function attentionItems(sources: AttentionSources): readonly AttentionIte
       target: { screenId: 'recovery-codes', params: {} },
       actionLabel: 'Issue new codes',
     })
+  }
+
+  /*
+   * A RETURN NOBODY HAS OPENED. Main decides which: a finished month, with documents in it,
+   * for a form that has not been looked at since. The words — which form, which month —
+   * are main's too; this only says that it has not been looked at.
+   */
+  if (sources.taxReturnsDue.state === 'ready') {
+    for (const due of sources.taxReturnsDue.data) {
+      items.push({
+        id: `tax-return-${due.form.id}`,
+        tone: 'info',
+        title: dueTitle(due.form.label, due.period.label),
+        note: dueNote(due.documentCount),
+        target: {
+          screenId: 'tax-returns',
+          params: { form: due.form.id, from: due.period.from, to: due.period.to },
+        },
+        actionLabel: `Open ${due.form.label}`,
+      })
+    }
   }
 
   if (sources.draftCount.state === 'ready' && sources.draftCount.data > 0) {

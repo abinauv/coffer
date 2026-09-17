@@ -249,6 +249,7 @@ function bridgeFor(books: Books = {}): BridgeStub {
           ? (books.sales ?? (() => ok(RECEIVABLES)))()
           : (books.purchase ?? (() => ok(PAYABLES)))(),
       overviewFigures: () => (books.figures ?? (() => ok(FIGURES)))(),
+      taxReturnsDue: () => ok([]),
     },
     documents: {
       count: (input) =>
@@ -456,6 +457,7 @@ describe('the figures', () => {
         taxRates: [],
         taxComponents: [],
         classification: { code: null, label: 'CPA', validLengths: [] },
+        returnForms: [],
       },
     })
 
