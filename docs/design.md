@@ -1,24 +1,37 @@
 # Brand, UI and the design system
 
-> What is a placeholder and what is decided, where every visual decision lives in the
-> code, and the rules a redesign has to keep. Read this before changing how Coffer looks.
+> What is decided, where every visual decision lives in the code, and the rules a redesign
+> has to keep. Read this before changing how Coffer looks.
 
 ---
 
-## 1. What is decided, and what is a placeholder
+## 1. What is decided
 
-| Decided                                                                                                                                                                    | Placeholder, waiting for real design                                          |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| The name, **Coffer** — a strongbox, because the books are encrypted at rest                                                                                                | README screenshots — the README carries a comment marking where they go       |
-| The tagline, _Your books, in your own safe._                                                                                                                               | Installer artwork: the NSIS sidebar image and the macOS disk-image background |
-| The audience (§2)                                                                                                                                                          |                                                                               |
-| **Mark:** a square recessed into a square — a coffered ceiling panel, a strongbox lid and a ruled ledger cell at once. Rectangles only                                     |                                                                               |
-| **Wordmark:** the name in IBM Plex Serif SemiBold beside the mark. A serif on the name and a sans in the interface                                                         |                                                                               |
-| **App icon:** the mark reversed white on Lapis, one flat 1024 × 1024 square with 12% padding, no platform mask                                                             |                                                                               |
-| **README banner** (1280 × 320) and **GitHub social preview** (1280 × 640, dark), rendered from the bundled fonts                                                           |                                                                               |
-| Colour: **Paper** (light) and **Slate** (dark), accent **Lapis**. Measured, not asserted — see the header of `tokens.css`                                                  |                                                                               |
-| Type: **IBM Plex** Sans, Serif and Mono, bundled under SIL OFL 1.1, with the Devanagari cut alongside                                                                      |                                                                               |
-| The layout model: a title bar with the command palette, six sections across a section bar, a rail of the current section’s screens, a status bar, and one screen at a time |                                                                               |
+Nothing in this table is a placeholder any more. The design work this document was waiting
+for has landed, and what follows is what shipped — which in places is less than the design
+drew, and says so.
+
+| What                  | Decided                                                                                                                                                                                             |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Name                  | **Coffer** — a strongbox, because the books are encrypted at rest                                                                                                                                   |
+| Tagline               | _Your books, in your own safe._                                                                                                                                                                     |
+| Audience              | §2                                                                                                                                                                                                  |
+| Mark                  | A square recessed into a square: a coffered ceiling panel, a strongbox lid and a ruled ledger cell at once. Rectangles only                                                                         |
+| Wordmark              | The name in IBM Plex Serif SemiBold beside the mark. A serif on the name and a sans in the interface                                                                                                |
+| App icon              | The mark reversed white on Lapis, one flat 1024 × 1024 square with 12% padding, no platform mask                                                                                                    |
+| Colour                | **Paper** (light) and **Slate** (dark), accent **Lapis**. Measured, not asserted — see the header of `tokens.css`                                                                                   |
+| Type                  | **IBM Plex** Sans, Serif and Mono, bundled under SIL OFL 1.1, with the Devanagari cut alongside. Plex has no Tamil or Telugu cut; those scripts use the operating system's face                     |
+| Layout model          | A title bar with the command palette, six sections across a section bar, a rail of the current section's screens, a status bar, and one screen at a time. The rail can be words or icons (Settings) |
+| Density               | Comfortable and Compact, four numbers apart                                                                                                                                                         |
+| Keyboard              | The Modern key map (§4a)                                                                                                                                                                            |
+| Voice                 | Plain and calm, in Indian English: the fact, then the consequence, then the one thing to do next (§4, Voice)                                                                                        |
+| README banner         | 1280 × 320, `docs/assets/banner.png`, rendered from the bundled fonts                                                                                                                               |
+| GitHub social preview | 1280 × 640, dark, rendered from the bundled fonts and uploaded in the repository's settings rather than committed                                                                                   |
+| README screenshots    | Taken from the built app with a demo company: the Overview, an issued invoice, the register with the palette in dark, and the recovery codes                                                        |
+| Installer artwork     | The Windows installer's sidebar and header, and the macOS disk image's background, cut from the banner. No text in any of them                                                                      |
+
+The design also drew three more navigation layouts and a second key map. They are not
+built, and §5 says so rather than this table.
 
 ## 2. Who it is designed for
 
@@ -41,6 +54,8 @@ legally required to keep. Calm and exact beats lively.
 | Name, tagline, description             | `src/branding.ts` is the source of truth. `electron-builder.yml` repeats the values by hand, because YAML cannot import it: change both                                                                                                                                                                                                                                                                                                              |
 | The mark                               | `src/shared/brand-mark.ts` holds its construction and small-size rules. Drawn by `components/shell/BrandMark.tsx` and, with the name, `Wordmark.tsx`                                                                                                                                                                                                                                                                                                 |
 | App icon                               | `build/icon.png`, 1024 × 1024, committed. Drawn from the mark by `scripts/generate-icon.mjs` (`npm run icon`): rerun it and commit the result after changing the mark or the accent. electron-builder derives every platform's icon from it                                                                                                                                                                                                          |
+| Installer artwork                      | `scripts/render-brand-assets.mjs` (`npm run brand:assets`) writes `build/installerSidebar.bmp` (164 × 314), `build/installerHeader.bmp` (150 × 57), `build/background.png` and its `@2x` pair (540 × 380). electron-builder finds all four by name; `scripts/packaging.test.mjs` checks their sizes and formats                                                                                                                                      |
+| README screenshots                     | `docs/assets/screenshot-*.png`, taken from the built app at a 1440 × 900 window with a demo company. Retake one when the screen it shows changes; a screenshot of a screen that no longer looks like that is a claim that is no longer true                                                                                                                                                                                                          |
 | README banner, social preview          | `scripts/render-brand-assets.mjs` (`npm run brand:assets`). The banner is committed at `docs/assets/banner.png`; the social preview goes to `dist/brand/` and is uploaded by hand in the repository settings                                                                                                                                                                                                                                         |
 | Colour, type, spacing, radius, density | `src/renderer/src/styles/tokens.css`, with the palette's reasoning and its measurements in the header                                                                                                                                                                                                                                                                                                                                                |
 | Fonts                                  | `src/renderer/src/assets/fonts/` as local woff2, declared with `@font-face` in `styles/base.css`. Versions, checksums and the OFL notice are in `THIRD-PARTY.md`                                                                                                                                                                                                                                                                                     |
@@ -97,6 +112,9 @@ is a bug, however it looks.
   padlock added. Encryption is in the copy, not the mark.
 - **The serif is for the name.** Plex Serif appears in the wordmark and nowhere else in
   the working interface.
+- **No text is baked into an image**, the installer artwork included. An installer writes
+  its own words beside its pictures, in the reader's language and at the reader's scale; a
+  word in a bitmap can be neither translated nor enlarged.
 
 **Colour and contrast**
 
@@ -325,6 +343,11 @@ front of it:
   locking a period cannot be undone, so each needs its confirmation designed first.
 - **Moving a role to another account.** The chart of accounts shows which accounts the
   software posts through and will not archive them, but no screen points a role elsewhere.
+- **Three more navigation layouts.** The design drew a full sidebar, a menu bar with letter
+  accelerators and a palette-only window. Settings offers the two that are built.
+- **Tally-style keys.** The design drew a second key map — Alt accelerators, Ctrl A to
+  accept, function keys to the statements. Only the Modern map is built, so Settings
+  describes the keyboard rather than offering a choice of one.
 
 ## 6. Checking a change
 

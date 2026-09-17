@@ -17,25 +17,25 @@ are running.
 
 What it comes to, for somebody deciding whether to open it: **you can keep a real set of
 books in Coffer.** Create a company, and it arrives with a chart of accounts, a fiscal
-year of periods, numbering series for all nine numbered kinds and a warehouse. Raise
-quotations, sales invoices, credit notes, purchase bills and debit notes; issue them,
-which numbers them and posts them in one transaction; record receipts, payments and
-refunds both ways, and say which documents they settle; set a credit note against the
-invoice it settles. Read a trial balance, a balance sheet, a profit and loss, a day book,
-an account ledger and an aged report on either side — none of which is stored, all of
-which are summed from the journal when asked. Keep stock per item and warehouse, valued at
-moving weighted average, where every movement that moved money also posts, so inventory on
-the balance sheet ties to the register as at every date. Close a period, close a year, and
-back the whole thing up into one archive that holds the database and the keys that open
-it.
+year of periods, numbering series for all nine numbered kinds, the common units of measure
+and a warehouse. Raise quotations, sales invoices, credit notes, purchase bills and debit
+notes; issue them, which numbers them and posts them in one transaction; print them or
+save them as a PDF; record receipts, payments and refunds both ways, and say which
+documents they settle; set a credit note against the invoice it settles. Read a trial
+balance, a balance sheet, a profit and loss, a day book, an account ledger and an aged
+report on either side — none of which is stored, all of which are summed from the journal
+when asked. Look over GSTR-1 and GSTR-3B for any month. Back the whole thing up into one
+archive that holds the database and the keys that open it.
 
-Three things are built and **not reachable from the app**, and they are listed here as
-what they are rather than left to be discovered: an invoice renderer (`services/pdf/`),
-four import readers for CSV, Tally XML and Zoho Books (`services/importers/`), and GSTR-1
-and GSTR-3B generation (`regimes/in-gst/returns/`). The last of those carries a
-`SCHEMA_UNVERIFIED` notice on every artefact it produces: the arithmetic is pinned to the
-paisa against hand-worked fixtures, and the shape has never been validated against GSTN's
-own schema or been through a filing cycle.
+Some things are built and **not reachable from the app**, and they are listed here as what
+they are rather than left to be discovered: the stock register, valued at moving weighted
+average (`db/repos/stock.ts`); closing a period and a year, opening balances and journal
+entries, which the ledger's contract carries and no screen offers; input-tax-credit
+eligibility per line; and four import readers for CSV, Tally XML and Zoho Books
+(`services/importers/`). GSTR-1 and GSTR-3B are reachable, and carry a `SCHEMA_UNVERIFIED`
+notice on every artefact they produce: the arithmetic is pinned to the paisa against
+hand-worked fixtures, and the shape has never been validated against GSTN's own schema or
+been through a filing cycle.
 
 Builds are unsigned. There is no telemetry, no account and no network call in any core
 path.
@@ -1006,9 +1006,9 @@ one transaction spanning the numbering counter, the posting rule and the ledger.
   and no locale is consulted. The grouping is a required parameter with no default, because
   the default was the lakh/crore grouping and it was silently wrong for everyone outside
   India.
-- **`printToPDF` and its IPC channel are not written.** This is the half that can be pinned
-  against a fixture without an Electron window in the room; there is no PDF button in the
-  app.
+- This was the half that can be pinned against a fixture without an Electron window in the
+  room. The other half — the window, `printToPDF` and the print dialog — landed with the
+  redesign, below.
 
 #### Reading somebody else's books in
 
@@ -1067,16 +1067,13 @@ one transaction spanning the numbering counter, the posting rule and the ledger.
 
 #### The app itself
 
-- Thirty-eight registered screens across twenty-one files, discovered by a glob rather than
-  a hand-written list, so adding one is a single `registerScreens` call and the sidebar
-  entry, the route and a "Go to…" command all follow.
-- **Overview** — a dashboard replacing the placeholder that had promised accounts, invoices
-  and reports "in the next phase". All of it shipped, so the notice had become a lie printed
-  on the one screen every session starts on. Receivables and payables as at today, what is
-  overdue worst-first across both sides, unissued drafts, recent documents and vouchers, the
-  file and vault paths, how many recovery codes are left, and back up / change passphrase /
-  close. Seven independent reads, none of which can take the screen down; an empty company
-  reads as a beginning rather than as nothing, with a three-step checklist.
+- Screens discovered by a glob rather than a hand-written list, so adding one is a single
+  `registerScreens` call and the rail entry, the route and a "Go to…" command all follow.
+- **Overview** — four figures from main (owed to you, you owe, cash and bank, the month so
+  far), the oldest debts, and what needs attention: overdue documents on either side, drafts
+  not yet issued, a backup that is overdue, recovery codes running out, and last month's
+  returns not yet looked at. Independent reads, none of which can take the screen down; an
+  empty company reads as a beginning rather than as nothing, with a three-step checklist.
 - Registers and editors for all five document kinds and all four voucher kinds; customers,
   vendors and the unfiltered party list; items; units; the chart of accounts; numbering
   series; business details; and the six reports.
@@ -1099,10 +1096,39 @@ one transaction spanning the numbering counter, the posting rule and the ledger.
 - Four unlock failures get four different screens rather than one "wrong passphrase" —
   invalid passphrase, missing database, missing vault, and keys that belong to a different
   file.
-- A command palette (Ctrl/Cmd+K) over every screen and every action, a three-way theme
-  control because "follow the system" is a real preference and not the absence of one, a
-  title bar correct in four different window-chrome modes, and toasts that pause their
-  countdown while you are reaching for the action button.
+- A command palette (Ctrl/Cmd+K) over every screen and every action, where every result
+  says where it lives; a title bar correct in four different window-chrome modes; and toasts
+  that pause their countdown while you are reaching for the action button.
+
+#### The redesign
+
+- **Paper, Slate and Lapis**, measured for contrast and for colour-blind readers rather than
+  asserted, and **IBM Plex** Sans, Serif and Mono bundled as local files under the SIL OFL.
+  Nothing loads from the internet, fonts included.
+- **The coffered mark** — a square recessed into a square — drawn from one construction for
+  the title bar, the app icon, the README banner, the social preview and the installer
+  artwork. The installer images carry no text: the installer writes its own words beside
+  them.
+- **Six sections and a contextual rail** in place of one long sidebar, and a status bar that
+  prints the company file's whole path. The rail collapses to icons; Settings chooses
+  between the two layouts, and the rail's own button and Ctrl B change the same setting.
+- **Components and states from the design system**: four notice tones, and an empty, a
+  loading and an error state for every register. Compact density moves four numbers and
+  touches no type size.
+- **Every existing screen restyled**, from the first run to the reports, with figures
+  right-aligned and negatives carrying a sign as well as the negative ink.
+- **The Modern key map**: Ctrl K, Ctrl N, Ctrl S, Ctrl F, Ctrl L and Ctrl Shift O; Ctrl Enter
+  to issue or record; Ctrl ] and Ctrl [ between sections. Enter advances and never submits,
+  and Escape steps back one level and asks before it throws typing away.
+- **Screens for four things that had working code and none**: Company → Backups (when the
+  last archive was written, where it went, and a reminder); Company → Recovery codes (a
+  fresh set, behind the passphrase); printing and PDF, from a hidden window that can run no
+  script; and Reports → Tax returns. The importers remain unreachable.
+- **Settings**: navigation layout, theme and density, from the title bar with or without a
+  company open.
+- **The voice**: dates as `17 Sep 2026` whatever locale the operating system reports,
+  buttons that name their object, refusals that say what to do next, and no message that
+  asks anyone to send their books.
 
 #### The mutation harness
 
@@ -1180,6 +1206,36 @@ everything around it, which is the shape this project spends its constraints on.
   three from the start — 0.125% is half of India's 0.25% slab — and only the comments were
   wrong, but a reader trusting them would have built the two-place column the scale exists
   to prevent.
+
+Found while building the redesign, by driving the app rather than by its tests:
+
+- **Every installer packed the whole repository.** `app.asar` was 29.6 MB and held `src/`
+  with every test and fixture, `docs/`, `scripts/` and `coverage/`: a platform's `files`
+  list replaces the shared one, and one beginning with an exclusion makes electron-builder
+  prepend `**/*`. A test reads the configuration and the build checks the archive.
+- Reverse charge and the export treatment were dropped at the IPC boundary, so no screen
+  could set either although the service and the repository honoured both.
+- No customer or vendor could be added without a credit limit: a blank limit arrived as
+  `''` and was refused. The screen tests stubbed the bridge and passed.
+- Every figure column in every ledger table was left-aligned under a header meant to sit
+  right.
+- Escape on the issue confirmation left it stuck open, because the editor's own Escape
+  claimed the keystroke the platform closes a dialog with.
+- Every print refusal — a draft, no copies, a page that would not render — reached the
+  print dialog as an internal error, because its error class was never registered at the
+  IPC boundary.
+- The picker wrote "Sep 17, 2026, 11:41 AM" on a machine set up in American English,
+  beside registers that write "17 Sep 2026".
+- Three reports that did not tie asked the reader to send a backup — somebody's books —
+  with their bug report. They ask for the figures on the screen.
+- Refusals for an unmapped role sent people to map one in the chart of accounts, which no
+  screen can do.
+- The Units screen said a new company starts with no units and that "nothing was seeded,
+  on purpose", while every new company is given eight.
+- The document editor's line grid squeezed its figures until a price read "82." and a tax
+  rate "18.0" at a 1440 px window, and scrolled sideways as well.
+- On a window shorter than a first-run step, the top of the step sat above the canvas where
+  no scrolling reached it, because the canvas centred what did not fit.
 
 ### Changed
 
