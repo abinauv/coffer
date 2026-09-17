@@ -137,7 +137,7 @@ describe('the list', () => {
     })
 
     expect(await screen.findByText('No units yet')).toBeInTheDocument()
-    expect(screen.getByText(/Nothing was seeded for you, on purpose/)).toBeInTheDocument()
+    expect(screen.getByText(/A line can be counted in nothing/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add the first unit' })).toBeInTheDocument()
   })
 })

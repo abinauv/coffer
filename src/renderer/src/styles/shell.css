@@ -50,10 +50,17 @@
 }
 
 /* With no company open there is nothing to navigate, so the canvas is a single
- * centred column rather than a page with a chrome-shaped hole in it. */
+ * centred column rather than a page with a chrome-shaped hole in it.
+ *
+ * SAFE CENTRE, NOT CENTRE (B35). A screen taller than the window was centred anyway, so it
+ * overflowed upwards as far as downwards — and the canvas can only scroll down. On a
+ * 900 px window the top 115 px of the recovery-codes step, its steps and the file it is
+ * for, sat above the canvas where no scrolling could reach them. `safe` centres what fits
+ * and starts at the top what does not. */
 .app__canvas {
   display: grid;
-  place-items: center;
+  align-items: safe center;
+  justify-items: center;
   padding: var(--space-8) var(--space-6);
 }
 

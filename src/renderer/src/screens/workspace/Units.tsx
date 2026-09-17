@@ -164,7 +164,7 @@ export function Units(): JSX.Element {
       isInset
       width="list"
       title="Units of measure"
-      lede="What quantities are counted in. These books start with none and assume nothing — add the units you actually trade in, whatever they are."
+      lede="What quantities are counted in. A new company starts with the common ones — numbers, pieces, boxes, kilograms and a few more. Add whatever else your paperwork uses, and archive what you never will."
       actions={
         <Button icon="plus" variant="primary" onClick={() => setEditing('new')}>
           New unit
@@ -189,7 +189,7 @@ export function Units(): JSX.Element {
           <RegisterEmpty
             plural="units"
             isFiltered={query.trim() !== ''}
-            sentence={`Nothing was seeded for you, on purpose — a guessed default is a default that ends up on invoices. Add the ones your paperwork already uses: KGS, NOS, BUNDLE, whatever they are.`}
+            sentence={`A line can be counted in nothing, so none is required. Add the ones your paperwork already uses: KGS, NOS, BUNDLE, whatever they are.`}
             newLabel="Add the first unit"
             onNew={() => setEditing('new')}
             filteredSentence={`No unit has ${query.trim()} in its code or its name.${archivedNote(includeArchived)}`}
