@@ -1,10 +1,15 @@
 name: Release
 
-# Tag a version, get installers for all three platforms plus a SHA-256 checksum file.
+# Tag a version, get installers for all three platforms plus a SHA-256 checksum file and
+# a signed build-provenance attestation for every file attached.
 #
-# The builds are unsigned (SECURITY.md, "Known gaps"), which makes SHA256SUMS.txt the
-# only integrity signal a download has. It is generated here, from the artefacts that are
-# actually attached, and it is not optional.
+# The builds are unsigned (SECURITY.md, "Known gaps"), so the operating system cannot vouch
+# for a download. Two things here can, and neither is optional:
+#   - SHA256SUMS.txt, generated from the artefacts that are actually attached, which says
+#     a file arrived intact;
+#   - the attestation, signed by Sigstore for this workflow run, which says the file was
+#     built by this workflow from the tagged commit. The checksum file sits on the same
+#     release page as the installers, so it cannot say that on its own.
 #
 # TODO (open hardening item): pin every `uses:` below to a full 40-character commit SHA.
 # The reasoning is in ci.yml's copy of this note, and it applies with more force here,
@@ -14,8 +19,9 @@ name: Release
 #     uses: actions/checkout@<the 40-character sha that v7.0.0 points at>  # v7.0.0
 #
 # Left undone in this pass because the SHAs have to be read off the upstream
-# repositories, and an invented one breaks every release at once. The references in this
-# file, all eight of them:
+# repositories, and an invented one breaks every release at once. `actions/attest` in the
+# `release` job was added pinned, its SHA read off the upstream v4.2.2 tag. The references
+# still to pin, all eight of them:
 #   - actions/checkout@v7          x3  (`verify`, the `build` matrix, `release`)
 #   - actions/setup-node@v7        x3  (`verify`, the `build` matrix, `release`)
 #   - actions/upload-artifact@v7   x1  (the `build` matrix)
@@ -146,6 +152,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Both for the attestation, and only in this job. `id-token` lets the run ask GitHub
+      # for the OIDC token Sigstore signs against; `attestations` stores the result where
+      # `gh attestation verify` looks for it.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v7
 
@@ -166,6 +177,25 @@ jobs:
       - name: Generate SHA-256 checksums
         run: node scripts/checksums.mjs artefacts
 
+      # SLSA build provenance for every file about to be attached, SHA256SUMS.txt included:
+      # a statement, signed with a certificate only this workflow run could obtain, that the
+      # file with this digest came out of this repository's release workflow at this tag.
+      # A file put on the release page by any other route fails `gh attestation verify`,
+      # even with a checksum line to match it.
+      #
+      # It is not code signing. Windows SmartScreen and macOS Gatekeeper do not read it, and
+      # the installers stay unsigned.
+      #
+      # Before `gh release create`, so a failed attestation publishes nothing rather than a
+      # release whose notes promise one. `actions/attest` rather than
+      # `actions/attest-build-provenance`: since v4 the second is a wrapper around the
+      # first, and its README sends new workflows to `actions/attest`. With no predicate or
+      # SBOM given, it produces build provenance.
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: artefacts/*
+
       - name: Compose release notes
         run: |
           version="${GITHUB_REF_NAME#v}"
@@ -177,14 +207,29 @@ jobs:
             echo "These builds are **not code-signed** — Windows shows a SmartScreen warning and"
             echo "macOS quarantines the download. See"
             echo "[SECURITY.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/SECURITY.md)."
-            echo "The checksum below is the only integrity signal these builds have, so please"
-            echo "check it before running the installer."
+            echo "Your operating system cannot vouch for them, so please check the file yourself"
+            echo "before running the installer: the checksum says it arrived intact."
             echo
             echo '```'
             echo 'sha256sum -c SHA256SUMS.txt        # Linux'
             echo 'shasum -a 256 -c SHA256SUMS.txt    # macOS'
             echo 'certutil -hashfile <file> SHA256   # Windows, compare by eye'
             echo '```'
+            echo
+            echo "### Check where it was built"
+            echo
+            echo "Every file here also has a signed build-provenance attestation. With the"
+            echo "[GitHub CLI](https://cli.github.com/) installed and signed in:"
+            echo
+            # One line, because a backslash continuation is not one in PowerShell or cmd.
+            echo '```'
+            echo "gh attestation verify <file> --repo ${GITHUB_REPOSITORY} --signer-workflow ${GITHUB_REPOSITORY}/.github/workflows/release.yml --source-ref refs/tags/${GITHUB_REF_NAME}"
+            echo '```'
+            echo
+            echo "It passes only for a file this repository's release workflow built from the"
+            echo "\`${GITHUB_REF_NAME}\` tag, unchanged since; if it reports an error, do not run the"
+            echo "installer. It is not code signing, and it does not remove the SmartScreen or"
+            echo "Gatekeeper warning."
             echo
             echo "### SHA-256"
             echo

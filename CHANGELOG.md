@@ -217,10 +217,10 @@ path.
   never deletes a company database.
 - CI on every push and pull request: typecheck, lint and test on one runner, plus a build
   on all three platforms.
-- A release workflow producing four artefacts and a `SHA256SUMS.txt` generated from what
-  is actually attached. Builds are unsigned by decision — signing credentials are never
-  read from a runner — so the checksum file is the only integrity signal and is not
-  optional.
+- A release workflow producing four artefacts, a `SHA256SUMS.txt` generated from what is
+  actually attached, and a signed build-provenance attestation for every attached file,
+  checkable with `gh attestation verify`. Builds are unsigned by decision — signing
+  credentials are never read from a runner — so neither check is optional.
 - Grouped Dependabot updates, with majors of the load-bearing toolchain ignored because
   each is an architectural decision with a paragraph attached.
 

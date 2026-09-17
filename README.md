@@ -205,8 +205,9 @@ not optional here.
 ### Verify what you downloaded
 
 Coffer's builds are **not code-signed**, so your operating system cannot tell you whether
-an installer was tampered with. The published checksum is the only integrity signal these
-builds have. Download `SHA256SUMS.txt` into the same folder as the installer, then:
+an installer was tampered with. Two checks can. The checksum says the file arrived intact,
+and needs nothing installed. Download `SHA256SUMS.txt` into the same folder as the
+installer, then:
 
 ```bash
 sha256sum -c SHA256SUMS.txt        # Linux
@@ -227,6 +228,20 @@ and the checksum file is lower case; that difference is not a mismatch.
 
 **If they do not match, do not run the installer.** Download it again, and if it still
 does not match, open an issue.
+
+**Where it was built.** The checksum file sits on the same release page as the installer,
+so on its own it cannot say who put either there. Every file on a release also has a
+signed build-provenance attestation. With the [GitHub CLI](https://cli.github.com/)
+installed and signed in, and your version in place of `0.1.0`:
+
+```bash
+gh attestation verify Coffer-0.1.0-windows-x64-setup.exe --repo abinauv/coffer --signer-workflow abinauv/coffer/.github/workflows/release.yml --source-ref refs/tags/v0.1.0
+```
+
+It passes only for a file built by this repository's release workflow from that version's
+tag, and not changed since. A file uploaded to the release page any other way fails it,
+even with a matching line in `SHA256SUMS.txt`. **If it reports an error, do not run the
+installer.** It is not code signing: the warning below still appears.
 
 ### Getting past the OS warning
 
@@ -268,8 +283,8 @@ sudo apt install ./Coffer-*.deb
 ```
 
 Signing is the first thing this project spends money on if it finds an audience, and it
-will make all of the above unnecessary. Until then, the checksum is the check that
-matters and the dialog is only a dialog.
+will make all of the above unnecessary. Until then, the checksum and the attestation are
+the checks that matter, and the dialog is only a dialog.
 
 ## Building from source
 

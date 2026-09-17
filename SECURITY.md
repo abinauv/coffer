@@ -93,12 +93,16 @@ Stated plainly rather than discovered later:
 
 **Releases are not code-signed.** Certificates cost more than this project currently has.
 Windows shows a SmartScreen warning and macOS quarantines the download. Every release
-publishes SHA-256 checksums — verify them. This means a tampered build cannot be
-detected by the OS, only by checking the checksum against the release page. Signing is
-the first thing funded if the project finds an audience.
+publishes SHA-256 checksums and a signed build-provenance attestation for every file —
+verify them. This means a tampered build cannot be detected by the OS, only by checking
+the checksum and the attestation. Signing is the first thing funded if the project finds
+an audience.
 
-The release workflow generates `SHA256SUMS.txt` from the artefacts actually attached and
-puts the verification commands in the release notes, and it sets
+The release workflow generates `SHA256SUMS.txt` from the artefacts actually attached,
+attests every one of those files with `actions/attest` (SLSA build provenance, signed
+through Sigstore with the run's own OIDC token) before anything is published, and puts
+both verification commands in the release notes. The attestation is not a substitute for
+signing: the operating system does not read it. The workflow also sets
 `CSC_IDENTITY_AUTO_DISCOVERY: false` so a signing identity in a runner keychain cannot be
 picked up by accident. **No release has been cut yet**, so there is nothing on a downloads
 page to verify; when there is, [the README](./README.md#install) is where the commands
