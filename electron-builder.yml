@@ -17,9 +17,10 @@ copyright: © 2026 The Coffer contributors
 # and the user has to open it explicitly, and macOS auto-update (which requires a valid
 # signature) will not work.
 #
-# The compensating control is integrity by checksum: .github/workflows/release.yml hashes
-# every artefact with SHA-256 and publishes SHA256SUMS.txt alongside the release. For an
-# unsigned build that file is the only integrity signal there is.
+# The compensating controls are in .github/workflows/release.yml: it hashes every artefact
+# with SHA-256 and publishes SHA256SUMS.txt alongside the release, and it attests build
+# provenance for each file, which `gh attestation verify` checks. Neither is read by the
+# operating system, which is the part signing would add.
 #
 # Nothing here references CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_TEAM_ID,
 # APPLE_APP_SPECIFIC_PASSWORD or any other signing credential, and no workflow sets them.
@@ -39,6 +40,9 @@ buildDependenciesFromSource: false
 # packaging mistakes that produce a clean build and a broken or bloated installer.
 afterPack: ./scripts/verify-packaged-app.mjs
 
+# build/ also holds the installer artwork — installerSidebar.bmp, installerHeader.bmp and
+# background.png with its @2x pair — which electron-builder picks up by name. They are
+# rendered by `npm run brand:assets` and carry no text (docs/design.md).
 directories:
   buildResources: build
   output: dist
