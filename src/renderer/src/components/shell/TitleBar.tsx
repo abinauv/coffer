@@ -27,11 +27,13 @@
 import type { JSX } from 'react'
 import { BRAND } from '../../../../branding'
 import { type Shortcut } from '../../lib/keys'
+import { makeRoute, SETTINGS_SCREEN_ID } from '../../lib/routing'
 import { useCommands } from '../../store/commands'
 import { useCompany } from '../../store/company'
 import { useCurrentFinancialYear } from '../../store/financial-year'
+import { useNavigation } from '../../store/navigation'
 import { useAppInfo, useWindowChrome } from '../../store/platform'
-import { Badge, Icon, Kbd } from '../atoms'
+import { Badge, Icon, IconButton, Kbd, Tooltip } from '../atoms'
 import { BrandMark } from './BrandMark'
 import { Wordmark } from './Wordmark'
 
@@ -42,6 +44,7 @@ export function TitleBar(): JSX.Element {
   const appInfo = useAppInfo()
   const { company } = useCompany()
   const { setPaletteOpen } = useCommands()
+  const { route, navigate } = useNavigation()
   const year = useCurrentFinancialYear(company?.id ?? null)
 
   return (
@@ -86,6 +89,17 @@ export function TitleBar(): JSX.Element {
       </div>
 
       <div className="titlebar__trail">
+        {/* In both areas: the theme is as much a question at the unlock screen as in the
+            books, and before a company is open there is no rail to find Settings in. */}
+        <Tooltip label="Settings" placement="bottom" delayMs={250}>
+          <IconButton
+            icon="settings"
+            label="Settings"
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate(makeRoute(route.area, SETTINGS_SCREEN_ID))}
+          />
+        </Tooltip>
         <Badge tone="warning">{BRAND.releaseStage}</Badge>
         {appInfo && (
           <span className="titlebar__version" title={`${BRAND.name} ${appInfo.version}`}>

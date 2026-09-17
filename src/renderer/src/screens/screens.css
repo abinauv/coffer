@@ -2173,3 +2173,271 @@
   margin-inline-end: var(--space-2);
   color: var(--ink-muted);
 }
+
+/* ---- Settings (Screens §06) ------------------------------------------------ */
+
+.settings__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* A rendered legend is not a flex item, so the fieldset's gap never reaches it. */
+.settings__legend {
+  margin-bottom: var(--space-2);
+  padding: 0;
+}
+
+.settings__heading {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-snug);
+}
+
+.settings__hint {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.settings__pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--rule);
+}
+
+.settings__layouts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-1);
+}
+
+/* The radio is the control and names the choice; the card's edge only says which card it
+ * belongs to, which is why a hairline is enough until it is chosen. */
+.settings__layout {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.settings__layout:hover {
+  border-color: var(--rule-strong);
+}
+
+.settings__layout[data-checked='true'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.settings__layout:has(.settings__radio:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.settings__layout-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.settings__radio {
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* The ring is drawn on the card, which is the thing that was chosen. */
+.settings__radio:focus-visible {
+  outline: none;
+}
+
+.settings__layout-label {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-snug);
+  cursor: pointer;
+}
+
+/* The whole card is the label's target, while the sentence under the name stays out of
+ * the radio's accessible name. */
+.settings__layout-label::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.settings__layout-body {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  line-height: var(--leading-normal);
+}
+
+/* A picture of the workspace frame: the title bar, the section bar, the rail and the screen.
+ * Tokens only, so it is drawn in the theme it sits in. */
+.layout-diagram {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  height: 4.5rem;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+
+.layout-diagram__title {
+  flex: 0 0 6px;
+  border-radius: 2px;
+  background: var(--chrome);
+}
+
+.layout-diagram__sections,
+.layout-diagram__rail,
+.layout-diagram__screen {
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--surface);
+}
+
+.layout-diagram__sections {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 9px;
+  padding: 0 3px;
+}
+
+.layout-diagram__sections > span {
+  width: 10px;
+  height: 3px;
+  border-radius: 1px;
+  background: var(--accent-soft-strong);
+}
+
+.layout-diagram__body {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 3px;
+  min-height: 0;
+}
+
+.layout-diagram__rail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 28%;
+  padding: 3px;
+}
+
+.layout-diagram__rail > span {
+  height: 3px;
+  border-radius: 1px;
+  background: var(--accent-soft-strong);
+}
+
+.layout-diagram[data-layout='icons'] .layout-diagram__rail {
+  align-items: center;
+  width: auto;
+}
+
+.layout-diagram[data-layout='icons'] .layout-diagram__rail > span {
+  width: 5px;
+  height: 5px;
+}
+
+.layout-diagram [data-active='true'] {
+  background: var(--accent);
+}
+
+.layout-diagram__screen {
+  flex: 1 1 auto;
+}
+
+/* Native radios drawn as segments. The input is hidden, not removed: arrow keys still move
+ * the choice, and the ring is drawn on the segment that holds the focus. */
+.segments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Sized by their words and then sharing what is left, so "Follow system" is not squeezed
+ * onto two lines to match "Dark". */
+.segments__option {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  text-align: center;
+  cursor: pointer;
+}
+
+.segments__option:hover {
+  background: var(--surface-hover);
+}
+
+.segments__option:has(.segments__input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-weight: var(--weight-medium);
+}
+
+.segments__option:has(.segments__input:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* One grid for every row, so the descriptions line up whatever the platform's keycaps
+ * are called. */
+.settings__keys {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+  margin: var(--space-1) 0 0;
+}
+
+.settings__key {
+  display: contents;
+}
+
+.settings__key dt,
+.settings__key dd {
+  margin: 0;
+}
+
+.settings__key dd {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+}

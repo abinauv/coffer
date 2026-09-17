@@ -13,27 +13,19 @@
  * should ever grow a case for an invoice.
  */
 
-import { useCallback, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { JSX } from 'react'
 import { DENSITY_LABELS, DENSITY_PREFERENCES } from '../../lib/density'
-import {
-  NARROW_VIEWPORT_QUERY,
-  parseRailPreference,
-  RAIL_STORAGE_KEY,
-  resolveRailCollapsed,
-  toggledRailPreference,
-  type RailPreference,
-} from '../../lib/layout'
-import { useMediaQuery } from '../../lib/hooks'
-import { makeRoute, type Route } from '../../lib/routing'
+import { makeRoute, SETTINGS_SCREEN_ID, type Route } from '../../lib/routing'
 import { describeLocation, navSections } from '../../lib/screens'
-import { browserStore, readPreference, writePreference } from '../../lib/storage'
 import type { Command } from '../../lib/command-registry'
 import { SHORTCUTS } from '../../lib/shortcuts'
+import { THEME_LABELS, THEME_PREFERENCES } from '../../lib/theme'
 import { useCommands, useRegisterCommands } from '../../store/commands'
 import { useCompany } from '../../store/company'
 import { useDensity } from '../../store/density'
 import { useNavigation } from '../../store/navigation'
+import { useNavigationLayout } from '../../store/navigation-layout'
 import { useScreens } from '../../store/screens'
 import { useTheme } from '../../store/theme'
 import { useToasts } from '../../store/toasts'
@@ -64,20 +56,9 @@ export function AppShell(): JSX.Element {
 }
 
 function Workspace(): JSX.Element {
-  const [preference, setPreferenceState] = useState<RailPreference>(() =>
-    parseRailPreference(readPreference(browserStore(), RAIL_STORAGE_KEY)),
-  )
-  const isNarrow = useMediaQuery(NARROW_VIEWPORT_QUERY)
-  const isCollapsed = resolveRailCollapsed(preference, isNarrow)
+  const { layout, toggleRail: toggle } = useNavigationLayout()
+  const isCollapsed = layout === 'icons'
   const sections = useSectionNavigation()
-
-  const toggle = useCallback(() => {
-    setPreferenceState((current) => {
-      const next = toggledRailPreference(current, isNarrow)
-      writePreference(browserStore(), RAIL_STORAGE_KEY, next)
-      return next
-    })
-  }, [isNarrow])
 
   return (
     <div className="app__body app__body--workspace">
@@ -185,17 +166,33 @@ function ShellCommands(): JSX.Element {
       })),
     )
 
-    const appearance: Command[] = (['system', 'light', 'dark'] as const).map((option) => ({
+    /* Settings is in the Company rail. Before a company is open there is no rail for it to
+     * be in, so the frame offers it here — in any area whose rail has not already. */
+    const settingsId = `go.${route.area}.${SETTINGS_SCREEN_ID}`
+    const settings: Command[] = navigation.some((command) => command.id === settingsId)
+      ? []
+      : [
+          {
+            id: settingsId,
+            title: 'Go to Settings',
+            section: 'Go to',
+            keywords: ['preferences', 'theme', 'density', 'navigation'],
+            run: () => navigate(makeRoute(route.area, SETTINGS_SCREEN_ID)),
+          },
+        ]
+
+    /* Settings has the controls. The palette keeps a command per choice as well, so somebody
+     * at the keyboard can change one without leaving the screen they are on, and each says
+     * which is on. The words are the ones Settings uses. */
+    const appearance: Command[] = THEME_PREFERENCES.map((option) => ({
       id: `view.theme.${option}`,
-      title: option === 'system' ? 'Appearance: match system' : `Appearance: ${option}`,
+      title: `Theme: ${THEME_LABELS[option].toLowerCase()}`,
       section: 'View',
-      keywords: ['theme', 'dark mode', 'light mode', 'contrast'],
+      keywords: ['theme', 'appearance', 'dark mode', 'light mode', 'contrast'],
       ...(option === preference ? { hint: 'Current' } : {}),
       run: () => setPreference(option),
     }))
 
-    /* Until Settings exists (design plan, Phase 8), the palette is where density is chosen.
-     * One command per preference rather than a toggle, so the palette says which is on. */
     const densities: Command[] = DENSITY_PREFERENCES.map((option) => ({
       id: `view.density.${option}`,
       title: `Density: ${DENSITY_LABELS[option].toLowerCase()}`,
@@ -269,7 +266,7 @@ function ShellCommands(): JSX.Element {
         ]
       : []
 
-    return [...frame, ...navigation, ...appearance, ...densities, ...companyCommands]
+    return [...frame, ...navigation, ...settings, ...appearance, ...densities, ...companyCommands]
   }, [
     screens,
     route.area,

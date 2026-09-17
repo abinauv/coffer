@@ -20,6 +20,7 @@ import userEvent from '@testing-library/user-event'
 import type { JSX } from 'react'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_COMPANY, renderScreen, type BridgeStub } from '@renderer/test/harness'
+import { NAVIGATION_LAYOUTS, RAIL_STORAGE_KEY, railPreferenceFor } from '../../lib/layout'
 import { makeRoute, type Route } from '../../lib/routing'
 import {
   NAV_GROUPS,
@@ -28,6 +29,7 @@ import {
   type ScreenDefinition,
 } from '../../lib/screens'
 import { useNavigation } from '../../store/navigation'
+import { useNavigationLayout } from '../../store/navigation-layout'
 import { ContextRail } from './ContextRail'
 import { SectionBar } from './SectionBar'
 import { useSectionNavigation } from './useSectionNavigation'
@@ -73,10 +75,13 @@ registerScreens([
 
 let navigate: (to: Route) => void
 
-function Frame({ isCollapsed = false }: { isCollapsed?: boolean }): JSX.Element {
+/* Collapsed as told, or — with nothing said — as the stored layout draws it, the way
+ * `AppShell` reads it. */
+function Frame({ isCollapsed }: { isCollapsed?: boolean | undefined }): JSX.Element {
   const nav = useNavigation()
   navigate = nav.navigate
   const sections = useSectionNavigation()
+  const { layout } = useNavigationLayout()
   return (
     <>
       <p>route: {nav.route.screenId}</p>
@@ -88,7 +93,7 @@ function Frame({ isCollapsed = false }: { isCollapsed?: boolean }): JSX.Element 
       <ContextRail
         section={sections.current}
         marked={sections.marked}
-        isCollapsed={isCollapsed}
+        isCollapsed={isCollapsed ?? layout === 'icons'}
         onToggleCollapsed={() => {}}
       />
     </>
@@ -96,11 +101,14 @@ function Frame({ isCollapsed = false }: { isCollapsed?: boolean }): JSX.Element 
 }
 
 function mount({
-  isCollapsed = false,
+  isCollapsed = false as boolean | 'stored',
   bridge = {} as BridgeStub,
   company = DEFAULT_COMPANY,
 } = {}): void {
-  renderScreen(<Frame isCollapsed={isCollapsed} />, { company, bridge })
+  renderScreen(<Frame isCollapsed={isCollapsed === 'stored' ? undefined : isCollapsed} />, {
+    company,
+    bridge,
+  })
 }
 
 function goTo(screenId: string): void {
@@ -373,9 +381,13 @@ describe('reachability', () => {
     expect(navigable.length).toBeGreaterThanOrEqual(24)
   })
 
-  it('reaches every rail screen with a section click and a rail click', async () => {
+  /* EVERY LAYOUT × EVERY SCREEN. Settings offers each layout, and a layout that lost a
+   * screen would be a way to hide part of the books from somebody who chose it. The layout
+   * comes from storage, as a relaunch reads it, and the rail is checked to have drawn it. */
+  it.each(NAVIGATION_LAYOUTS)('reaches every rail screen in the %s layout', async (layout) => {
+    localStorage.setItem(RAIL_STORAGE_KEY, railPreferenceFor(layout))
     const user = userEvent.setup()
-    mount()
+    mount({ isCollapsed: 'stored' })
 
     for (const definition of productScreens()) {
       if (definition.nav === undefined) continue
@@ -388,8 +400,13 @@ describe('reachability', () => {
         within(rail(section.label)).getByRole('button', { name: definition.nav.label }),
       )
 
-      expect(route(), `${section.label} → ${definition.nav.label}`).toBe(definition.id)
+      expect(route(), `${layout}: ${section.label} → ${definition.nav.label}`).toBe(definition.id)
+      expect(rail(section.label)).toHaveAttribute(
+        'data-collapsed',
+        layout === 'icons' ? 'true' : 'false',
+      )
     }
+    localStorage.clear()
   })
 
   /* Collapsed, the rail is its icons and nothing else. */

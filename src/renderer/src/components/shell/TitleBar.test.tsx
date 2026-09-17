@@ -30,6 +30,7 @@ import {
 } from '@renderer/test/harness'
 import { BRAND } from '../../../../branding'
 import { useCommands } from '../../store/commands'
+import { useNavigation } from '../../store/navigation'
 import { TitleBar } from './TitleBar'
 
 /* The strip prints the display name, so the name is asserted and the summary is a
@@ -77,6 +78,16 @@ function PaletteProbe(): JSX.Element {
   return <p>palette: {isPaletteOpen ? 'open' : 'closed'}</p>
 }
 
+/** Prints where the app is, so the Settings button is asserted against where it went. */
+function RouteProbe(): JSX.Element {
+  const { route } = useNavigation()
+  return (
+    <p>
+      route: {route.area}/{route.screenId}
+    </p>
+  )
+}
+
 interface Options {
   platform?: Platform
   isCompanyOpen?: boolean
@@ -87,6 +98,7 @@ function mount({ platform = 'linux', isCompanyOpen = false, periods }: Options =
   renderScreen(
     <>
       <PaletteProbe />
+      <RouteProbe />
       <TitleBar />
     </>,
     { bridge: bridgeFor({ platform }, periods), company: isCompanyOpen ? ACME : null },
@@ -232,12 +244,29 @@ describe('the trailing end', () => {
     expect(screen.getByText(BRAND.releaseStage)).toHaveClass('badge')
   })
 
-  /* Appearance is chosen from the palette until Settings exists, not from the title bar. */
-  it('carries no appearance control', () => {
+  /* The choices are on the Settings screen; the bar carries the way there and none of them. */
+  it('carries no appearance control of its own', () => {
     mount()
 
-    expect(screen.queryByRole('radiogroup')).toBeNull()
+    expect(screen.queryByRole('radio')).toBeNull()
   })
+
+  /* In both areas, and to the area it is in: there is no rail before a company is open, so
+   * this button is how Settings is found at the unlock screen. */
+  it.each([false, true])(
+    'opens Settings in the area it is in (company open: %s)',
+    async (isCompanyOpen) => {
+      const user = userEvent.setup()
+      mount({ isCompanyOpen })
+
+      await user.click(screen.getByRole('button', { name: 'Settings' }))
+
+      expect(screen.getByText(/^route:/)).toHaveTextContent(
+        `route: ${isCompanyOpen ? 'workspace' : 'welcome'}/settings`,
+      )
+      if (isCompanyOpen) await screen.findByText('2026-27')
+    },
+  )
 })
 
 describe('the window chrome', () => {

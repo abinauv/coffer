@@ -162,6 +162,12 @@ function sectionBar(): HTMLElement | null {
   return screen.queryByRole('navigation', { name: 'Sections' })
 }
 
+function titleBar(): HTMLElement {
+  const bar = document.querySelector('.titlebar')
+  if (!(bar instanceof HTMLElement)) throw new Error('No title bar was rendered')
+  return bar
+}
+
 /* Named by its section. The workspace lands on the Overview, which is under Accounts. */
 function rail(): HTMLElement | null {
   return document.querySelector('nav.rail')
@@ -285,9 +291,10 @@ describe('the commands the frame owns', () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'dark')
     mount()
 
-    expect(ids()).toContain('view.theme.system')
-    expect(ids()).toContain('view.theme.light')
-    expect(ids()).toContain('view.theme.dark')
+    /* In the words Settings uses for the same three choices. */
+    expect(commandFor('view.theme.system').title).toBe('Theme: follow system')
+    expect(commandFor('view.theme.light').title).toBe('Theme: light')
+    expect(commandFor('view.theme.dark').title).toBe('Theme: dark')
     expect(commandFor('view.theme.dark').hint).toBe('Current')
     expect(commandFor('view.theme.light').hint).toBeUndefined()
     expect(commandFor('view.theme.system').hint).toBeUndefined()
@@ -458,6 +465,67 @@ describe('the palette', () => {
 
     expect(route).toBe('shell-probe')
     expect(screen.getByText('the shell probe screen')).toBeVisible()
+  })
+})
+
+/*
+ * SETTINGS, FROM THE TITLE BAR IN EITHER AREA, AND FROM THE PALETTE IN EITHER AREA.
+ *
+ * Inside the books it is also in the Company rail. Before any company is open there is no
+ * rail, and the theme is as much a question at the unlock screen — so the title bar and the
+ * palette are asserted in both areas, not only where the rail would have covered for them.
+ */
+describe('settings', () => {
+  it('opens from the title bar with no company open', async () => {
+    const user = userEvent.setup()
+    mount({ isCompanyOpen: false })
+
+    await user.click(screen.getByRole('button', { name: 'Settings' }))
+
+    expect(route).toBe('settings')
+    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()
+    expect(screen.getByRole('radio', { name: 'Dark' })).toBeInTheDocument()
+  })
+
+  it('opens from the title bar inside the books, and marks its place in the rail', async () => {
+    const user = userEvent.setup()
+    mount({ isCompanyOpen: true })
+
+    await user.click(within(titleBar()).getByRole('button', { name: 'Settings' }))
+
+    expect(route).toBe('settings')
+    const company = screen.getByRole('navigation', { name: 'Company' })
+    expect(within(company).getByRole('button', { name: 'Settings' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+  })
+
+  it('is offered by the palette in both areas, once each', () => {
+    mount({ isCompanyOpen: false })
+    expect(commandFor('go.welcome.settings').title).toBe('Go to Settings')
+
+    localStorage.clear()
+    mount({ isCompanyOpen: true })
+    expect(ids().filter((id) => id.endsWith('.settings'))).toEqual(['go.workspace.settings'])
+    expect(commandFor('go.workspace.settings').location).toBe('Company → Settings')
+  })
+
+  /* ONE FACT, TWO CONTROLS. The layout chosen in Settings is the rail the frame draws, and
+   * the rail's own toggle moves the choice Settings shows. */
+  it('collapses the rail when the icon rail is chosen, and follows the rail toggle back', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem(RAIL_STORAGE_KEY, 'expanded')
+    mount({ isCompanyOpen: true })
+    await user.click(within(titleBar()).getByRole('button', { name: 'Settings' }))
+    expect(rail()).toHaveAttribute('data-collapsed', 'false')
+
+    await user.click(screen.getByRole('radio', { name: 'Icon rail' }))
+    expect(rail()).toHaveAttribute('data-collapsed', 'true')
+
+    run('view.toggle-rail')
+    expect(rail()).toHaveAttribute('data-collapsed', 'false')
+    expect(screen.getByRole('radio', { name: 'Section bar and rail' })).toBeChecked()
   })
 })
 
