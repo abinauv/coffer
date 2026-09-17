@@ -51,6 +51,7 @@ describe('API_SURFACE', () => {
       'recover',
       'close',
       'changePassphrase',
+      'replaceRecoveryCodes',
       'backup',
       'setBackupReminder',
       'restore',

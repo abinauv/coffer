@@ -51,7 +51,9 @@ import type {
   OpenCompanyResult,
   PassphraseStrength,
   RecoverCompanyInput,
+  RecoveryCodesIssued,
   RegistrationCheck,
+  ReplaceRecoveryCodesInput,
   RestoreInput,
   SetBackupReminderInput,
 } from '@shared/dto'
@@ -73,6 +75,7 @@ import {
   createVaultFile,
   readVaultFile,
   remainingRecoveryCodes,
+  replaceVaultFileRecoveryCodes,
   setPassphrase,
   unlockVaultFileWithRecoveryCode,
   unlockWithPassphrase,
@@ -312,8 +315,8 @@ export class CompanyService {
    *
    * A fresh set of codes is NOT issued here: exactly one code is spent and the other four
    * keep working. Re-issuing would invalidate the four codes on the sheet the user is
-   * holding, at the one moment they have proved they need it. Offer that as its own
-   * deliberate action instead — `replaceVaultFileRecoveryCodes` in the security module.
+   * holding, at the one moment they have proved they need it. It is its own deliberate
+   * action instead — `replaceRecoveryCodes` below, which asks for the passphrase.
    */
   async recover(input: RecoverCompanyInput): Promise<OpenCompanyResult> {
     return this.exclusive(async () => {
@@ -369,6 +372,35 @@ export class CompanyService {
         input.currentPassphrase,
         input.newPassphrase,
       )
+    })
+  }
+
+  /**
+   * Issue a fresh set of recovery codes, killing every code issued before.
+   *
+   * THE PASSPHRASE IS RE-ENTERED, although a company is already open. Issuing codes mints
+   * five new ways into these books, and the session in memory is not evidence of who is
+   * at the keyboard — an unlocked machine on a desk would otherwise be enough. So the
+   * passphrase is checked here exactly as `open` checks it, against the vault on disk,
+   * and a wrong one fails with the same `PASSPHRASE_INVALID` the unlock path raises.
+   *
+   * The DEK is never taken from the open session. `replaceVaultFileRecoveryCodes` derives
+   * it from the passphrase and zeroes it afterwards, which is what makes the check real:
+   * a check that passed a session key to the writer would be theatre.
+   *
+   * The database is untouched — not re-encrypted, not opened — and the open session stays
+   * valid, because the key it was opened with has not changed. Only the recovery slots
+   * in the vault are rewritten.
+   */
+  async replaceRecoveryCodes(input: ReplaceRecoveryCodesInput): Promise<RecoveryCodesIssued> {
+    return this.exclusive(async () => {
+      const session = this.requireSession()
+      requirePassphrase(input.passphrase, 'Enter your passphrase to issue new recovery codes.')
+      const recoveryCodes = await replaceVaultFileRecoveryCodes(
+        session.record.vaultPath,
+        input.passphrase,
+      )
+      return { recoveryCodes: [...recoveryCodes], recoveryCodesRemaining: recoveryCodes.length }
     })
   }
 

@@ -700,6 +700,111 @@ describe('changePassphrase', () => {
   })
 })
 
+describe('replaceRecoveryCodes', () => {
+  /*
+   * THE SECURITY PROPERTY, IN ONE TEST. Five new codes exist, none of the old five works
+   * any more, and the database was not touched on the way through.
+   */
+  it(
+    'issues five that work and kills five that did',
+    async () => {
+      const now = await fixture()
+      const created = await createCompany(now)
+      writeMetadata(now.service.requireDatabase(), MARKER_KEY, 'untouched')
+      const old = created.recoveryCodes ?? []
+      expect(old).toHaveLength(5)
+
+      const issued = await now.service.replaceRecoveryCodes({ passphrase: PASSPHRASE })
+
+      expect(issued.recoveryCodes).toHaveLength(5)
+      expect(issued.recoveryCodesRemaining).toBe(5)
+      /* Not one of them is a code that was on the old sheet. */
+      expect(issued.recoveryCodes.filter((code) => old.includes(code))).toEqual([])
+      /* The books are the books: no page was rewritten, and the session still holds. */
+      expect(readMetadata(now.service.requireDatabase(), MARKER_KEY)).toBe('untouched')
+
+      await now.service.close()
+      expect(
+        await codeOf(() =>
+          now.service.recover({
+            id: created.company.id,
+            recoveryCode: old[0] ?? '',
+            newPassphrase: NEW_PASSPHRASE,
+          }),
+        ),
+      ).toBe('RECOVERY_CODE_INVALID')
+
+      /* And a new one opens the books, which is the other half of the claim. */
+      const recovered = await now.service.recover({
+        id: created.company.id,
+        recoveryCode: issued.recoveryCodes[2] ?? '',
+        newPassphrase: NEW_PASSPHRASE,
+      })
+      expect(recovered.recoveryCodesRemaining).toBe(4)
+    },
+    SLOW_TEST_MS,
+  )
+
+  /*
+   * A WRONG PASSPHRASE ISSUES NOTHING. Not a partial set, not a vault with the old codes
+   * removed — the old sheet is exactly as good after a failed attempt as before it.
+   */
+  it(
+    'issues nothing on a wrong passphrase, and leaves the old codes working',
+    async () => {
+      const now = await fixture()
+      const created = await createCompany(now)
+      const old = created.recoveryCodes ?? []
+      const before = await sha256(created.company.vaultPath)
+
+      expect(
+        await codeOf(() => now.service.replaceRecoveryCodes({ passphrase: 'not the passphrase' })),
+      ).toBe('PASSPHRASE_INVALID')
+      expect(await sha256(created.company.vaultPath)).toBe(before)
+
+      await now.service.close()
+      const recovered = await now.service.recover({
+        id: created.company.id,
+        recoveryCode: old[0] ?? '',
+        newPassphrase: NEW_PASSPHRASE,
+      })
+      expect(recovered.recoveryCodesRemaining).toBe(4)
+    },
+    SLOW_TEST_MS,
+  )
+
+  it('refuses an empty passphrase, and refuses when no company is open', async () => {
+    const now = await fixture()
+    expect(await codeOf(() => now.service.replaceRecoveryCodes({ passphrase: PASSPHRASE }))).toBe(
+      'NO_COMPANY_OPEN',
+    )
+
+    await createCompany(now)
+    expect(await codeOf(() => now.service.replaceRecoveryCodes({ passphrase: '' }))).toBe(
+      'PASSPHRASE_REQUIRED',
+    )
+  })
+
+  /*
+   * ISSUED ONCE. The codes are in the answer and nowhere else: not in the vault (which
+   * keeps one-way verifiers), and not in anything the service will hand out later.
+   */
+  it('keeps no readable copy of what it issued', async () => {
+    const now = await fixture()
+    const created = await createCompany(now)
+
+    const issued = await now.service.replaceRecoveryCodes({ passphrase: PASSPHRASE })
+
+    const vaultText = await readFile(created.company.vaultPath, 'utf8')
+    for (const code of issued.recoveryCodes) {
+      expect(vaultText).not.toContain(code)
+      expect(vaultText).not.toContain(code.replaceAll('-', ''))
+    }
+    const reopened = await now.service.list()
+    expect(JSON.stringify(reopened)).not.toContain(issued.recoveryCodes[0] ?? 'nothing')
+  })
+})
+
 describe('what the registry remembers about backups', () => {
   /*
    * WHY THE REGISTRY AND NOT THE COMPANY FILE. A backup is written FROM the database, so

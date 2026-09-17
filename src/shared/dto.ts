@@ -187,8 +187,8 @@ export interface RecoverCompanyInput {
 export interface OpenCompanyResult {
   company: CompanySummary
   /**
-   * Recovery codes, returned exactly once — at creation, or when recovery consumes one
-   * and a fresh set is issued. Never retrievable afterwards.
+   * Recovery codes, returned exactly once — at creation. Never retrievable afterwards;
+   * a fresh set is issued only by `replaceRecoveryCodes`, which answers separately.
    */
   recoveryCodes?: string[]
   /** How many single-use recovery codes remain unspent. */
@@ -198,6 +198,25 @@ export interface OpenCompanyResult {
 export interface ChangePassphraseInput {
   currentPassphrase: string
   newPassphrase: string
+}
+
+/**
+ * Issuing a fresh set of recovery codes for the open company.
+ *
+ * The passphrase is not a formality. Issuing codes needs the key the vault is wrapped
+ * around, so it is proved the same way opening the company is — and it means somebody
+ * who walks up to an unlocked machine cannot mint themselves a way back in.
+ */
+export interface ReplaceRecoveryCodesInput {
+  passphrase: string
+}
+
+/** The answer to `replaceRecoveryCodes`. The codes are in it once and never again. */
+export interface RecoveryCodesIssued {
+  /** The new set, in order. Every code issued before this one is now dead. */
+  recoveryCodes: string[]
+  /** How many are unspent — all of them, the moment they are issued. */
+  recoveryCodesRemaining: number
 }
 
 // ---- Backup and restore ---------------------------------------------------

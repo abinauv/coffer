@@ -293,37 +293,11 @@ to write code to open that issue.
 
 ## 5. Larger, but well-scoped
 
-Agree the approach on an issue before starting any of these. All three touch a contract or
+Agree the approach on an issue before starting any of these. Both touch a contract or
 the security model, and [`CONTRIBUTING.md`](../CONTRIBUTING.md) is explicit that a
 finished PR which violates a load-bearing constraint is unpleasant for everyone.
 
-### 5.1 Let a user get a fresh set of recovery codes
-
-**Files:** `src/shared/ipc.ts`, `src/shared/dto.ts`, `src/main/ipc/surface.ts`,
-`src/main/ipc/handlers/companies.ts`, `src/main/companies/service.ts`.
-
-Today, using a recovery code leaves you with four — permanently. There is no way to ask
-for a new set.
-
-The capability is already built and tested: `replaceVaultFileRecoveryCodes` in
-`src/main/security/vault.ts` issues a fresh set against a passphrase, invalidating every
-existing code. It requires the passphrase by design, so a stolen vault file cannot mint
-itself new codes. Nothing calls it.
-
-`CompanyService.recover()` names this gap in its own comment, and explains why recovery
-does **not** silently reissue: it would invalidate the four codes on the sheet in the
-user's hand at the one moment they have proved they need it. So this must be a separate,
-deliberate action.
-
-**Done when** there is a `companies.replaceRecoveryCodes` method on the contract, listed
-in `API_SURFACE`, with a handler and a service method, returning the new codes once and
-only once. Tests should cover: the old codes stop working, the new ones work, and a wrong
-passphrase changes nothing.
-
-**Note:** the screen is a separate issue. Land the main-process half first — and see 5.3,
-which is what that screen will need to offer the sheet as a file.
-
-### 5.2 Upgrade a vault's KDF parameters on unlock
+### 5.1 Upgrade a vault's KDF parameters on unlock
 
 **Files:** `src/main/companies/service.ts`, possibly `src/main/security/vault.ts`.
 
@@ -345,7 +319,7 @@ which nobody has — so only the passphrase slot can be upgraded on unlock. Say 
 rather than leaving `needsKdfUpgrade` reporting a state that can never be cleared. And a
 failed write must not cost the user their unlock.
 
-### 5.3 A `system.writeTextFile` on the contract
+### 5.2 A `system.writeTextFile` on the contract
 
 **Files:** `src/shared/ipc.ts`, `src/shared/dto.ts`, `src/main/ipc/surface.ts`,
 `src/main/ipc/handlers/system.ts`, `src/main/ipc/electron.ts`,
@@ -359,7 +333,7 @@ failed write must not cost the user their unlock.
 
 The one thing that path saves today is **the recovery-code sheet**, which is why this is on
 the list rather than filed as tidying: the codes are the only fallback a user has, there is
-no escrow, and the save happens on the one screen they cannot go back to.
+no escrow, and the save happens on a screen that cannot be returned to.
 
 **Done when** the method exists with a handler that goes through `SystemEnvironment` and
 the same path allowlist `revealInFileManager` uses, the renderer calls it instead of

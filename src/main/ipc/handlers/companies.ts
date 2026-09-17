@@ -26,7 +26,9 @@ import type {
   OpenCompanyResult,
   PassphraseStrength,
   RecoverCompanyInput,
+  RecoveryCodesIssued,
   RegistrationCheck,
+  ReplaceRecoveryCodesInput,
   RestoreInput,
   SetBackupReminderInput,
 } from '../../../shared/dto'
@@ -58,6 +60,8 @@ export interface CompanyService {
   recover(input: RecoverCompanyInput): Promise<OpenCompanyResult>
   close(): Promise<void>
   changePassphrase(input: ChangePassphraseInput): Promise<void>
+  /** Kills every existing code and mints a new set. Needs the current passphrase. */
+  replaceRecoveryCodes(input: ReplaceRecoveryCodesInput): Promise<RecoveryCodesIssued>
   backup(input: BackupInput): Promise<BackupResult>
   setBackupReminder(input: SetBackupReminderInput): Promise<CompanySummary>
   restore(input: RestoreInput): Promise<CompanySummary>
@@ -126,6 +130,11 @@ function parseChangePassphraseInput(value: unknown): ChangePassphraseInput {
     currentPassphrase: expectString(input['currentPassphrase'], 'currentPassphrase'),
     newPassphrase: expectString(input['newPassphrase'], 'newPassphrase'),
   }
+}
+
+function parseReplaceRecoveryCodesInput(value: unknown): ReplaceRecoveryCodesInput {
+  const input = expectRecord(value, 'input')
+  return { passphrase: expectString(input['passphrase'], 'passphrase') }
 }
 
 function parseBackupInput(value: unknown): BackupInput {
@@ -215,6 +224,16 @@ export function createCompaniesHandlers(
         await service.changePassphrase(input)
         return ok(undefined)
       },
+    },
+
+    /*
+     * The codes come back through the envelope and are not written down anywhere on the
+     * way — not to a log line, not to the allowlist, not into the company summary. The
+     * renderer is the only place they exist after this returns.
+     */
+    replaceRecoveryCodes: {
+      parseArgs: (raw): [ReplaceRecoveryCodesInput] => [parseReplaceRecoveryCodesInput(raw[0])],
+      handle: async (input) => ok(await service.replaceRecoveryCodes(input)),
     },
 
     backup: {
