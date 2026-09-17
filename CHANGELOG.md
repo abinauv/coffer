@@ -1213,6 +1213,10 @@ Found while building the redesign, by driving the app rather than by its tests:
   with every test and fixture, `docs/`, `scripts/` and `coverage/`: a platform's `files`
   list replaces the shared one, and one beginning with an exclusion makes electron-builder
   prepend `**/*`. A test reads the configuration and the build checks the archive.
+- **The release workflow could not package macOS.** Its first run failed both Mac jobs:
+  `arch: [x64, arm64]` on the target overrode each runner's `--arm64` or `--x64`, so each
+  packaged the slice whose native binaries it did not have, and the build's own check
+  refused it. The architecture is the command line's now, and a test holds it.
 - Reverse charge and the export treatment were dropped at the IPC boundary, so no screen
   could set either although the service and the repository honoured both.
 - No customer or vendor could be added without a credit limit: a blank limit arrived as
