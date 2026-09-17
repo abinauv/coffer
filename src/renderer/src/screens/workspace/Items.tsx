@@ -720,9 +720,8 @@ function UnitField({
         }
       >
         <p>
-          These books were not given any — nothing is assumed about what you trade in. An item does
-          not need one, so you can save this without a unit and set it later, or add your units
-          first and come back.
+          These books have none in use. An item does not need one, so you can save this without a
+          unit and set it later, or add your units first and come back.
         </p>
       </Notice>
     )

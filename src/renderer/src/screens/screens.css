@@ -1803,24 +1803,78 @@
   overflow: auto;
 }
 
-/* Ten columns of controls. Below this width they squeeze until a price reads "2250." — so
- * the grid holds its width and scrolls sideways inside its own box instead. */
-.editor__table {
-  min-width: 84rem;
-}
-
-/* The item, the description and the code are read as words, so they keep a width a word
- * fits in; the figures share what is left. */
+/*
+ * Ten columns of controls, EACH HOLDING ITS OWN WIDTH, so the table is as wide as its
+ * content needs and scrolls sideways inside its own box only when the window is narrower
+ * than that.
+ *
+ * It used to hold one width for the whole table (84rem) and let the figures share whatever
+ * the three word columns left. At a 1440 px window that scrolled sideways AND squeezed: the
+ * tax-rate box was 39 px wide showing "18.000", a price read "82.", a unit "N" — and the
+ * amount, the one figure the row exists for, was past the edge (B34).
+ */
 .editor__table td:nth-child(2) .field {
-  min-width: 11rem;
+  min-width: 8.5rem;
 }
 
 .editor__table td:nth-child(3) .field {
-  min-width: 16rem;
+  min-width: 11rem;
 }
 
+/* Up to eight digits, typed with dots and spaces. */
 .editor__table td:nth-child(4) .field {
-  min-width: 8rem;
+  min-width: 5.5rem;
+}
+
+/* Quantity: three places and a thousands group. */
+.editor__table td:nth-child(5) .field {
+  min-width: 5.5rem;
+}
+
+/* A unit's code; its name is in the list when it opens. */
+.editor__table td:nth-child(6) .field {
+  min-width: 4.5rem;
+}
+
+/* A price in lakhs, two places. */
+.editor__table td:nth-child(7) .field {
+  min-width: 6.5rem;
+}
+
+.editor__table td:nth-child(8) .field {
+  min-width: 5rem;
+}
+
+/* A rate with three places: 0.125, and 18.000 as it comes back from a save. */
+.editor__table td:nth-child(9) .field {
+  min-width: 6rem;
+}
+
+/* Ten controls a row: the gutter between them is the control's own border, not a row's
+ * padding, or twelve columns spend a fifth of the grid on space. */
+.editor__table th,
+.editor__table td {
+  padding-inline: var(--space-1);
+}
+
+.editor__table th:first-child,
+.editor__table td:first-child {
+  padding-inline-start: var(--space-4);
+}
+
+/* Where the line posts: the charge box and the account under it. Its label is one line,
+ * or every row grows by two. */
+.editor__table td:nth-child(11) {
+  min-width: 10rem;
+}
+
+.editor__table td:nth-child(11) .checkbox__label {
+  white-space: nowrap;
+}
+
+/* The saved amount is read, not typed, and a wrapped figure is a figure misread. */
+.editor__table td.editor__amount {
+  white-space: nowrap;
 }
 
 .editor__grid > .prose {
