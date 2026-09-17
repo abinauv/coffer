@@ -240,6 +240,100 @@
   padding-inline-start: calc(1em + var(--space-3));
 }
 
+/* One icon wide, and never the column that grows when the window does. */
+.register__print {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* ---- The print dialog ----------------------------------------------------- */
+
+/* Options on the left, a sheet of A4 on the right. Below the dialog's own breakpoint the
+ * two stack and the preview goes second — somebody on a narrow window is choosing what to
+ * print, and the picture can wait until they scroll. */
+
+.print {
+  display: grid;
+  grid-template-columns: minmax(16rem, 22rem) 1fr;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+@media (max-width: 47rem) {
+  .print {
+    grid-template-columns: 1fr;
+  }
+}
+
+.print__group {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.print__group legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+}
+
+.print__preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* A4's own ratio, so the box is the right shape before the image has arrived and does not
+ * jump when it does — capped, because a full-width sheet at that ratio is taller than the
+ * dialog and would put the Include boxes behind a scrollbar. */
+.print__sheet {
+  aspect-ratio: 210 / 297;
+  max-height: min(58vh, 30rem);
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  /* Always white. The page is ink on paper and has no theme — a preview that went dark
+   * with the interface would be showing something the printer will not produce. */
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.print__image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+/* Drawing the next one. The old page stays, dimmed, rather than being replaced by a
+ * spinner: a preview that blanks on every tick is harder to compare against. */
+.print__image[data-stale='true'] {
+  opacity: 0.45;
+}
+
+.print__placeholder {
+  margin: 0;
+  padding: var(--space-4);
+  text-align: center;
+  font-size: var(--text-sm);
+  /* On the white sheet above, so it cannot take the theme's ink. */
+  color: #6b6b6b;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .print__image {
+    transition: none;
+  }
+}
+
 /* ---- Recovery-code meter -------------------------------------------------- */
 
 /* One segment per code issued, filled while the code is unspent. The count beside it

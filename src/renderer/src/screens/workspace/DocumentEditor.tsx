@@ -123,6 +123,7 @@ import type {
 import { CheckboxField } from '../components/CheckboxField'
 import { FailureNotice } from '../components/FailureNotice'
 import { Notice } from '../components/Notice'
+import { PrintDialog } from '../components/PrintDialog'
 import { ScreenFrame } from '../components/ScreenFrame'
 import { formatDate } from '../lib/dates'
 import { advanceFrom, fieldsIn, isAdvanceField, isAdvanceKey } from '../lib/enter-advances'
@@ -141,6 +142,7 @@ import {
 import {
   blankLine,
   canCancel,
+  canPrint,
   canDelete,
   canEdit,
   canIssue,
@@ -236,6 +238,7 @@ export function DocumentEditor({
   const [error, setError] = useState<AppError | null>(null)
   const [isBusy, setBusy] = useState(false)
   const [isReading, setReading] = useState(documentId !== null)
+  const [isPrinting, setPrinting] = useState(false)
 
   const [partyId, setPartyId] = useState('')
   const [date, setDate] = useState('')
@@ -882,6 +885,8 @@ export function DocumentEditor({
 
   const canBeginIssue =
     document !== null && canIssue(status) && canSave && !isBusy && confirming === null
+  /* Anything with a number on it, cancelled ones included — see `canPrint`. */
+  const canPrintThis = document !== null && canPrint(status)
   const section = definition.side === 'sales' ? 'Sales' : 'Purchases'
 
   /*
@@ -911,9 +916,9 @@ export function DocumentEditor({
     navigate(makeRoute('workspace', registerScreenId(kind)))
   }, [isDirty, kind, navigate])
 
-  const actions = useRef({ beginIssue, duplicate, save, stepBack })
+  const actions = useRef({ beginIssue, duplicate, save, stepBack, print: () => setPrinting(true) })
   useEffect(() => {
-    actions.current = { beginIssue, duplicate, save, stepBack }
+    actions.current = { beginIssue, duplicate, save, stepBack, print: () => setPrinting(true) }
   }, [beginIssue, duplicate, save, stepBack])
 
   useRegisterCommands(
@@ -946,6 +951,14 @@ export function DocumentEditor({
           run: () => actions.current.stepBack(),
         },
         {
+          id: `documents.${kind}.print`,
+          title: `Print this ${label}`,
+          section,
+          keywords: ['print', 'pdf', 'copy', 'paper', label],
+          isDisabled: !canPrintThis,
+          run: () => actions.current.print(),
+        },
+        {
           id: `documents.${kind}.duplicate-line`,
           title: 'Duplicate this line',
           section,
@@ -955,7 +968,16 @@ export function DocumentEditor({
           run: () => actions.current.duplicate(),
         },
       ],
-      [canBeginIssue, canSave, definition.pluralLabel, isEditable, kind, label, section],
+      [
+        canBeginIssue,
+        canPrintThis,
+        canSave,
+        definition.pluralLabel,
+        isEditable,
+        kind,
+        label,
+        section,
+      ],
     ),
   )
 
@@ -1026,6 +1048,11 @@ export function DocumentEditor({
               <span className="button__keys" aria-hidden="true">
                 <Kbd shortcut={ISSUE_SHORTCUT} />
               </span>
+            </Button>
+          )}
+          {canPrintThis && (
+            <Button icon="invoice" disabled={isBusy} onClick={() => setPrinting(true)}>
+              Print
             </Button>
           )}
           {document !== null && canCancel(status) && (
@@ -1291,6 +1318,15 @@ export function DocumentEditor({
           </div>
         )}
       </Dialog>
+
+      {document !== null && (
+        <PrintDialog
+          isOpen={isPrinting}
+          documentId={document.id}
+          title={document.number ?? label}
+          onClose={() => setPrinting(false)}
+        />
+      )}
     </ScreenFrame>
   )
 }
