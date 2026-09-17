@@ -190,7 +190,7 @@ describe('restoring', () => {
     const user = userEvent.setup()
     renderScreen(<Backups />, { bridge: bridge(), company: BACKED_UP })
 
-    await user.click(await screen.findByRole('button', { name: 'Restore from a backup…' }))
+    await user.click(await screen.findByRole('button', { name: 'Restore from a backup' }))
 
     const dialog = await screen.findByRole('dialog', { name: 'Restore from a backup' })
     expect(within(dialog).getByText(/does not open the company/)).toBeInTheDocument()

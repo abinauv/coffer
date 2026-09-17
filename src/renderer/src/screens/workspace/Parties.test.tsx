@@ -227,7 +227,7 @@ describe('adding', () => {
     const { user } = await opened('vendor', { create })
 
     await user.type(screen.getByLabelText('Name'), 'Southern Transport')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith(
@@ -243,7 +243,7 @@ describe('adding', () => {
     await user.type(screen.getByLabelText('Name'), '  Bharat Steel  ')
     await user.type(screen.getByLabelText('Registration number'), ' 33AABCC1234D1ZI ')
     await user.type(screen.getByLabelText('City'), 'Coimbatore')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith(
@@ -287,7 +287,7 @@ describe('adding', () => {
     await user.type(screen.getByLabelText('Phone'), '+9144')
     await user.type(screen.getByLabelText('Notes'), 'Cheque')
 
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith({
@@ -325,7 +325,7 @@ describe('adding', () => {
 
     await user.type(screen.getByLabelText('Name'), 'Walk-in')
     await user.selectOptions(screen.getByLabelText('State or region'), '33')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith(expect.objectContaining({ jurisdictionCode: '33' }))
@@ -339,7 +339,7 @@ describe('adding', () => {
     const { user } = await opened('customer', { create })
 
     await user.type(screen.getByLabelText('Name'), 'Walk-in')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith(expect.objectContaining({ jurisdictionCode: '' }))
@@ -401,7 +401,7 @@ describe('adding', () => {
     expect(screen.getByLabelText('Country')).toHaveValue('pt')
 
     await user.type(screen.getByLabelText('Name'), 'Lisbon Metals')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith(expect.objectContaining({ countryCode: 'pt' }))
@@ -440,7 +440,7 @@ describe('adding', () => {
     expect(screen.getByLabelText('Country')).toHaveValue('pt')
 
     await user.type(screen.getByLabelText('Name'), 'Lisbon Metals')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith(expect.objectContaining({ countryCode: 'pt' }))
@@ -462,7 +462,7 @@ describe('adding', () => {
     expect(screen.getByLabelText('Country')).toHaveValue('pt')
 
     await user.type(screen.getByLabelText('Name'), 'Lisbon Metals')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith(expect.objectContaining({ countryCode: 'pt' }))
@@ -483,7 +483,8 @@ describe('adding', () => {
 
     expect(screen.getByLabelText('Country')).toHaveValue('')
     await user.type(screen.getByLabelText('Name'), 'Somebody')
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    /* The button names what it adds, in the words of the list it was opened from. */
+    expect(screen.getByRole('button', { name: 'Add customer' })).toBeDisabled()
   })
 
   /*
@@ -494,25 +495,25 @@ describe('adding', () => {
   it('will not save until the name, the country and a side are all there', async () => {
     const { user } = await opened('customer')
 
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ })).toBeDisabled()
 
     await user.selectOptions(screen.getByLabelText('Country'), '')
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ })).toBeDisabled()
 
     await user.type(screen.getByLabelText('Name'), '   ')
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ })).toBeDisabled()
 
     await user.type(screen.getByLabelText('Name'), 'Bharat Steel')
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ })).toBeDisabled()
 
     await user.selectOptions(screen.getByLabelText('Country'), 'in')
-    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ })).toBeEnabled()
 
     await user.click(screen.getByLabelText(/We sell to them/))
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ })).toBeDisabled()
 
     await user.click(screen.getByLabelText(/We buy from them/))
-    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ })).toBeEnabled()
   })
 
   /* A party that is neither is refused by the database. Saying so in the dialog beats
@@ -524,7 +525,7 @@ describe('adding', () => {
     await user.click(screen.getByLabelText(/We sell to them/))
 
     expect(await screen.findByText('Which way does the money go?')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ })).toBeDisabled()
   })
 
   /*
@@ -540,11 +541,11 @@ describe('adding', () => {
     await user.type(screen.getByLabelText('Payment terms (days)'), '-5')
 
     expect(await screen.findByText(/whole number of days/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ })).toBeDisabled()
 
     await user.clear(screen.getByLabelText('Payment terms (days)'))
     await user.type(screen.getByLabelText('Payment terms (days)'), '30')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith(expect.objectContaining({ paymentTermsDays: 30 }))
@@ -558,7 +559,7 @@ describe('adding', () => {
     const { user } = await opened('customer', { create })
 
     await user.type(screen.getByLabelText('Name'), 'Walk-in')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith(expect.objectContaining({ paymentTermsDays: null }))
@@ -576,7 +577,7 @@ describe('adding', () => {
 
     await user.type(screen.getByLabelText('Name'), 'Bharat Steel')
     await user.type(screen.getByLabelText('Credit limit'), '1000')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith(expect.objectContaining({ creditLimit: '1000' }))
@@ -603,7 +604,7 @@ describe('adding', () => {
 
     await user.type(screen.getByLabelText('Name'), 'Bharat Steel')
     await user.type(screen.getByLabelText('Registration number'), '33AABCC1234D1ZZ')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ }))
 
     expect(
       await screen.findByText(/The last character does not match the rest of this GSTIN/),
@@ -634,7 +635,7 @@ describe('adding', () => {
     await user.type(screen.getByLabelText('Name'), 'Bharat Steel')
     await user.type(screen.getByLabelText('Registration number'), '33AABCC1234D1ZI')
     await user.selectOptions(screen.getByLabelText('State or region'), '29')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: /^Add (customer|vendor|party)$/ }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith(
@@ -702,7 +703,7 @@ describe('editing', () => {
 
     await user.clear(screen.getByLabelText('Name'))
     await user.type(screen.getByLabelText('Name'), 'Bharat Steel Works')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: /^Save (customer|vendor|party)$/ }))
 
     await waitFor(() => {
       expect(update).toHaveBeenCalledWith(
@@ -733,7 +734,7 @@ describe('editing', () => {
     await user.click(await screen.findByRole('button', { name: 'Bharat Steel' }))
     expect(await screen.findByLabelText('Payment terms (days)')).toHaveValue('30')
 
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: /^Save (customer|vendor|party)$/ }))
 
     await waitFor(() => {
       expect(update).toHaveBeenCalledWith(expect.objectContaining({ paymentTermsDays: 30 }))
@@ -764,7 +765,7 @@ describe('editing', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Bharat Steel' }))
     await screen.findByLabelText('State or region')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: /^Save (customer|vendor|party)$/ }))
 
     await waitFor(() => {
       expect(update).toHaveBeenCalledWith(
@@ -804,7 +805,7 @@ describe('editing', () => {
     /* Displayed at the scale main stored it. `1000` was sent and `1000.00` came back. */
     expect(screen.getByLabelText('Credit limit')).toHaveValue('1000.00')
 
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: /^Save (customer|vendor|party)$/ }))
 
     await waitFor(() => {
       expect(update).toHaveBeenCalledWith(
@@ -839,7 +840,7 @@ describe('editing', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Bharat Steel' }))
     await screen.findByLabelText('Name')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: /^Save (customer|vendor|party)$/ }))
 
     expect(await screen.findByText(/no longer a customer/)).toBeInTheDocument()
     expect(screen.getByText(/still in the books/)).toBeInTheDocument()

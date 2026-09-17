@@ -363,8 +363,9 @@ export class DocumentsService {
     if (profile === null) {
       throw new RepoError(
         'COMPANY_PROFILE_MISSING',
-        'These books do not say who they are for yet. Fill in the company profile — the ' +
-          'tax on a sale depends on where the business is as much as on where the customer is.',
+        'These books do not say who they belong to yet, and the tax on a sale depends on ' +
+          'where the business is as much as on where the customer is. Fill in Business ' +
+          'details under Company, then save this again.',
       )
     }
     return {

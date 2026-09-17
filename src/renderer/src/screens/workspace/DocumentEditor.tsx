@@ -1671,14 +1671,14 @@ function PlaceOfSupply({
       disabled={!isEditable}
       hint={
         isTouched
-          ? `Overridden for this ${label}. Choose "Wherever the regime decides" to let it decide again.`
+          ? `Overridden for this ${label}. Choose "Where the party and your registration place it" to go back.`
           : savedTaxes.length > 0
             ? `Taxed as ${savedTaxes.join(' + ')} at the last save. Left alone, this follows the party and your own registration.`
             : 'Left alone, this follows the party and your own registration. Change it only for a supply that happens somewhere else — a hotel room, goods delivered to a third state.'
       }
       onChange={(event) => onChange(event.target.value)}
     >
-      <option value="">Wherever the regime decides</option>
+      <option value="">Where the party and your registration place it</option>
       {(regime?.jurisdictions ?? []).map((jurisdiction) => (
         <option key={jurisdiction.code} value={jurisdiction.code}>
           {jurisdiction.name}

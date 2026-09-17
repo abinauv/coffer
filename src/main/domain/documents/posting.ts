@@ -673,10 +673,12 @@ function taxAccountFor(
     throw new PostingError(
       'ROLE_UNMAPPED',
       levy === 'output'
-        ? `These books have no account for ${componentCode} collected on sales. ` +
-            'Add one under Duties and Taxes before issuing this.'
-        : `These books have no account for ${componentCode} paid on purchases. ` +
-            'Add one under Taxes Recoverable before issuing this.',
+        ? `These books have no account for ${componentCode} collected on sales, so this ` +
+            'cannot post. Every chart Coffer creates has one, and no screen can map one ' +
+            'yet, so please report this.'
+        : `These books have no account for ${componentCode} paid on purchases, so this ` +
+            'cannot post. Every chart Coffer creates has one, and no screen can map one ' +
+            'yet, so please report this.',
       { componentCode, levy },
     )
   }
@@ -687,7 +689,7 @@ function required(account: AccountRef | null, role: AccountRole): AccountRef {
   if (account === null) {
     throw new PostingError(
       'ROLE_UNMAPPED',
-      `No account is mapped to ${role}. Point one at it in the chart of accounts.`,
+      `No account is mapped to ${role}, so this cannot post. Every chart Coffer creates maps one, and no screen can yet, so please report this.`,
       { role },
     )
   }

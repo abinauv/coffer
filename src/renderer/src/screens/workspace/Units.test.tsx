@@ -164,26 +164,26 @@ describe('adding', () => {
   it('will not save a unit with no code', async () => {
     const { user } = await opened()
 
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add unit' })).toBeDisabled()
 
     await user.type(screen.getByLabelText('Name'), 'Kilograms')
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add unit' })).toBeDisabled()
 
     await user.type(screen.getByLabelText('Code'), 'KGS')
-    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Add unit' })).toBeEnabled()
   })
 
   it('will not save a unit with no name', async () => {
     const { user } = await opened()
 
     await user.type(screen.getByLabelText('Code'), 'KGS')
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add unit' })).toBeDisabled()
 
     await user.type(screen.getByLabelText('Name'), '   ')
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add unit' })).toBeDisabled()
 
     await user.type(screen.getByLabelText('Name'), 'Kilograms')
-    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Add unit' })).toBeEnabled()
   })
 
   /*
@@ -199,7 +199,7 @@ describe('adding', () => {
 
     await user.type(screen.getByLabelText('Code'), '  BUNDLE  ')
     await user.type(screen.getByLabelText('Name'), 'Bundles of ten')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: 'Add unit' }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith({
@@ -221,7 +221,7 @@ describe('adding', () => {
     await user.type(screen.getByLabelText('Code'), 'BOX')
     await user.type(screen.getByLabelText('Name'), 'Boxes')
     await user.selectOptions(screen.getByLabelText('Decimal places'), '0')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: 'Add unit' }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith(
@@ -239,7 +239,7 @@ describe('adding', () => {
     await user.type(screen.getByLabelText('Code'), 'BAGS')
     await user.type(screen.getByLabelText('Name'), 'Bags')
     await user.type(screen.getByLabelText('Reports as'), ' BAG ')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: 'Add unit' }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith(expect.objectContaining({ regimeCode: 'BAG' }))
@@ -260,14 +260,14 @@ describe('adding', () => {
 
     await user.type(screen.getByLabelText('Code'), 'kgs')
     await user.type(screen.getByLabelText('Name'), 'Kilograms')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: 'Add unit' }))
 
     await waitFor(() => {
       expect(screen.getByLabelText('Code')).toHaveValue('KGS')
     })
     /* And it is now an existing unit, so the box that was editable a moment ago is not. */
     expect(screen.getByLabelText('Code')).toHaveAttribute('readonly')
-    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save unit' })).toBeInTheDocument()
   })
 
   /*
@@ -290,7 +290,7 @@ describe('adding', () => {
 
     await user.type(screen.getByLabelText('Code'), 'kgs')
     await user.type(screen.getByLabelText('Name'), 'Kilos')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: 'Add unit' }))
 
     const box = await screen.findByLabelText('Code')
     await waitFor(() => {
@@ -313,7 +313,7 @@ describe('adding', () => {
 
     await user.type(screen.getByLabelText('Code'), 'KGS')
     await user.type(screen.getByLabelText('Name'), 'Kilograms')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: 'Add unit' }))
 
     expect(await screen.findByText('No company is open.')).toBeInTheDocument()
     expect(screen.getByLabelText('Code')).toHaveAccessibleDescription(/kg and KG would be one unit/)
@@ -330,9 +330,9 @@ describe('adding', () => {
 
     await user.type(screen.getByLabelText('Code'), 'KGS')
     await user.type(screen.getByLabelText('Name'), 'Kilograms')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: 'Add unit' }))
 
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add unit' })).toBeDisabled()
 
     /* Awaiting the promise is not waiting for the screen: the state that follows it is
      * set in a React update, and only `act` flushes that. */
@@ -341,7 +341,7 @@ describe('adding', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'Save unit' })).toBeEnabled()
     })
   })
 })
@@ -402,7 +402,7 @@ describe('editing', () => {
     await user.clear(await screen.findByLabelText('Name'))
     await user.type(screen.getByLabelText('Name'), 'Kilogrammes')
     await user.selectOptions(screen.getByLabelText('Decimal places'), '2')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save unit' }))
 
     await waitFor(() => {
       expect(update).toHaveBeenCalledWith({
@@ -423,7 +423,7 @@ describe('editing', () => {
     const { user } = await editorFor('KGS', { update })
 
     await user.clear(await screen.findByLabelText('Reports as'))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save unit' }))
 
     await waitFor(() => {
       expect(update).toHaveBeenCalledWith(expect.objectContaining({ regimeCode: null }))
@@ -451,7 +451,7 @@ describe('editing', () => {
 
     await user.clear(await screen.findByLabelText('Name'))
     await user.type(screen.getByLabelText('Name'), 'Kilos')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save unit' }))
 
     await waitFor(() => {
       expect(screen.getByLabelText('Name')).toHaveValue('Kilogrammes')

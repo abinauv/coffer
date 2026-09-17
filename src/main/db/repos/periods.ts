@@ -35,6 +35,7 @@ import type { AccountingPeriod, DateString, PeriodStatus } from '@shared/dto'
 
 import type { CofferDb } from '../kysely'
 import type { AccountingPeriodsTable } from '../schema'
+import { writtenDate } from '@shared/written-date'
 import { RepoError, repoErrorFrom } from './errors'
 
 type PeriodRow = AccountingPeriodsTable
@@ -122,6 +123,21 @@ export async function periodRefForDate(
 }
 
 /**
+ * The refusal for a date no period covers, written once for every caller that needs one.
+ *
+ * The date is written the way the screens write it, because this message reaches them
+ * unchanged, and it says what to do: nothing can be dated outside the years the books keep.
+ */
+export function noPeriodCovering(date: DateString): RepoError {
+  return new RepoError(
+    'NO_PERIOD',
+    `These books have no period covering ${writtenDate(date)}, so nothing can be dated then. ` +
+      'Choose a date inside the financial years they keep.',
+    { date },
+  )
+}
+
+/**
  * The period a document dated `date` may post into, or a refusal saying why not.
  *
  * The posting engine's entry point into this file. `NO_PERIOD` and `PERIOD_CLOSED` are
@@ -133,16 +149,19 @@ export async function requirePostablePeriod(
   date: DateString,
 ): Promise<AccountingPeriodRef> {
   const row = await rowForDate(db, date)
-  if (row === null) {
-    throw new RepoError('NO_PERIOD', `The books have no period covering ${date}.`, { date })
-  }
+  if (row === null) throw noPeriodCovering(date)
   if (row.status !== 'open') {
-    throw new RepoError('PERIOD_CLOSED', `${row.label} is ${row.status}.`, {
-      date,
-      periodId: row.id,
-      label: row.label,
-      status: row.status,
-    })
+    throw new RepoError(
+      'PERIOD_CLOSED',
+      `${row.label} is ${row.status}, so nothing more can be posted in it. ` +
+        'Date this in a period that is still open.',
+      {
+        date,
+        periodId: row.id,
+        label: row.label,
+        status: row.status,
+      },
+    )
   }
   return toRef(row)
 }

@@ -552,7 +552,7 @@ export function buildInvoicePrintModel(sources: InvoicePrintSources): InvoicePri
     throw new PrintError(
       'COMPANY_PROFILE_MISSING',
       'These books do not say who they belong to yet, and an invoice has to name its ' +
-        'supplier. Fill in the company profile and print again.',
+        'supplier. Fill in Business details under Company and print again.',
     )
   }
   if (party === null) {

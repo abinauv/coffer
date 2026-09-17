@@ -340,7 +340,7 @@ export function CompanyProfile(): JSX.Element {
                 disabled={!canSave}
                 aria-keyshortcuts="Control+S"
               >
-                {isBusy ? 'Saving…' : 'Save'}
+                {isBusy ? 'Saving…' : 'Save business details'}
                 <span className="button__keys" aria-hidden="true">
                   <Kbd shortcut={SHORTCUTS.save} />
                 </span>

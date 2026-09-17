@@ -25,7 +25,8 @@ import { useToasts } from '@renderer/store/toasts'
 import { copyText, offerTextDownload, printPage } from '../lib/browser'
 import { countWord } from '../lib/create-flow'
 import { challengeIndex, gateHint, gateState } from '../lib/recovery-gate'
-import { recoverySheetText, sheetDate, sheetFileName } from '../lib/recovery-sheet'
+import { writtenDayOf } from '@shared/written-date'
+import { recoverySheetText, sheetFileName } from '../lib/recovery-sheet'
 import { CheckboxField } from './CheckboxField'
 
 /** What a caller needs to know about the gate: whether it is open, and what is missing. */
@@ -147,7 +148,7 @@ export function RecoverySheet({
               {companyName} · {filePath}
             </p>
           </div>
-          <p className="sheet__date">{sheetDate(generatedAt)}</p>
+          <p className="sheet__date">{writtenDayOf(generatedAt)}</p>
         </header>
 
         <ol className="sheet__codes">

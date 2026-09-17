@@ -110,8 +110,9 @@ export function BalanceSheet(): JSX.Element {
                 <p>
                   Assets come to {formatAmount(sheet.totalAssets, format)} and the other side to{' '}
                   {formatAmount(sheet.totalLiabilitiesAndEquity, format)}. Every entry in these
-                  books was checked three times before it was written, so this should be impossible
-                  — please report it, with a backup if you can.
+                  books was checked three times before it was written, so this should be impossible.
+                  Please report it with these two figures, and attach neither the company file nor a
+                  backup: both hold your books.
                 </p>
               </Notice>
             )}

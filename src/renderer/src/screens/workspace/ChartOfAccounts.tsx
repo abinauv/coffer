@@ -94,7 +94,11 @@ export function ChartOfAccounts(): JSX.Element {
         api.ledger.updateAccount({ id: account.id, isArchived: archived }),
       )
       if (!result.ok) {
-        show({ tone: 'danger', title: 'That did not work', body: result.error.message })
+        show({
+          tone: 'danger',
+          title: `${accountLabel(account)} was not ${archived ? 'archived' : 'put back in use'}`,
+          body: result.error.message,
+        })
         return
       }
       show({
@@ -205,7 +209,11 @@ export function ChartOfAccounts(): JSX.Element {
         onClose={() => setEditing(null)}
         onSaved={(saved) => {
           setEditing(null)
-          show({ tone: 'success', title: 'Saved', body: `${accountLabel(saved)} is up to date.` })
+          show({
+            tone: 'success',
+            title: 'Account saved',
+            body: `${accountLabel(saved)} is up to date.`,
+          })
           void load()
         }}
       />
@@ -481,7 +489,7 @@ function EditAccountDialog({
             disabled={!canSubmit}
             isBusy={isBusy}
           >
-            Save
+            Save account
           </Button>
         </>
       }

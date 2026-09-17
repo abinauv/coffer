@@ -267,6 +267,20 @@ describe('TrialBalance', () => {
     expect(figuresOf(footer as HTMLElement)).toEqual(['1,90,000.50', '1,89,000.50'])
   })
 
+  /* The bug template says never to attach a company file or a backup: they hold somebody's
+   * books. This notice used to ask for a backup. */
+  it('asks for the figures in a report, and never for the books', async () => {
+    renderScreen(<TrialBalance />, {
+      bridge: bridgeReturning(
+        report({ totalDebit: '190000.50', totalCredit: '189000.50', balanced: false }),
+      ),
+    })
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Please report it with these two figures')
+    expect(alert).toHaveTextContent('attach neither the company file nor a backup')
+  })
+
   it('says nothing of the sort when it does tie', async () => {
     renderScreen(<TrialBalance />, { bridge: bridgeReturning(report()) })
 

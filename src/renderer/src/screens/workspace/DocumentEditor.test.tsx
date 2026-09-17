@@ -418,7 +418,7 @@ describe('the place of supply', () => {
 
     const picker = (await screen.findByLabelText('Place of supply')) as HTMLSelectElement
     expect([...picker.options].map((option) => option.text)).toEqual([
-      'Wherever the regime decides',
+      'Where the party and your registration place it',
       'Karnataka',
       'Tamil Nadu',
     ])

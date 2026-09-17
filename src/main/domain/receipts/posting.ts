@@ -214,7 +214,7 @@ function requiredRole(account: AccountRef | null, role: AccountRole): AccountRef
   if (account === null) {
     throw new PostingError(
       'ROLE_UNMAPPED',
-      `No account is mapped to ${role}. Point one at it in the chart of accounts.`,
+      `No account is mapped to ${role}, so this cannot post. Every chart Coffer creates maps one, and no screen can yet, so please report this.`,
       { role },
     )
   }

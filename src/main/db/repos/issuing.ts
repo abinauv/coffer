@@ -106,7 +106,7 @@ import { RepoError, type RepoErrorCode } from './errors'
 import { postEntry, reverseEntry } from './journal'
 import { allocateNumber, defaultSeriesFor } from './numbering'
 import { assertNotAllocated, assertNotOffset } from './outstanding'
-import { periodRefForDate } from './periods'
+import { noPeriodCovering, periodRefForDate } from './periods'
 import { inTransaction } from './transaction'
 
 /**
@@ -410,9 +410,7 @@ function assertHasSomethingOnIt(document: Document): void {
  */
 async function requireCoveringPeriod(db: CofferDb, date: DateString): Promise<AccountingPeriodRef> {
   const period = await periodRefForDate(db, date)
-  if (period === null) {
-    throw new RepoError('NO_PERIOD', `The books have no period covering ${date}.`, { date })
-  }
+  if (period === null) throw noPeriodCovering(date)
   return period
 }
 
@@ -427,7 +425,7 @@ async function requireDefaultSeries(
   throw new RepoError(
     'SERIES_NOT_CONFIGURED',
     `These books have no numbering series for ${definitionOf(kind).pluralLabel.toLowerCase()}. ` +
-      'Set one up before issuing.',
+      'Add one under Company → Numbering, then issue this.',
     { kind, documentId: document.id },
   )
 }
