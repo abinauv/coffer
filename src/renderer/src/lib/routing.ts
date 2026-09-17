@@ -32,6 +32,13 @@ export const AREA_HOME: Readonly<Record<AppArea, string>> = {
   workspace: 'overview',
 }
 
+/**
+ * Settings, which the frame itself points at: the title bar's button and the palette open it
+ * in whichever area is showing, because how the app looks is a question before any company
+ * is open as well as after.
+ */
+export const SETTINGS_SCREEN_ID = 'settings'
+
 /** Deep stacks are a sign of a lost user, not a feature. */
 const MAX_HISTORY = 50
 

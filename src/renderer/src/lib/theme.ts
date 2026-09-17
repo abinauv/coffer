@@ -24,7 +24,7 @@ export const THEME_PREFERENCES: readonly ThemePreference[] = ['system', 'light',
 export const THEME_STORAGE_KEY = 'coffer.theme'
 
 export const THEME_LABELS: Readonly<Record<ThemePreference, string>> = {
-  system: 'Match system',
+  system: 'Follow system',
   light: 'Light',
   dark: 'Dark',
 }

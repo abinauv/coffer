@@ -49,9 +49,9 @@ legally required to keep. Calm and exact beats lively.
 | Components                             | `src/renderer/src/components/` — `atoms/`, `shell/`, `command-palette/`, `toast/`                                                                                                                                                                                                                                                                                                                                                                    |
 | Sections and the rail                  | `lib/screens.ts` holds the six sections (`NAV_GROUPS`) and each screen's `nav` or `navParent`; `lib/sections.ts` decides which section shows and where choosing one lands; `components/shell/` draws the section bar, the rail and the status bar                                                                                                                                                                                                    |
 | Icons                                  | `src/renderer/src/lib/icons.ts` — 24 × 24 stroke paths drawn by `components/atoms/Icon.tsx`. No icon library                                                                                                                                                                                                                                                                                                                                         |
-| Screens                                | `src/renderer/src/screens/welcome/` (create, pick, unlock, recover a company) and `screens/workspace/` (everything inside an open company)                                                                                                                                                                                                                                                                                                           |
+| Screens                                | `src/renderer/src/screens/welcome/` (create, pick, unlock, recover a company), `screens/workspace/` (everything inside an open company) and `screens/settings/` (Settings, registered in both)                                                                                                                                                                                                                                                       |
 | Screen building blocks                 | `src/renderer/src/screens/components/` — frames, notices, the passphrase field and strength meter, report lines, `MoneyField`, `StepFrame` for a flow in steps, a register's `RegisterToolbar`, `RegisterSearch` and `RegisterPager`, a list's `ListToolbar`, `FigureCell` for a figure in a table, `DeleteDialog`, `CountrySelect`, and the three states every screen ships besides its full one: `EmptyState`, `RegisterSkeleton` and `ErrorState` |
-| Density preference                     | `lib/density.ts` decides, `store/density.tsx` wires it: the `data-density` attribute on `<html>`, stored as `coffer.density`. Chosen from the command palette until Settings exists                                                                                                                                                                                                                                                                  |
+| Interface preferences                  | `lib/theme.ts`, `lib/density.ts` and `lib/layout.ts` decide; `store/theme.tsx`, `store/density.tsx` and `store/navigation-layout.tsx` wire them. Kept in localStorage as `coffer.theme`, `coffer.density` and `coffer.rail-collapsed`, never in the books. Chosen in Settings                                                                                                                                                                        |
 
 ## 4. Rules a redesign must keep
 
@@ -137,10 +137,18 @@ is a bug, however it looks.
   (on Linux it downloads dictionaries). Anything that makes a request changes the sentence.
 - **Keys:** <kbd>Ctrl</kbd><kbd>]</kbd> and <kbd>Ctrl</kbd><kbd>[</kbd> move to the next and
   previous section, <kbd>Alt</kbd><kbd>←</kbd> goes back, and <kbd>Ctrl</kbd><kbd>B</kbd>
-  collapses the rail to icons, which narrow windows also do on their own. A shortcut on
-  an arrow, Home or End never fires inside a field, whatever modifier is held: those keys
-  move the caret there. The rest of the map is in §4a below.
-- **Appearance and density are chosen from the command palette** until Settings exists.
+  collapses the rail to icons, which narrow windows also do until a layout is chosen. A
+  shortcut on an arrow, Home or End never fires inside a field, whatever modifier is held:
+  those keys move the caret there. The rest of the map is in §4a below.
+- **Settings holds how the app looks and moves:** the navigation layout, the theme and the
+  density, each applied as it is chosen, with no Save. The title bar's button opens it with a
+  company open or not, the Company rail lists it, and the palette keeps a command for each
+  theme and density. It offers only what is built: two layouts, the keyboard described
+  rather than picked from a list of one, and no language until a translation exists.
+- **Two navigation layouts:** the section bar with the rail as words, or with the rail as
+  icons. They are one stored preference with the rail's collapse button and
+  <kbd>Ctrl</kbd><kbd>B</kbd>, so Settings and the rail cannot show different layouts.
+  `ContextRail.test.tsx` walks every screen in each of them.
 - **Leaving the books is two commands, not one.** <kbd>Ctrl</kbd><kbd>L</kbd> locks and stops
   at the unlock screen for the company that was open; <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>O</kbd>
   switches and goes to the picker. Both close the company in main.
@@ -184,8 +192,7 @@ is a bug, however it looks.
 
 - **Density is four numbers.** `--control-height`, `--row-height`, the row padding pair and
   `--screen-pad`. Controls, table rows and the workspace frame read them; nothing else
-  moves. Compact is chosen from the command palette ("Density: compact") until Settings
-  exists.
+  moves. Compact is chosen in Settings, or from the palette ("Density: compact").
 - **Compact removes padding, never legibility.** No control or row below `--hit-min`
   (24px) in either density, and Compact touches no type token. `styles/tokens.test.ts`
   reads the stylesheet and fails if either slips.

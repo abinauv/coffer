@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { parseRailPreference, resolveRailCollapsed, toggledRailPreference } from './layout'
+import {
+  NAVIGATION_LAYOUTS,
+  parseRailPreference,
+  railPreferenceFor,
+  resolveNavigationLayout,
+  resolveRailCollapsed,
+  toggledRailPreference,
+} from './layout'
 
 describe('parseRailPreference', () => {
   it('accepts the two explicit values', () => {
@@ -46,5 +53,26 @@ describe('toggledRailPreference', () => {
     expect(resolveRailCollapsed(once, true)).toBe(false)
     const twice = toggledRailPreference(once, true)
     expect(resolveRailCollapsed(twice, true)).toBe(true)
+  })
+})
+
+describe('the navigation layout', () => {
+  it('is the icon rail exactly when the rail is collapsed', () => {
+    for (const preference of ['auto', 'expanded', 'collapsed'] as const) {
+      for (const isNarrow of [true, false]) {
+        expect(resolveNavigationLayout(preference, isNarrow)).toBe(
+          resolveRailCollapsed(preference, isNarrow) ? 'icons' : 'sections',
+        )
+      }
+    }
+  })
+
+  /* Chosen in Settings, it must hold when the window is resized, as the toggle's does. */
+  it('is kept at any width once chosen', () => {
+    for (const layout of NAVIGATION_LAYOUTS) {
+      for (const isNarrow of [true, false]) {
+        expect(resolveNavigationLayout(railPreferenceFor(layout), isNarrow)).toBe(layout)
+      }
+    }
   })
 })

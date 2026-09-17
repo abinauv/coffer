@@ -33,6 +33,7 @@ import { CommandProvider } from './store/commands'
 import { CompanyProvider } from './store/company'
 import { DensityProvider } from './store/density'
 import { NavigationProvider } from './store/navigation'
+import { NavigationLayoutProvider } from './store/navigation-layout'
 import { OpenCompanyRegime } from './store/regime'
 import { PlatformProvider } from './store/platform'
 import { ThemeProvider } from './store/theme'
@@ -43,21 +44,23 @@ export function App(): JSX.Element {
     <PlatformProvider>
       <ThemeProvider>
         <DensityProvider>
-          <ToastProvider>
-            <CompanyProvider>
-              <OpenCompanyRegime>
-                <NavigationProvider>
-                  <CommandProvider>
-                    <BackupProvider>
-                      <AppShell />
-                      <ChangePassphrase />
-                      <PartySearch />
-                    </BackupProvider>
-                  </CommandProvider>
-                </NavigationProvider>
-              </OpenCompanyRegime>
-            </CompanyProvider>
-          </ToastProvider>
+          <NavigationLayoutProvider>
+            <ToastProvider>
+              <CompanyProvider>
+                <OpenCompanyRegime>
+                  <NavigationProvider>
+                    <CommandProvider>
+                      <BackupProvider>
+                        <AppShell />
+                        <ChangePassphrase />
+                        <PartySearch />
+                      </BackupProvider>
+                    </CommandProvider>
+                  </NavigationProvider>
+                </OpenCompanyRegime>
+              </CompanyProvider>
+            </ToastProvider>
+          </NavigationLayoutProvider>
         </DensityProvider>
       </ThemeProvider>
     </PlatformProvider>

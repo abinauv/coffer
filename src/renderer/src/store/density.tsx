@@ -6,8 +6,8 @@
  * gives: density is a property of this installation's interface, not of anyone's books,
  * and it has to hold before any company is open.
  *
- * Settings will own the control (design plan, Phase 8). Until then the command palette
- * does, through the commands the shell registers.
+ * Settings draws the control; the palette offers one command per density as well, through
+ * the commands the shell registers. Both call `setPreference` here.
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'

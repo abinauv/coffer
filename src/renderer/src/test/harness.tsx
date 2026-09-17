@@ -36,6 +36,7 @@ import { CommandProvider } from '@renderer/store/commands'
 import { CompanyProvider, useCompany } from '@renderer/store/company'
 import { DensityProvider } from '@renderer/store/density'
 import { NavigationProvider } from '@renderer/store/navigation'
+import { NavigationLayoutProvider } from '@renderer/store/navigation-layout'
 import { PlatformProvider } from '@renderer/store/platform'
 import { RegimeProvider } from '@renderer/store/regime'
 import { ThemeProvider } from '@renderer/store/theme'
@@ -295,23 +296,25 @@ function Providers({
   return (
     <ThemeProvider>
       <DensityProvider>
-        <PlatformProvider>
-          <ToastProvider>
-            <CompanyProvider>
-              <OpenCompany company={company} recoveryCodesRemaining={recoveryCodesRemaining} />
-              <RegimeProvider value={regime}>
-                <NavigationProvider>
-                  <CommandProvider>
-                    <BackupProvider>
-                      {children}
-                      {toastViewport && <ToastViewport />}
-                    </BackupProvider>
-                  </CommandProvider>
-                </NavigationProvider>
-              </RegimeProvider>
-            </CompanyProvider>
-          </ToastProvider>
-        </PlatformProvider>
+        <NavigationLayoutProvider>
+          <PlatformProvider>
+            <ToastProvider>
+              <CompanyProvider>
+                <OpenCompany company={company} recoveryCodesRemaining={recoveryCodesRemaining} />
+                <RegimeProvider value={regime}>
+                  <NavigationProvider>
+                    <CommandProvider>
+                      <BackupProvider>
+                        {children}
+                        {toastViewport && <ToastViewport />}
+                      </BackupProvider>
+                    </CommandProvider>
+                  </NavigationProvider>
+                </RegimeProvider>
+              </CompanyProvider>
+            </ToastProvider>
+          </PlatformProvider>
+        </NavigationLayoutProvider>
       </DensityProvider>
     </ThemeProvider>
   )
