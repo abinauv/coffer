@@ -118,6 +118,20 @@ export const DEFAULT_REGIME: RegimeDescription = {
     { code: 'IGST', label: 'Integrated GST', levy: 'both' },
   ],
   classification: { code: 'HSN', label: 'HSN / SAC', validLengths: [4, 6, 8] },
+  /* The two the India regime prepares, as main describes them. A screen test that needs a
+   * regime with none passes its own. */
+  returnForms: [
+    {
+      id: 'gstr-1',
+      label: 'GSTR-1',
+      description: 'Outward supplies: every sales invoice and credit note issued in the period.',
+    },
+    {
+      id: 'gstr-3b',
+      label: 'GSTR-3B',
+      description: 'The summary return: output tax, input tax credit, and the cash payable.',
+    },
+  ],
 }
 
 /*

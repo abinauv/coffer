@@ -46,6 +46,7 @@ import type {
   AppError,
   CompanyProfile,
   DocumentListRow,
+  TaxReturnDue,
   OverviewFigures,
   PartySummary,
 } from '@shared/dto'
@@ -92,6 +93,7 @@ export function Overview({ navigate }: ScreenContext): JSX.Element {
   const [receiptCount, setReceiptCount] = useState<Panel<number>>(LOADING)
   const [draftCount, setDraftCount] = useState<Panel<number>>(LOADING)
   const [newestDraft, setNewestDraft] = useState<Panel<readonly DocumentListRow[]>>(LOADING)
+  const [taxReturnsDue, setTaxReturnsDue] = useState<Panel<readonly TaxReturnDue[]>>(LOADING)
   const [profile, setProfile] = useState<Panel<CompanyProfile | null>>(LOADING)
   const [parties, setParties] = useState<Panel<readonly PartySummary[]>>(LOADING)
 
@@ -103,15 +105,17 @@ export function Overview({ navigate }: ScreenContext): JSX.Element {
   const load = useCallback(async () => {
     const date = todayISO()
     setAsAtDate(date)
-    const [sales, purchases, overview, documents, receipts, drafts, newest] = await Promise.all([
-      callApi((api) => api.reports.aged({ side: 'sales', asAtDate: date })),
-      callApi((api) => api.reports.aged({ side: 'purchase', asAtDate: date })),
-      callApi((api) => api.reports.overviewFigures({ asAtDate: date })),
-      callApi((api) => api.documents.count()),
-      callApi((api) => api.receipts.count()),
-      callApi((api) => api.documents.count({ status: 'draft' })),
-      callApi((api) => api.documents.list({ status: 'draft', limit: 1 })),
-    ])
+    const [sales, purchases, overview, documents, receipts, drafts, newest, returns] =
+      await Promise.all([
+        callApi((api) => api.reports.aged({ side: 'sales', asAtDate: date })),
+        callApi((api) => api.reports.aged({ side: 'purchase', asAtDate: date })),
+        callApi((api) => api.reports.overviewFigures({ asAtDate: date })),
+        callApi((api) => api.documents.count()),
+        callApi((api) => api.receipts.count()),
+        callApi((api) => api.documents.count({ status: 'draft' })),
+        callApi((api) => api.documents.list({ status: 'draft', limit: 1 })),
+        callApi((api) => api.reports.taxReturnsDue({ asAtDate: date })),
+      ])
     setReceivables(panelFrom(sales))
     setPayables(panelFrom(purchases))
     setFigures(panelFrom(overview))
@@ -119,6 +123,7 @@ export function Overview({ navigate }: ScreenContext): JSX.Element {
     setReceiptCount(panelFrom(receipts))
     setDraftCount(panelFrom(drafts))
     setNewestDraft(panelFrom(newest))
+    setTaxReturnsDue(panelFrom(returns))
   }, [])
 
   /*
@@ -250,6 +255,7 @@ export function Overview({ navigate }: ScreenContext): JSX.Element {
                 newestDraft,
                 recoveryCodesRemaining,
                 company,
+                taxReturnsDue,
               }}
               onOpen={open}
             />

@@ -247,6 +247,49 @@
   text-align: right;
 }
 
+/* ---- Tax returns ---------------------------------------------------------- */
+
+.returns__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+/* A table's own name is an identifier someone types into a portal: mono, and never split. */
+.returns__table {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.returns__issues {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.returns__issue {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal, 1.5);
+}
+
+.returns__issue > .badge {
+  flex: none;
+}
+
+.returns__document {
+  font-family: var(--font-mono);
+}
+
 /* ---- The print dialog ----------------------------------------------------- */
 
 /* Options on the left, a sheet of A4 on the right. Below the dialog's own breakpoint the

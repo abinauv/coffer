@@ -111,6 +111,7 @@ const BRIDGE: BridgeStub = {
         cashAndBank: { total: '0.00', accounts: [] },
         monthToDate: { fromDate: input.asAtDate, toDate: input.asAtDate, netProfit: '0.00' },
       }),
+    taxReturnsDue: () => ok([]),
   },
   documents: { list: () => ok<DocumentListRow[]>([]), count: () => ok(0) },
   receipts: { count: () => ok(0) },
