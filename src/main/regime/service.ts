@@ -78,6 +78,13 @@ export function describeRegime(regime: TaxRegime): RegimeDescription {
       label: regime.classification.label,
       validLengths: [...regime.classification.validLengths],
     },
+
+    /* The forms and nothing else: `prepare` is executable, and stays in main. */
+    returnForms: (regime.returns?.forms ?? []).map((form) => ({
+      id: form.id,
+      label: form.label,
+      description: form.description,
+    })),
   }
 }
 

@@ -26,7 +26,7 @@ import type { NumberingService } from './handlers/numbering'
 import type { PartiesService } from './handlers/parties'
 import type { ReceiptsService } from './handlers/receipts'
 import type { RegimeService } from './handlers/regime'
-import type { ReportService } from './handlers/reports'
+import type { ReportService, TaxReturnsService } from './handlers/reports'
 import type { UnitsService } from './handlers/units'
 import { type IpcDependencies, registerIpcHandlers } from './index'
 import type { HandlerRegistry, IpcLogger, IpcTransport } from './registry'
@@ -193,6 +193,8 @@ export interface ElectronIpcOptions {
   regime: RegimeService
   /** The same service, read-only half. See the `reports` group in src/shared/ipc.ts. */
   reports: ReportService
+  /** The tax returns service from src/main/tax-returns — a regime's reading of a period. */
+  taxReturns: TaxReturnsService
   /** Extra error types to recognise — see `IpcDependencies.errorMappers`. */
   errorMappers?: readonly ErrorMapper[]
 }
@@ -215,6 +217,7 @@ export function createElectronIpcDependencies(options: ElectronIpcOptions): IpcD
     receipts: options.receipts,
     regime: options.regime,
     reports: options.reports,
+    taxReturns: options.taxReturns,
     ...(options.errorMappers === undefined ? {} : { errorMappers: options.errorMappers }),
     /* The registry of companies lives here, so it is revealable from the moment the app
      * starts. Every other path has to be earned — see ./path-access.ts. */

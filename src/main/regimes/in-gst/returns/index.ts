@@ -35,6 +35,8 @@
  *   gstr3b.ts       Tables 3.1, 3.2, 4 and the payment, including credit utilisation.
  *   pack.ts         The B2CL threshold, as a pack value rather than a literal.
  *   provisional.ts  What is not settled, and what would settle it.
+ *   prepare.ts      The regime-neutral capability: books-shaped documents in, rows with
+ *                   their own words out. The only door the rest of main uses.
  */
 
 export { buildGstr1, buildDocIssue, resolveExport, NATURE_OF_DOCUMENT } from './gstr1'
@@ -123,6 +125,8 @@ export {
 export type { TaxAmounts, TaxBucket, TaxTotals } from './amounts'
 
 export { PROVISIONAL_NOTICE, RETURN_DECISIONS, RETURN_MODEL_GAPS } from './provisional'
+
+export { INDIA_RETURN_FORMS, indiaReturns, toReturnDocument } from './prepare'
 export type { ReturnDecision, ReturnModelGap } from './provisional'
 
 export { blockingCount, isReturnError, issue, ReturnError } from './errors'

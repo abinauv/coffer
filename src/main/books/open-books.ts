@@ -22,7 +22,7 @@
 
 import type { SqliteDatabase } from '../db/connection'
 import { createQueryBuilder, type CofferDb } from '../db/kysely'
-import { METADATA_KEYS, readMetadata } from '../companies/metadata'
+import { METADATA_KEYS, readMetadata, writeMetadata } from '../companies/metadata'
 import { CompanyError } from '../companies/errors'
 import { DEFAULT_REGIME_ID, findRegime, type TaxRegime } from '../regimes'
 
@@ -85,6 +85,20 @@ export class OpenBooks {
       )
     }
     return regime
+  }
+
+  /**
+   * A value the open company keeps about itself, outside the ledger.
+   *
+   * @throws CompanyError `NO_COMPANY_OPEN`
+   */
+  readMetadata(key: string): string | null {
+    return readMetadata(this.connection(), key)
+  }
+
+  /** @throws CompanyError `NO_COMPANY_OPEN` */
+  writeMetadata(key: string, value: string): void {
+    writeMetadata(this.connection(), key, value)
   }
 
   private connection(): SqliteDatabase {

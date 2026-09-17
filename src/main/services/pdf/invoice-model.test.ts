@@ -441,6 +441,7 @@ describe('a regime that is not India', () => {
     taxRates: [{ ratePct: '23', label: '23%', note: 'The standard rate.' }],
     taxComponents: [{ code: 'IVA', label: 'IVA', levy: 'output' }],
     classification: { code: null, label: 'CPA', validLengths: [] },
+    returnForms: [],
   }
 
   const model = modelFor(fixture.intraState, { regime: portugal })

@@ -181,6 +181,7 @@ describe('createElectronIpcDependencies', () => {
       receipts: {} as never,
       regime: {} as never,
       reports: {} as never,
+      taxReturns: {} as never,
     })
 
     expect(dependencies.revealRoots).toEqual(['C:\\Users\\ada\\AppData\\Roaming\\Coffer'])
@@ -204,6 +205,7 @@ describe('createElectronIpcDependencies', () => {
         receipts: {} as never,
         regime: {} as never,
         reports: {} as never,
+        taxReturns: {} as never,
       }).companies,
     ).toBe(companies)
   })
@@ -225,6 +227,7 @@ describe('createElectronIpcDependencies', () => {
         receipts: {} as never,
         regime: {} as never,
         reports: {} as never,
+        taxReturns: {} as never,
         errorMappers,
       }).errorMappers,
     ).toBe(errorMappers)
@@ -245,6 +248,7 @@ describe('createElectronIpcDependencies', () => {
         receipts: {} as never,
         regime: {} as never,
         reports: {} as never,
+        taxReturns: {} as never,
       }),
     ).not.toHaveProperty('errorMappers')
   })

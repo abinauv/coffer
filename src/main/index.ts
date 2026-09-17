@@ -28,6 +28,10 @@ import { createPrintingService } from './printing/service'
 import { createElectronPagePrinter, printSchemePrivileges } from './printing/window'
 import { createReceiptsService } from './receipts/service'
 import { createRegimeService } from './regime/service'
+import { isRegimeRefusal } from './regimes'
+import { isPrintError } from './services/pdf'
+import { createTaxReturnsService } from './tax-returns/service'
+import { createElectronReturnFileSaver } from './tax-returns/save-dialog'
 import { createUnitsService } from './units/service'
 
 let mainWindow: BrowserWindow | null = null
@@ -61,6 +65,11 @@ function installHandlers(): void {
     /* One object, two contract groups: the read-only methods are on the same service,
      * so both point at it. See the note beside them in src/main/ledger/service.ts. */
     reports: ledger,
+    /* A regime's reading of a period's documents, and a save dialog for the file. */
+    taxReturns: createTaxReturnsService(companies, createElectronReturnFileSaver(), {
+      appName: BRAND.name,
+      appVersion: app.getVersion(),
+    }),
     /* CompanyError codes are what the company screens branch on, and nothing under
      * src/main/ipc may import that module. Deliberately narrow: the companies module
      * also exports a broader `describeError` that claims DbError too, and DbError
@@ -72,6 +81,12 @@ function installHandlers(): void {
     errorMappers: [
       (cause) => (isCompanyError(cause) ? { code: cause.code, message: cause.message } : null),
       (cause) => (isRepoError(cause) ? { code: cause.code, message: cause.message } : null),
+      /* A print refusal — a draft, no copies, a page the window could not render — says
+       * what to do about it, and the dialog branches on its code. Missing until 7d, so
+       * every one of them reached the screen as the generic "could not finish". */
+      (cause) => (isPrintError(cause) ? { code: cause.code, message: cause.message } : null),
+      /* A regime's refusal, recognised without naming the regime (CONVENTIONS §1.6). */
+      (cause) => (isRegimeRefusal(cause) ? { code: cause.code, message: cause.message } : null),
     ],
   })
 

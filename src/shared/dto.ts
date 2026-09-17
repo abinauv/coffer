@@ -1433,6 +1433,19 @@ export interface RegimeDescription {
    */
   registrationLabel: string
   classification: ClassificationSchemeInfo
+  /**
+   * The returns these books' tax rules can prepare. EMPTY IS A COMPLETE ANSWER: a regime
+   * that prepares none has nothing to offer, and the returns screen says so rather than
+   * the renderer deciding by country which screens exist (CONVENTIONS §1.6).
+   */
+  returnForms: ReturnFormInfo[]
+}
+
+/** One return the regime can prepare. Labels are the regime's; the renderer invents none. */
+export interface ReturnFormInfo {
+  id: string
+  label: string
+  description: string
 }
 
 // ---- Query inputs ---------------------------------------------------------
@@ -2173,6 +2186,85 @@ export interface PrintPreview {
 /** Where a PDF went, or null when the user cancelled the save dialog. */
 export interface SavePdfResult {
   path: string | null
+}
+
+// ---- Tax returns ----------------------------------------------------------
+
+/*
+ * A return prepared from the books, in words the regime chose.
+ *
+ * NOTHING HERE NAMES A COUNTRY, A FORM OR A TAX (CONVENTIONS §1.6). The form list comes
+ * off `RegimeDescription.returnForms`, and every row carries its own label and sentence,
+ * so the screen draws a table without knowing whose table it is. Every figure is a
+ * decimal string computed in main; the renderer adds nothing up.
+ */
+
+export interface TaxReturnInput {
+  /** One of `RegimeDescription.returnForms`. */
+  formId: string
+  /** Inclusive at both ends. */
+  from: DateString
+  to: DateString
+}
+
+export interface TaxReturnPeriod {
+  from: DateString
+  to: DateString
+  /** 'August 2026' for a whole month, the two dates otherwise. Built in main. */
+  label: string
+}
+
+/** One table of a prepared return. */
+export interface TaxReturnRow {
+  id: string
+  /** The table's own name. */
+  label: string
+  /** What it holds. */
+  what: string
+  /** Null where the table counts no documents. */
+  documentCount: number | null
+  /** Null where the table carries tax alone. */
+  taxableValue: DecimalString | null
+  /** Every component on the row, added in main. */
+  tax: DecimalString
+}
+
+export interface TaxReturnIssue {
+  code: string
+  /** 'error': it cannot be filed as it stands. 'warning': something was assumed. */
+  severity: 'error' | 'warning'
+  message: string
+  documentNumber: string | null
+}
+
+export interface TaxReturn {
+  form: ReturnFormInfo
+  period: TaxReturnPeriod
+  /** Which version of the regime's rules prepared it. */
+  packVersion: string
+  /**
+   * True while the return's shape has not been checked against the authority's own
+   * schema. The screen shows `notice` whenever it is set, and the exported file carries
+   * both.
+   */
+  isProvisional: boolean
+  notice: string | null
+  rows: TaxReturnRow[]
+  total: TaxReturnRow
+  issues: TaxReturnIssue[]
+}
+
+/** Where an exported return went, or null when the user cancelled the save dialog. */
+export interface ExportTaxReturnResult {
+  path: string | null
+}
+
+/** A return for a finished period that has documents in it and has not been opened. */
+export interface TaxReturnDue {
+  form: ReturnFormInfo
+  period: TaxReturnPeriod
+  /** Issued and cancelled documents dated in the period. Always more than zero. */
+  documentCount: number
 }
 
 // ---- Warehouses and the stock ledger (0017-0019) ---------------------------

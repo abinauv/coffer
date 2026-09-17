@@ -84,6 +84,10 @@ import type {
   RestoreInput,
   SavePdfResult,
   SetBackupReminderInput,
+  ExportTaxReturnResult,
+  TaxReturn,
+  TaxReturnDue,
+  TaxReturnInput,
   Result,
   SaveCompanyProfileInput,
   RegimeDescription,
@@ -614,6 +618,26 @@ export interface CofferApi {
      * which it counted.
      */
     overviewFigures(input: AsAtDateInput): Promise<Result<OverviewFigures>>
+
+    /*
+     * TAX RETURNS. Refused with RETURN_FORM_UNKNOWN when the books' regime prepares no
+     * such form — which, for a regime that prepares none, is every form.
+     */
+
+    /** One form for one period, as rows. Reads the books; writes nothing. */
+    taxReturn(input: TaxReturnInput): Promise<Result<TaxReturn>>
+    /**
+     * The whole prepared return as a JSON file, through the save dialog. The file states
+     * that it is provisional, in its own body, whenever the return is.
+     */
+    exportTaxReturn(input: TaxReturnInput): Promise<Result<ExportTaxReturnResult>>
+    /** Remember that this form has been looked at up to `to`. Never moves backwards. */
+    markTaxReturnSeen(input: TaxReturnInput): Promise<Result<void>>
+    /**
+     * Returns for the month before `date` that have documents in them and have not been
+     * looked at. For the Overview's "Needs your attention".
+     */
+    taxReturnsDue(input: AsAtDateInput): Promise<Result<TaxReturnDue[]>>
   }
 }
 

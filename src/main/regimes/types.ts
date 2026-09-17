@@ -17,8 +17,9 @@
 
 import type { Decimal } from '@main/domain/money'
 import type { FiscalYearRule } from '@main/domain/time'
-import type { ExportTaxPayment } from '@shared/dto'
-import type { DecimalString } from '@shared/scalars'
+import type { DocumentKind } from '@shared/documents'
+import type { ExportTaxPayment, ItcEligibility } from '@shared/dto'
+import type { DateString, DecimalString } from '@shared/scalars'
 
 // ---- Identity -------------------------------------------------------------
 
@@ -244,6 +245,155 @@ export interface FilingDefinition {
   description: string
 }
 
+// ---- Returns --------------------------------------------------------------
+
+/*
+ * WHAT A REGIME PREPARES FROM THE BOOKS, in words no regime owns.
+ *
+ * `filings` above is a declaration — what exists, how often. This is the capability: a
+ * regime that can turn a period's documents into a return says so here, and one that
+ * cannot leaves `returns` off. Nothing above `regimes/` names a form, a table or a tax
+ * (CONVENTIONS §1.6): the screen asks which forms exist, sends a period, and draws rows
+ * whose labels and descriptions came from here.
+ *
+ * THE TAX IS CARRIED, NEVER RECOMPUTED. Every figure on `ReturnSourceDocument` is what
+ * the regime answered when the document was raised. A return that recomputed would be a
+ * second answer to a settled question, and the two would disagree the first time a rate
+ * changed.
+ */
+
+/** One return a regime can prepare. */
+export interface ReturnFormDefinition {
+  /** Stable, e.g. 'gstr-1'. What a screen sends back. */
+  id: string
+  /** What it is called, e.g. 'GSTR-1'. */
+  label: string
+  /** One sentence: what it reports. */
+  description: string
+}
+
+/** The period a return covers, inclusive at both ends. */
+export interface ReturnSourcePeriod {
+  from: DateString
+  to: DateString
+  /** What a person calls it, e.g. 'August 2026'. Carried, never parsed. */
+  label: string
+}
+
+/** One tax component on a line, exactly as the document recorded it. */
+export interface ReturnSourceTax {
+  code: string
+  ratePct: DecimalString
+  amount: DecimalString
+}
+
+export interface ReturnSourceLine {
+  lineNumber: number
+  classificationCode: string | null
+  quantity: DecimalString
+  unitCode: string | null
+  /** After discount, before tax. */
+  taxableValue: DecimalString
+  /** The full rate before it splits. */
+  ratePct: DecimalString
+  isCharge: boolean
+  /** Null on a document written before the column existed. */
+  itcEligibility: ItcEligibility | null
+  taxes: readonly ReturnSourceTax[]
+}
+
+/**
+ * One document, as a regime preparing a return reads it.
+ *
+ * ISSUED OR CANCELLED, NEVER A DRAFT, and never a kind that posts nothing: the caller
+ * selects by `postsToLedger`, which is a fact about the kind rather than about any
+ * regime. The builders refuse anything else rather than filtering it, so a caller that
+ * got the selection wrong finds out instead of filing a return with a hole in it.
+ */
+export interface ReturnSourceDocument {
+  id: string
+  kind: DocumentKind
+  number: string
+  date: DateString
+  isCancelled: boolean
+  counterparty: {
+    partyId: string
+    name: string
+    registrationNumber: string | null
+    jurisdictionCode: string | null
+    countryCode: string
+  }
+  /** Resolved by the regime when the document was taxed, not re-derived here. */
+  placeOfSupply: PlaceOfSupply
+  /** The document a note corrects, when it names one. */
+  corrects: { documentId: string; kind: DocumentKind; number: string; date: DateString } | null
+  exportTaxPayment: ExportTaxPayment | null
+  /** The whole-unit adjustment the document was issued with, signed to add. */
+  roundOff: DecimalString
+  isReverseCharge: boolean
+  lines: readonly ReturnSourceLine[]
+}
+
+/** One row of a prepared return, as a screen draws it. */
+export interface PreparedReturnRow {
+  /** Stable within the form, e.g. 'b2b' or '3.1a'. */
+  id: string
+  /** The table's own name, e.g. 'B2B' or '3.1(a)'. */
+  label: string
+  /** What the row holds, in a sentence fragment a person can read. */
+  what: string
+  /** Null where the table counts no documents. */
+  documentCount: number | null
+  /** Null where the table carries no value, only tax. */
+  taxableValue: DecimalString | null
+  /** Every component on the row, added. */
+  tax: DecimalString
+}
+
+/** Something doubtful about a prepared return, located well enough to go and fix. */
+export interface PreparedReturnIssue {
+  code: string
+  /** 'error': it cannot be filed as it stands. 'warning': something was assumed. */
+  severity: 'error' | 'warning'
+  message: string
+  documentNumber: string | null
+}
+
+export interface PreparedReturn {
+  form: ReturnFormDefinition
+  period: ReturnSourcePeriod
+  /** Which version of the regime's rules produced it. */
+  packVersion: string
+  /**
+   * True while the return's SHAPE has not been checked against the authority's own
+   * schema. A screen shows `notice` whenever this is set, and a file carries both.
+   */
+  isProvisional: boolean
+  notice: string | null
+  rows: readonly PreparedReturnRow[]
+  /** The line under the table. Its label differs by form: a total, or what is payable. */
+  total: PreparedReturnRow
+  /** Excluding the provisional status itself, which `isProvisional` already states. */
+  issues: readonly PreparedReturnIssue[]
+  /** The whole artefact, plain JSON, for a file. Never sent to the renderer. */
+  artefact: unknown
+}
+
+/** The capability. See the section header. */
+export interface RegimeReturns {
+  readonly forms: readonly ReturnFormDefinition[]
+  /**
+   * Prepare one form for one period.
+   *
+   * @throws when `formId` is not one of `forms`, and when a document cannot be in a
+   *         return at all — both are refusals, never silent omissions.
+   */
+  prepare(
+    formId: string,
+    input: { period: ReturnSourcePeriod; documents: readonly ReturnSourceDocument[] },
+  ): PreparedReturn
+}
+
 // ---- The adapter ----------------------------------------------------------
 
 export interface TaxRegime {
@@ -327,4 +477,10 @@ export interface TaxRegime {
   amountInWords(value: Decimal): string
 
   readonly filings: ReadonlyArray<FilingDefinition>
+
+  /**
+   * The returns this regime can prepare from the books. Absent when it can prepare none,
+   * which is a complete answer: the screen says so and offers nothing.
+   */
+  readonly returns?: RegimeReturns
 }

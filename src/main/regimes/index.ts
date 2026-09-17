@@ -18,6 +18,7 @@ import type { RegimeId, TaxRegime } from './types'
 import { inGstRegime } from './in-gst'
 
 export * from './types'
+export { RegimeRefusal, isRegimeRefusal } from './errors'
 
 /**
  * The regime a new company gets unless it says otherwise.

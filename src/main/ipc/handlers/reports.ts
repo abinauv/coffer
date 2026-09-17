@@ -22,12 +22,17 @@ import type {
   BalanceSheet,
   DateRangeInput,
   DayBook,
+  ExportTaxReturnResult,
   OverviewFigures,
   ProfitAndLoss,
+  TaxReturn,
+  TaxReturnDue,
+  TaxReturnInput,
 } from '../../../shared/dto'
 import type { GroupHandlers } from '../registry'
 import { ok } from '../surface'
 import {
+  expectBoundedString,
   expectDateString,
   expectNonEmptyString,
   expectOneOf,
@@ -47,6 +52,34 @@ export interface ReportService {
   dayBook(input: DateRangeInput): Promise<DayBook>
   aged(input: AgedReportInput): Promise<AgedReport>
   overviewFigures(input: AsAtDateInput): Promise<OverviewFigures>
+}
+
+/**
+ * What the IPC layer needs in order to prepare a tax return.
+ *
+ * A SECOND SERVICE BEHIND ONE GROUP, as printing is behind `documents`. The ledger's
+ * reports are sums the journal answers; a return is a regime's reading of a period's
+ * documents, and it needs a save dialog. See src/main/tax-returns/service.ts.
+ */
+export interface TaxReturnsService {
+  taxReturn(input: TaxReturnInput): Promise<TaxReturn>
+  exportTaxReturn(input: TaxReturnInput): Promise<ExportTaxReturnResult>
+  markTaxReturnSeen(input: TaxReturnInput): Promise<void>
+  taxReturnsDue(input: AsAtDateInput): Promise<TaxReturnDue[]>
+}
+
+/**
+ * A form and a period. The form id is checked against the regime in main, not here: which
+ * forms exist is the regime's answer, and a handler that kept its own list would be a
+ * second one to fall out of step. Its length is bounded because it is an id, not a text.
+ */
+function parseTaxReturn(value: unknown): TaxReturnInput {
+  const input = expectRecord(value, 'input')
+  return {
+    formId: expectBoundedString(expectNonEmptyString(input['formId'], 'formId'), 'formId', 64),
+    from: expectDateString(input['from'], 'from'),
+    to: expectDateString(input['to'], 'to'),
+  }
 }
 
 function parseDateRange(value: unknown): DateRangeInput {
@@ -89,7 +122,10 @@ function parseAged(value: unknown): AgedReportInput {
   }
 }
 
-export function createReportHandlers(service: ReportService): GroupHandlers<'reports'> {
+export function createReportHandlers(
+  service: ReportService,
+  taxReturns: TaxReturnsService,
+): GroupHandlers<'reports'> {
   return {
     balanceSheet: {
       parseArgs: (raw): [AsAtDateInput] => [parseAsAt(raw[0])],
@@ -121,6 +157,31 @@ export function createReportHandlers(service: ReportService): GroupHandlers<'rep
     overviewFigures: {
       parseArgs: (raw): [AsAtDateInput] => [parseAsAt(raw[0])],
       handle: async (input) => ok(await service.overviewFigures(input)),
+    },
+
+    taxReturn: {
+      parseArgs: (raw): [TaxReturnInput] => [parseTaxReturn(raw[0])],
+      handle: async (input) => ok(await taxReturns.taxReturn(input)),
+    },
+
+    /* No path is granted for reveal: the save dialog is the user naming the file, and
+     * the screen says where it went rather than offering to open it. */
+    exportTaxReturn: {
+      parseArgs: (raw): [TaxReturnInput] => [parseTaxReturn(raw[0])],
+      handle: async (input) => ok(await taxReturns.exportTaxReturn(input)),
+    },
+
+    markTaxReturnSeen: {
+      parseArgs: (raw): [TaxReturnInput] => [parseTaxReturn(raw[0])],
+      handle: async (input) => {
+        await taxReturns.markTaxReturnSeen(input)
+        return ok(undefined)
+      },
+    },
+
+    taxReturnsDue: {
+      parseArgs: (raw): [AsAtDateInput] => [parseAsAt(raw[0])],
+      handle: async (input) => ok(await taxReturns.taxReturnsDue(input)),
     },
   }
 }

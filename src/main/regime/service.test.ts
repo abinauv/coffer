@@ -178,9 +178,22 @@ describe('describeRegime', () => {
       'label',
       'numberFormat',
       'registrationLabel',
+      'returnForms',
       'taxComponents',
       'taxRates',
     ])
+  })
+
+  /*
+   * THE FORMS CROSS; `prepare` DOES NOT. A description carrying the capability itself
+   * would hand the renderer a function that reads a period's documents and adds up tax.
+   */
+  it('carries the returns the regime prepares, as data only', () => {
+    expect(description.returnForms.map((form) => form.id)).toEqual(['gstr-1', 'gstr-3b'])
+    expect(description).not.toHaveProperty('returns')
+    for (const form of description.returnForms) {
+      expect(Object.keys(form).sort()).toEqual(['description', 'id', 'label'])
+    }
   })
 
   /*

@@ -10,7 +10,7 @@ import type { NumberingService } from './handlers/numbering'
 import type { PartiesService } from './handlers/parties'
 import type { ReceiptsService } from './handlers/receipts'
 import type { RegimeService } from './handlers/regime'
-import type { ReportService } from './handlers/reports'
+import type { ReportService, TaxReturnsService } from './handlers/reports'
 import type { SystemEnvironment } from './handlers/system'
 import type { UnitsService } from './handlers/units'
 import {
@@ -60,6 +60,7 @@ let printing: PrintingService
 let receipts: ReceiptsService
 let regime: RegimeService
 let reports: ReportService
+let taxReturns: TaxReturnsService
 
 function dependencies(overrides: Partial<IpcDependencies> = {}): IpcDependencies {
   const transport: IpcTransport = {
@@ -83,6 +84,7 @@ function dependencies(overrides: Partial<IpcDependencies> = {}): IpcDependencies
     receipts,
     regime,
     reports,
+    taxReturns,
     ...overrides,
   }
 }
@@ -222,6 +224,13 @@ beforeEach(() => {
     dayBook: vi.fn(),
     overviewFigures: vi.fn(),
   } as unknown as ReportService
+
+  taxReturns = {
+    taxReturn: vi.fn(),
+    exportTaxReturn: vi.fn(),
+    markTaxReturnSeen: vi.fn(),
+    taxReturnsDue: vi.fn(async () => []),
+  } as unknown as TaxReturnsService
 })
 
 describe('registerIpcHandlers', () => {
