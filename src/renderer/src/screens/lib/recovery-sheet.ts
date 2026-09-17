@@ -75,8 +75,10 @@ export function recoverySheetText(input: SheetInput): string {
     'Keep this sheet away from the computer holding the file above. A code stored',
     'beside the books it protects protects nothing.',
     '',
-    'Coffer cannot show these codes again and cannot reissue them. If they and the',
-    'passphrase are both lost, this company cannot be opened by anyone.',
+    'Coffer cannot show these codes again. A fresh set can be issued from inside the',
+    'company, under Company → Recovery codes, but that needs the passphrase and it',
+    'kills every code on this sheet. If these and the passphrase are both lost, this',
+    'company cannot be opened by anyone.',
   )
 
   return `${lines.join('\n')}\n`
@@ -88,17 +90,17 @@ export function remainingCodesNotice(remaining: number): { title: string; body: 
     return {
       title: 'That was your last recovery code',
       body:
-        'Your passphrase is now the only way into this company. Coffer cannot issue new ' +
-        'codes for an existing company yet, so treat the passphrase accordingly: if it ' +
-        'goes, the books go with it.',
+        'Your passphrase is now the only way into this company. Issue a new set from ' +
+        'Company → Recovery codes while you still have it — that screen needs the ' +
+        'passphrase, so it is no help at all once the passphrase is gone.',
     }
   }
   if (remaining === 1) {
     return {
       title: 'One recovery code left',
       body:
-        'One unused code remains on your sheet. After that, the passphrase is the only ' +
-        'way in — so put the new passphrase somewhere you will find it.',
+        'One unused code remains on your sheet. Company → Recovery codes will issue a ' +
+        'fresh set of five, which kills that last one along with the spent ones.',
     }
   }
   return {

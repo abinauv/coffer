@@ -27,6 +27,12 @@ interface CompanyContextValue {
   close: () => Promise<Result<void>>
   /** Reflects a rename or a re-read of the registry entry. */
   update: (company: CompanySummary) => void
+  /**
+   * Records that a fresh set of recovery codes was issued: the count, and only the count.
+   * The codes themselves are never held here — they belong to the screen that showed
+   * them, for exactly as long as it is on screen.
+   */
+  recordRecoveryCodes: (remaining: number) => void
 }
 
 const CompanyContext = createContext<CompanyContextValue | null>(null)
@@ -53,6 +59,11 @@ export function CompanyProvider({ children }: { children: ReactNode }): JSX.Elem
 
   const update = useCallback((next: CompanySummary) => setCompany(next), [])
 
+  const recordRecoveryCodes = useCallback(
+    (remaining: number) => setRecoveryCodesRemaining(remaining),
+    [],
+  )
+
   const value = useMemo<CompanyContextValue>(
     () => ({
       company,
@@ -61,8 +72,9 @@ export function CompanyProvider({ children }: { children: ReactNode }): JSX.Elem
       adopt,
       close,
       update,
+      recordRecoveryCodes,
     }),
-    [company, recoveryCodesRemaining, adopt, close, update],
+    [company, recoveryCodesRemaining, adopt, close, update, recordRecoveryCodes],
   )
 
   return <CompanyContext.Provider value={value}>{children}</CompanyContext.Provider>

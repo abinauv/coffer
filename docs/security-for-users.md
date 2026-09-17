@@ -150,10 +150,26 @@ Coffer deliberately does **not** issue a fresh set of five at that moment. Doing
 invalidate the four codes on the sheet in your hand, at the one moment you have proved
 you need it.
 
-> **Currently missing:** there is no way to ask Coffer for a fresh set of recovery codes
-> after using one. The capability exists inside the application but no screen or command
-> reaches it yet. Until it lands, using a code leaves you with four, permanently. This is
-> tracked in [`good-first-issues.md`](./good-first-issues.md).
+### Asking for a fresh set
+
+**Company → Recovery codes** issues five new ones and shows them once, the same way
+creating a company does. Do it when the sheet is lost, when somebody who should not have
+it might, or when you are down to your last code or two.
+
+Three things are worth knowing before you use it:
+
+- **It needs your passphrase**, although the company is already open. Issuing codes mints
+  five new ways into your books, and an unlocked machine on a desk is not evidence of who
+  is sitting at it. The check is against the vault, exactly as opening the company is.
+- **Every code you have now stops working** — the spent ones and the unused ones alike.
+  There is no way to bring one back, so the old sheet becomes waste paper the moment the
+  new one appears.
+- **Nothing else changes.** Your passphrase still works, the books are not re-encrypted,
+  and the company stays open while it happens. Only the key slots the codes unwrap are
+  replaced.
+
+If your passphrase is gone as well, this screen cannot help: it asks for the passphrase,
+and that is the point of it.
 
 ### Where to keep them
 

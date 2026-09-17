@@ -39,6 +39,7 @@ import { backupAttention } from './backup-view'
 import { formatDate, formatDayRange } from './dates'
 import { editorScreenId as documentEditorScreenId } from './document-view'
 import { isNegativeAmount, isZeroAmount } from './ledger-format'
+import { isRecoveryLow } from './recovery-view'
 
 // ---- One read, in the three states it can be in -----------------------------
 
@@ -461,19 +462,28 @@ export function attentionItems(sources: AttentionSources): readonly AttentionIte
     })
   }
 
+  /*
+   * THE CODES LINE NOW LEADS SOMEWHERE. Until Company → Recovery codes existed this said
+   * what was true and offered nothing, because nothing could be done about it. Issuing a
+   * fresh set needs the passphrase, so it is worth saying while the user still has it.
+   */
   if (sources.recoveryCodesRemaining === 0) {
     items.push({
       id: 'recovery-codes',
       tone: 'negative',
       title: 'No recovery codes remain',
-      note: 'The passphrase is now the only way into these books, and nobody can reset it. Keep a backup.',
+      note: 'The passphrase is the only way into these books. A new set can be issued while you still have it.',
+      target: { screenId: 'recovery-codes', params: {} },
+      actionLabel: 'Issue new codes',
     })
-  } else if (sources.recoveryCodesRemaining <= 2) {
+  } else if (isRecoveryLow(sources.recoveryCodesRemaining)) {
     items.push({
       id: 'recovery-codes',
       tone: 'warning',
       title: `Only ${counted(sources.recoveryCodesRemaining, 'recovery code')} left`,
       note: 'Each one opens this company once. When they are gone, the passphrase is the only way in.',
+      target: { screenId: 'recovery-codes', params: {} },
+      actionLabel: 'Issue new codes',
     })
   }
 

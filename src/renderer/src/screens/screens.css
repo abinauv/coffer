@@ -240,6 +240,56 @@
   padding-inline-start: calc(1em + var(--space-3));
 }
 
+/* ---- Recovery-code meter -------------------------------------------------- */
+
+/* One segment per code issued, filled while the code is unspent. The count beside it
+ * says the same thing in words — `recoveryView.valueText` feeds both this label and the
+ * meter's `aria-valuetext`, so they cannot drift apart. */
+
+.codes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.codes__bar {
+  display: flex;
+  flex: 1 1 12rem;
+  gap: var(--space-1);
+}
+
+.codes__segment {
+  flex: 1 1 0;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  /* A spent code is not nothing: the outline keeps it countable against the page. */
+  box-shadow: inset 0 0 0 1px var(--rule-total);
+}
+
+.codes__bar[data-tone='positive'] .codes__segment[data-filled='true'] {
+  background: var(--positive);
+  box-shadow: none;
+}
+
+.codes__bar[data-tone='warning'] .codes__segment[data-filled='true'] {
+  background: var(--warning);
+  box-shadow: none;
+}
+
+.codes__bar[data-tone='negative'] .codes__segment[data-filled='true'] {
+  background: var(--negative);
+  box-shadow: none;
+}
+
+.codes__count {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--ink);
+}
+
 /* ---- Strength meter ------------------------------------------------------ */
 
 /* Advisory and visibly so. Tone is carried by `data-tone`, but never by colour

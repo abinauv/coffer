@@ -521,6 +521,18 @@ describe('attentionItems', () => {
     expect(attentionItems(quiet({ recoveryCodesRemaining: 3 }))).toEqual([])
   })
 
+  /* The line used to say what was true and offer nothing, because nothing could be done
+   * about it. Company → Recovery codes is where a new set is issued. */
+  it('sends the reader somewhere they can act', () => {
+    expect(attentionItems(quiet({ recoveryCodesRemaining: 1 }))[0]).toMatchObject({
+      target: { screenId: 'recovery-codes', params: {} },
+      actionLabel: 'Issue new codes',
+    })
+    expect(attentionItems(quiet({ recoveryCodesRemaining: 0 }))[0]).toMatchObject({
+      target: { screenId: 'recovery-codes', params: {} },
+    })
+  })
+
   it('counts the drafts and opens the newest in the editor for its own kind', () => {
     const [drafts] = attentionItems(quiet({ draftCount: ready(4), newestDraft: ready([draft()]) }))
     expect(drafts).toMatchObject({
