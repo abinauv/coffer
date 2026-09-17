@@ -41,10 +41,12 @@ import { useNumberFormat } from '@renderer/store/regime'
 import { definitionOf, DOCUMENT_KINDS, type DocumentKind } from '@shared/documents'
 import type { AppError, DocumentListRow, DocumentStatusDto } from '@shared/dto'
 import { FailureNotice } from '../components/FailureNotice'
+import { PrintDialog } from '../components/PrintDialog'
 import { RegisterPager } from '../components/RegisterPager'
 import { RegisterSkeleton } from '../components/RegisterSkeleton'
 import { RegisterEmpty, RegisterToolbar } from '../components/RegisterToolbar'
 import { ScreenFrame } from '../components/ScreenFrame'
+import { canPrint } from '../lib/document-editor'
 import { useSearchShortcut } from '../lib/use-search-shortcut'
 import { formatDate } from '../lib/dates'
 import { formatAmount } from '../lib/ledger-format'
@@ -98,6 +100,8 @@ export function DocumentRegister({
   const [applied, setApplied] = useState('')
   const [page, setPage] = useState(0)
   const [hasMore, setMore] = useState(false)
+  /* Which document the print dialog is for, or null when it is closed. */
+  const [printing, setPrinting] = useState<{ id: string; title: string } | null>(null)
 
   const load = useCallback(async () => {
     const filter = {
@@ -237,6 +241,11 @@ export function DocumentRegister({
                   <th scope="col" className="ledger-table__figure">
                     Amount
                   </th>
+                  {/* The heading is for a screen reader; the cells hold one icon each and
+                      a visible word above them would be wider than the column. */}
+                  <th scope="col" className="register__print">
+                    <span className="visually-hidden">Print</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -274,6 +283,18 @@ export function DocumentRegister({
                       <td className="ledger-table__figure">
                         {formatAmount(document.grandTotal, format)}
                       </td>
+                      {/* Named with the number, so twenty rows do not put twenty controls
+                          called "Print" on the page (design.md §4, rule 6). A draft has no
+                          number and nothing to print, and gets no button. */}
+                      <td className="register__print">
+                        {canPrint(document.status) && document.number !== null && (
+                          <PrintCell
+                            id={document.id}
+                            number={document.number}
+                            onPrint={setPrinting}
+                          />
+                        )}
+                      </td>
                     </tr>
                   )
                 })}
@@ -292,7 +313,42 @@ export function DocumentRegister({
           </div>
         )}
       </div>
+
+      {printing !== null && (
+        <PrintDialog
+          isOpen
+          documentId={printing.id}
+          title={printing.title}
+          onClose={() => setPrinting(null)}
+        />
+      )}
     </ScreenFrame>
+  )
+}
+
+/**
+ * The print button on one row.
+ *
+ * Its own component so that `document.number` is narrowed once, where it is checked,
+ * rather than asserted inside a callback the compiler cannot see through.
+ */
+function PrintCell({
+  id,
+  number,
+  onPrint,
+}: {
+  id: string
+  number: string
+  onPrint: (target: { id: string; title: string }) => void
+}): JSX.Element {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      icon="invoice"
+      aria-label={`Print ${number}`}
+      onClick={() => onPrint({ id, title: number })}
+    />
   )
 }
 

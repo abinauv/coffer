@@ -50,6 +50,8 @@ export type FailureContext =
   | 'backup'
   | 'change-passphrase'
   | 'new-recovery-codes'
+  /* Printing. The refusals are about the document rather than about the printer. */
+  | 'print'
   /* The ledger screens. No overrides yet — `RepoError` messages are already written as
    * sentences for a user, so the generic path shows them unchanged. The context exists
    * so that adding guidance for, say, PERIOD_CLOSED is a table entry rather than a
@@ -403,6 +405,20 @@ const OVERRIDES: Partial<Record<FailureContext, Record<string, Entry>>> = {
       body:
         'It is stored nowhere, so Coffer cannot fill it in. Nothing has changed yet — your ' +
         'current codes still work.',
+    },
+  },
+  print: {
+    DOCUMENT_NOT_ISSUED: {
+      title: 'A draft cannot be printed.',
+      body:
+        'It has no number yet, and a page that looks like an invoice and carries no ' +
+        'number cannot be told from a real one once it is on paper. Issue it, then print.',
+    },
+    COMPANY_PROFILE_MISSING: {
+      title: 'These books do not say who they belong to.',
+      body:
+        'An invoice has to name its supplier. Fill in Business details under Company, ' +
+        'then print — nothing about the document itself needs changing.',
     },
   },
   create: {

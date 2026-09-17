@@ -358,6 +358,19 @@ export function canCancel(status: DocumentStatusDto): boolean {
 }
 
 /**
+ * Printing reaches anything with a number on it, INCLUDING A CANCELLED DOCUMENT.
+ *
+ * That is not an oversight. A cancelled invoice keeps its number and its lines, and the
+ * reason somebody prints one is to show a customer or an auditor what was cancelled — the
+ * page says CANCELLED across its face, which is the whole point of printing it. A draft is
+ * the only thing refused, because it has no number and a page that looks like an invoice
+ * and carries no number cannot be told from a real one once it is on paper.
+ */
+export function canPrint(status: DocumentStatusDto): boolean {
+  return status !== 'draft'
+}
+
+/**
  * Deleting reaches a draft and nothing else.
  *
  * An issued document is cancelled, never removed — it has a number that was reported, an
