@@ -16,14 +16,26 @@ _Your books, in your own safe._
 
 </div>
 
-<!-- Screenshots go here once the interface redesign lands. -->
+<p align="center">
+  <img src="docs/assets/screenshot-overview.png" alt="The Overview of a demo company: what customers owe, what it owes, cash and bank, and the month so far; the oldest debts; and a list of what needs attention, including an overdue invoice and last month's GST returns" width="100%">
+</p>
+
+<table>
+  <tr>
+    <td width="33%"><img src="docs/assets/screenshot-invoice.png" alt="An issued sales invoice: five lines with HSN codes, quantities and prices, and the totals with CGST, SGST and the amount in words"></td>
+    <td width="33%"><img src="docs/assets/screenshot-palette-dark.png" alt="The sales invoice register in the dark theme, with the command palette open on the word sales"></td>
+    <td width="33%"><img src="docs/assets/screenshot-recovery-codes.png" alt="Creating a company: the five recovery codes, shown once, with the step that asks for one of them back"></td>
+  </tr>
+</table>
+
+<sub>The current build, with a demo company. Every figure was worked out by the app.</sub>
 
 ---
 
 **Coffer is a desktop accounting and ERP application for small and medium businesses
 (SMEs and MSMEs) in India.** It keeps real double-entry books, raises GST invoices with
-CGST, SGST, UTGST or IGST worked out from the place of supply, tracks what customers owe
-and what you owe suppliers, and keeps a stock register valued at moving weighted average.
+CGST, SGST, UTGST or IGST worked out from the place of supply, prints them, tracks what
+customers owe and what you owe suppliers, and prepares GSTR-1 and GSTR-3B for you to check.
 It runs entirely offline on Windows, macOS and Linux: each company is one encrypted file on
 your own computer, with no account, no subscription and no telemetry. It is free and open
 source under the AGPL-3.0 licence, and it is in **alpha** — there is no release to download
@@ -32,8 +44,8 @@ yet.
 ## Status
 
 **Alpha. There is no download yet.** The books work — you can create a company, keep a
-chart of accounts, raise and issue documents, record what has been paid, run the
-statements, and keep a stock register that reconciles with the balance sheet. What has not
+chart of accounts, raise, issue and print documents, record what has been paid, run the
+statements, look over the month's GST returns, and back the whole company up to one file. What has not
 happened is a release: no version has been tagged, so there is nothing on the releases
 page to install. [Install](#install) says where it will appear and what to do with it when
 it does.
@@ -78,28 +90,33 @@ internet doesn't.
 
 ## What it does today
 
-|                        |                                                                                                                                                                                                                                   |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Real books**         | Double-entry general ledger, a chart of accounts you can renumber, fiscal periods that close and lock, opening balances, reversals and a year-end close. Trial balance, balance sheet, profit and loss, day book, account ledger. |
-| **Sell**               | Quotations, sales invoices and credit notes, with GST computed by the regime and frozen onto the document at issue.                                                                                                               |
-| **Buy**                | Purchase bills and debit notes, with input-tax-credit eligibility recorded per line — because one bill can carry a laptop and a staff car.                                                                                        |
-| **GST**                | CGST and SGST (or UTGST) within a state, IGST across states, reverse charge, zero-rated exports with or without tax paid, and HSN and SAC codes on items.                                                                         |
-| **Get paid**           | Receipts, payments and refunds both ways, allocated against the documents they settle; credit notes set off against invoices. Aged receivables and payables that cannot disagree with the balance sheet.                          |
-| **Stock**              | A perpetual register per item and warehouse, valued at moving weighted average, where every movement that moved money also posts — so inventory on the balance sheet ties to the register, as at every date.                      |
-| **Several businesses** | Each company is its own encrypted file. Run three firms, or a hundred clients, from one install.                                                                                                                                  |
-| **Leave**              | Your data is in SQLite. Any SQLCipher-capable tool opens it given the key. No lock-in is a feature, not an oversight.                                                                                                             |
+Everything below is something you can do in the app, on a screen.
+
+|                     |                                                                                                                                                                                                                                             |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Real books**      | A double-entry general ledger, and a chart of accounts you can rename, renumber and regroup. Trial balance, balance sheet, profit and loss, day book and account ledger, summed from the journal every time they are opened.                |
+| **Sell**            | Quotations, sales invoices and credit notes, with GST computed by the regime and frozen onto the document when it is issued. Printed, or saved as a PDF, as original, duplicate and triplicate.                                             |
+| **Buy**             | Purchase bills and debit notes, numbered your way, with the supplier's own bill number kept beside yours.                                                                                                                                   |
+| **GST**             | CGST and SGST (or UTGST) within a state and IGST across states, from the place of supply; reverse charge; zero-rated exports with or without tax paid; HSN and SAC codes. GSTR-1 and GSTR-3B prepared from your documents for you to check. |
+| **Get paid**        | Receipts, payments and refunds both ways, set against the documents they settle; credit notes set off against invoices. Aged receivables and payables that cannot disagree with the balance sheet.                                          |
+| **Items**           | Goods and services with their usual prices, tax rates and HSN or SAC codes, counted in units of measure you choose.                                                                                                                         |
+| **Keep it safe**    | Each company is one encrypted file behind a passphrase, with five one-time recovery codes. A backup is one click and one file, and restores as a separate company.                                                                          |
+| **Many businesses** | Each company is its own file. Run three firms, or a hundred clients, from one install.                                                                                                                                                      |
+| **Leave**           | Your data is in SQLite. Any SQLCipher-capable tool opens it given the key. No lock-in is a feature, not an oversight.                                                                                                                       |
 
 **And what it does not do yet**, because a landing page that lists plans as features is
 the thing this project is trying not to be:
 
-- **No printing.** The invoice renderer is written and tested; nothing in the app reaches
-  it, so there is no PDF button.
-- **No importing.** Readers for CSV bank statements, Zoho Books exports and Tally XML are
-  written and tested, and are likewise not wired to a screen.
-- **No filed returns.** GSTR-1 and GSTR-3B are built from your documents and the
+- **Built underneath, with no screen yet.** A perpetual stock register per item and
+  warehouse, valued at moving weighted average; closing a period and the financial year;
+  opening balances and journal entries; input-tax-credit eligibility line by line; and
+  readers for Tally XML, Zoho Books CSV and bank-statement CSV. Each is written and tested
+  in the core of the app, and nothing on a screen reaches it yet.
+- **No filed returns.** GSTR-1 and GSTR-3B are prepared from your documents and the
   arithmetic is pinned to the paisa — but the _shape_ has never been checked against the
-  portal's published schema or been through a filing cycle, so every artefact says so on
-  its own face. GSTR-2B reconciliation, e-invoice and e-way bill payloads are not written.
+  portal's published schema or been through a filing cycle, so the screen and every file
+  it exports say so. Coffer files nothing. GSTR-2B reconciliation, e-invoice and e-way bill
+  payloads are not written.
 - **No e-mail, no auto-update, no telemetry.** The last of those is permanent.
 
 ## Design principles
@@ -123,8 +140,8 @@ share it.
 
 It is built for the same job — keeping a small Indian business's books and GST on a
 desktop computer, without the internet — and it is free and open source where Tally is
-proprietary and paid. It is not a drop-in replacement **yet**: Coffer is in alpha, cannot
-print invoices, cannot import a Tally company from inside the app, and does not produce
+proprietary and paid. It is not a drop-in replacement **yet**: Coffer is in alpha, has no
+stock screens, cannot import a Tally company from inside the app, and does not produce
 e-invoices or e-way bills. If you need to file returns this month, keep using what you
 use today and watch this repository.
 
@@ -132,10 +149,11 @@ use today and watch this repository.
 
 Yes, for GST as it is computed on documents. It works out CGST and SGST (or UTGST) for a
 supply within a state and IGST for a supply across states from the place of supply,
-handles reverse charge and zero-rated exports, records HSN and SAC codes, and records
-input-tax-credit eligibility line by line. GSTR-1 and GSTR-3B are generated from your
-documents but are marked provisional, because their format has not yet been validated
-against the GST portal. E-invoicing and e-way bills are not supported yet.
+handles reverse charge and zero-rated exports, and records HSN and SAC codes. Reports →
+Tax returns prepares GSTR-1 and GSTR-3B from your documents and exports them as a file,
+marked provisional on the screen and in the file, because their format has not yet been
+validated against the GST portal. Coffer files nothing itself. E-invoicing and e-way bills
+are not supported yet.
 
 ### Where is my data stored? Is it uploaded to the cloud?
 
@@ -152,9 +170,10 @@ Yes. Every feature works offline. Offline is the default, not a fallback.
 ### What happens if I forget my passphrase?
 
 When you create a company, Coffer shows you five recovery codes, once. Any one of them
-unlocks the books a single time and has you set a new passphrase on the spot. If you lose the passphrase **and**
-all five codes, the books cannot be recovered by anyone — there is deliberately no back
-door, including for the maintainers.
+unlocks the books a single time and has you set a new passphrase on the spot. While you
+still have the passphrase, Company → Recovery codes issues a fresh set. If you lose the
+passphrase **and** all five codes, the books cannot be recovered by anyone — there is
+deliberately no back door, including for the maintainers.
 
 ### Can I keep books for more than one company?
 
