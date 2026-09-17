@@ -180,7 +180,7 @@ async function accountForRole(db: CofferDb, role: string): Promise<string> {
   if (row === undefined) {
     throw new RepoError(
       'ROLE_UNMAPPED',
-      `No account is mapped to ${role}. Point one at it in the chart of accounts.`,
+      `No account is mapped to ${role}, so this cannot post. Every chart Coffer creates maps one, and no screen can yet, so please report this.`,
       { role },
     )
   }

@@ -209,8 +209,9 @@ function TieNotice({ report }: { report: Report }): JSX.Element {
         The rows below come to {formatAmount(report.totals.total, format)}, and {report.accountCode}{' '}
         · {report.accountName} stands at {formatAmount(report.controlBalance, format)} as at{' '}
         {formatDate(report.asAtDate)}. Every line on that account is meant to be here, so the two
-        cannot differ — please report it, with a backup if you can. The rows are still shown below,
-        because the difference is somewhere among them.
+        cannot differ. Please report it with these two figures, and attach neither the company file
+        nor a backup: both hold your books. The rows are still shown below, because the difference
+        is somewhere among them.
       </p>
     </Notice>
   )

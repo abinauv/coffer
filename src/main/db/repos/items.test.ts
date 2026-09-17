@@ -502,6 +502,7 @@ describe('names and codes are unique, ignoring case', () => {
 
     expect(failure.code).toBe('ITEM_NAME_TAKEN')
     expect(failure.details).toMatchObject({ existingName: 'Ball bearing 6203' })
+    expect(failure.message).toMatch(/Add the size or the grade/)
   })
 
   it('refuses a code another item already holds, ignoring case', async () => {

@@ -159,7 +159,7 @@ export function Backups(): JSX.Element {
             the backup was taken — recovery codes from that day still work.
           </p>
           <div className="actions">
-            <Button onClick={() => setRestoreOpen(true)}>Restore from a backup…</Button>
+            <Button onClick={() => setRestoreOpen(true)}>Restore from a backup</Button>
           </div>
         </section>
       </div>

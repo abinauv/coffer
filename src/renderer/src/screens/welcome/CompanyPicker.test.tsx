@@ -71,7 +71,7 @@ describe('the welcome', () => {
     await screen.findByRole('heading', { name: 'Welcome to Coffer' })
 
     expect(screen.getByRole('button', { name: 'Create a company' })).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Open an existing company file…' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Add an existing company' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Use a recovery code' })).toBeVisible()
     expect(screen.getByRole('button', { name: 'Restore from a backup' })).toBeVisible()
   })

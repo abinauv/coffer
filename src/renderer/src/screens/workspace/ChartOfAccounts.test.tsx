@@ -427,7 +427,7 @@ describe('changing an account', () => {
     await user.clear(within(dialog).getByLabelText('Name'))
     await user.type(within(dialog).getByLabelText('Name'), 'Main Account')
     await user.selectOptions(within(dialog).getByLabelText('Inside'), '1000')
-    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Save account' }))
 
     await waitFor(() =>
       expect(updateAccount).toHaveBeenCalledWith({

@@ -484,7 +484,7 @@ describe('adding a series', () => {
     await rowFor('Main')
     await user.click(screen.getByRole('button', { name: 'New series' }))
 
-    const add = screen.getByRole('button', { name: 'Add' })
+    const add = screen.getByRole('button', { name: 'Add series' })
     expect(add).toBeDisabled()
 
     await user.type(screen.getByLabelText('Label'), 'Export')
@@ -509,7 +509,7 @@ describe('adding a series', () => {
     await rowFor('Main')
     await user.click(screen.getByRole('button', { name: 'New series' }))
 
-    const add = screen.getByRole('button', { name: 'Add' })
+    const add = screen.getByRole('button', { name: 'Add series' })
     await user.selectOptions(screen.getByLabelText('Numbers'), 'credit-note')
     expect(add).toBeDisabled()
 
@@ -528,7 +528,7 @@ describe('adding a series', () => {
 
     await user.selectOptions(screen.getByLabelText('Numbers'), 'credit-note')
     await user.type(screen.getByLabelText('Label'), '   ')
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add series' })).toBeDisabled()
   })
 
   it('offers every numbered kind, in the kind tables words', async () => {
@@ -578,7 +578,7 @@ describe('adding a series', () => {
     await user.type(screen.getByLabelText('Separator'), '-')
     await user.click(screen.getByLabelText('Show the financial year in the number'))
     await user.click(screen.getByLabelText('Take new numbers of this kind from this series'))
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: 'Add series' }))
 
     await waitFor(() => expect(bridge.callsTo('numbering:create')).toHaveLength(1))
     expect(bridge.lastCallTo('numbering:create')?.args[0]).toEqual({
@@ -607,7 +607,7 @@ describe('adding a series', () => {
     await user.type(screen.getByLabelText('Label'), 'Cash')
     await user.selectOptions(screen.getByLabelText('Numbers'), 'payment')
     await user.type(screen.getByLabelText('Width'), '6')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: 'Add series' }))
 
     await waitFor(() => expect(bridge.callsTo('numbering:create')).toHaveLength(1))
     const sent = bridge.lastCallTo('numbering:create')?.args[0] as { width?: number }
@@ -626,7 +626,7 @@ describe('adding a series', () => {
     await user.selectOptions(screen.getByLabelText('Numbers'), 'payment')
     await user.type(screen.getByLabelText('Width'), 'four')
 
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add series' })).toBeDisabled()
     expect(screen.getByText('A width is a whole number of digits, or nothing.')).toBeInTheDocument()
   })
 })
@@ -653,7 +653,7 @@ describe('editing a series', () => {
     await user.click(await screen.findByRole('button', { name: 'Main' }))
     await user.clear(screen.getByLabelText('Prefix'))
     await user.type(screen.getByLabelText('Prefix'), 'TAX')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save series' }))
 
     await waitFor(() => expect(bridge.callsTo('numbering:update')).toHaveLength(1))
     expect(bridge.lastCallTo('numbering:update')?.args[0]).toEqual({
@@ -725,7 +725,7 @@ describe('editing a series', () => {
     await user.click(await screen.findByRole('button', { name: 'Main' }))
     await user.clear(screen.getByLabelText('Prefix'))
     await user.type(screen.getByLabelText('Prefix'), 'TAX')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save series' }))
 
     expect(await screen.findByText(/Create a new series instead/)).toBeInTheDocument()
   })
@@ -747,7 +747,7 @@ describe('editing a series', () => {
     await user.click(await screen.findByRole('button', { name: 'Main' }))
     await user.clear(screen.getByLabelText('Label'))
     await user.type(screen.getByLabelText('Label'), 'Export')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save series' }))
 
     await screen.findByText(/already has Export/)
     expect((screen.getByLabelText('Label') as HTMLInputElement).value).toBe('Export')
@@ -767,7 +767,7 @@ describe('editing a series', () => {
     })
 
     await user.click(await screen.findByRole('button', { name: 'Main' }))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save series' }))
 
     expect(
       await screen.findByText('The next sales invoice on Main will be INV/2026-27/0042.'),

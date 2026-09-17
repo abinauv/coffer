@@ -182,7 +182,7 @@ export function CompanyPicker(): JSX.Element {
             Add an existing company
           </Button>
           <Button icon="archive" onClick={() => setRestoreOpen(true)}>
-            Restore a backup
+            Restore from a backup
           </Button>
           <Button variant="primary" icon="plus" onClick={goCreate}>
             Create a company
@@ -363,7 +363,7 @@ function Welcome({
             Create a company
           </Button>
           <Button icon="folder" isFullWidth isBusy={isAdding} onClick={onOpenFile}>
-            Open an existing company file…
+            Add an existing company
           </Button>
         </div>
         <p className="welcome__links">

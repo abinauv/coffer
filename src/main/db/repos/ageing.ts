@@ -558,7 +558,7 @@ async function controlAccountFor(db: CofferDb, side: TradeSide): Promise<Control
     throw new RepoError(
       'ROLE_UNMAPPED',
       `No account is mapped to ${role}, so there is no balance to age. ` +
-        'Point one at it in the chart of accounts.',
+        'Every chart Coffer creates maps one, and no screen can yet, so please report this.',
       { role, side },
     )
   }

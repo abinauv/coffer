@@ -244,11 +244,41 @@ is a bug, however it looks.
 - **List only fonts that ship.** Plex has no Tamil cut, so Tamil text uses the operating
   system's Tamil face. A family named in `--font-sans` and not bundled falls through to
   whatever the OS has, silently.
-- **Dates the app writes read `31 Mar 2026`. Dates typed into a field use the platform's own
-  date picker,** which shows the operating system's format (`dd-mm-yyyy` on an Indian
+- **Dates the app writes read `31 Mar 2026`, and a time reads `9:40 pm`,** whatever locale the
+  operating system reports. Both processes write them through `src/shared/written-date.ts`,
+  because main's refusals reach the screen unchanged. **Dates typed into a field use the
+  platform's own date picker,** which shows the operating system's format (`dd-mm-yyyy` on an Indian
   Windows). That is a deliberate exception rather than an oversight: the native picker keeps
   keyboard entry, the OS calendar and the user's own locale, and a hand-built date field
   that drew the regime's format would have to rebuild all three.
+
+**Voice**
+
+The person reading the screen is legally required to keep the records it holds. Calm and
+exact beats lively.
+
+- **No exclamation marks, no "Oops", no emoji, no "Success"**, and no congratulation for
+  finishing a form. A toast says what now is: "Backup written", "Account saved".
+- **The fact, then the consequence, then the one thing to do next.** "These books have no
+  period covering 1 Apr 2031, so nothing can be dated then. Choose a date inside the
+  financial years they keep." A refusal that stops at the fact leaves the reader to guess.
+  One that names somewhere to go names it the way the rail does: "Company → Numbering".
+- **A failure names what did not happen.** "Freight was not archived", never "That did not
+  work"; the reason main gave goes underneath.
+- **A button names its object.** "Save item", "Add customer", "Save business details" —
+  never a bare "Save", "Add", "OK" or "Submit". One action has one name everywhere it
+  appears: "Add an existing company" on the welcome, the list and the palette alike.
+- **Indian English.** Licence, organisation, cheque, bill. The financial year is the
+  regime's own label, `2026-27`.
+- **Their words for their work.** Invoice, bill, receipt, party. Not "regime", which is
+  the code's word: a place of supply that follows the rules is "where the party and your
+  registration place it".
+- **Never ask for the books.** No message asks anyone to send a company file or a backup —
+  both hold somebody's books, and the bug template says never to attach one. A report asks
+  for the figures on the screen.
+- **Never promise what is not built.** A provisional return says so on its own face; the
+  alpha build says so in the title bar; no screen lists a plan as a feature, and no message
+  sends somebody to a screen that does not exist.
 
 **Platform and security**
 
@@ -287,11 +317,14 @@ is a bug, however it looks.
 Worth designing for, because each already has working code behind it and no screen in
 front of it:
 
-- **Printing.** An invoice print model and HTML template exist in `src/main/services/pdf/`,
-  but no screen offers a print or PDF button.
 - **Importing.** Readers for Tally XML, Zoho Books CSV and bank-statement CSV exist in
-  `src/main/services/importers/`, with no screen in front of them.
-- **GST returns.** GSTR-1 and GSTR-3B are generated but provisional, and have no screen.
+  `src/main/services/importers/`, with no screen in front of them. Nothing writes what they
+  read yet: a screen needs a staging model and a commit that is safe to run twice.
+- **Periods and year-end close.** Closing, reopening and locking a period, and closing a
+  financial year, are in the ledger's contract and have no screen. Closing a year and
+  locking a period cannot be undone, so each needs its confirmation designed first.
+- **Moving a role to another account.** The chart of accounts shows which accounts the
+  software posts through and will not archive them, but no screen points a role elsewhere.
 
 ## 6. Checking a change
 

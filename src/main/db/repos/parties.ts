@@ -288,10 +288,14 @@ async function assertNameFree(db: CofferDb, name: string, exceptId: string | nul
   }
   const clash = await query.executeTakeFirst()
   if (clash !== undefined) {
-    throw new RepoError('PARTY_NAME_TAKEN', `${clash.name} is already in these books.`, {
-      name,
-      existingName: clash.name,
-    })
+    throw new RepoError(
+      'PARTY_NAME_TAKEN',
+      `${clash.name} is already in these books. Add the city or an initial to tell the two apart.`,
+      {
+        name,
+        existingName: clash.name,
+      },
+    )
   }
 }
 
@@ -322,7 +326,7 @@ async function assertRegistrationFree(
   if (clash !== undefined) {
     throw new RepoError(
       'PARTY_REGISTRATION_TAKEN',
-      `${clash.name} already carries that registration number.`,
+      `${clash.name} already carries that registration number. One firm is one record — open ${clash.name} instead.`,
       { registrationNumber, existingName: clash.name },
     )
   }
@@ -361,10 +365,14 @@ export async function assertPartiesActive(
       })
     }
     if (row.is_archived === 1) {
-      throw new RepoError('PARTY_ARCHIVED', `${row.name} is archived and takes nothing new.`, {
-        partyId: id,
-        name: row.name,
-      })
+      throw new RepoError(
+        'PARTY_ARCHIVED',
+        `${row.name} is archived and takes nothing new. Put them back in use from their list under Sales or Purchases first.`,
+        {
+          partyId: id,
+          name: row.name,
+        },
+      )
     }
   }
 }

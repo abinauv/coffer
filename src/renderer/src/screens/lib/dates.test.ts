@@ -44,6 +44,15 @@ describe('describeLastOpened', () => {
     )
   })
 
+  /* The voice rule's form, whatever locale the operating system reports. */
+  it('writes the day and time as 4 Jan 2026 and 9:15 am', () => {
+    expect(describeLastOpened(new Date(2026, 0, 4).toISOString(), NOW)).toBe('Opened 4 Jan 2026')
+    expect(describeLastOpened(new Date(2026, 7, 14, 9, 15).toISOString(), NOW)).toBe(
+      'Opened today at 9:15 am',
+    )
+    expect(describeCreated(new Date(2026, 0, 4, 18, 0).toISOString())).toBe('Created 4 Jan 2026')
+  })
+
   it('does not print "Invalid Date" at anyone', () => {
     expect(describeLastOpened('nonsense', NOW)).toBe('Opened at an unknown time')
   })

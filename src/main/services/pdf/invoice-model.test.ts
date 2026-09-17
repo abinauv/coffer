@@ -627,7 +627,8 @@ describe('what it refuses, and what it says', () => {
   it('refuses to print books that do not say who they belong to', () => {
     const call = () => modelFor(fixture.intraState, { company: null })
 
-    expect(call).toThrow(/company profile/)
+    /* Named the way the rail names it, so the sentence says where to go. */
+    expect(call).toThrow(/Business details under Company/)
     try {
       call()
     } catch (error) {

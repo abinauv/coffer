@@ -327,13 +327,13 @@ describe('adding', () => {
   it('will not save an item with no name', async () => {
     const { user } = await opened()
 
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add item' })).toBeDisabled()
 
     await user.type(screen.getByLabelText('Name'), '   ')
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add item' })).toBeDisabled()
 
     await user.type(screen.getByLabelText('Name'), 'Bearing')
-    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Add item' })).toBeEnabled()
   })
 
   /* An item that is neither sold nor bought is refused by the repository and reaches no
@@ -343,14 +343,14 @@ describe('adding', () => {
     const { user } = await opened()
 
     await user.type(screen.getByLabelText('Name'), 'Bearing')
-    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Add item' })).toBeEnabled()
 
     await user.click(screen.getByLabelText(/We sell it/))
     expect(await screen.findByText('Which way does this item go?')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Add item' })).toBeDisabled()
 
     await user.click(screen.getByLabelText(/We buy it/))
-    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Add item' })).toBeEnabled()
   })
 
   /*
@@ -382,7 +382,7 @@ describe('adding', () => {
     await user.click(screen.getByLabelText(/It is a charge/))
     await user.selectOptions(screen.getByLabelText('Sales account'), 'sales')
     await user.selectOptions(screen.getByLabelText('Purchase account'), 'purchases')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: 'Add item' }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith({
@@ -421,7 +421,7 @@ describe('adding', () => {
     const { user } = await opened({ items: { create } })
 
     await user.type(screen.getByLabelText('Name'), 'Advice')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: 'Add item' }))
 
     await waitFor(() => {
       expect(create).toHaveBeenCalledWith({
@@ -462,7 +462,7 @@ describe('adding', () => {
 
     await user.type(screen.getByLabelText('Name'), 'Laptop')
     await user.type(screen.getByLabelText('HSN / SAC'), '8471.30')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: 'Add item' }))
 
     await waitFor(() => {
       expect(screen.getByLabelText('HSN / SAC')).toHaveValue('847130')
@@ -481,7 +481,7 @@ describe('adding', () => {
 
     await user.type(screen.getByLabelText('Name'), 'Laptop')
     await user.type(screen.getByLabelText('Sale price'), '5000')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: 'Add item' }))
 
     await waitFor(() => {
       expect(screen.getByLabelText('Sale price')).toHaveValue('5000.00')
@@ -510,7 +510,7 @@ describe('adding', () => {
 
     await user.type(screen.getByLabelText('Name'), 'Laptop')
     await user.type(screen.getByLabelText('HSN / SAC'), '847')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: 'Add item' }))
 
     const box = await screen.findByLabelText('HSN / SAC')
     await waitFor(() => {
@@ -535,7 +535,7 @@ describe('adding', () => {
     })
 
     await user.type(screen.getByLabelText('Name'), 'Laptop')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
+    await user.click(screen.getByRole('button', { name: 'Add item' }))
 
     expect(await screen.findByText('No company is open.')).toBeInTheDocument()
     expect(screen.getByLabelText('HSN / SAC')).toHaveAccessibleDescription(/4, 6 or 8 digits/)
@@ -549,8 +549,8 @@ describe('adding', () => {
     const { user } = await opened({ items: { create: () => pending } })
 
     await user.type(screen.getByLabelText('Name'), 'Laptop')
-    await user.click(screen.getByRole('button', { name: 'Add' }))
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'Add item' }))
+    expect(screen.getByRole('button', { name: 'Add item' })).toBeDisabled()
 
     /* Awaiting the promise is not waiting for the screen: what follows it is a React
      * update, and only `act` flushes that. */
@@ -559,7 +559,7 @@ describe('adding', () => {
     })
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'Save item' })).toBeEnabled()
     })
   })
 })
@@ -673,7 +673,7 @@ describe('editing', () => {
 
     await user.clear(screen.getByLabelText('Name'))
     await user.type(screen.getByLabelText('Name'), 'Ball bearing 6204')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save item' }))
 
     await waitFor(() => {
       expect(update).toHaveBeenCalledWith(
@@ -709,7 +709,7 @@ describe('editing', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('Unit')).toHaveValue('DOZ')
     })
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save item' }))
 
     await waitFor(() => {
       expect(update).toHaveBeenCalledWith(expect.objectContaining({ unitCode: 'DOZ' }))
@@ -738,7 +738,7 @@ describe('editing', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('Sales account')).toHaveValue('old')
     })
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save item' }))
 
     await waitFor(() => {
       expect(update).toHaveBeenCalledWith(expect.objectContaining({ salesAccountId: 'old' }))
@@ -767,7 +767,7 @@ describe('editing', () => {
 
     await user.clear(screen.getByLabelText('HSN / SAC'))
     await user.type(screen.getByLabelText('HSN / SAC'), '8471.30')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save item' }))
 
     await waitFor(() => {
       expect(screen.getByLabelText('HSN / SAC')).toHaveValue('847130')
@@ -824,6 +824,24 @@ describe('archiving', () => {
     expect(
       await screen.findByText(/Every document it is already on is untouched/),
     ).toBeInTheDocument()
+  })
+
+  /* A refusal says what did not happen, by name — not "That did not work". */
+  it('names what was not archived when main refuses', async () => {
+    const user = userEvent.setup()
+    const archive = vi.fn(() =>
+      Promise.resolve({
+        ok: false as const,
+        error: { code: 'ITEM_NOT_FOUND', message: 'That item is no longer in these books.' },
+      }),
+    )
+    renderScreen(itemsScreen(), { bridge: bridgeFor({ items: { archive } }) })
+
+    const row = await rowFor('Freight')
+    await user.click(within(row).getByRole('button', { name: 'Archive' }))
+
+    expect(await screen.findByText('Freight was not archived')).toBeInTheDocument()
+    expect(screen.getByText('That item is no longer in these books.')).toBeInTheDocument()
   })
 
   it('offers to restore one that is already archived', async () => {

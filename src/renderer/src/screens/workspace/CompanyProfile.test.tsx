@@ -65,7 +65,7 @@ describe('books nobody has filled in yet', () => {
     renderScreen(<CompanyProfile />, { bridge: bridgeWith(null, profile()) })
 
     await screen.findByText('Nothing here yet')
-    const save = screen.getByRole('button', { name: 'Save' })
+    const save = screen.getByRole('button', { name: 'Save business details' })
 
     /* Country is seeded from the regime, so only the name is missing. */
     expect(save).toBeDisabled()
@@ -121,7 +121,7 @@ describe('books nobody has filled in yet', () => {
 
     await user.type(field('Legal name'), 'Lisboa Metais')
     await user.selectOptions(field('Country'), 'Portugal')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save business details' }))
 
     await waitFor(() =>
       expect(bridge.lastCallTo('companyProfile:save')?.args[0]).toMatchObject({
@@ -175,7 +175,7 @@ describe('saving', () => {
     const { bridge } = renderScreen(<CompanyProfile />, { bridge: bridgeWith(profile()) })
 
     await waitFor(() => expect(field('Legal name').value).toBe('Acme Traders Private Limited'))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save business details' }))
 
     await waitFor(() => expect(bridge.callsTo('companyProfile:save')).toHaveLength(1))
     expect(bridge.lastCallTo('companyProfile:save')?.args[0]).toEqual({
@@ -199,7 +199,7 @@ describe('saving', () => {
 
     await screen.findByText('Nothing here yet')
     await user.type(field('Legal name'), '  Acme Traders Private Limited  ')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save business details' }))
 
     await waitFor(() => expect(bridge.callsTo('companyProfile:save')).toHaveLength(1))
     const sent = bridge.lastCallTo('companyProfile:save')?.args[0] as { legalName: string }
@@ -226,7 +226,7 @@ describe('saving', () => {
     expect(picker.value).toBe('')
 
     await user.type(field('Registration number'), '33AABCC1234D1ZI')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save business details' }))
 
     await waitFor(() => expect(picker.value).toBe('33'))
   })
@@ -236,7 +236,7 @@ describe('saving', () => {
     renderScreen(<CompanyProfile />, { bridge: bridgeWith(profile()) })
 
     await waitFor(() => expect(field('Legal name').value).toBe('Acme Traders Private Limited'))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save business details' }))
 
     expect(
       await screen.findByText(/These books belong to Acme Traders Private Limited/),
@@ -268,7 +268,7 @@ describe('saving', () => {
     })
 
     await waitFor(() => expect(field('Legal name').value).toBe('Acme Traders Private Limited'))
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save business details' }))
 
     expect(await screen.findByText(/issued in Tamil Nadu/)).toBeInTheDocument()
   })
@@ -291,7 +291,7 @@ describe('saving', () => {
     await waitFor(() => expect(field('Registration number').value).toBe('33AABCC1234D1ZI'))
     await user.clear(field('Registration number'))
     await user.type(field('Registration number'), '33AABCC1234D1ZZ')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await user.click(screen.getByRole('button', { name: 'Save business details' }))
 
     await screen.findByText(/not a GSTIN/)
     /* Typing it again from scratch after a rejection is the fastest way to lose a user. */

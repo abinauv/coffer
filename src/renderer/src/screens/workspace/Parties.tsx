@@ -199,7 +199,11 @@ export function Parties({ role = null, openId }: PartiesProps): JSX.Element {
     async (party: PartySummary, archived: boolean) => {
       const result = await callApi((api) => api.parties.archive({ id: party.id, archived }))
       if (!result.ok) {
-        show({ tone: 'danger', title: 'That did not work', body: result.error.message })
+        show({
+          tone: 'danger',
+          title: `${party.name} was not ${archived ? 'archived' : 'put back in use'}`,
+          body: result.error.message,
+        })
         return
       }
       show({
@@ -488,7 +492,7 @@ function PartyDialog({
       isOpen
       onClose={onClose}
       hasUnsavedInput={hasTyped}
-      title={isNew ? copyFor(role).newLabel : 'Edit'}
+      title={party === null ? copyFor(role).newLabel : `Edit ${party.name}`}
       description="One record per firm. Tick both boxes when you buy from someone you also sell to — that is what keeps their balance in one place."
       footer={
         <>
@@ -499,7 +503,7 @@ function PartyDialog({
             disabled={!canSubmit}
             isBusy={isBusy}
           >
-            {isNew ? 'Add' : 'Save'}
+            {isNew ? `Add ${copyFor(role).noun}` : `Save ${copyFor(role).noun}`}
           </Button>
         </>
       }

@@ -11,6 +11,8 @@
  */
 
 /** How the saved file is named. Kept simple enough to type into a search box. */
+import { writtenDayOf } from '@shared/written-date'
+
 export const SHEET_FILE_PREFIX = 'coffer-recovery-codes'
 
 export interface SheetInput {
@@ -24,7 +26,7 @@ export interface SheetInput {
   appVersion?: string
 }
 
-/** ISO date, no time. The time of day is noise on a printed sheet. */
+/** ISO date, no time, for the file name: it sorts, and a file name is not a sentence. */
 export function sheetDate(date: Date): string {
   const year = date.getFullYear()
   const month = `${date.getMonth() + 1}`.padStart(2, '0')
@@ -61,7 +63,7 @@ export function recoverySheetText(input: SheetInput): string {
     'Coffer — recovery codes',
     `Company:   ${input.companyName}`,
     `File:      ${input.filePath}`,
-    `Issued:    ${sheetDate(input.generatedAt)}`,
+    `Issued:    ${writtenDayOf(input.generatedAt)}`,
   ]
   if (input.appVersion !== undefined && input.appVersion !== '') {
     lines.push(`Coffer:    ${input.appVersion}`)

@@ -424,9 +424,9 @@ function roleAccount(accounts: AccountResolver, role: AccountRole): AccountRef {
   if (account === null) {
     throw new PostingError(
       'ROLE_UNMAPPED',
-      `No account is mapped to ${role}, so this stock movement cannot post. Point one at ` +
-        'it in the chart of accounts — a movement that does not post is a balance sheet ' +
-        'that does not tie to the stock register.',
+      `No account is mapped to ${role}, so this stock movement cannot post — a movement ` +
+        'that does not post is a balance sheet that does not tie to the stock register. ' +
+        'Every chart Coffer creates maps one, and no screen can yet, so please report this.',
       { role },
     )
   }

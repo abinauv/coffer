@@ -408,10 +408,14 @@ async function assertNameFree(db: CofferDb, name: string, exceptId: string | nul
   }
   const clash = await query.executeTakeFirst()
   if (clash !== undefined) {
-    throw new RepoError('ITEM_NAME_TAKEN', `${clash.name} is already in these books.`, {
-      name,
-      existingName: clash.name,
-    })
+    throw new RepoError(
+      'ITEM_NAME_TAKEN',
+      `${clash.name} is already in these books. Add the size or the grade to tell the two apart.`,
+      {
+        name,
+        existingName: clash.name,
+      },
+    )
   }
 }
 
@@ -440,10 +444,14 @@ async function assertCodeFree(
   }
   const clash = await query.executeTakeFirst()
   if (clash !== undefined) {
-    throw new RepoError('ITEM_CODE_TAKEN', `${clash.name} already carries that code.`, {
-      code,
-      existingName: clash.name,
-    })
+    throw new RepoError(
+      'ITEM_CODE_TAKEN',
+      `${clash.name} already carries that code. Give this item a different one, or leave it empty.`,
+      {
+        code,
+        existingName: clash.name,
+      },
+    )
   }
 }
 
@@ -476,10 +484,14 @@ export async function assertItemsActive(db: CofferDb, itemIds: readonly string[]
       })
     }
     if (row.is_archived === 1) {
-      throw new RepoError('ITEM_ARCHIVED', `${row.name} is archived and takes nothing new.`, {
-        itemId: id,
-        name: row.name,
-      })
+      throw new RepoError(
+        'ITEM_ARCHIVED',
+        `${row.name} is archived and takes nothing new. Put it back in use from Inventory → Items first.`,
+        {
+          itemId: id,
+          name: row.name,
+        },
+      )
     }
   }
 }
@@ -537,11 +549,15 @@ async function postingAccountOf(
     )
   }
   if (account.is_archived === 1) {
-    throw new RepoError('ACCOUNT_ARCHIVED', `${account.name} is archived and takes nothing new.`, {
-      accountId,
-      which,
-      name: account.name,
-    })
+    throw new RepoError(
+      'ACCOUNT_ARCHIVED',
+      `${account.name} is archived and takes nothing new. Name another account, or put it back in use from Accounts → Chart of accounts.`,
+      {
+        accountId,
+        which,
+        name: account.name,
+      },
+    )
   }
   return account.id
 }

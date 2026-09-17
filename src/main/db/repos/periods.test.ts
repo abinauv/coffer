@@ -533,6 +533,20 @@ describe('requirePostablePeriod', () => {
     expect(failure.code).toBe('PERIOD_CLOSED')
     expect(failure.details).toMatchObject({ status: 'locked', label: 'Apr 2026' })
   })
+
+  /* These reach the screen unchanged, so they are sentences for a person: the date the way
+   * every screen writes it, and the one thing to do next. */
+  it('says what to do, with the date written the way the screens write it', async () => {
+    const none = await failureOf(() => requirePostablePeriod(db, '2030-01-01'))
+    expect(none.message).toContain('no period covering 1 Jan 2030')
+    expect(none.message).not.toContain('2030-01-01')
+    expect(none.message).toMatch(/Choose a date inside/)
+
+    const april = await periodOn('2026-04-15')
+    await closePeriod(db, april.id)
+    const closed = await failureOf(() => requirePostablePeriod(db, '2026-04-15'))
+    expect(closed.message).toMatch(/Apr 2026 is closed, so nothing more can be posted in it/)
+  })
 })
 
 describe('closing and reopening', () => {

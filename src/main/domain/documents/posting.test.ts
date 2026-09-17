@@ -981,7 +981,10 @@ describe('charges, on each side of the trade', () => {
       message = error instanceof Error ? error.message : String(error)
     }
     expect(message).toContain('CGST paid on purchases')
-    expect(message).toContain('Taxes Recoverable')
+    /* A tax account is found by its role, and no screen maps one. Sending somebody to add
+     * an account under a group would leave the refusal exactly where it was. */
+    expect(message).not.toContain('Add one under')
+    expect(message).toContain('please report this')
   })
 })
 

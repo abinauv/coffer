@@ -3,10 +3,13 @@
  * when it was created.
  *
  * Timestamps cross IPC as ISO-8601 UTC strings (docs/CONVENTIONS.md §3). They are shown
- * in the user's own locale and time zone, because the only reader is the person sitting
- * in front of the machine. The decisions worth testing are which phrasing applies, not
- * what `Intl` produces for a given locale, so the branch is separated from the format.
+ * in the user's own time zone, because the only reader is the person sitting in front of
+ * the machine — but in the form the voice rule fixes, `17 Sep 2026` and `9:40 pm`, and not
+ * in the operating system's locale. `toLocaleDateString` wrote "Sep 17, 2026" on a machine
+ * set up in American English, beside registers that say "17 Sep 2026".
  */
+
+import { writtenDate, writtenDateParts, writtenDayOf, writtenTimeOf } from '@shared/written-date'
 
 /** A timestamp that could not be read at all. Better than printing 'Invalid Date'. */
 const UNREADABLE = 'at an unknown time'
@@ -31,13 +34,13 @@ export function dayDistance(timestamp: string, now: Date): DayDistance {
 function formatDay(timestamp: string): string {
   const at = new Date(timestamp)
   if (Number.isNaN(at.getTime())) return UNREADABLE
-  return at.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+  return writtenDayOf(at)
 }
 
 function formatTime(timestamp: string): string {
   const at = new Date(timestamp)
   if (Number.isNaN(at.getTime())) return UNREADABLE
-  return at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  return writtenTimeOf(at)
 }
 
 /**
@@ -71,44 +74,14 @@ export function describeCreated(timestamp: string): string {
 
 /*
  * `31 Mar 2026`, the voice rule in docs/design.md, for a date the app WRITES. A date typed
- * into a field keeps the platform's own picker.
- *
- * NOT `toLocaleDateString`, unlike the timestamps above. A document date is a calendar
- * date with no time and no zone — `2026-04-01` is the first of April wherever the reader
- * sits — and handing it to `Date` reads it as UTC midnight, which is the thirty-first of
- * March in every zone west of Greenwich. So the three parts are read off the string, and
- * the month is named from a table: the day and the year are digits in every locale this
- * product ships, and the abbreviation is the one the design writes.
+ * into a field keeps the platform's own picker. The table and the reading of the string are
+ * in `@shared/written-date`, because main writes dates into its messages too.
  */
-const MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-] as const
-
-const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
-
-function dateParts(iso: string): { day: number; month: string; year: string } | null {
-  const match = ISO_DATE.exec(iso)
-  if (match === null) return null
-  const month = MONTHS[Number(match[2]) - 1]
-  if (month === undefined) return null
-  return { day: Number(match[3]), month, year: match[1] ?? '' }
-}
+const dateParts = writtenDateParts
 
 /** `2026-09-13` as `13 Sep 2026`. Anything that is not an ISO date is shown as it came. */
 export function formatDate(iso: string): string {
-  const parts = dateParts(iso)
-  return parts === null ? iso : `${String(parts.day)} ${parts.month} ${parts.year}`
+  return writtenDate(iso)
 }
 
 /**

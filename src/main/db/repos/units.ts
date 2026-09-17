@@ -294,9 +294,13 @@ async function requireUnit(db: CofferDb, code: string): Promise<UnitOfMeasure> {
 export async function requireActiveUnit(db: CofferDb, code: string): Promise<UnitOfMeasure> {
   const unit = await requireUnit(db, code)
   if (unit.isArchived) {
-    throw new RepoError('UNIT_ARCHIVED', `${unit.code} is archived and takes nothing new.`, {
-      code: unit.code,
-    })
+    throw new RepoError(
+      'UNIT_ARCHIVED',
+      `${unit.code} is archived and takes nothing new. Put it back in use from Inventory → Units of measure first.`,
+      {
+        code: unit.code,
+      },
+    )
   }
   return unit
 }
@@ -319,7 +323,11 @@ async function assertCodeFree(db: CofferDb, code: string): Promise<void> {
     .where('code', '=', code)
     .executeTakeFirst()
   if (clash !== undefined) {
-    throw new RepoError('UNIT_CODE_TAKEN', `${code} is already a unit in these books.`, { code })
+    throw new RepoError(
+      'UNIT_CODE_TAKEN',
+      `${code} is already a unit in these books. Use that one, or choose another code.`,
+      { code },
+    )
   }
 }
 

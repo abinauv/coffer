@@ -613,7 +613,7 @@ async function assertLabelFree(
   if (clash !== undefined) {
     throw new RepoError(
       'SERIES_LABEL_TAKEN',
-      `${numberedKindDefinition(kind).label} already has a series called ${clash.label}.`,
+      `${numberedKindDefinition(kind).label} already has a series called ${clash.label}. Give this one a different label.`,
       { kind, label, existingLabel: clash.label },
     )
   }

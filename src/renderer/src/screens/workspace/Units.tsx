@@ -136,7 +136,11 @@ export function Units(): JSX.Element {
     async (unit: UnitOfMeasure, archived: boolean) => {
       const result = await callApi((api) => api.units.archive({ code: unit.code, archived }))
       if (!result.ok) {
-        show({ tone: 'danger', title: 'That did not work', body: result.error.message })
+        show({
+          tone: 'danger',
+          title: `${unit.code} was not ${archived ? 'archived' : 'put back in use'}`,
+          body: result.error.message,
+        })
         return
       }
       show({
@@ -384,7 +388,7 @@ function UnitDialog({ isOpen, unit, onClose, onSaved }: UnitDialogProps): JSX.El
             disabled={!canSubmit}
             isBusy={isBusy}
           >
-            {isNew ? 'Add' : 'Save'}
+            {isNew ? 'Add unit' : 'Save unit'}
           </Button>
         </>
       }

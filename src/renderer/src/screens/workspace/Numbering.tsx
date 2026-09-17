@@ -251,7 +251,11 @@ export function Numbering(): JSX.Element {
         api.numbering.update({ id: record.id, isDefault: true }),
       )
       if (!result.ok) {
-        show({ tone: 'danger', title: 'That did not work', body: result.error.message })
+        show({
+          tone: 'danger',
+          title: `${record.label} was not made the default`,
+          body: result.error.message,
+        })
         return
       }
       show({
@@ -268,7 +272,11 @@ export function Numbering(): JSX.Element {
     async (record: NumberingSeriesRecord, archived: boolean) => {
       const result = await callApi((api) => api.numbering.archive({ id: record.id, archived }))
       if (!result.ok) {
-        show({ tone: 'danger', title: 'That did not work', body: result.error.message })
+        show({
+          tone: 'danger',
+          title: `${record.label} was not ${archived ? 'archived' : 'put back in use'}`,
+          body: result.error.message,
+        })
         return
       }
       show({
@@ -678,7 +686,7 @@ function SeriesDialog({
             disabled={!canSubmit}
             isBusy={isBusy}
           >
-            {isNew ? 'Add' : 'Save'}
+            {isNew ? 'Add series' : 'Save series'}
           </Button>
         </>
       }

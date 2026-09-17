@@ -89,7 +89,7 @@ import { postEntry, reverseEntry } from './journal'
 import { allocateNumber, defaultSeriesFor } from './numbering'
 import { outstandingForDocument, type DocumentControl } from './outstanding'
 import { assertPartiesActive } from './parties'
-import { periodRefForDate } from './periods'
+import { noPeriodCovering, periodRefForDate } from './periods'
 import { inTransaction } from './transaction'
 
 /** The same ceiling `listDocuments` uses, and exported for the same reason: to cross it. */
@@ -749,7 +749,7 @@ async function assertMoneyAccount(
   if (account.is_archived === 1) {
     throw new RepoError(
       'RECEIPT_ACCOUNT_INVALID',
-      `${account.name} is archived and takes nothing new.`,
+      `${account.name} is archived and takes nothing new. Choose another bank or cash account.`,
       { accountId, name: account.name },
     )
   }
@@ -772,9 +772,7 @@ async function assertMoneyAccount(
 
 async function requireCoveringPeriod(db: CofferDb, date: DateString): Promise<AccountingPeriodRef> {
   const period = await periodRefForDate(db, date)
-  if (period === null) {
-    throw new RepoError('NO_PERIOD', `The books have no period covering ${date}.`, { date })
-  }
+  if (period === null) throw noPeriodCovering(date)
   return period
 }
 
@@ -785,7 +783,7 @@ async function requireDefaultSeries(db: CofferDb, kind: ReceiptKind): Promise<st
   throw new RepoError(
     'SERIES_NOT_CONFIGURED',
     `These books have no numbering series for ${receiptDefinitionOf(kind).pluralLabel.toLowerCase()}. ` +
-      'Set one up before recording this.',
+      'Add one under Company → Numbering, then record this.',
     { kind },
   )
 }

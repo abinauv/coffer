@@ -175,7 +175,11 @@ export function Items({ navigate }: ScreenContext): JSX.Element {
     async (item: ItemSummary, archived: boolean) => {
       const result = await callApi((api) => api.items.archive({ id: item.id, archived }))
       if (!result.ok) {
-        show({ tone: 'danger', title: 'That did not work', body: result.error.message })
+        show({
+          tone: 'danger',
+          title: `${item.name} was not ${archived ? 'archived' : 'put back in use'}`,
+          body: result.error.message,
+        })
         return
       }
       show({
@@ -522,7 +526,7 @@ function ItemDialog({
             disabled={!canSubmit}
             isBusy={isBusy}
           >
-            {isNew ? 'Add' : 'Save'}
+            {isNew ? 'Add item' : 'Save item'}
           </Button>
         </>
       }

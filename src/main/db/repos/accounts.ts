@@ -284,7 +284,11 @@ export async function deleteAccount(db: CofferDb, id: string): Promise<void> {
     .where('parent_id', '=', id)
     .executeTakeFirst()
   if (children !== undefined) {
-    throw new RepoError('ACCOUNT_HAS_CHILDREN', 'Move or remove its children first.', { id })
+    throw new RepoError(
+      'ACCOUNT_HAS_CHILDREN',
+      'This group still holds accounts. Move them to another group first.',
+      { id },
+    )
   }
 
   const posting = await db
@@ -330,7 +334,7 @@ async function assertFillsNoRole(db: CofferDb, id: string): Promise<void> {
   if (role !== undefined) {
     throw new RepoError(
       'ACCOUNT_IN_USE',
-      'This account fills a role. Point the role at another account first.',
+      'The software posts through this account, and no screen can move that to another account yet, so it cannot be archived.',
       { id, role: role.role },
     )
   }
@@ -366,14 +370,22 @@ export async function setAccountRole(db: CofferDb, role: string, accountId: stri
     })
   }
   if (account.is_group === 1) {
-    throw new RepoError('ACCOUNT_IS_GROUP', 'A group totals its children and holds nothing.', {
-      accountId,
-    })
+    throw new RepoError(
+      'ACCOUNT_IS_GROUP',
+      'A group totals the accounts inside it and holds nothing itself. Choose one of those accounts.',
+      {
+        accountId,
+      },
+    )
   }
   if (account.is_archived === 1) {
-    throw new RepoError('ACCOUNT_ARCHIVED', 'An archived account accepts nothing new.', {
-      accountId,
-    })
+    throw new RepoError(
+      'ACCOUNT_ARCHIVED',
+      'An archived account accepts nothing new. Put it back in use from Accounts → Chart of accounts first.',
+      {
+        accountId,
+      },
+    )
   }
 
   const now = new Date().toISOString()
@@ -476,10 +488,14 @@ async function assertCodeFree(db: CofferDb, code: string, exceptId: string | nul
   }
   const clash = await query.executeTakeFirst()
   if (clash !== undefined) {
-    throw new RepoError('ACCOUNT_CODE_TAKEN', `Account code ${clash.code} is already in use.`, {
-      code,
-      existingCode: clash.code,
-    })
+    throw new RepoError(
+      'ACCOUNT_CODE_TAKEN',
+      `Account code ${clash.code} is already in use. Choose another code.`,
+      {
+        code,
+        existingCode: clash.code,
+      },
+    )
   }
 }
 
