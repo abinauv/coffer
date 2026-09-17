@@ -11,7 +11,7 @@
  */
 
 import { join } from 'node:path'
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, protocol, shell } from 'electron'
 import log from 'electron-log'
 import { BRAND } from '../branding'
 import { companies, isCompanyError } from './companies'
@@ -24,6 +24,8 @@ import { createItemsService } from './items/service'
 import { createLedgerService } from './ledger/service'
 import { createNumberingService } from './numbering/service'
 import { createPartiesService } from './parties/service'
+import { createPrintingService } from './printing/service'
+import { createElectronPagePrinter, printSchemePrivileges } from './printing/window'
 import { createReceiptsService } from './receipts/service'
 import { createRegimeService } from './regime/service'
 import { createUnitsService } from './units/service'
@@ -51,6 +53,9 @@ function installHandlers(): void {
     numbering: createNumberingService(companies),
     companyProfile: createCompanyProfileService(companies),
     documents: createDocumentsService(companies),
+    /* The one service that needs a Chromium. Its window is created and destroyed per
+     * print; nothing is held between them. See src/main/printing/window.ts. */
+    printing: createPrintingService(companies, createElectronPagePrinter()),
     receipts: createReceiptsService(companies),
     regime: createRegimeService(companies),
     /* One object, two contract groups: the read-only methods are on the same service,
@@ -120,6 +125,14 @@ function createWindow(): void {
     void mainWindow.loadFile(join(import.meta.dirname, '../renderer/index.html'))
   }
 }
+
+/*
+ * BEFORE THE APP IS READY, because scheme privileges are fixed at that moment and cannot
+ * be added afterwards. `coffer-print:` is how a rendered invoice reaches the hidden window
+ * that turns it into a page, without the HTML ever touching the disk — see
+ * src/main/printing/window.ts.
+ */
+protocol.registerSchemesAsPrivileged([printSchemePrivileges()])
 
 void app.whenReady().then(() => {
   app.setAppUserModelId(BRAND.appId)

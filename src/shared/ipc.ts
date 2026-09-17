@@ -75,11 +75,14 @@ import type {
   PartySummary,
   PostOpeningBalancesInput,
   PostingResult,
+  PrintDocumentInput,
+  PrintPreview,
   ProfitAndLoss,
   RecoverCompanyInput,
   RecoveryCodesIssued,
   ReplaceRecoveryCodesInput,
   RestoreInput,
+  SavePdfResult,
   SetBackupReminderInput,
   Result,
   SaveCompanyProfileInput,
@@ -416,6 +419,18 @@ export interface CofferApi {
     offset(input: SetOffsetsInput): Promise<Result<DocumentSettlement>>
     /** The charge documents this refund document may be set against, oldest first. */
     openForOffset(documentId: string): Promise<Result<OpenDocument[]>>
+
+    /*
+     * PRINTING. All three build the same page from the same model; they differ only in
+     * where it ends up. The HTML never crosses this boundary — see `PrintPreview`.
+     */
+
+    /** A picture of page one, for the print dialog. Writes nothing and prints nothing. */
+    renderPrint(input: PrintDocumentInput): Promise<Result<PrintPreview>>
+    /** Render to PDF and ask where to put it. `path: null` when the user cancels. */
+    savePdf(input: PrintDocumentInput): Promise<Result<SavePdfResult>>
+    /** Hand the page to the operating system's print dialog. */
+    print(input: PrintDocumentInput): Promise<Result<void>>
   }
 
   /**

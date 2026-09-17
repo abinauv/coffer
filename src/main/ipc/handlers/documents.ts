@@ -34,6 +34,10 @@ import type {
   ListDocumentsInput,
   OffsetInput,
   OpenDocument,
+  PrintCopy,
+  PrintDocumentInput,
+  PrintPreview,
+  SavePdfResult,
   SetOffsetsInput,
   UpdateDocumentInput,
 } from '../../../shared/dto'
@@ -69,6 +73,21 @@ export interface DocumentsService {
   settlement(documentId: string): Promise<DocumentSettlement>
   offset(input: SetOffsetsInput): Promise<DocumentSettlement>
   openForOffset(documentId: string): Promise<OpenDocument[]>
+}
+
+/**
+ * What the IPC layer needs in order to print one.
+ *
+ * A SECOND SERVICE BEHIND ONE GROUP, and the split is the same one the modules make:
+ * `DocumentsService` writes to the books and is the only layer allowed to ask the regime
+ * for tax; this one writes nothing and needs a Chromium. Folding them together would put
+ * a `BrowserWindow` in reach of the object that issues invoices. See
+ * src/main/printing/service.ts.
+ */
+export interface PrintingService {
+  renderPrint(input: PrintDocumentInput): Promise<PrintPreview>
+  savePdf(input: PrintDocumentInput): Promise<SavePdfResult>
+  print(input: PrintDocumentInput): Promise<void>
 }
 
 /*
@@ -276,7 +295,40 @@ function parseSetOffsets(value: unknown): SetOffsetsInput {
   }
 }
 
-export function createDocumentsHandlers(service: DocumentsService): GroupHandlers<'documents'> {
+/*
+ * The copies, as values. Duplicated from `PrintCopy` for the reason `DOCUMENT_STATUSES`
+ * is — `expectOneOf` needs them at runtime — and pinned to the type the same way.
+ */
+const PRINT_COPIES = ['original', 'duplicate', 'triplicate'] as const satisfies readonly PrintCopy[]
+
+/**
+ * What to print, and what to put on it.
+ *
+ * The copy list is bounded at three because there are three: a renderer that sent four
+ * hundred would otherwise ask main to render four hundred pages in a window. Duplicates
+ * are not rejected here — the service folds the list back into the rule's order, which
+ * removes them, and a user who managed to tick `original` twice has made no mistake worth
+ * an error message.
+ */
+function parsePrint(value: unknown): PrintDocumentInput {
+  const input = expectRecord(value, 'input')
+  const include = expectRecord(input['include'], 'include')
+  return {
+    id: expectNonEmptyString(input['id'], 'id'),
+    copies: expectArray(input['copies'], 'copies', PRINT_COPIES.length).map((copy, index) =>
+      expectOneOf(copy, `copies[${index}]`, PRINT_COPIES),
+    ),
+    include: {
+      amountInWords: expectBoolean(include['amountInWords'], 'include.amountInWords'),
+      hsnSummary: expectBoolean(include['hsnSummary'], 'include.hsnSummary'),
+    },
+  }
+}
+
+export function createDocumentsHandlers(
+  service: DocumentsService,
+  printing: PrintingService,
+): GroupHandlers<'documents'> {
   return {
     list: {
       parseArgs: (raw): [ListDocumentsInput] => [parseList(raw[0])],
@@ -334,6 +386,31 @@ export function createDocumentsHandlers(service: DocumentsService): GroupHandler
     openForOffset: {
       parseArgs: (raw): [string] => [expectNonEmptyString(raw[0], 'documentId')],
       handle: async (documentId) => ok(await service.openForOffset(documentId)),
+    },
+
+    /*
+     * THE PAGE ITSELF NEVER COMES BACK THROUGH HERE. `renderPrint` answers with a picture,
+     * `savePdf` with a path the user chose in a native dialog, and `print` with nothing.
+     * No path is granted for reveal: the save dialog is the user naming the file, and the
+     * screen offers to show it only after main has said where it went.
+     */
+
+    renderPrint: {
+      parseArgs: (raw): [PrintDocumentInput] => [parsePrint(raw[0])],
+      handle: async (input) => ok(await printing.renderPrint(input)),
+    },
+
+    savePdf: {
+      parseArgs: (raw): [PrintDocumentInput] => [parsePrint(raw[0])],
+      handle: async (input) => ok(await printing.savePdf(input)),
+    },
+
+    print: {
+      parseArgs: (raw): [PrintDocumentInput] => [parsePrint(raw[0])],
+      handle: async (input) => {
+        await printing.print(input)
+        return ok(undefined)
+      },
     },
   }
 }

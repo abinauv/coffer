@@ -19,7 +19,7 @@ import type { ErrorMapper } from './errors'
 import type { SystemEnvironment } from './handlers/system'
 import type { CompanyService } from './handlers/companies'
 import type { CompanyProfileService } from './handlers/company-profile'
-import type { DocumentsService } from './handlers/documents'
+import type { DocumentsService, PrintingService } from './handlers/documents'
 import type { ItemsService } from './handlers/items'
 import type { LedgerService } from './handlers/ledger'
 import type { NumberingService } from './handlers/numbering'
@@ -185,6 +185,8 @@ export interface ElectronIpcOptions {
   companyProfile: CompanyProfileService
   /** The documents service from src/main/documents — where the regime is asked for tax. */
   documents: DocumentsService
+  /** The printing service from src/main/printing — a document as a page. */
+  printing: PrintingService
   /** The receipts service from src/main/receipts — money in and out, and what it settles. */
   receipts: ReceiptsService
   /** The regime service from src/main/regime — the tax rules, described for the screens. */
@@ -209,6 +211,7 @@ export function createElectronIpcDependencies(options: ElectronIpcOptions): IpcD
     numbering: options.numbering,
     companyProfile: options.companyProfile,
     documents: options.documents,
+    printing: options.printing,
     receipts: options.receipts,
     regime: options.regime,
     reports: options.reports,

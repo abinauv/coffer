@@ -108,6 +108,9 @@ export const API_SURFACE: ApiSurface = {
     settlement: true,
     offset: true,
     openForOffset: true,
+    renderPrint: true,
+    savePdf: true,
+    print: true,
   },
   receipts: {
     list: true,
