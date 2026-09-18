@@ -432,10 +432,7 @@ describe('the keyboard, when the screen changes', () => {
     mount()
     goTo('host-other')
 
-    expect(screen.getByText('the other probe').closest('.screen')).toHaveAttribute(
-      'tabindex',
-      '-1',
-    )
+    expect(screen.getByText('the other probe').closest('.screen')).toHaveAttribute('tabindex', '-1')
   })
 
   it('leaves the caret where a screen has put it itself', () => {
