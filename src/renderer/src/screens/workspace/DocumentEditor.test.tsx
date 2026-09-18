@@ -2001,9 +2001,14 @@ describe('a credit note', () => {
       ),
     })
 
+    /* WAIT FOR THE PANEL, NOT FOR THE CALL (B27). `callsTo` counts a call the moment it is
+     * made, which is before its promise resolves and long before the answer is drawn — so
+     * a synchronous `getByText` after it was a race, and the one this test lost under a
+     * loaded full-suite run. Every other settlement assertion in this file waits for the
+     * text; this one now does too, and the count is checked after it. */
     await screen.findByLabelText('Customer')
-    await waitFor(() => expect(bridge.callsTo('documents:settlement')).toHaveLength(1))
-    expect(screen.getByText('Outstanding')).toBeInTheDocument()
+    expect(await screen.findByText('Outstanding')).toBeInTheDocument()
+    expect(bridge.callsTo('documents:settlement')).toHaveLength(1)
   })
 
   /*
