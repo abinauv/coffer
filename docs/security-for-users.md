@@ -185,8 +185,8 @@ and that is the point of it.
 ## 4. Verifying a download
 
 Coffer's builds are **not code-signed**. Certificates cost more than this project
-currently has. Windows will show a SmartScreen warning and macOS will quarantine the
-download.
+currently has. Windows will show a SmartScreen warning, Windows 11's Smart App Control may
+refuse to start the installer outright, and macOS will quarantine the download.
 
 The practical consequence: your operating system cannot tell you whether an installer was
 tampered with. Two checks can. The SHA-256 checksum says the file arrived intact and needs
@@ -254,11 +254,19 @@ What it does not do: it is not code signing, so Windows and macOS still warn exa
 they would without it, and it says where a file was built rather than that the code in it
 is safe. The code is public at that tag for anyone who wants to read it.
 
-**And when they do match, you still have a dialog to get past.** Windows SmartScreen and
-macOS Gatekeeper both assume you have not checked anything, and neither offers an obvious
-way through. [The README](../README.md#getting-past-the-os-warning) names the buttons on
-each platform. Do that step only after the checksum has matched: it is what removes the
-warning, not what makes the file safe.
+**And when they do match, the operating system still has its own opinion.** Windows
+SmartScreen and macOS Gatekeeper both assume you have not checked anything, and neither
+offers an obvious way through. [The README](../README.md#getting-past-the-os-check) names
+the buttons on each platform. Do that step only after the checksum has matched: it is what
+removes the warning, not what makes the file safe.
+
+**On Windows 11, it may not be a dialog at all.** Smart App Control, which is on by
+default on some Windows 11 machines, refuses to start an unsigned installer it has no
+reputation for, with no **Run anyway** offered — Coffer's own installer was blocked that
+way on the maintainer's machine on 18 Sep 2026. There is no trick that gets past it: the
+choices are another machine, turning the feature off (which lowers the protection on
+everything you run, and which Microsoft's own FAQ is the right place to read before you
+do), or waiting for signed builds. The README section linked above sets out all three.
 
 ## 5. Backing up
 

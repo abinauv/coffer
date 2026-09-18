@@ -329,7 +329,10 @@ need prebuilds for all three in CI.
 **Builds are unsigned for now.** Windows shows a SmartScreen warning and macOS
 quarantines the download; the README says exactly which buttons to press on each, and
 every release publishes SHA-256 checksums for every artefact so the download is at least
-verifiable. `.github/workflows/release.yml` generates `SHA256SUMS.txt` from the artefacts
+verifiable. On Windows 11, Smart App Control is the case with no button to press: it
+refuses an unsigned installer it has no reputation for, which is why unsigned is a
+limitation on who can install Coffer rather than only on what the OS can vouch for
+(SECURITY.md, "Known gaps"). `.github/workflows/release.yml` generates `SHA256SUMS.txt` from the artefacts
 actually attached, via `scripts/checksums.mjs`, attests SLSA build provenance for each of
 those files with `actions/attest` before publishing, and puts both verification commands
 in the release notes. The checksum says a file arrived intact; the attestation says it was

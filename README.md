@@ -260,12 +260,14 @@ gh attestation verify Coffer-0.1.0-windows-x64-setup.exe --repo abinauv/coffer -
 It passes only for a file built by this repository's release workflow from that version's
 tag, and not changed since. A file uploaded to the release page any other way fails it,
 even with a matching line in `SHA256SUMS.txt`. **If it reports an error, do not run the
-installer.** It is not code signing: the warning below still appears.
+installer.** It is not code signing: what follows still happens.
 
-### Getting past the OS warning
+### Getting past the OS check
 
-Once the checksum matches, you still have to get past a dialog that assumes you have not
-checked. This is the part nobody tells you, so here it is in full.
+Once the checksum matches, your operating system still has its own opinion, formed without
+knowing you checked anything. On Windows and macOS that is usually a dialog to get past,
+and on one Windows 11 setting it is a refusal with nothing to click. This is the part
+nobody tells you, so here it is in full.
 
 **Windows — SmartScreen.** Running the installer shows a blue box saying
 _"Windows protected your PC"_ with only a **Don't run** button visible. Click **More
@@ -273,6 +275,36 @@ info** — a line appears naming the app and the publisher as unknown — then *
 If that link does not appear, Windows has flagged the file as coming from the internet:
 right-click the `.exe`, choose **Properties**, tick **Unblock** at the bottom of the
 General tab, apply, and run it again.
+
+**Windows 11 — Smart App Control, which has no way past.** This is a second, stricter
+check, on by default on some Windows 11 machines and absent from others. It does not warn:
+it refuses to start an unsigned file it has no reputation for, and there is no **More
+info** and no **Run anyway** to click. Windows shows a message naming Smart App Control,
+and a terminal reports _"An Application Control policy has blocked this file"_. Coffer's
+own installer was blocked this way on the maintainer's machine on 18 Sep 2026.
+
+Its verdict is per file and is not fixed: on that same machine the app's executable ran
+while the installer it comes in did not, and an unsigned file blocked one week was allowed
+the next. So there is nothing to try twice — either the installer starts or it does not.
+
+To see whether it is on, open **Windows Security → App & browser control → Smart App
+Control**. If there is no such section, it is not running on that machine and SmartScreen
+above is all you will meet. If it is on, you have three options, and none of them is
+good:
+
+- **Install Coffer on another machine**, one where it is off or unavailable. It is a
+  setting for the whole machine, so a different Windows account on the same one will not
+  help.
+- **Turn it off** in that same settings page, install, and decide whether to turn it back
+  on. Weigh it honestly: it protects everything you run, not only this installer.
+  Microsoft's [Smart App Control
+  FAQ](https://support.microsoft.com/en-us/windows/security/threat-malware-protection/smart-app-control-frequently-asked-questions)
+  says recent Windows updates let it be switched back on; on older builds, switching it
+  off was a one-way door that only reinstalling Windows undid. Check that page before you
+  touch the setting.
+- **Wait for signed builds.** This is the honest answer, and the only one that costs you
+  nothing. Signing is the first thing this project funds; until then, an unsigned
+  installer is exactly what Smart App Control exists to stop.
 
 **macOS — Gatekeeper.** The `.dmg` mounts, and double-clicking the app inside gives
 _"Coffer cannot be opened because the developer cannot be verified"_ with only **Move to

@@ -98,6 +98,18 @@ verify them. This means a tampered build cannot be detected by the OS, only by c
 the checksum and the attestation. Signing is the first thing funded if the project finds
 an audience.
 
+**And on Windows 11 it can be worse than a warning.** Smart App Control, on by default on
+some Windows 11 machines, does not warn about an unsigned file it has no reputation for:
+it refuses to start it, with no "Run anyway". Coffer's own installer was blocked that way
+on the maintainer's machine on 18 Sep 2026 — `Get-FileHash` and every checksum in this
+document are of no help, because the file never runs. Two things about it are worth
+knowing before you plan around it: the verdict is per file, so on that same machine the
+app's executable ran while the installer did not; and it is not stable over time, since a
+file blocked one week was allowed the next. The practical consequence is that some people
+cannot install Coffer at all until the builds are signed.
+[The README](./README.md#getting-past-the-os-check) sets out the three options, and
+recommends none of them over the others.
+
 The release workflow generates `SHA256SUMS.txt` from the artefacts actually attached,
 attests every one of those files with `actions/attest` (SLSA build provenance, signed
 through Sigstore with the run's own OIDC token) before anything is published, and puts
@@ -145,13 +157,15 @@ exist.
   theft, not against a failed disk.
 - **Verify the checksum** of any release you download, until signing is in place. Your
   operating system cannot do it for you on an unsigned build, and it will say so in a
-  dialog that gives you no other information.
+  dialog that gives you no other information — or, with Windows 11's Smart App Control on,
+  by refusing to start the installer at all.
 
 [`docs/security-for-users.md`](./docs/security-for-users.md) covers all four at length —
 how to choose a passphrase, what recovery codes are and where to keep them, and the exact
 commands for checking a SHA-256 on each platform. [The README](./README.md#install) has
-the other half: what Windows SmartScreen and macOS Gatekeeper will show you, and which
-buttons get you past them once the checksum matches.
+the other half: what Windows SmartScreen and macOS Gatekeeper will show you, which
+buttons get you past them once the checksum matches, and what to do when Smart App Control
+offers no button at all.
 
 ## Supported versions
 

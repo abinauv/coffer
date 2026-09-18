@@ -149,6 +149,20 @@ under Node can still be the wrong one for Electron:
 [native]   ok   better-sqlite3-multiple-ciphers â€” keyed round-trip via chacha20, file is not plaintext
 ```
 
+**On Windows 11, the installer you just built may refuse to start.** Smart App Control
+blocks an unsigned executable it has no reputation for, and every build produces a new
+one; PowerShell reports "An Application Control policy has blocked this file". It is the
+`.exe` installer that gets blocked, not the app — `dist/win-unpacked/Coffer.exe` runs, and
+that is the one to check a packaging change with. To confirm what blocked it:
+
+```powershell
+Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-CodeIntegrity/Operational'} -MaxEvents 5
+```
+
+A "Smart App Control Block Details" entry beside a Code Integrity error names the file.
+It is also why nobody here has seen the installer's own wizard pages; what the release
+build puts in them is checked by `scripts/packaging.test.mjs` and by makensis instead.
+
 `npm run checksums` takes a directory and defaults to `dist`:
 
 ```bash

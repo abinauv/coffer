@@ -37,8 +37,8 @@ notice on every artefact they produce: the arithmetic is pinned to the paisa aga
 hand-worked fixtures, and the shape has never been validated against GSTN's own schema or
 been through a filing cycle.
 
-Builds are unsigned. There is no telemetry, no account and no network call in any core
-path.
+Builds are unsigned, which on Windows 11 with Smart App Control on means the installer may
+not start at all. There is no telemetry, no account and no network call in any core path.
 
 ### Added
 
@@ -1152,7 +1152,11 @@ one transaction spanning the numbering counter, the posting rule and the ledger.
   CODEOWNERS.
 - The README covers what Coffer does today rather than what it will do, where releases
   will appear, how to check a SHA-256, and — the step nobody writes down — which buttons
-  get you past Windows SmartScreen and macOS Gatekeeper on an unsigned build.
+  get you past Windows SmartScreen and macOS Gatekeeper on an unsigned build. Where there
+  is no button, it says that too: Windows 11's Smart App Control refuses to start an
+  unsigned installer it has no reputation for, which is what happened to Coffer's own, so
+  some people cannot install it at all until the builds are signed. The README, SECURITY.md
+  and every release's notes set out the three options and recommend none of them.
 - The README says in its first paragraph who Coffer is for and what it is, and answers
   the questions people ask before trying it — is it free, does it do GST, where does the
   data live, what if the passphrase is lost — in a FAQ that is honest about what is
@@ -1240,6 +1244,12 @@ Found while building the redesign, by driving the app rather than by its tests:
   rate "18.0" at a 1440 px window, and scrolled sideways as well.
 - On a window shorter than a first-run step, the top of the step sat above the canvas where
   no scrolling reached it, because the canvas centred what did not fit.
+- The company picker cut a company's name and the path to its file off with an ellipsis,
+  even in a wide window: both shared a line with the row's buttons, and the buttons would
+  not give the room back. The row stacks now, and the path takes a second line rather than
+  lose its folder.
+- A screen test waited for a call to be made and then read the screen, which is a race it
+  lost about one run in three under a loaded suite. It waits for what the call draws.
 
 ### Changed
 
