@@ -262,12 +262,13 @@ function CompanyRow({
       <div className="company__identity">
         <Icon name="building" size={18} className="company__mark" />
         <div className="company__names">
-          <h2 className="company__name truncate" title={company.displayName}>
-            {company.displayName}
-          </h2>
-          <p className="company__path truncate selectable" title={company.filePath}>
-            {company.filePath}
-          </p>
+          {/* NEITHER OF THESE IS CUT SHORT (B29). Both used to be one-line and clipped with
+              an ellipsis, so "Sharma Traders Private Lim…" and a path with its folder
+              missing were what the list showed — the two things a row is FOR. They wrap
+              now, and the row takes the extra line. A `title` is gone with the clipping:
+              a tooltip is not how a name is read. */}
+          <h2 className="company__name">{company.displayName}</h2>
+          <p className="company__path selectable">{company.filePath}</p>
           <p className="company__meta">
             {describeLastOpened(company.lastOpenedAt)} · {describeCreated(company.createdAt)}
           </p>

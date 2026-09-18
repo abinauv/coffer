@@ -148,7 +148,11 @@ is a bug, however it looks.
   registered screen and fails if one is more than a section click and a rail click away,
   or if a screen outside the rail names no parent in it.
 - **Labels wrap, never truncate.** A long rail label takes a second line. The status bar
-  prints the company file's whole path and grows a line rather than cut the folder off.
+  prints the company file's whole path and grows a line rather than cut the folder off, and
+  so does every company in the picker: a row stacks its name and path above its buttons so
+  that neither has to give way to them. The one place an ellipsis is allowed is the title
+  bar, a single strip of fixed height that cannot grow a line — and what it shortens is
+  repeated in full on the screen below.
 - **The status bar's sentences are claims.** "encrypted · SQLCipher" and "offline — this
   app never connects" are true because of the cipher in `src/main/db/connection.ts`, the
   renderer's Content Security Policy, and the spellchecker being off in `src/main/index.ts`

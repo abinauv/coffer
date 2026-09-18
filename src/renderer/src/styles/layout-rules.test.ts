@@ -1,10 +1,11 @@
 /*
- * Two layout rules that a screen test cannot see, read off the stylesheets.
+ * The layout rules that a screen test cannot see, read off the stylesheets.
  *
- * happy-dom lays nothing out, so neither of these failures reaches a rendered test: a
- * welcome screen pushed above the top of its canvas and a line grid whose price box shows
- * "82." both render every element a query can find. Both were found by driving the built
- * app at a real window size (B34, B35), and these hold the fixes.
+ * happy-dom lays nothing out, so none of these failures reaches a rendered test: a welcome
+ * screen pushed above the top of its canvas, a line grid whose price box shows "82.", and
+ * a company name clipped to "Sharma Traders Private Lim…" all render every element a query
+ * can find. Each was found by driving the built app at a real window size (B34, B35, B29),
+ * and these hold the fixes.
  */
 
 import { readFileSync } from 'node:fs'
@@ -56,5 +57,24 @@ describe('the document line grid (B34)', () => {
 
   it('never wraps a saved amount', () => {
     expect(rules(screens, '.editor__table td.editor__amount')).toMatch(/white-space:\s*nowrap/)
+  })
+})
+
+describe('a company in the picker (B29)', () => {
+  /* The name, the path and the buttons shared one flex line, and the buttons were the ones
+   * that would not shrink. The identity has the line to itself now. */
+  it('stacks the identity above the buttons instead of sharing a line', () => {
+    const company = rules(screens, '.company')
+    expect(company).toMatch(/flex-direction:\s*column/)
+  })
+
+  it('lets the buttons wrap rather than squeeze what is beside them', () => {
+    expect(rules(screens, '.company__actions')).toMatch(/flex-wrap:\s*wrap/)
+  })
+
+  /* A path is one unbroken token, so wrapping it needs saying; without this it would push
+   * the row sideways instead of taking a second line. */
+  it('breaks a long file path anywhere it has to', () => {
+    expect(rules(screens, '.company__path')).toMatch(/overflow-wrap:\s*anywhere/)
   })
 })
