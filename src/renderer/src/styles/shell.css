@@ -68,6 +68,13 @@
   min-height: 100%;
 }
 
+/* A new screen takes focus so the keyboard carries on inside it rather than from the top of
+ * the window (ScreenHost). It is a region and not a control, so it draws no ring of its own:
+ * the next Tab lands on something that does. */
+.screen:focus {
+  outline: none;
+}
+
 /* ---- Title bar ----------------------------------------------------------- */
 
 .titlebar {
