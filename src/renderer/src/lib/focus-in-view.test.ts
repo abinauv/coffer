@@ -14,26 +14,51 @@ import { isFullyInView, keepInView, sidewaysScroller } from './focus-in-view'
 
 /** A box as `getBoundingClientRect` answers one. Only the sides are read. */
 function box(left: number, right: number): DOMRect {
-  return { left, right, top: 0, bottom: 0, width: right - left, height: 0, x: left, y: 0, toJSON: () => ({}) } as DOMRect
+  return {
+    left,
+    right,
+    top: 0,
+    bottom: 0,
+    width: right - left,
+    height: 0,
+    x: left,
+    y: 0,
+    toJSON: () => ({}),
+  } as DOMRect
 }
 
 /** An element with a rect and a scroll size, inside an optional parent. */
 function element(
   rect: DOMRect,
-  options: { overflowX?: string; scrollWidth?: number; clientWidth?: number; parent?: HTMLElement } = {},
+  options: {
+    overflowX?: string
+    scrollWidth?: number
+    clientWidth?: number
+    parent?: HTMLElement
+  } = {},
 ): HTMLElement {
   const node = document.createElement('div')
   node.getBoundingClientRect = () => rect
   if (options.overflowX !== undefined) node.style.overflowX = options.overflowX
-  Object.defineProperty(node, 'scrollWidth', { value: options.scrollWidth ?? 0, configurable: true })
-  Object.defineProperty(node, 'clientWidth', { value: options.clientWidth ?? 0, configurable: true })
+  Object.defineProperty(node, 'scrollWidth', {
+    value: options.scrollWidth ?? 0,
+    configurable: true,
+  })
+  Object.defineProperty(node, 'clientWidth', {
+    value: options.clientWidth ?? 0,
+    configurable: true,
+  })
   ;(options.parent ?? document.body).append(node)
   return node
 }
 
 describe('the box a control is kept inside', () => {
   it('is the nearest ancestor that scrolls sideways and has room to scroll', () => {
-    const scroller = element(box(200, 1400), { overflowX: 'auto', scrollWidth: 1228, clientWidth: 1172 })
+    const scroller = element(box(200, 1400), {
+      overflowX: 'auto',
+      scrollWidth: 1228,
+      clientWidth: 1172,
+    })
     const control = element(box(1391, 1457), { parent: scroller })
 
     expect(sidewaysScroller(control)).toBe(scroller)
@@ -41,14 +66,22 @@ describe('the box a control is kept inside', () => {
 
   /* A table that fits needs no scrolling, and asking for some would jump the page. */
   it('is nothing when the scroller has nowhere to scroll', () => {
-    const scroller = element(box(200, 1400), { overflowX: 'auto', scrollWidth: 1172, clientWidth: 1172 })
+    const scroller = element(box(200, 1400), {
+      overflowX: 'auto',
+      scrollWidth: 1172,
+      clientWidth: 1172,
+    })
     const control = element(box(300, 380), { parent: scroller })
 
     expect(sidewaysScroller(control)).toBeNull()
   })
 
   it('is nothing when nothing above it scrolls sideways', () => {
-    const still = element(box(200, 1400), { overflowX: 'visible', scrollWidth: 1228, clientWidth: 1172 })
+    const still = element(box(200, 1400), {
+      overflowX: 'visible',
+      scrollWidth: 1228,
+      clientWidth: 1172,
+    })
     const control = element(box(1391, 1457), { parent: still })
 
     expect(sidewaysScroller(control)).toBeNull()
@@ -72,7 +105,11 @@ describe('whether a control is wholly inside its box', () => {
 
 describe('what happens on focus', () => {
   it('scrolls a control that is half outside its scroller', () => {
-    const scroller = element(box(233, 1405), { overflowX: 'auto', scrollWidth: 1228, clientWidth: 1172 })
+    const scroller = element(box(233, 1405), {
+      overflowX: 'auto',
+      scrollWidth: 1228,
+      clientWidth: 1172,
+    })
     const control = element(box(1391, 1457), { parent: scroller })
     control.scrollIntoView = vi.fn()
 
@@ -81,7 +118,11 @@ describe('what happens on focus', () => {
   })
 
   it('leaves a control that already fits alone', () => {
-    const scroller = element(box(233, 1405), { overflowX: 'auto', scrollWidth: 1228, clientWidth: 1172 })
+    const scroller = element(box(233, 1405), {
+      overflowX: 'auto',
+      scrollWidth: 1228,
+      clientWidth: 1172,
+    })
     const control = element(box(300, 380), { parent: scroller })
     control.scrollIntoView = vi.fn()
 
