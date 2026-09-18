@@ -209,6 +209,17 @@ is a bug, however it looks.
 - **Nothing is reachable only by keyboard.** Every binding has a visible control: a button
   that carries the keycap and `aria-keyshortcuts`, the box the key puts the cursor in, or the
   palette row that runs it.
+- **The keyboard follows the screen.** Opening a screen usually removes the control that
+  opened it, and a browser answers that by dropping focus on the body — the next Tab then
+  starts at the skip link and walks the title bar, the section bar and the whole rail again.
+  A new screen takes focus itself (`ScreenHost`), unless something in it has claimed focus
+  already, so a screen that puts the caret in its first field keeps it. The screen region
+  draws no ring of its own: it is where the keyboard carries on from, and the next Tab lands
+  on something that does.
+- **A focus ring is never under an edge.** A browser scrolls a focused control into view only
+  when none of it is showing, so in a table that scrolls sideways the last column keeps its
+  ring half outside the window. Every focus asks for the smallest scroll that brings the
+  control wholly inside the box it lives in (`lib/focus-in-view.ts`).
 
 **Density**
 

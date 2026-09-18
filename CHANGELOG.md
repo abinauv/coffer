@@ -1250,6 +1250,16 @@ Found while building the redesign, by driving the app rather than by its tests:
   lose its folder.
 - A screen test waited for a call to be made and then read the screen, which is a race it
   lost about one run in three under a loaded suite. It waits for what the call draws.
+- The box that takes what a receipt settles was squeezed by the table it sits in: at a
+  1024 px window it was 56 px wide and showed "31(" of 31,057.60, the one figure the row
+  exists to set. Every figure cell that holds a field keeps a width of its own now.
+- Opening a screen left the keyboard on nothing: the button that opened it had gone, so the
+  next Tab started at the skip link and walked the title bar, the section bar and the rail
+  again. A new screen takes focus, unless something in it has claimed focus already.
+- Tabbing along an invoice line put the focus ring on a Remove button with ten pixels of it
+  showing under the window edge — a browser scrolls a focused control into view only when
+  none of it is showing. Focus now asks for the smallest scroll that brings the whole
+  control into the box it lives in.
 
 ### Changed
 

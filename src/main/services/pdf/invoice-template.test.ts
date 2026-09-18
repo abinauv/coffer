@@ -707,9 +707,20 @@ describe('every value is escaped', () => {
    * The sweep above names each field; this one needs no list at all. Take out the
    * doctype and every tag, and what is left is the document's TEXT — which, on a page
    * whose every value is a marker full of angle brackets, must contain not one.
+   *
+   * STRIPPED UNTIL NOTHING MORE COMES OUT, rather than in one pass. A single pass over
+   * `<scr<b>ipt>` leaves `<script>` behind, so a one-pass strip could report a clean page
+   * that is not one — and it is what CodeQL flags as an incomplete sanitiser
+   * (js/incomplete-multi-character-sanitization). Repeating until the text stops changing
+   * makes the assertion strictly stronger.
    */
   it('leaves no raw angle bracket that did not open a tag', () => {
-    const stray = page.replace(/<!doctype[^>]*>/gi, '').replace(/<\/?[a-zA-Z][^>]*>/g, '')
+    let stray = page
+    let previous = ''
+    while (stray !== previous) {
+      previous = stray
+      stray = stray.replace(/<!doctype[^>]*>/gi, '').replace(/<\/?[a-zA-Z][^>]*>/g, '')
+    }
 
     expect(stray).not.toContain('<')
     expect(stray).toContain('&lt;')
