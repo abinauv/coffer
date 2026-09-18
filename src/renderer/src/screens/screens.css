@@ -600,9 +600,16 @@
   list-style: none;
 }
 
+/*
+ * A COMPANY IS A STACK, NOT A ROW (B29). Name, path and buttons shared one flex line, and
+ * the buttons were the ones that would not shrink — so at 960px (the list width) the name
+ * was cut to "Sharma Traders Private Lim…" and the path lost its folder. The identity now
+ * has the row to itself and the buttons take the next one, which is also what the 35%
+ * label growth in R4 needs.
+ */
 .company {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--rule);
@@ -620,20 +627,23 @@
   opacity: 0.72;
 }
 
+/* On the name's line, not the middle of a block that may run to three. */
 .company__mark {
   flex: 0 0 auto;
+  margin-top: var(--space-0-5);
   color: var(--ink-faint);
 }
 
 .company__identity {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-3);
   min-width: 0;
 }
 
 .company__names {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: var(--space-0-5);
   min-width: 0;
@@ -651,9 +661,12 @@
   line-height: var(--leading-snug);
 }
 
+/* A path has no spaces to break at, so it is allowed to break anywhere rather than push
+ * the row sideways — the status bar prints one the same way (B15). */
 .company__path {
   font-family: var(--font-mono);
   font-variant-numeric: var(--numeric-identifier);
+  overflow-wrap: anywhere;
 }
 
 .company__spacer {
@@ -663,6 +676,7 @@
 .company__actions {
   display: flex;
   flex: 0 0 auto;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
 }

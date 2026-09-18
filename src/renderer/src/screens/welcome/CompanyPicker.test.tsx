@@ -156,6 +156,32 @@ describe('the list', () => {
     expect(screen.getByRole('heading', { name: 'Acme Pvt Ltd' })).toBeVisible()
     expect(screen.queryByRole('heading', { name: 'Welcome to Coffer' })).toBeNull()
   })
+
+  /*
+   * NEITHER THE NAME NOR THE PATH IS CLIPPED (B29). Both carried `truncate`, which is
+   * `white-space: nowrap` and an ellipsis, and the row's buttons would not give the room
+   * back: a real company read "Sharma Traders Private Lim…" over a path with its folder
+   * missing. happy-dom lays nothing out, so this asserts the cause rather than the
+   * pixels — the class is gone, and `styles/layout-rules.test.ts` holds the rules that
+   * let them wrap instead.
+   */
+  it('prints a long name and its whole path, cut by nothing', async () => {
+    const long: CompanySummary = {
+      ...ACME,
+      id: 'sharma',
+      displayName: 'Sharma Traders Private Limited',
+      filePath: 'D:\\Books\\Sharma Traders\\sharma-traders-private-limited.coffer',
+    }
+    mount({ companies: [long] })
+
+    const name = await screen.findByRole('heading', { name: 'Sharma Traders Private Limited' })
+    expect(name).not.toHaveClass('truncate')
+    expect(name).not.toHaveAttribute('title')
+
+    const path = screen.getByText(long.filePath)
+    expect(path).not.toHaveClass('truncate')
+    expect(path).not.toHaveAttribute('title')
+  })
 })
 
 describe('requests from other screens', () => {
