@@ -60,6 +60,14 @@ describe('the document line grid (B34)', () => {
   })
 })
 
+describe('a settlement table (B37)', () => {
+  /* The receipt's Settle box and the credit note's "Set against it" are fields inside a
+   * figure column. The column gave them whatever was left, which at 1024 px was 56 px. */
+  it('gives a figure cell that holds a field a width of its own', () => {
+    expect(rules(screens, '.ledger-table__figure .field')).toMatch(/min-width:\s*\d/)
+  })
+})
+
 describe('a company in the picker (B29)', () => {
   /* The name, the path and the buttons shared one flex line, and the buttons were the ones
    * that would not shrink. The identity has the line to itself now. */

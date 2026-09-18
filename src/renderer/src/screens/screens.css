@@ -1649,6 +1649,17 @@
   font-variant-numeric: var(--numeric-figures);
 }
 
+/*
+ * A FIGURE CELL THAT TAKES A FIGURE RATHER THAN PRINTING ONE (B37). The settlement tables
+ * on a receipt and a credit note put a field in a figure column, and a table with no width
+ * to spare squeezed it: at a 1024 px window the receipt's Settle box was 56 px wide and
+ * showed "31(" of 31,057.60 — the one figure the row exists to set. It keeps a width of its
+ * own now, and the table scrolls sideways instead, as the line grid does (B34).
+ */
+.ledger-table__figure .field {
+  min-width: 7rem;
+}
+
 /* An account code, a registration number, a document or entry number: the identifier face,
  * as in a field and on a register's number, because it is read aloud and retyped. A date is
  * not one — it takes `.ledger-table__date`. */
