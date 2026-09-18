@@ -82,7 +82,23 @@ function Commanding(): JSX.Element {
   return <p>commanding</p>
 }
 
+/* A screen with a button that goes somewhere, and one that puts the caret in a field. */
+function Focusing(): JSX.Element {
+  return (
+    <>
+      <p>focusing probe</p>
+      <input aria-label="First field" autoFocus />
+    </>
+  )
+}
+
 registerScreens([
+  {
+    id: 'host-focus',
+    title: 'Focusing probe',
+    area: 'welcome',
+    render: () => <Focusing />,
+  },
   {
     id: 'host-commands',
     title: 'Commanding probe',
@@ -389,5 +405,51 @@ describe('where a screen’s commands live', () => {
     expect(screen.getByText('commanding')).toBeInTheDocument()
     expect(seen.find((command) => command.id === 'probe.plain')?.location).toBe('Commanding probe')
     expect(seen.find((command) => command.id === 'probe.own')?.location).toBe('Somewhere else')
+  })
+})
+
+/*
+ * WHERE THE KEYBOARD IS AFTER A SCREEN CHANGES (B38).
+ *
+ * Activating a button that opens a screen removes that button from the page, and the
+ * browser answers by putting focus on the body — so the next Tab starts at the skip link
+ * and walks the title bar, the section bar and the rail again. The new screen takes focus
+ * instead, unless something inside it has already claimed it.
+ */
+describe('the keyboard, when the screen changes', () => {
+  it('puts focus on the screen when the last focused thing went away with the old one', async () => {
+    const user = userEvent.setup()
+    mount()
+    goTo('host-probe')
+
+    await user.click(screen.getByRole('button', { name: 'go elsewhere' }))
+
+    expect(screen.getByText('the other probe').closest('.screen')).toHaveFocus()
+  })
+
+  /* The screen is a region, not a control: it is focusable only on purpose. */
+  it('keeps the screen out of the tab order', () => {
+    mount()
+    goTo('host-other')
+
+    expect(screen.getByText('the other probe').closest('.screen')).toHaveAttribute(
+      'tabindex',
+      '-1',
+    )
+  })
+
+  it('leaves the caret where a screen has put it itself', () => {
+    mount()
+    goTo('host-focus')
+
+    expect(screen.getByLabelText('First field')).toHaveFocus()
+  })
+
+  /* A window that has just opened answers its first Tab with the skip link, as any page
+   * does. Focus moves on a CHANGE of screen, not on the first one. */
+  it('takes no focus from the screen the window opened on', () => {
+    mount()
+
+    expect(document.body).toHaveFocus()
   })
 })

@@ -21,6 +21,7 @@ import { describeLocation, navSections } from '../../lib/screens'
 import type { Command } from '../../lib/command-registry'
 import { SHORTCUTS } from '../../lib/shortcuts'
 import { THEME_LABELS, THEME_PREFERENCES } from '../../lib/theme'
+import { useKeepFocusInView } from '../../lib/hooks'
 import { useCommands, useRegisterCommands } from '../../store/commands'
 import { useCompany } from '../../store/company'
 import { useDensity } from '../../store/density'
@@ -40,6 +41,8 @@ import { useSectionNavigation } from './useSectionNavigation'
 
 export function AppShell(): JSX.Element {
   const { route } = useNavigation()
+  /* A focus ring under the window edge is no ring at all (B38). */
+  useKeepFocusInView()
 
   return (
     <div className="app" data-area={route.area}>

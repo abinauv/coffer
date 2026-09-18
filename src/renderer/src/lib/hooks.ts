@@ -3,6 +3,7 @@
  */
 
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
+import { keepInView } from './focus-in-view'
 
 /**
  * Subscribes to a CSS media query.
@@ -40,4 +41,23 @@ export function useLatest<T>(value: T): { readonly current: T } {
     ref.current = value
   })
   return ref
+}
+
+/**
+ * Keeps the control the keyboard moves to inside the box that holds it.
+ *
+ * One listener for the whole app, because the rule is the app's and not any one screen's:
+ * a browser scrolls a focused element into view only when NONE of it is showing, so a
+ * control at the edge of a table that scrolls sideways keeps its focus ring under the
+ * window edge (B38). See lib/focus-in-view.ts.
+ */
+export function useKeepFocusInView(): void {
+  useEffect(() => {
+    const onFocus = (event: FocusEvent): void => {
+      const target = event.target
+      if (target instanceof Element) keepInView(target)
+    }
+    document.addEventListener('focusin', onFocus)
+    return () => document.removeEventListener('focusin', onFocus)
+  }, [])
 }

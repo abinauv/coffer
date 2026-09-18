@@ -4,8 +4,17 @@
  * When nothing matches, the placeholder below says exactly what is missing and how
  * to supply it. A shell that renders a blank pane when a route has no screen is a
  * shell that costs somebody an afternoon.
+ *
+ * IT ALSO CATCHES THE KEYBOARD. Activating "New sales invoice" removes that button from the
+ * page, and a browser answers that by putting focus on the body: the next Tab then starts
+ * at the skip link, and a keyboard user walks the title bar, the section bar and the whole
+ * rail again before reaching the screen they just opened (B38 in the design plan). So a new
+ * screen takes focus itself — but only when nothing in it has claimed focus already, which
+ * is why the effect below reads `document.activeElement` instead of focusing unconditionally.
+ * A screen that puts the caret in its first field, as the create form does, keeps it.
  */
 
+import { useEffect, useRef } from 'react'
 import type { JSX } from 'react'
 import type { Route } from '../../lib/routing'
 import { describeLocation, findScreen } from '../../lib/screens'
@@ -18,12 +27,30 @@ export function ScreenHost(): JSX.Element {
   const screens = useScreens()
   const { route, navigate } = useNavigation()
   const screen = findScreen(screens, route.area, route.screenId)
+  const frame = useRef<HTMLDivElement>(null)
+  const key = screenKey(route)
+  /* The screen on show when the window opened. Focus moves on a CHANGE of screen and never
+   * on the first one: a window that has just opened should answer its first Tab with the
+   * skip link, as every other page does. */
+  const shown = useRef(key)
+
+  /* Effects run from the inside out, so a screen that focuses a field of its own has
+   * already done it by the time this runs, and this leaves it alone. */
+  useEffect(() => {
+    if (shown.current === key) return
+    shown.current = key
+    const active = document.activeElement
+    if (active === null || active === document.body) {
+      frame.current?.focus({ preventScroll: true })
+    }
+  }, [key])
 
   if (!screen) return <MissingScreen area={route.area} screenId={route.screenId} />
 
   return (
     <>
-      <div key={screenKey(route)} className="screen">
+      {/* `tabIndex={-1}` so it can be focused without joining the tab order. */}
+      <div key={key} ref={frame} tabIndex={-1} className="screen">
         <CommandLocation
           location={describeLocation(screens, route.area, route.screenId) ?? screen.title}
         >
