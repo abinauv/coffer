@@ -56,6 +56,7 @@ import type {
 } from '@shared/dto'
 import { DOCUMENT_KINDS } from '@shared/documents'
 import { renderScreen, screenContext, testRoute, type BridgeStub } from '../../test/harness'
+import { todayISO } from '../lib/report-view'
 import { documentEditorScreens, DocumentEditor } from './DocumentEditor'
 
 const CUSTOMERS: PartySummary[] = [
@@ -966,6 +967,20 @@ describe('the account a line posts to', () => {
 })
 
 describe('creating one', () => {
+  /*
+   * The date is the one header field the screen can answer for itself, and it does: a
+   * document raised now is dated now. It opened empty until the verification pass, which
+   * meant the most common screen in the product refused to save until somebody typed a
+   * date it could have assumed. `todayISO` reads the user's own calendar, not UTC.
+   */
+  it('opens a new document dated today', async () => {
+    renderScreen(<DocumentEditor {...creating()} kind="sales-invoice" />, {
+      bridge: bridgeFor(null),
+    })
+
+    expect(await screen.findByLabelText('Date')).toHaveValue(todayISO())
+  })
+
   it('will not create without a customer, a date and a line', async () => {
     renderScreen(<DocumentEditor {...creating()} kind="sales-invoice" />, {
       bridge: bridgeFor(null),
@@ -992,6 +1007,7 @@ describe('creating one', () => {
     await user.selectOptions(screen.getByLabelText('Customer'), 'party-1')
     expect(create).toBeDisabled()
 
+    await user.clear(screen.getByLabelText('Date'))
     await user.type(screen.getByLabelText('Date'), '2026-04-15')
     expect(create).toBeDisabled()
 
@@ -1022,6 +1038,7 @@ describe('creating one', () => {
 
     await screen.findByLabelText('Customer')
     await user.selectOptions(screen.getByLabelText('Customer'), 'party-1')
+    await user.clear(screen.getByLabelText('Date'))
     await user.type(screen.getByLabelText('Date'), '2026-04-15')
     await user.type(screen.getByLabelText('Description, line 1'), 'Ball bearing 6203')
     await user.type(screen.getByLabelText('Unit price, line 1'), '500.00')
@@ -1713,6 +1730,7 @@ describe('a purchase bill', () => {
 
     await screen.findByLabelText('Vendor')
     await user.selectOptions(screen.getByLabelText('Vendor'), 'party-1')
+    await user.clear(screen.getByLabelText('Date'))
     await user.type(screen.getByLabelText('Date'), '2026-04-15')
     await user.type(screen.getByLabelText('Description, line 1'), 'Ball bearing 6203')
     await user.type(screen.getByLabelText('Unit price, line 1'), '500.00')

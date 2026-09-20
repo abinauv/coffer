@@ -126,6 +126,7 @@ import { Notice } from '../components/Notice'
 import { PrintDialog } from '../components/PrintDialog'
 import { ScreenFrame } from '../components/ScreenFrame'
 import { formatDate } from '../lib/dates'
+import { todayISO } from '../lib/report-view'
 import { advanceFrom, fieldsIn, isAdvanceField, isAdvanceKey } from '../lib/enter-advances'
 import { formatAmount, isZeroAmount } from '../lib/ledger-format'
 import {
@@ -241,7 +242,17 @@ export function DocumentEditor({
   const [isPrinting, setPrinting] = useState(false)
 
   const [partyId, setPartyId] = useState('')
-  const [date, setDate] = useState('')
+  /*
+   * A NEW document is dated today, and an existing one waits for its own date.
+   *
+   * Every report screen already opens on today (`todayISO`), and a document raised now is
+   * almost always dated now — an empty date meant the most common screen in the product
+   * could not be saved until somebody typed a date it could have assumed. It is not
+   * touched, so a draft that is only dated is not yet edited, and the field is as
+   * changeable as any other. An existing document starts empty because `isReading` holds
+   * the form back until the stored date arrives.
+   */
+  const [date, setDate] = useState(documentId === null ? todayISO() : '')
   const [partyReference, setPartyReference] = useState('')
   const [narration, setNarration] = useState('')
   const [lines, setLines] = useState<LineDraft[]>([blankLine()])
