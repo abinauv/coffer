@@ -4,7 +4,7 @@
 # (BRAND.name, BRAND.appId, BRAND.copyrightHolder, BRAND.tagline, BRAND.description).
 # This file is YAML and cannot import it, so the values are literal here — change
 # branding.ts first, then mirror it down. Nothing else in the repo hard-codes the name.
-appId: com.coffer.app
+appId: io.github.abinauv.coffer
 productName: Coffer
 copyright: © 2026 The Coffer contributors
 
