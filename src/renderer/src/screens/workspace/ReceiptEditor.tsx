@@ -65,6 +65,7 @@ import { MoneyField } from '../components/MoneyField'
 import { Notice } from '../components/Notice'
 import { ScreenFrame } from '../components/ScreenFrame'
 import { formatDate } from '../lib/dates'
+import { todayISO } from '../lib/report-view'
 import { advanceFrom, isAdvanceField, isAdvanceKey } from '../lib/enter-advances'
 import { formatAmount } from '../lib/ledger-format'
 import {
@@ -112,7 +113,8 @@ export function ReceiptEditor({
   const [isReading, setReading] = useState(receiptId !== null)
 
   const [partyId, setPartyId] = useState(route.params['partyId'] ?? '')
-  const [date, setDate] = useState('')
+  /* A new receipt is dated today, as a new document is; see `DocumentEditor`. */
+  const [date, setDate] = useState(receiptId === null ? todayISO() : '')
   const [amount, setAmount] = useState('')
   const [accountId, setAccountId] = useState('')
   const [reference, setReference] = useState('')

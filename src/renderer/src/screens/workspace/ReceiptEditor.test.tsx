@@ -32,6 +32,7 @@ import type {
 } from '@shared/dto'
 import { RECEIPT_KINDS } from '@shared/receipts'
 import { renderScreen, screenContext, testRoute, type BridgeStub } from '../../test/harness'
+import { todayISO } from '../lib/report-view'
 import { receiptEditorScreens, ReceiptEditor } from './ReceiptEditor'
 
 const CUSTOMERS: PartySummary[] = [
@@ -138,12 +139,20 @@ const sentTo = (
 /** Fill in a new receipt's header, which is what every create test needs first. */
 async function fillHeader(user: ReturnType<typeof userEvent.setup>): Promise<void> {
   await user.selectOptions(screen.getByLabelText('Customer'), 'party-1')
+  await user.clear(screen.getByLabelText('Date'))
   await user.type(screen.getByLabelText('Date'), '2026-04-20')
   await user.type(screen.getByLabelText('Amount'), '1180.00')
   await user.selectOptions(screen.getByLabelText('Account the money landed in'), 'acc-bank')
 }
 
 describe('recording one', () => {
+  /* Money recorded now is dated now, as a new document is. See `DocumentEditor.test`. */
+  it('opens a new receipt dated today', async () => {
+    renderScreen(<ReceiptEditor {...creating()} kind="receipt" />, { bridge: bridgeFor(null) })
+
+    expect(await screen.findByLabelText('Date')).toHaveValue(todayISO())
+  })
+
   /*
    * ONE FIELD AT A TIME, and that is the point. Filling all four and asserting the button
    * turns on passes against a screen that only checks one of them — a mutation removing
@@ -160,6 +169,13 @@ describe('recording one', () => {
     await user.selectOptions(screen.getByLabelText('Customer'), 'party-1')
     expect(button).toBeDisabled()
 
+    /*
+     * The field opens on today, so it is emptied and typed back. The clear is what proves
+     * the date is still required: without it this step would assert nothing, because the
+     * screen would have arrived with a date already in hand.
+     */
+    await user.clear(screen.getByLabelText('Date'))
+    expect(button).toBeDisabled()
     await user.type(screen.getByLabelText('Date'), '2026-04-20')
     expect(button).toBeDisabled()
 
@@ -655,6 +671,7 @@ describe('the payment editor', () => {
 
     await screen.findByRole('button', { name: 'Record payment' })
     await user.selectOptions(screen.getByLabelText('Vendor'), 'party-1')
+    await user.clear(screen.getByLabelText('Date'))
     await user.type(screen.getByLabelText('Date'), '2026-04-20')
     await user.type(screen.getByLabelText('Amount'), '1180.00')
     await user.selectOptions(screen.getByLabelText(/came out of/), 'acc-bank')
@@ -684,6 +701,7 @@ describe('the payment editor', () => {
 
     await screen.findByRole('button', { name: 'Record payment' })
     await user.selectOptions(screen.getByLabelText('Vendor'), 'party-1')
+    await user.clear(screen.getByLabelText('Date'))
     await user.type(screen.getByLabelText('Date'), '2026-04-20')
     await user.type(screen.getByLabelText('Amount'), '1180.00')
     await user.selectOptions(screen.getByLabelText(/came out of/), 'acc-bank')
