@@ -26,7 +26,7 @@ export const BRAND = {
     'own machine, in one encrypted file you own.',
 
   /** Reverse-DNS application identifier. macOS bundle id, Windows AppUserModelID. */
-  appId: 'com.coffer.app',
+  appId: 'io.github.abinauv.coffer',
 
   /** Directory name under the OS application-data path. Holds the company registry. */
   dataDirName: 'Coffer',
