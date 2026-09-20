@@ -45,7 +45,6 @@ deliberately, not incidentally.
 | Money         | `decimal.js`                                 | 10.x    | Arbitrary precision. See §7.                                                                                                                                                                      |
 | Hashing       | `@node-rs/argon2`                            | 2.x     | Argon2id for the passphrase.                                                                                                                                                                      |
 | Crypto        | `libsodium-wrappers`                         | 0.8.x   | Sealed-box recovery.                                                                                                                                                                              |
-| Excel         | ExcelJS                                      | 4.x     | Declared and not yet imported anywhere — see §5 on `services/excel/`.                                                                                                                             |
 | Packaging     | electron-builder                             | 26.x    | NSIS, dmg, AppImage + deb.                                                                                                                                                                        |
 
 **Deliberately absent:** no ORM, no state-management library in main, no CSS framework
@@ -161,11 +160,13 @@ check at all, though `electron-updater` is a declared dependency waiting for one
 folder is where all of it belongs once there is more than one window and a menu with items
 in it. Until then, splitting it would be four files that import each other in a line.
 
-**`services/excel/` and `services/mailer/` do not exist.** ExcelJS is a declared
-dependency with no importer anywhere in `src/` — the return builders in
-`regimes/in-gst/returns/` produce TypeScript values and stop there, because a workbook
-whose column layout has never been through a filing cycle is a file somebody would
-upload. §6.6 is the reason that is not a small omission.
+**`services/excel/` and `services/mailer/` do not exist.** ExcelJS was a declared
+dependency with no importer anywhere in `src/`, and it was removed before the first
+release rather than shipped inside an installer for code nobody calls: the return
+builders in `regimes/in-gst/returns/` produce TypeScript values and stop there, because a
+workbook whose column layout has never been through a filing cycle is a file somebody
+would upload. §6.6 is the reason that is not a small omission. Whatever writes a workbook
+first can declare it then.
 
 **Backup is in `companies/`, not in `services/`.** Earlier revisions of this section put
 it under `services/`, and that was wrong rather than early: a backup archive holds the
