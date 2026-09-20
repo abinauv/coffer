@@ -253,14 +253,18 @@ describe('checkIntegrity', () => {
   })
 
   /*
-   * The slowest test in the suite, and legitimately so: 500 individually encrypted
-   * writes with `synchronous = FULL`, then a full `integrity_check` over a file that has
-   * been deliberately damaged — which is the slow path, because SQLite walks the whole
-   * b-tree once it starts finding faults.
+   * The slowest test in the suite, and legitimately so: 500 encrypted rows, then a full
+   * `integrity_check` over a file that has been deliberately damaged — which is the slow
+   * path, because SQLite walks the whole b-tree once it starts finding faults.
    *
-   * It measured 5.2s against the default 5s timeout on a loaded machine, so it failed
-   * roughly one run in twenty with a message about a hanging test. Nothing was hanging.
-   * The timeout is raised rather than the work reduced: fewer rows would leave the
+   * The 500 rows go in as ONE transaction. Written one at a time they are 500 commits,
+   * and `synchronous = FULL` makes every one of them wait for the disk: 1.3s on a
+   * developer's machine but over 30s on GitHub's Windows runner, where this test timed
+   * out on every push to `main` from 17 Sep 2026. The rows, their order and the page
+   * they land on are the same either way — only the number of flushes changes, and this
+   * test is about what `integrity_check` says, not about durability.
+   *
+   * The count stays at 500, and the timeout stays generous: fewer rows would leave the
    * scribble at offset 6000 landing outside the data pages, and the test would then pass
    * by finding no damage where it had also caused none.
    */
@@ -269,9 +273,12 @@ describe('checkIntegrity', () => {
     const db = open({ filePath: path, key: KEY, journalMode: 'delete' })
     db.exec(`CREATE TABLE notes (body TEXT NOT NULL) STRICT`)
     const insert = db.prepare(`INSERT INTO notes VALUES (?)`)
-    for (let i = 0; i < 500; i += 1) {
-      insert.run(`row ${i}`)
-    }
+    const insertAll = db.transaction(() => {
+      for (let i = 0; i < 500; i += 1) {
+        insert.run(`row ${i}`)
+      }
+    })
+    insertAll()
     closeDatabase(db)
 
     /* Scribble over a page past the header, so the file still decrypts and opens. */
