@@ -85,11 +85,13 @@ there. Four in particular are worth knowing about before you go looking:
   arithmetic is pinned and the shape has never been through a filing cycle. Writing a
   user-facing page about it before that is true would be the mistake the notice exists to
   prevent.
-- **No document on printing or importing.** `services/pdf/` and
-  `services/importers/{csv,xml,zoho,tally}/` are built and tested and have no IPC group
-  behind them, so there is nothing a user can be told to do yet.
-- **No release notes.** [`CHANGELOG.md`](../CHANGELOG.md) has one `[Unreleased]` section,
-  which is what the first alpha's notes will be.
+- **No document on printing or importing.** Printing is reachable — a document prints or
+  saves a PDF from its editor and from the register — and no page here describes it; the
+  screens name their own steps. The readers in `services/importers/{csv,xml,zoho,tally}/`
+  are built and tested with no IPC group behind them, so there is nothing a user can be
+  told to do with those at all.
+- **No release notes of their own.** [`CHANGELOG.md`](../CHANGELOG.md) is where they are:
+  its `[0.1.0]` section is the first alpha's.
 
 If a document here disagrees with the code, the code is right and the document is a bug.
 Please report it.

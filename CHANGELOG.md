@@ -9,11 +9,11 @@ Entries that change how money, tax or ledger postings are calculated are marked
 **[accounting]**. Read those carefully before upgrading — they can change figures on
 documents you have already issued.
 
-## [Unreleased]
+## [0.1.0] - 2026-09-20
 
-**The first alpha.** No release has been made, so everything below is new — this is one
+**The first alpha, and the first release**, so everything below is new — this is one
 section covering the whole of the work so far rather than a diff against something people
-are running.
+are already running.
 
 What it comes to, for somebody deciding whether to open it: **you can keep a real set of
 books in Coffer.** Create a company, and it arrives with a chart of accounts, a fiscal
@@ -1170,8 +1170,8 @@ one transaction spanning the numbering counter, the posting rule and the ledger.
 
 ### Fixed
 
-Nothing has been released, so these are bugs found and corrected before anyone could have
-been running them. They are recorded because each one was a wrong answer that agreed with
+Nothing had been released while these were found, so they are bugs corrected before
+anyone could have been running them. They are recorded because each one was a wrong answer that agreed with
 everything around it, which is the shape this project spends its constraints on.
 
 - **[accounting]** **An aged report reported nonsense rows under a correct total.** A
@@ -1263,8 +1263,8 @@ Found while building the redesign, by driving the app rather than by its tests:
 
 ### Changed
 
-Nothing has been released, so these correct decisions made earlier rather than changing
-behaviour anyone has seen.
+Nothing had been released while these were made, so they correct decisions taken earlier
+rather than changing behaviour anyone has seen.
 
 - **[accounting]** The rate storage scale is 3dp, not 2dp. Half of India's 0.25% slab is
   0.125%, and at two places an invoice would print CGST at 0.13% — a rate the tax was
@@ -1281,4 +1281,4 @@ behaviour anyone has seen.
   `domain/ledger/types.ts`, in migration `0004` and in the data model, with the three
   triggers that actually enforce it named in all three.
 
-[Unreleased]: https://github.com/abinauv/coffer/commits/main
+[0.1.0]: https://github.com/abinauv/coffer/releases/tag/v0.1.0

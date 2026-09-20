@@ -58,6 +58,21 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run verify
+      # The tag names the release; package.json names what electron-builder writes into
+      # the installers, the About box and every file name. Nothing tied the two together,
+      # so `v0.1.0` could have published installers calling themselves 0.0.0. A
+      # workflow_dispatch rehearsal has a branch for a ref, not a version, and is skipped.
+      - name: The tag and package.json agree
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tagged="${GITHUB_REF_NAME#v}"
+          packaged="$(node -p 'require("./package.json").version')"
+          if [ "$tagged" != "$packaged" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json ${packaged}."
+            echo "Bump the version in package.json, or tag v${packaged}."
+            exit 1
+          fi
+          echo "Releasing ${packaged}."
 
   build:
     name: Package ${{ matrix.artefact }}
