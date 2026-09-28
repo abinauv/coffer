@@ -1299,5 +1299,11 @@ describe('the register', () => {
    * the shape `checkIntegrity > reports damage` already has — A SLOW TEST AND A HANGING
    * TEST LOOK IDENTICAL, and the answer is to raise the limit rather than to shrink the
    * work: fewer rows than the ceiling is precisely the bug this test was written for.
-   */, 20_000)
+   *
+   * 60s, not 20s, and the reason is worth knowing: a test that names its own timeout
+   * OPTS OUT of the one the command line raises. ci.yml gives the Windows and macOS
+   * runners 60s because they are ten to twenty times slower at writing an encrypted
+   * file; this test ignored that and took 21.2s there against 0.9s here, failing the
+   * merge of a dependency bump that had nothing to do with it.
+   */, 60_000)
 })
