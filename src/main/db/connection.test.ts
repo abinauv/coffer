@@ -268,7 +268,9 @@ describe('checkIntegrity', () => {
    * scribble at offset 6000 landing outside the data pages, and the test would then pass
    * by finding no damage where it had also caused none.
    */
-  it('reports damage instead of throwing', { timeout: 30_000 }, () => {
+  /* 60s to match what ci.yml gives the slow runners, since a named timeout opts out of
+   * the one the command line raises. It runs in 20ms. */
+  it('reports damage instead of throwing', { timeout: 60_000 }, () => {
     const path = tempPath()
     const db = open({ filePath: path, key: KEY, journalMode: 'delete' })
     db.exec(`CREATE TABLE notes (body TEXT NOT NULL) STRICT`)

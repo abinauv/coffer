@@ -148,6 +148,16 @@ jobs:
       # main failed that way, each on a different test that passes everywhere else. The
       # `checks` job keeps Vitest's 5s default, so a test that genuinely slows down
       # still fails where the runner is predictable.
+      #
+      # `--hookTimeout` IS NOT A TYPO FOR A FLAG THAT WORKS. It does not reach the tests
+      # inside a project — measured against Vitest 5.0.1: passing `--hookTimeout=1`
+      # changes nothing, while `--testTimeout=1` fails every test in a file. The hook
+      # ceiling is set in vitest.config.ts instead, from the variable below, which is why
+      # this step kept failing on `main` after the flag was added: four merges in a row,
+      # each on a different database test, every one of them a `beforeEach` that opens a
+      # SQLCipher file and migrates it inside Vitest's 10s default.
       - name: Test
         if: github.event_name != 'pull_request' && runner.os != 'Linux'
-        run: npm test -- --testTimeout=60000 --hookTimeout=60000
+        env:
+          VITEST_HOOK_TIMEOUT_MS: 60000
+        run: npm test -- --testTimeout=60000
