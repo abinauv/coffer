@@ -29,6 +29,21 @@ const alias = {
   '@renderer': resolve('src/renderer/src'),
 }
 
+/*
+ * HOW LONG A `beforeEach` MAY TAKE, and the only place it can be said.
+ *
+ * `--testTimeout` on the command line reaches the tests inside a project. `--hookTimeout`
+ * does not — measured against Vitest 5.0.1 by running this suite with `--hookTimeout=1`,
+ * which changed nothing, while `--testTimeout=1` failed every test in the file. So the
+ * hook ceiling can only be set here, and ci.yml raises it through this variable for the
+ * Windows and macOS runners, where a hook that opens a SQLCipher file and migrates it
+ * takes ten to twenty times what it takes on a developer's machine.
+ *
+ * The default is Vitest's own 10s, so a hook that genuinely stalls still fails locally
+ * and on the Linux `checks` job, where the machine is predictable.
+ */
+const hookTimeout = Number(process.env['VITEST_HOOK_TIMEOUT_MS'] ?? 10_000)
+
 export default defineConfig({
   resolve: { alias },
   test: {
@@ -39,6 +54,8 @@ export default defineConfig({
           name: 'main',
           environment: 'node',
           include: ['src/{main,preload,shared}/**/*.test.ts'],
+          /* Every database test writes a real encrypted file in its hook. See above. */
+          hookTimeout,
         },
       },
       {
