@@ -87,7 +87,7 @@
     "electron-builder": "26.15.3",
     "electron-vite": "5.0.0",
     "eslint": "9.39.5",
-    "happy-dom": "20.14.3",
+    "happy-dom": "20.14.5",
     "prettier": "3.9.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
